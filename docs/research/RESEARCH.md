@@ -118,3 +118,12 @@ Sources:
 - https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/src/protocol/v2/thread.rs
 - https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md
 - https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/spec_plan.rs
+
+## Current App Server permissions profile and tool allowlist, 2026-09-27
+
+Inspected the current public-main `ThreadStartParams` after the pinned 0.155.1 tool-surface gate remained open. The typed request exposes host-supplied `dynamicTools`, selected capability roots and an experimental named `permissions` profile. The profile is documented as mutually exclusive with the legacy `sandbox` field; it is a permission-profile selector, not a declared list of model-visible tool names. No general `allowed_tools` or `allowedTools` field appeared in the inspected request type. The current App Server README also states that saved `disabledPluginIds` do not filter plugin capabilities. These source observations do not prove the effective runtime catalog and are not from the pinned 0.155.1 release. Keep the product on its pinned, tested feature gates and host-tool validation; do not upgrade or claim a complete allowlist from the profile, dynamic tool definitions, or plugin selection.
+
+Sources:
+
+- https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/src/protocol/v2/thread.rs
+- https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md
