@@ -130,9 +130,12 @@ Sources:
 
 ## Pinned Codex 0.155.1 thread tool-boundary schema, 2026-09-27
 
-Inspected the exact `rust-v0.155.1` tagged `ThreadStartParams` and `ThreadResumeParams` source used to generate the app's pinned protocol closure. `ThreadStartParams` has `dynamicTools` and `selectedCapabilityRoots`; its `permissions` field is documented as a named profile ID mutually exclusive with the legacy sandbox field. The typed start/resume request contains no general `allowed_tools` or `allowedTools` list. This is a type-level contract observation only: it does not enumerate every runtime-selected direct/deferred tool or establish that feature gates form a complete allowlist. Keep the guarded app-owned tool adapter, route checks, child policy and tested feature gates; P2-07 remains open.
+Inspected the exact `rust-v0.155.1` tagged `ThreadStartParams` and `ThreadResumeParams` source used to generate the app's pinned protocol closure. `ThreadStartParams` has `dynamicTools` and `selectedCapabilityRoots`; its `permissions` field is documented as a named profile ID mutually exclusive with the legacy sandbox field. The typed start/resume request contains no general `allowed_tools` or `allowedTools` list. The same release's config schema scopes `enabled_tools` allowlists to plugin-provided MCP servers and `direct_only_tool_namespaces`/`excluded_tool_namespaces` to the nested Code Mode surface. Its top-level `tools` settings cover specific built-ins such as plan, user-input and web-search, not a global direct-tool name allowlist. Those narrower controls do not enumerate every runtime-selected direct/deferred tool or establish that feature gates form a complete allowlist. Keep the guarded app-owned tool adapter, route checks, child policy and tested feature gates; the full effective surface remains open.
 
 Sources:
 
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/app-server-protocol/src/protocol/v2/thread.rs#L59-L155
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/app-server-protocol/src/protocol/v2/thread.rs#L323-L395
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L496-L523
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L3169-L3204
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L3932-L3950
