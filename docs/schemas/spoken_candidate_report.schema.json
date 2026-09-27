@@ -132,6 +132,7 @@
           "items": { "$ref": "#/$defs/identifier" }
         },
         "related_segment_id": {
+          "description": "Segment containing the candidate, or the earlier occurrence for an identical adjacent-segment repeat.",
           "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/identifier" }]
         },
         "protected_word_ids": {

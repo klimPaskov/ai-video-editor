@@ -657,6 +657,7 @@ export function analyzeSpokenCandidates(
     matchedWords: readonly PositionedWord[],
     evidence: readonly SpokenCandidateEvidenceCode[],
     contextOnly = false,
+    relatedSegmentId?: string,
   ) => {
     const first = matchedWords[0];
     const last = matchedWords.at(-1);
@@ -702,7 +703,7 @@ export function analyzeSpokenCandidates(
       start_word_id: first.word_id,
       end_word_id: last.word_id,
       word_ids: wordIds,
-      related_segment_id: first.segment_id,
+      related_segment_id: relatedSegmentId ?? first.segment_id,
       protected_word_ids: protectedIds,
       protected_reasons: reasons,
       evidence: uniqueEvidence,
@@ -844,7 +845,13 @@ export function analyzeSpokenCandidates(
     const previous = wordsBySegment[index - 1]!;
     const current = wordsBySegment[index]!;
     if (exactAdjacentSegmentRepeat(previous, current))
-      addCandidate("repeated_take", current, ["exact_repeated_segment"]);
+      addCandidate(
+        "repeated_take",
+        current,
+        ["exact_repeated_segment"],
+        false,
+        previous[0]!.segment_id,
+      );
   }
 
   for (const silence of analysis.silences) {

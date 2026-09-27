@@ -360,7 +360,7 @@ test("adjacent identical transcript segments are review-only repeated-take candi
     repeat?.word_ids,
     words.slice(4).map((word) => word.word_id),
   );
-  assert.equal(repeat?.related_segment_id, "segment-second-01");
+  assert.equal(repeat?.related_segment_id, "segment-first-01");
   assert.equal(repeat?.disposition, "review_required");
   assert.equal(repeat?.cut_authorized, false);
 });
