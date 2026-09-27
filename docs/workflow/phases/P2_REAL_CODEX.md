@@ -1,5 +1,7 @@
 # P2: real Codex runtime and explicit API providers
 
+Pinned 0.155.1 process and thread policy also disables default-on browser/CDP, computer-use, shell-snapshot, interactive unified-exec TTY, workspace-dependency, guardian-approval, in-app utility, fast-mode, image-budget, mention, and personality capabilities when the product does not use them. Verify exact names against the packaged runtime inventory. The inventory currently reports `unified_exec` true despite an explicit false override; do not count that backend as disabled. This is defense-in-depth only; complete effective tool confinement remains a separate acceptance requirement.
+
 Task IDs: `P2-01` through `P2-10`
 
 Use `codex-app-server`, `security-privacy`, `native-app-testing`, and `spec-sync`. Integrate the official Codex app-server as a long-running child process over stdio JSONL. Generate or validate protocol types against the installed binary. Implement ChatGPT-managed sign-in, account state, rate limits, runtime model discovery, skill discovery, durable project threads, streamed events, interruption, restart recovery, and server approval requests.

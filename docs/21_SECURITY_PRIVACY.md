@@ -1,5 +1,7 @@
 # Security and privacy
 
+For the pinned Codex 0.155.1 runtime, explicitly disable unrelated default-on browser/CDP, computer-use, shell snapshot, interactive unified-exec TTY, workspace-dependency, guardian-approval, in-app browser/chat/dictation/automation/update, fast-mode, image-compaction, mention, and personality capabilities at process launch and on both thread start/resume. Verify exact feature names against the pinned runtime inventory. The packaged feature list reports `unified_exec` true even with an explicit false override, so do not claim that backend feature is disabled; keep `shell_tool=false` and full effective tool confinement under review. These switches reduce exposure but are not a global tool-name allowlist.
+
 ## Desktop renderer
 
 - Load packaged local content only.

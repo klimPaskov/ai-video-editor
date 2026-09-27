@@ -24,6 +24,8 @@ description: Review Electron, files, capture, Codex, assets, and deletion bounda
 
 ## Method
 
+For pinned Codex 0.155.1, verify process and thread feature gates against the packaged `codex features list`. Disable unused default-on browser/CDP, computer-use, shell-snapshot, interactive TTY, workspace-dependency, guardian-approval and in-app utility surfaces. Do not claim `unified_exec` is disabled when the runtime reports it true; `shell_tool=false` is the separate shell-registration gate. Feature switches are not a generic model-visible tool allowlist.
+
 Build a threat list for each changed boundary. Add abuse and failure tests. Verify secrets and raw logs do not enter renderer state, project files, screenshots, or crash output.
 
 For OpenAI API, DeepSeek and Gemini API, test that malformed keys and malicious model output cannot choose a URL, escape edit scope, invoke Codex/MCP privileges, or bypass draft sequence/hash checks. Gemini function-call thought signatures are bounded opaque turn-local metadata in main; reject foreign/malformed metadata and never persist or expose a signature. Treat a network model response as untrusted, not as an authorized tool call.

@@ -1,5 +1,11 @@
 # Research summary
 
+## Pinned 0.155.1 feature-list verification
+
+The exact packaged Linux Codex 0.155.1 binary reports `stable true` by default for unrelated capabilities, including external/full-CDP browser access, computer use, shell snapshots, interactive unified-exec terminals, workspace dependency helpers, guardian approvals, and in-app utilities. Sixteen relevant toggles were explicitly disabled in the app process arguments and both thread routes; a fresh guest `CODEX_HOME` feature-list run confirmed each false. The same command continued to report `unified_exec` true despite `--disable unified_exec` and equivalent `-c` forms. Do not count the backend toggle as disabled or use a process feature listing as proof of per-thread/model-visible absence. `shell_tool=false` remains configured; the complete effective tool catalog remains open because 0.155.1 has no generic direct-tool allowlist in the inspected thread schema.
+
+Source: [pinned 0.155.1 feature registry](https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/features/src/lib.rs). It describes `unified_exec` as an execution-implementation feature, separate from shell-tool registration. This observation is limited to the exact packaged Linux binary and feature-list command.
+
 Research date: 2026-09-04
 
 Current foundation review: [P0 research, checked 2026-09-05](P0_FOUNDATION.md). Use that report for current dependency observations, protocol corrections, and explicit limits; the earlier summary below is background research.

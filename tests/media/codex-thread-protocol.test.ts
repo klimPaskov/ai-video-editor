@@ -31,6 +31,7 @@ const restrictedFeatures = {
   browser_use_external: false,
   browser_use_full_cdp_access: false,
   chronicle: false,
+  compaction_image_budget: false,
   code_mode_only: false,
   code_mode: {
     excluded_tool_namespaces: [
@@ -55,18 +56,26 @@ const restrictedFeatures = {
   enable_mcp_apps: false,
   exec_permission_approvals: false,
   external_agent_memory_import: false,
+  fast_mode: false,
   goals: false,
+  guardian_approval: false,
   hooks: false,
   image_generation: false,
   imagegenext: false,
   in_app_browser: false,
+  in_app_chat: false,
+  in_app_dictation: false,
+  in_app_local_automation: false,
+  in_app_updates: false,
   mcp_oauth_refresh_coordination: false,
   memories: false,
   memory_tool: false,
+  mentions_v2: false,
   multi_agent: false,
   multi_agent_v2: false,
   plugins: false,
   plugin_sharing: false,
+  personality: false,
   recommended_plugins: false,
   remote_control: false,
   remote_plugin: false,
@@ -74,8 +83,11 @@ const restrictedFeatures = {
   request_rule: false,
   search_tool: false,
   shell_tool: false,
+  shell_snapshot: false,
   sleep_tool: false,
   token_budget: false,
+  unified_exec_tty: false,
+  workspace_dependencies: false,
   skill_mcp_dependency_install: false,
   skill_search: false,
   standalone_web_search: false,
@@ -289,6 +301,21 @@ test("experimental initialization and no-environment requests are exact", () => 
     assert.equal(request.config.features.code_mode_only, true);
     assert.equal(request.config.features.computer_use, false);
     assert.equal(request.config.features.browser_use, false);
+    assert.equal(request.config.features.browser_use_external, false);
+    assert.equal(request.config.features.browser_use_full_cdp_access, false);
+    assert.equal(request.config.features.compaction_image_budget, false);
+    assert.equal(request.config.features.fast_mode, false);
+    assert.equal(request.config.features.guardian_approval, false);
+    assert.equal(request.config.features.in_app_browser, false);
+    assert.equal(request.config.features.in_app_chat, false);
+    assert.equal(request.config.features.in_app_dictation, false);
+    assert.equal(request.config.features.in_app_local_automation, false);
+    assert.equal(request.config.features.in_app_updates, false);
+    assert.equal(request.config.features.mentions_v2, false);
+    assert.equal(request.config.features.personality, false);
+    assert.equal(request.config.features.shell_snapshot, false);
+    assert.equal(request.config.features.unified_exec_tty, false);
+    assert.equal(request.config.features.workspace_dependencies, false);
     assert.equal(request.config.features.image_generation, false);
     assert.equal(request.config.features.connectors, false);
     assert.equal(request.config.features.codex_git_commit, false);
