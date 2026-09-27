@@ -311,8 +311,21 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
     endpoint: "private-endpoint",
     token: "b".repeat(64),
   };
-  const args = buildCodexAppServerArguments(runtime);
+  const args = buildCodexAppServerArguments(runtime, ["untrusted_test"]);
   const serialized = JSON.stringify(args);
+  assert.equal(
+    args.filter((argument) => argument === "mcp_servers={}").length,
+    1,
+  );
+  const resetIndex = args.indexOf("mcp_servers={}"),
+    disabledServerIndex = args.indexOf(
+      "mcp_servers.untrusted_test.enabled=false",
+    ),
+    ownedServerIndex = args.findIndex((argument) =>
+      argument.startsWith("mcp_servers.codex-video-edit.command="),
+    );
+  assert.ok(resetIndex >= 0 && resetIndex < disabledServerIndex);
+  assert.ok(disabledServerIndex < ownedServerIndex);
   assert.ok(args.includes("--strict-config"));
   for (const [index, value] of args.entries())
     if (value === "-c")
@@ -413,6 +426,10 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
     else if (index > 0 && dynamicArgs[index - 1] === "-c")
       assert.match(value, /^[A-Za-z0-9_.-]+=/u);
   assert.ok(dynamicArgs.includes("mcp_servers={}"));
+  assert.equal(
+    dynamicArgs.filter((argument) => argument === "mcp_servers={}").length,
+    1,
+  );
   assert.ok(
     !dynamicArgs.some((arg) => arg.startsWith("mcp_servers.codex-video-edit.")),
   );

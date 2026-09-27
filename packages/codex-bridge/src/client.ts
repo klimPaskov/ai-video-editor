@@ -222,8 +222,6 @@ export function buildCodexAppServerArguments(
   const quoted = (value: string) => JSON.stringify(value);
   args.push(
     "-c",
-    "mcp_servers={}",
-    "-c",
     `mcp_servers.codex-video-edit.command=${quoted(mcp.command)}`,
     "-c",
     `mcp_servers.codex-video-edit.args=[${quoted(mcp.script)}]`,
