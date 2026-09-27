@@ -159,3 +159,14 @@ The pinned `AgentsToml` supports `default_subagent_model` and `default_subagent_
 Source:
 
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L33-L53
+
+## Pinned Codex 0.155.1 asynchronous user-input surface, 2026-09-27
+
+The pinned core tool planner registers `request_user_input_async` or the compatibility-named `send_user_message_async` when those identifiers appear in `model_info.experimental_supported_tools`; the registration branch is separate from the `experimental_request_user_input_enabled` setting. When invoked, App Server sends the host a typed `item/tool/requestUserInput` server request. This means the fixed config can disable the standard request-user-input tool without proving asynchronous user-input functions are absent from the model catalog.
+
+The editor's project-thread client allows only the reviewed application edit tool call, approval decisions and cancellation of the owned MCP elicitation request. It rejects any other server request and quarantines the thread. A focused regression submits a synthetic `item/tool/requestUserInput` request containing a sentinel question and proves it is rejected and the question is absent from renderer event projection. This is bounded denial evidence, not a complete effective-tool allowlist.
+
+Sources:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/src/tools/spec_plan.rs#L1091-L1131
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/app-server/src/bespoke_event_handling.rs#L823-L868

@@ -1280,6 +1280,47 @@ test("unsupported or uncorrelated server requests fail closed", async () => {
   }
 });
 
+test("async user-input server requests are rejected without projecting questions", async () => {
+  const fixtureState = await fixture();
+  try {
+    await fixtureState.client.open();
+    fixtureState.setHandler(async () => turnResponse("turn-user-input"));
+    await fixtureState.client.startTurn({ text: "Inspect the draft" });
+    assert.throws(
+      () =>
+        fixtureState.client.serverRequest({
+          id: "request-user-input",
+          method: "item/tool/requestUserInput",
+          params: {
+            threadId: "thread-1",
+            turnId: "turn-user-input",
+            itemId: "user-input-call",
+            questions: [
+              {
+                id: "question-1",
+                header: "Confirm",
+                question: "private-test-user-question",
+                isOther: false,
+                isSecret: false,
+                options: [{ label: "Continue", description: "Fixture" }],
+              },
+            ],
+          },
+          signal: new AbortController().signal,
+        }),
+      (error: unknown) =>
+        error instanceof CodexThreadProtocolError && error.code === "forbidden",
+    );
+    assert.ok(
+      !JSON.stringify(fixtureState.events).includes(
+        "private-test-user-question",
+      ),
+    );
+  } finally {
+    await rm(fixtureState.root, { recursive: true, force: true });
+  }
+});
+
 test("correlated owned host call uses the guarded invoker without closing the thread", async () => {
   const invoked: string[] = [];
   const value = await fixture(undefined, async (name, input) => {

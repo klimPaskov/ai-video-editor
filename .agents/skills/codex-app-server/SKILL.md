@@ -166,3 +166,5 @@ For guarded `cut.restore_range`, bind one user-confirmed missing half-open inter
 For the pinned Codex 0.155.1 editor route, disable `features.deferred_executor` and `features.token_budget` at launch and on both start/resume configs when environment-wait and context-budget tools are not used. Assert those exact keys in process and protocol tests. Do not infer a complete effective tool allowlist from the resulting narrower surface.
 
 For dynamic V1 and V2 child routes, pin `agents.default_subagent_model` and `default_subagent_reasoning_effort` to the selected parent model and effort on start/resume. Suppress native child protocols for Astra model IDs. This avoids a server-default child model drifting from the user's selected model; child lineage and read-only checks remain required.
+
+Pinned 0.155.1 may register asynchronous user-input functions from model metadata separately from the standard user-input setting. Treat the resulting `item/tool/requestUserInput` server request as unsupported, quarantine the thread, and keep question content out of renderer events. Do not claim this means the function was absent from the upstream model-visible catalog.

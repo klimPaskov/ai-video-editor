@@ -68,3 +68,5 @@ The manual Edit Restore source range control follows the same boundary: renderer
 For pinned Codex 0.155.1, disable `features.deferred_executor` and `features.token_budget` at launch and on both thread routes when the editor does not need environment-wait or context-budget utility tools. Verify exact process/start/resume configuration; these flags narrow the surface without proving a global allowlist.
 
 When native children are enabled, pin the default child model and reasoning to the selected parent pair in both start and resume configuration. Disable the native child route for Astra model IDs. Validate the server-owned child lineage and restrict child authority independently of this model pin.
+
+For pinned Codex 0.155.1, model metadata may enable async user-input functions outside the standard input-tool toggle. The project thread client must reject `item/tool/requestUserInput`, quarantine the thread, and never project question payloads. This proves host-side denial, not model-visible unavailability.
