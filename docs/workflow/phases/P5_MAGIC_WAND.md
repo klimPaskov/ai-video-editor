@@ -6,7 +6,7 @@ Use `magic-edit`, `media-engine`, `codex-app-server`, `native-app-testing`, and 
 
 Magic Wand must create a real useful edit. Apply the base cut and time map before dependent effects. Preserve uncertain meaning and use original footage as fallback.
 
-The analysis-only speech candidate contract is a foundation, not a Magic Wand edit: review dispositions, evidence, protection and silence context never authorize a cut. Only a separately confirmed current operation may enter the shared transaction engine.
+The analysis-only speech candidate contract is a foundation, not a Magic Wand edit: review dispositions, evidence, protection and silence context never authorize a cut. Auto Edit may show source-context excerpts and preview a candidate through the current committed map; preview is read-only. Only a separately confirmed current operation may enter the shared transaction engine.
 
 Acceptance:
 

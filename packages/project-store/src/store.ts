@@ -61,6 +61,39 @@ function invalid(): never {
     "The project could not be opened or saved. Check its local files and try again.",
   );
 }
+const transientWindowsRenameCodes = new Set(["EPERM", "EBUSY", "EACCES"]);
+const windowsRenameRetryDelaysMs = [25, 50, 100, 200, 400] as const;
+
+/** Retry short Windows file-scanner/handle locks without weakening atomic publish. */
+export async function renameProjectDirectoryWithRetry(
+  operation: typeof rename,
+  source: string,
+  destination: string,
+  platform = process.platform,
+  wait: (delayMs: number) => Promise<void> = (delayMs) =>
+    new Promise((resolve) => setTimeout(resolve, delayMs)),
+): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await operation(source, destination);
+      return;
+    } catch (error) {
+      const code =
+        error && typeof error === "object" && "code" in error
+          ? error.code
+          : undefined;
+      const delayMs = windowsRenameRetryDelaysMs[attempt];
+      if (
+        platform !== "win32" ||
+        typeof code !== "string" ||
+        !transientWindowsRenameCodes.has(code) ||
+        delayMs === undefined
+      )
+        throw error;
+      await wait(delayMs);
+    }
+  }
+}
 async function safeDirectory(path: string): Promise<void> {
   const stat = await lstat(path);
   if (
@@ -210,7 +243,7 @@ export class ProjectStore {
       )
         throw error;
     }
-    await rename(staged, folder);
+    await renameProjectDirectoryWithRetry(rename, staged, folder);
   }
   createFromMedia(mediaId: string): Promise<InitialProjectSnapshot> {
     return this.serialize(async () => {

@@ -64,3 +64,5 @@ The final screen shows a preview summary, required warnings, a small set of expo
 ## Returning users
 
 Reopening a project restores the last autosave. If an interrupted draft exists, the app explains what was recovered and what needs to be rerun.
+
+After local transcription completes, Auto Edit offers deterministic speech-cue review with original-transcript context excerpts and a still-frame seek through the committed clip map. Reviewing cues and seeking a frame do not cut or otherwise change the draft; Magic Wand remains the only automatic edit action and is still under implementation.

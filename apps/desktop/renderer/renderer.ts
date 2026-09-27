@@ -3,6 +3,10 @@ import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { reconcileProjectDraft } from "./project-draft.ts";
 import { pollTranscriptionView } from "./transcription-state.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
+import {
+  analyzeSpokenCandidates,
+  createDefaultSpokenCandidatePolicy,
+} from "../../../packages/domain/src/spoken-candidates.ts";
 import type { DesktopBridge, Reply } from "../src/bridge.ts";
 import type {
   MediaFrame,
@@ -16,7 +20,15 @@ import type {
 import type { CodexThreadView } from "../../../packages/domain/src/codex-thread-view.ts";
 import type { ApiThreadView } from "../../../packages/domain/src/api-thread-view.ts";
 import type { ApiProviderId } from "../../../packages/domain/src/api-providers.ts";
-import type { TranscriptionProjectView } from "../../../packages/domain/src/transcription.ts";
+import type {
+  SpokenCandidate,
+  SpokenCandidateReport,
+} from "../../../packages/domain/src/spoken-candidates.ts";
+import { mapSourceTimeToOutputTime } from "../../../packages/domain/src/source-output-map.ts";
+import type {
+  TranscriptionProjectView,
+  TranscriptionSourceResult,
+} from "../../../packages/domain/src/transcription.ts";
 declare global {
   interface Window {
     desktop: DesktopBridge;
@@ -76,7 +88,14 @@ const autoEditActions = element("auto-edit-actions"),
   transcriptResults = element<HTMLDetailsElement>("transcript-results"),
   transcriptSummary = element("transcript-summary"),
   transcriptLanguageNote = element("transcript-language-note"),
-  transcriptContent = element("transcript-content");
+  transcriptContent = element("transcript-content"),
+  reviewSpeechCuesButton = element<HTMLButtonElement>("review-speech-cues"),
+  speechCandidateResults = element<HTMLDetailsElement>(
+    "speech-candidate-results",
+  ),
+  speechCandidateSummary = element("speech-candidate-summary"),
+  speechCandidateError = element("speech-candidate-error"),
+  speechCandidateContent = element("speech-candidate-content");
 const transcriptEditPanel = element("transcript-edit-panel"),
   transcriptEditSource = element<HTMLSelectElement>("transcript-edit-source"),
   transcriptWordFilter = element<HTMLInputElement>("transcript-word-filter"),
@@ -124,6 +143,15 @@ let transcriptionRequestPending = false;
 let transcriptionActionPending = false;
 let transcriptionPollTimer: number | undefined;
 let transcriptRenderKey = "";
+let speechCandidateProjectId: string | undefined;
+let speechCandidateContextKey: string | undefined;
+let speechCandidateGroups:
+  | Array<{
+      result: TranscriptionSourceResult;
+      report: SpokenCandidateReport;
+    }>
+  | undefined;
+let speechCandidateIssue: string | null = null;
 let transcriptEditSourceProjectId: string | undefined;
 let transcriptWordRenderKey = "";
 let transcriptCorrectionIssue: string | null = null;
@@ -304,20 +332,282 @@ function joinCorrectedTranscriptWords(
   transcriptId: string,
   words: TranscriptionProjectView["results"][number]["transcript"]["segments"][number]["words"],
 ): string {
+  return joinTranscriptTokens(
+    words.map((word) =>
+      correctedTranscriptWordText(
+        sourceId,
+        transcriptId,
+        word.word_id,
+        word.text,
+      ),
+    ),
+  );
+}
+function joinOriginalTranscriptWords(
+  words: TranscriptionProjectView["results"][number]["transcript"]["segments"][number]["words"],
+): string {
+  return joinTranscriptTokens(words.map((word) => word.text));
+}
+function joinTranscriptTokens(tokens: readonly string[]): string {
   let result = "";
-  for (const word of words) {
-    const token = correctedTranscriptWordText(
-      sourceId,
-      transcriptId,
-      word.word_id,
-      word.text,
-    ).trim();
+  for (const text of tokens) {
+    const token = text.trim();
     if (!token) continue;
     if (/^[,.;:!?…%)}\]»”’]+$/u.test(token) || /^[([{«“‘]/u.test(token))
       result = result.trimEnd() + token;
     else result = result ? `${result} ${token}` : token;
   }
   return result.trim();
+}
+function speechCandidateKey(
+  view: TranscriptionProjectView | undefined,
+): string | undefined {
+  if (!view) return undefined;
+  return [
+    view.project_id,
+    ...view.results.map(
+      (result) =>
+        `${result.source_id}:${result.transcript.transcript_id}:${result.analysis.source_sha256}:${result.transcript.language}`,
+    ),
+  ].join("|");
+}
+function speechCandidateLabel(candidate: SpokenCandidate): string {
+  const kindLabels: Record<SpokenCandidate["kind"], string> = {
+    filler: "Filler",
+    false_start: "False start",
+    repeated_take: "Repeated phrase",
+    self_correction: "Possible correction",
+    editor_cue: "Spoken editor cue",
+    long_pause: "Long pause",
+  };
+  const disposition =
+    candidate.disposition === "protected"
+      ? "Protected"
+      : candidate.disposition === "context_only"
+        ? "Context only"
+        : "Review";
+  return `${kindLabels[candidate.kind]} · ${disposition}`;
+}
+function speechCandidateExcerpt(
+  result: TranscriptionSourceResult,
+  candidate: SpokenCandidate,
+): string {
+  if (!candidate.start_word_id || !candidate.end_word_id)
+    return "Silence context; no transcript words are attached.";
+  const segment = result.transcript.segments.find(
+    (item) => item.segment_id === candidate.related_segment_id,
+  );
+  if (!segment) return "Transcript context is unavailable.";
+  const start = segment.words.findIndex(
+      (word) => word.word_id === candidate.start_word_id,
+    ),
+    end = segment.words.findIndex(
+      (word) => word.word_id === candidate.end_word_id,
+    );
+  if (start < 0 || end < start) return "Transcript context is unavailable.";
+  const words = segment.words.slice(
+    Math.max(0, start - 4),
+    Math.min(segment.words.length, end + 5),
+  );
+  return (
+    joinOriginalTranscriptWords(words) || "Transcript context is unavailable."
+  );
+}
+function clearSpeechCandidateReview(): void {
+  speechCandidateProjectId = undefined;
+  speechCandidateContextKey = undefined;
+  speechCandidateGroups = undefined;
+  speechCandidateIssue = null;
+  speechCandidateResults.open = false;
+  speechCandidateResults.hidden = true;
+  speechCandidateContent.replaceChildren();
+  speechCandidateError.textContent = "";
+  speechCandidateError.hidden = true;
+}
+function renderSpeechCandidateReview(
+  view: TranscriptionProjectView | undefined,
+): void {
+  const project = activeProject;
+  const currentView = view?.project_id === project?.id ? view : undefined;
+  const currentKey = speechCandidateKey(currentView);
+  if (
+    speechCandidateProjectId !== undefined &&
+    (speechCandidateProjectId !== project?.id ||
+      (currentKey !== undefined && speechCandidateContextKey !== currentKey))
+  )
+    clearSpeechCandidateReview();
+
+  const visible = project?.stage === "auto_edit";
+  const completed =
+    visible &&
+    currentView?.job.status === "completed" &&
+    currentView.results.length > 0;
+  reviewSpeechCuesButton.hidden = !completed;
+  reviewSpeechCuesButton.disabled =
+    !completed || navigating || transcriptionActionPending;
+  reviewSpeechCuesButton.textContent = speechCandidateGroups
+    ? "Refresh speech cues"
+    : "Review speech cues";
+
+  const reportVisible =
+    completed &&
+    speechCandidateProjectId === project?.id &&
+    speechCandidateContextKey === currentKey &&
+    (speechCandidateGroups !== undefined || speechCandidateIssue !== null);
+  speechCandidateResults.hidden = !reportVisible;
+  speechCandidateError.textContent = speechCandidateIssue ?? "";
+  speechCandidateError.hidden = !reportVisible || !speechCandidateIssue;
+  if (!reportVisible || !speechCandidateGroups || !project) return;
+
+  const candidateCount = speechCandidateGroups.reduce(
+    (count, group) => count + group.report.candidates.length,
+    0,
+  );
+  speechCandidateSummary.textContent = speechCandidateIssue
+    ? "Speech cues unavailable"
+    : candidateCount === 0
+      ? "No configured review cues found"
+      : `${candidateCount} review cue${candidateCount === 1 ? "" : "s"}`;
+  speechCandidateContent.replaceChildren();
+  const maximumVisibleCandidates = 120;
+  let renderedCandidates = 0;
+  for (const group of speechCandidateGroups) {
+    if (renderedCandidates >= maximumVisibleCandidates) break;
+    const sourceName =
+      project?.sources?.find((source) => source.id === group.result.source_id)
+        ?.name ??
+      project?.source.name ??
+      "Source";
+    const sourceSection = document.createElement("section");
+    sourceSection.className = "speech-candidate-source";
+    const heading = document.createElement("strong");
+    heading.textContent = sourceName;
+    sourceSection.append(heading);
+
+    const protectedCount = group.report.protected_words.length;
+    if (protectedCount > 0) {
+      const protectedSummary = document.createElement("p");
+      protectedSummary.className = "speech-candidate-protection";
+      protectedSummary.textContent = `${protectedCount} protected transcript word${protectedCount === 1 ? "" : "s"}.`;
+      sourceSection.append(protectedSummary);
+    }
+    const warningMessages: Record<string, string> = {
+      language_unidentified:
+        "Language not identified; language-specific cues were skipped.",
+      word_timing_estimated: "Word timings are local model estimates.",
+      language_cues_skipped_mismatch:
+        "Cue language did not match the transcript; language-specific cues were skipped.",
+      silence_evidence_is_context_only:
+        "Long silences are context only, not cut suggestions.",
+    };
+    for (const warning of group.report.warnings) {
+      const item = document.createElement("p");
+      item.className = "speech-candidate-warning";
+      item.textContent =
+        warningMessages[warning] ?? "Review transcript timing.";
+      sourceSection.append(item);
+    }
+
+    const list = document.createElement("ol");
+    list.className = "speech-candidate-list";
+    for (const candidate of group.report.candidates) {
+      if (renderedCandidates >= maximumVisibleCandidates) break;
+      const item = document.createElement("li");
+      item.className = "speech-candidate-item";
+      const title = document.createElement("p");
+      title.className = "speech-candidate-title";
+      title.textContent = `${speechCandidateLabel(candidate)} · Source ${time(candidate.source_start_us)}–${time(candidate.source_end_us)}`;
+      const excerpt = document.createElement("p");
+      excerpt.className = "speech-candidate-excerpt";
+      excerpt.textContent = speechCandidateExcerpt(group.result, candidate);
+      item.append(title, excerpt);
+      const outputTime = mapSourceTimeToOutputTime(
+        project.clips,
+        project.timeline.durationUs,
+        group.result.source_id,
+        candidate.source_start_us,
+      );
+      if (outputTime === undefined) {
+        const missing = document.createElement("span");
+        missing.className = "speech-candidate-unavailable";
+        missing.textContent = "Not visible in the current draft.";
+        item.append(missing);
+      } else {
+        const preview = document.createElement("button");
+        preview.type = "button";
+        preview.textContent = "Preview";
+        preview.setAttribute(
+          "aria-label",
+          `Preview ${speechCandidateLabel(candidate).toLowerCase()} at ${time(candidate.source_start_us)}`,
+        );
+        preview.addEventListener("click", () => {
+          if (
+            activeProject?.id === project.id &&
+            activeProject.stage === "auto_edit"
+          )
+            requestFrame(outputTime);
+        });
+        item.append(preview);
+      }
+      list.append(item);
+      renderedCandidates++;
+    }
+    if (group.report.candidates.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "speech-candidate-empty";
+      empty.textContent = "No configured cues found for this source.";
+      sourceSection.append(empty);
+    } else sourceSection.append(list);
+    speechCandidateContent.append(sourceSection);
+  }
+  if (candidateCount > maximumVisibleCandidates) {
+    const limit = document.createElement("p");
+    limit.className = "speech-candidate-limit";
+    limit.textContent = `Showing the first ${maximumVisibleCandidates} of ${candidateCount} cues.`;
+    speechCandidateContent.append(limit);
+  }
+}
+function reviewSpeechCues(): void {
+  const project = activeProject;
+  const view =
+    transcriptionView?.project_id === project?.id
+      ? transcriptionView
+      : undefined;
+  if (
+    !project ||
+    project.stage !== "auto_edit" ||
+    view?.job.status !== "completed" ||
+    view.results.length === 0
+  )
+    return;
+  const contextKey = speechCandidateKey(view);
+  if (!contextKey) return;
+  try {
+    const groups = view.results.map((result) => ({
+      result,
+      report: analyzeSpokenCandidates(
+        result.transcript,
+        result.analysis,
+        createDefaultSpokenCandidatePolicy(result.transcript.language),
+      ),
+    }));
+    if (activeProject?.id !== project.id) return;
+    speechCandidateProjectId = project.id;
+    speechCandidateContextKey = contextKey;
+    speechCandidateGroups = groups;
+    speechCandidateIssue = null;
+    transcriptResults.open = true;
+    speechCandidateResults.open = true;
+  } catch {
+    speechCandidateProjectId = project.id;
+    speechCandidateContextKey = contextKey;
+    speechCandidateGroups = [];
+    speechCandidateIssue =
+      "Speech cues could not be analyzed. Refresh the transcript and try again.";
+    transcriptResults.open = true;
+    speechCandidateResults.open = true;
+  }
+  renderTranscriptionActions();
 }
 function transcriptEditResult(
   project: ProjectView,
@@ -634,6 +924,7 @@ function renderTranscriptionActions(): void {
   transcriptSummary.textContent = `Transcript · ${wordCount} words${languageUnknown ? " · language not identified" : ""}`;
   transcriptLanguageNote.hidden = !languageUnknown;
   updateTranscriptionText(view);
+  renderSpeechCandidateReview(view);
   syncTranscriptionPolling();
 }
 async function loadTranscription(): Promise<void> {
@@ -1047,6 +1338,7 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
   transcriptionView = undefined;
   transcriptionErrorMessage = null;
   transcriptRenderKey = "";
+  clearSpeechCandidateReview();
   transcriptEditSourceProjectId = undefined;
   transcriptWordRenderKey = "";
   transcriptCorrectionIssue = null;
@@ -1523,6 +1815,7 @@ function applyProjectDraft(
 transcribeLocalButton.addEventListener("click", () => {
   void startTranscription();
 });
+reviewSpeechCuesButton.addEventListener("click", reviewSpeechCues);
 stopTranscriptionButton.addEventListener("click", () => {
   void stopTranscription();
 });

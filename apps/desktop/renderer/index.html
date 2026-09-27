@@ -156,6 +156,18 @@
                 The local model did not identify a language.
               </p>
               <div id="transcript-content"></div>
+              <button id="review-speech-cues" type="button" hidden>
+                Review speech cues
+              </button>
+              <details id="speech-candidate-results" hidden>
+                <summary id="speech-candidate-summary">Speech cues</summary>
+                <p id="speech-candidate-note">
+                  Original local transcript cues. Preview selects a frame; no
+                  cut is applied.
+                </p>
+                <p id="speech-candidate-error" role="alert" hidden></p>
+                <div id="speech-candidate-content"></div>
+              </details>
             </details>
           </section>
           <section
