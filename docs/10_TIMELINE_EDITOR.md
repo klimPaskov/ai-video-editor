@@ -29,9 +29,9 @@ Do not expose arbitrary track creation in the first release. Empty tracks stay h
 
 ## Transcript edit
 
-Deleting transcript text creates a linked cut operation. Restoring text restores the linked media when no later operation conflicts. Highlight uncertain words and prevent accidental deletion without review.
+Full transcript-text editing should create linked cut operations when the user deletes source words, and restoring deleted text should restore linked media when no later operation conflicts. Highlight uncertain words and prevent accidental deletion without review; this semantic text-to-media restoration path is not part of the current manual word-range cut control.
 
-The current P5-02 slice lets a user search for and correct one locally transcribed word in Edit. The correction is stored as text-only metadata in the draft timeline and commits through the shared transaction journal, so Undo, Redo and project reopen preserve it. The original ASR transcript and recorded audio remain unchanged. Transcript-linked cuts and text restoration are still future work; never imply that changing a transcript word changes speech.
+The current P5-02 slice lets a user search for and correct one locally transcribed word or select a word range to cut in Edit. A correction is stored as text-only metadata in the draft timeline and commits through the shared transaction journal, so Undo, Redo and project reopen preserve it. A selected-word cut binds the source, transcript and word IDs to the current draft head, maps the inclusive word range to exact source and output times, and commits a ripple delete only when it lies in one continuous visible clip. Undo restores the previous clip map; there is no separate transcript restoration control yet. Both operations leave the original ASR transcript and recorded audio unchanged. A selected-word cut does not establish that the speech is expendable, verify A/V joins, or render a synchronized result. Never imply that changing transcript text changes speech.
 
 ## Direct manipulation
 

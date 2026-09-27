@@ -95,6 +95,7 @@ export async function invokeWithProjectDraftRefresh<T>(options: {
     options.toolName === "cut.delete_ranges" ||
     options.toolName === "cut.restore_range" ||
     options.toolName === "transcript.correct_word" ||
+    options.toolName === "transcript.cut_words" ||
     options.toolName === "timeline.split" ||
     options.toolName === "timeline.ripple_delete" ||
     options.toolName === "timeline.undo" ||

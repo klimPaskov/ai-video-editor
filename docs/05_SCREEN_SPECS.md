@@ -90,7 +90,7 @@ Do not show raw FFmpeg, transcription, or protocol logs.
 
 The current implemented surface is a user-started local transcription action. First use downloads the pinned approximately 76 MiB Whisper weight set from Hugging Face into app-private storage; source audio is processed on device. Show download or transcription progress, Stop, a read-only transcript, the word-count summary, and warnings that timestamps are estimates and language was not identified. Completed results survive project reopen. The transcription action does not edit the draft or create cuts.
 
-The planned editorial flow follows docs/47_EDITORIAL_FIRST_CUT.md. Show meaningful current pass progress and actionable unresolved directions from real persisted work, with separate spoken-cut, layout and zoom undo groups. Do not turn the detailed QA requirements into persistent dashboards or extra panels. The configured cue and protected scope belong to relevant project/edit settings. Magic Wand presets, transcript correction, automatic cuts, captions, and layout/effect actions remain unimplemented.
+The planned editorial flow follows docs/47_EDITORIAL_FIRST_CUT.md. Show meaningful current pass progress and actionable unresolved directions from real persisted work, with separate spoken-cut, layout and zoom undo groups. Do not turn the detailed QA requirements into persistent dashboards or extra panels. The configured cue and protected scope belong to relevant project/edit settings. Manual text-only transcript correction and explicit selected-word structural cuts are available in Edit. Magic Wand presets, automatic meaning-aware cuts, captions, and layout/effect actions remain unimplemented.
 
 Visible:
 
@@ -109,11 +109,11 @@ Visible:
 - large preview
 - compact tool rail
 - simple timeline with non-empty tracks only
-- transcript mode with word search, source selection, text-only word correction, and shared Undo/Redo
+- transcript mode with word search, source selection, text-only word correction, selected-word ripple cut, and shared Undo/Redo
 - one inspector
 - collapsible Codex drawer
 
-The transcript correction view changes draft metadata only and states that the recorded audio is unchanged. Transcript-linked cuts remain unimplemented.
+The transcript correction view changes draft metadata only and states that the recorded audio is unchanged. Word selection for a cut requires start and end words from the same transcript and a continuous current clip mapping; the resulting draft operation is undoable. The operation is a source-time mapping edit, not speech understanding, A/V rendering, or proof that removing the selected speech preserves meaning.
 
 Direct canvas handles appear for the selected zoom, camera, or B-roll item.
 

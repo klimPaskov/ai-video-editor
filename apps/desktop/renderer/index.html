@@ -177,6 +177,13 @@
                 />
                 <label for="transcript-edit-word">Word</label>
                 <select id="transcript-edit-word"></select>
+                <label for="transcript-cut-start">Cut from word</label>
+                <select id="transcript-cut-start"></select>
+                <label for="transcript-cut-end">Through word</label>
+                <select id="transcript-cut-end"></select>
+                <button id="transcript-cut-submit" type="button">
+                  Cut selected words
+                </button>
                 <label for="transcript-correction-input">
                   Correct transcript text
                 </label>
@@ -196,6 +203,8 @@
               </p>
               <p id="transcript-correction-status" role="status" hidden></p>
               <p id="transcript-correction-error" role="alert" hidden></p>
+              <p id="transcript-cut-status" role="status" hidden></p>
+              <p id="transcript-cut-error" role="alert" hidden></p>
             </details>
           </section>
           <div id="edit-actions" class="edit-actions" hidden>

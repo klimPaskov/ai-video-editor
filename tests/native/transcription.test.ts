@@ -5,6 +5,7 @@ import {
   cp,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   writeFile,
 } from "node:fs/promises";
@@ -397,12 +398,114 @@ try {
     "Start",
   );
   await inspectionHold("transcript-correction-inspection");
+  const secondWord = firstTranscript.segments[0]!.words[1]!;
+  const initialDuration = beforeTranscription.value[0]!.timeline.durationUs;
+  await page.locator("#transcript-cut-start").selectOption(firstWord.word_id);
+  await page.locator("#transcript-cut-end").selectOption(secondWord.word_id);
+  await expect(page.locator("#transcript-cut-submit")).toBeEnabled();
+  await page.locator("#transcript-cut-submit").click();
+  await expect(page.locator("#transcript-cut-status")).toContainText(
+    "Check the join",
+  );
+  const afterTranscriptCut = await page.evaluate(() =>
+    window.desktop.listProjects(),
+  );
+  assert.ok(afterTranscriptCut.ok);
+  const cutProject = afterTranscriptCut.value.find(
+    (item) => item.id === projectId,
+  );
+  assert.ok(cutProject);
+  assert.equal(cutProject.draft.sequence, 4);
+  assert.equal(
+    cutProject.timeline.durationUs,
+    initialDuration - (secondWord.end_us - firstWord.start_us),
+  );
+  const journal = join(
+    userData,
+    "project-store",
+    projectId,
+    "draft",
+    "journal",
+  );
+  const committedEntries = (await readdir(journal))
+    .filter((name) => /^\d{12}\..+\.json$/u.test(name))
+    .sort();
+  const lastTransaction = JSON.parse(
+    await readFile(join(journal, committedEntries.at(-1)!), "utf8"),
+  ) as { operations: Array<Record<string, unknown>> };
+  const transcriptCut = lastTransaction.operations[0]!;
+  assert.equal(transcriptCut.operation_type, "transcript_cut");
+  assert.equal(transcriptCut.transcript_id, firstTranscript.transcript_id);
+  assert.equal(transcriptCut.start_word_id, firstWord.word_id);
+  assert.equal(transcriptCut.end_word_id, secondWord.word_id);
+  await inspectionHold("transcript-cut-inspection");
+  await page.locator("#undo-edit").click();
+  await expect(page.locator("#transcript-correction-input")).toHaveValue(
+    "Start",
+  );
+  const afterCutUndo = await page.evaluate(() => window.desktop.listProjects());
+  assert.ok(afterCutUndo.ok);
+  const restoredCutProject = afterCutUndo.value.find(
+    (item) => item.id === projectId,
+  );
+  assert.ok(restoredCutProject);
+  assert.equal(restoredCutProject.draft.sequence, 5);
+  assert.equal(restoredCutProject.timeline.durationUs, initialDuration);
+  await expect(page.locator("#transcript-cut-status")).toBeHidden();
+  assert.equal(
+    restoredCutProject.transcriptEdits?.[0]?.replacement_text,
+    "Start",
+  );
+  await page.locator("#redo-edit").click();
+  const afterCutRedo = await page.evaluate(() => window.desktop.listProjects());
+  assert.ok(afterCutRedo.ok);
+  const redoneCutProject = afterCutRedo.value.find(
+    (item) => item.id === projectId,
+  );
+  assert.ok(redoneCutProject);
+  assert.equal(redoneCutProject.draft.sequence, 6);
+  assert.equal(
+    redoneCutProject.timeline.durationUs,
+    initialDuration - (secondWord.end_us - firstWord.start_us),
+  );
+  await expect(page.locator("#transcript-cut-status")).toBeHidden();
+  await page.locator("#undo-edit").click();
+  const afterCutRedoUndo = await page.evaluate(() =>
+    window.desktop.listProjects(),
+  );
+  assert.ok(afterCutRedoUndo.ok);
+  const finallyRestoredProject = afterCutRedoUndo.value.find(
+    (item) => item.id === projectId,
+  );
+  assert.ok(finallyRestoredProject);
+  assert.equal(finallyRestoredProject.draft.sequence, 7);
+  assert.equal(finallyRestoredProject.timeline.durationUs, initialDuration);
+  await expect(page.locator("#transcript-cut-status")).toBeHidden();
+  assert.equal(
+    finallyRestoredProject.transcriptEdits?.[0]?.replacement_text,
+    "Start",
+  );
   await page.getByRole("button", { name: "Home", exact: true }).click();
   await expect(page.locator("#home")).toBeVisible();
   await page.locator(`#projects [data-project-id="${projectId}"]`).click();
   await expect(page.locator("#transcript-correction-input")).toHaveValue(
     "Start",
     { timeout: 30_000 },
+  );
+  const reopenedAfterCut = await page.evaluate(() =>
+    window.desktop.listProjects(),
+  );
+  assert.ok(reopenedAfterCut.ok);
+  const reopenedCutProject = reopenedAfterCut.value.find(
+    (item) => item.id === projectId,
+  );
+  assert.ok(reopenedCutProject);
+  assert.equal(reopenedCutProject.draft.sequence, 7);
+  assert.equal(reopenedCutProject.timeline.durationUs, initialDuration);
+  await expect(page.locator("#transcript-cut-status")).toBeHidden();
+  assert.equal(
+    reopenedCutProject.transcriptEdits?.[0]?.replacement_text,
+    "Start",
   );
   await page
     .getByRole("navigation", { name: "Project stages" })
@@ -458,6 +561,8 @@ try {
         transcriptCorrectionUndoRedo: true,
         transcriptCorrectionSurvivedReopen: true,
         transcriptCorrectionIsMetadataOnly: true,
+        transcriptCutLinkedUndo: true,
+        transcriptCutUndoRedoReopen: true,
         sourceUnchanged: true,
         paidProviderUsed: false,
         transcriptTextRecorded: false,

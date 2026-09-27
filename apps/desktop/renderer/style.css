@@ -335,7 +335,8 @@ canvas {
   width: 100%;
   min-width: 0;
 }
-#save-transcript-correction {
+#save-transcript-correction,
+#transcript-cut-submit {
   grid-column: 2;
   justify-self: start;
 }
@@ -347,6 +348,9 @@ canvas {
   font-size: 13px;
 }
 #transcript-correction-error {
+  color: #ed9b9b;
+}
+#transcript-cut-error {
   color: #ed9b9b;
 }
 .edit-actions {

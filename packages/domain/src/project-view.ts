@@ -146,6 +146,18 @@ export interface ManualTranscriptCorrectionRequest {
   expectedText: string;
   replacementText: string;
 }
+export interface ManualTranscriptCutRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  sourceId: string;
+  transcriptId: string;
+  startWordId: string;
+  endWordId: string;
+}
 export interface ManualUndoRequest {
   schema_version: "1.0";
   projectId: string;
@@ -354,6 +366,27 @@ export function assertManualTranscriptCorrectionRequest(
     value.expectedText === value.replacementText
   )
     invalid();
+}
+export function assertManualTranscriptCutRequest(
+  value: unknown,
+): asserts value is ManualTranscriptCutRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "sourceId",
+    "transcriptId",
+    "startWordId",
+    "endWordId",
+  ]);
+  assertManualHead(value);
+  id(value.sourceId);
+  opaqueId(value.transcriptId);
+  opaqueId(value.startWordId);
+  opaqueId(value.endWordId);
 }
 export function assertManualUndoRequest(
   value: unknown,

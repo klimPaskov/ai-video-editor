@@ -1680,3 +1680,96 @@ test("transcript text corrections use the shared journal, Undo, Redo, and reopen
   assert.deepEqual(reopened.draft, redone.draft);
   assert.deepEqual(await readFile(source), sourceBytes);
 });
+
+test("transcript cuts retain exact word evidence in the shared reversible journal", async () => {
+  const { projects, projectStore, baseline, source } = await fixture();
+  const sourceBytes = await readFile(source);
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  const cut = await store.applyManual(
+    trim(initial, {
+      request_id: "request-transcript-cut-001",
+      pass_group: { pass_group_id: "pass-spoken-001", kind: "spoken_cut" },
+      reason: "Remove the explicitly selected transcript words from the draft.",
+      operations: [
+        {
+          type: "transcript_cut",
+          source_id: baseline.source.source_id,
+          transcript_id: "transcript-local-001",
+          start_word_id: "word-local-000001",
+          end_word_id: "word-local-000002",
+          source_start_us: 200_000,
+          source_end_us: 400_000,
+          start_us: 200_000,
+          end_us: 400_000,
+        },
+      ],
+    }),
+  );
+  assert.equal(cut.draft.timeline.duration_us, 800_000);
+  const operation = cut.transaction.operations[0];
+  assert.ok(operation && operation.operation_type === "transcript_cut");
+  assert.equal(operation.source_start_us, 200_000);
+  assert.equal(operation.start_word_id, "word-local-000001");
+  await assert.rejects(
+    store.applyManual(
+      trim(cut.draft, {
+        request_id: "request-transcript-cut-bad-map-001",
+        operations: [
+          {
+            type: "transcript_cut",
+            source_id: baseline.source.source_id,
+            transcript_id: "transcript-local-001",
+            start_word_id: "word-local-000001",
+            end_word_id: "word-local-000002",
+            source_start_us: 200_000,
+            source_end_us: 400_000,
+            start_us: 201_000,
+            end_us: 401_000,
+          },
+        ],
+      }),
+    ),
+    code("conflict"),
+  );
+  const undone = await store.undoManual(
+    undo(cut.draft, cut.transaction.transaction_id),
+  );
+  assert.equal(undone.draft.timeline.duration_us, 1_000_000);
+  assert.deepEqual(undone.draft.timeline.clips, baseline.timeline.clips);
+  const redone = await store.redoManual(
+    redo(
+      undone.draft,
+      undone.transaction.transaction_id,
+      "request-transcript-cut-redo-001",
+    ),
+  );
+  assert.equal(redone.draft.timeline.duration_us, 800_000);
+  assert.deepEqual(redone.draft.timeline.clips, cut.draft.timeline.clips);
+  const reopenedAfterRedo = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopenedAfterRedo.draft, redone.draft);
+  const restoredAgain = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).undoManual(
+    undo(
+      reopenedAfterRedo.draft,
+      cut.transaction.transaction_id,
+      "request-transcript-cut-final-undo-001",
+    ),
+  );
+  assert.equal(restoredAgain.draft.timeline.duration_us, 1_000_000);
+  const reopenedAfterRestore = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopenedAfterRestore.draft, restoredAgain.draft);
+  assert.deepEqual(await readFile(source), sourceBytes);
+});

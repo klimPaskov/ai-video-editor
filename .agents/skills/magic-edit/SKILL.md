@@ -27,7 +27,7 @@ When an optional API provider is selected for generative assistance, the user ex
 
 The goal is a useful edit, not maximum change. Do not add random effects or shorten content without evidence.
 
-The current app foundation exposes user-started local word-timed transcription and separate silence evidence in Auto Edit. It does not yet implement transcript correction or Magic Wand edits. Treat model timing as approximate, keep language as unidentified when the runtime returns none, and never cut based only on silence. A text correction changes transcript metadata; it does not resynthesize recorded speech.
+The current app foundation exposes user-started local word-timed transcription and separate silence evidence in Auto Edit. Edit supports one-word text-only correction and a user-selected word-range structural cut through the shared draft journal; Magic Wand edits remain unimplemented. Treat model timing as approximate, keep language as unidentified when the runtime returns none, and never cut based only on silence. A text correction changes transcript metadata; it does not resynthesize recorded speech. A selected-word cut does not establish semantic safety, synchronized A/V quality, or a verified spoken pass.
 
 ## Presets
 

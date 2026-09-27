@@ -31,6 +31,7 @@ import {
   assertManualRangeCutRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
+  assertManualTranscriptCutRequest,
   assertManualUndoRequest,
   assertManualRedoRequest,
   assertProjectRequest,
@@ -252,6 +253,14 @@ const bridge: DesktopBridge = {
     assertManualTranscriptCorrectionRequest(request);
     return invoke(
       channels.projectTranscriptCorrection,
+      request,
+      assertProjectDraftView,
+    );
+  },
+  cutTranscriptWords: (request) => {
+    assertManualTranscriptCutRequest(request);
+    return invoke(
+      channels.projectTranscriptCut,
       request,
       assertProjectDraftView,
     );

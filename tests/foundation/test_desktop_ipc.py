@@ -106,6 +106,22 @@ class DesktopIpcContractTests(unittest.TestCase):
         value['response']['value']['transcriptEdits'][0]['word_id'] = '../private'
         self.invalid(value)
 
+    def test_transcript_cut_exchange_is_head_bound_and_path_free(self):
+        exchange = json.loads((ROOT / 'docs/examples/desktop_ipc_transcript_cut.example.json').read_text(encoding='utf8'))
+        self.valid(exchange)
+        for request_patch in [
+            {'source_path': '/private/source.mkv'},
+            {'expectedSequence': -1},
+            {'startWordId': '../private'},
+            {'endWordId': ''},
+        ]:
+            value = deepcopy(exchange)
+            value['payload'].update(request_patch)
+            self.invalid(value)
+        value = deepcopy(exchange)
+        value['response']['value']['clips'][0]['sourceStartUs'] = -1
+        self.invalid(value)
+
     def test_frame_and_summary_limits(self):
         for field, bad in [('width', 16777217), ('height', 0), ('rgbaBase64', 'not base64!?')]:
             value = deepcopy(self.frame)

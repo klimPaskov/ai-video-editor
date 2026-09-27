@@ -34,7 +34,7 @@ The user picks one or more local media files and sees one plain processing view.
 
 The current Auto Edit action is Transcribe locally. On the first explicit start, the app downloads the pinned Whisper model weights into private application storage, then produces local word timing and separate silence evidence. Source audio remains on this device. The app preserves one live job identity across repeated Start requests and polling, offers Stop, caches results by immutable source hash and model revision, and restores completed transcripts when the project reopens. Model word times are estimates; the local model does not identify a language in this runtime, so the view labels language as unidentified. These results do not change the draft.
 
-The planned Magic Wand remains the main editorial action. It will offer a small preset menu and clear switches, stream validated edits to the active draft, and retain completed reversible work when stopped. Edit now supports text-only correction of a locally transcribed word. Transcript-linked cuts, captions, and automatic effects are not implemented yet.
+The planned Magic Wand remains the main editorial action. It will offer a small preset menu and clear switches, stream validated edits to the active draft, and retain completed reversible work when stopped. Edit supports text-only correction of a locally transcribed word and a selected-word ripple cut. Captions and automatic effects are not implemented yet.
 
 Optional OpenAI API, DeepSeek and Gemini API assistance under ADRs 0014 and 0015 uses a separately connected key and provider-validated model. A paid generation turn starts only when the user explicitly selects it. Local deterministic work does not silently incur API usage.
 
@@ -49,9 +49,9 @@ The default layout contains:
 - one inspector at a time
 - collapsible AI drawer, with real Codex conversation and only verified capabilities for optional API providers
 
-The user can click an AI change in the history to see its reason and undo it. Edit supports source selection, word search and one-word transcript correction in the shared draft journal; recorded audio is unchanged. Transcript-linked cuts remain in progress.
+The user can click an AI change in the history to see its reason and undo it. Edit supports source selection, word search, one-word transcript correction and a selected-word ripple cut in the shared draft journal. Transcript corrections change metadata only. A selected word range can be cut only when its source times map continuously onto one currently visible clip; the operation records the exact source and output interval. Undo restores the prior clip map. This draft operation does not process or render synchronized A/V, determine whether speech is safe to remove, or resynthesize audio.
 
-The current Edit transcript controls can correct one locally transcribed word. That correction uses the shared draft journal and is undoable and redoable. It changes transcript text only; the original transcript and recorded audio stay unchanged. Transcript-selected cuts and restore are not implemented yet.
+The Edit transcript controls can correct one locally transcribed word or cut a selected word range. Correction uses a text-only override; the original transcript and recorded audio stay unchanged. A cut uses the immutable source/transcript word IDs and the current draft head, commits through the shared journal, and can be undone or redone. Transcript text restoration and speech-aware cut approval are not provided here.
 
 ## Review
 

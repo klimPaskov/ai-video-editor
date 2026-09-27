@@ -59,6 +59,7 @@
           { "$ref": "#/$defs/split_operation" },
           { "$ref": "#/$defs/ripple_delete_operation" },
           { "$ref": "#/$defs/restore_range_operation" },
+          { "$ref": "#/$defs/transcript_cut_operation" },
           { "$ref": "#/$defs/transcript_edit_operation" }
         ]
       }
@@ -88,6 +89,21 @@
         "properties": {
           "operations": {
             "contains": { "$ref": "#/$defs/restore_range_operation" }
+          }
+        },
+        "required": ["operations"]
+      },
+      "then": {
+        "properties": {
+          "operations": { "minItems": 1, "maxItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operations": {
+            "contains": { "$ref": "#/$defs/transcript_cut_operation" }
           }
         },
         "required": ["operations"]
@@ -292,6 +308,67 @@
           }
         }
       }
+    },
+    "transcript_cut_operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation_id",
+        "operation_type",
+        "source_id",
+        "transcript_id",
+        "start_word_id",
+        "end_word_id",
+        "source_start_us",
+        "source_end_us",
+        "start_us",
+        "end_us",
+        "before",
+        "after",
+        "inverse"
+      ],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "operation_id": { "$ref": "#/$defs/id" },
+        "operation_type": { "const": "transcript_cut" },
+        "source_id": { "$ref": "#/$defs/id" },
+        "transcript_id": { "$ref": "#/$defs/id" },
+        "start_word_id": { "$ref": "#/$defs/id" },
+        "end_word_id": { "$ref": "#/$defs/id" },
+        "source_start_us": { "type": "integer", "minimum": 0 },
+        "source_end_us": { "type": "integer", "minimum": 1 },
+        "start_us": { "type": "integer", "minimum": 0 },
+        "end_us": { "type": "integer", "minimum": 1 },
+        "before": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/clip" }
+        },
+        "after": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/clip" }
+        },
+        "inverse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "clips", "expected_after_sha256"],
+          "properties": {
+            "type": { "const": "restore_timeline_clips" },
+            "clips": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4096,
+              "items": { "$ref": "#/$defs/clip" }
+            },
+            "expected_after_sha256": { "$ref": "#/$defs/hash" }
+          }
+        }
+      },
+      "description": "One user-selected contiguous half-open source word range mapped to the current output timeline. It shares ripple-delete's reversible clip-map inverse and records its transcript and word identity."
     },
     "transcript_edit_operation": {
       "type": "object",

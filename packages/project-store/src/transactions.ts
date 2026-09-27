@@ -623,7 +623,25 @@ function prepareApply(
       timeline.operation_ids.push(operationId);
       continue;
     }
-    if (intent.type === "ripple_delete") {
+    if (intent.type === "ripple_delete" || intent.type === "transcript_cut") {
+      if (intent.type === "transcript_cut") {
+        const clip = timeline.clips.find(
+          (candidate) =>
+            candidate.source_id === intent.source_id &&
+            candidate.source_start_us <= intent.source_start_us &&
+            candidate.source_end_us >= intent.source_end_us,
+        );
+        if (
+          !clip ||
+          clip.timeline_start_us +
+            (intent.source_start_us - clip.source_start_us) !==
+            intent.start_us ||
+          clip.timeline_start_us +
+            (intent.source_end_us - clip.source_start_us) !==
+            intent.end_us
+        )
+          fail("conflict");
+      }
       if (
         intent.end_us > timeline.duration_us ||
         (intent.start_us === 0 && intent.end_us === timeline.duration_us)
@@ -676,20 +694,41 @@ function prepareApply(
       }
       if (!Number.isSafeInteger(position) || position < 1) fail("conflict");
       timeline.duration_us = position;
-      records.push({
-        schema_version: "1.0",
-        operation_id: operationId,
-        operation_type: "ripple_delete",
-        start_us: intent.start_us,
-        end_us: intent.end_us,
-        before: priorClips,
-        after: structuredClone(timeline.clips),
-        inverse: {
-          type: "restore_timeline_clips",
-          clips: structuredClone(priorClips),
-          expected_after_sha256: canonicalSha256(timeline.clips),
-        },
-      });
+      const afterClips = structuredClone(timeline.clips);
+      const inverse = {
+        type: "restore_timeline_clips" as const,
+        clips: structuredClone(priorClips),
+        expected_after_sha256: canonicalSha256(timeline.clips),
+      };
+      records.push(
+        intent.type === "transcript_cut"
+          ? {
+              schema_version: "1.0",
+              operation_id: operationId,
+              operation_type: "transcript_cut",
+              source_id: intent.source_id,
+              transcript_id: intent.transcript_id,
+              start_word_id: intent.start_word_id,
+              end_word_id: intent.end_word_id,
+              source_start_us: intent.source_start_us,
+              source_end_us: intent.source_end_us,
+              start_us: intent.start_us,
+              end_us: intent.end_us,
+              before: priorClips,
+              after: afterClips,
+              inverse,
+            }
+          : {
+              schema_version: "1.0",
+              operation_id: operationId,
+              operation_type: "ripple_delete",
+              start_us: intent.start_us,
+              end_us: intent.end_us,
+              before: priorClips,
+              after: afterClips,
+              inverse,
+            },
+      );
       timeline.operation_ids.push(operationId);
       continue;
     }
@@ -1056,22 +1095,34 @@ export class DraftTransactionStore {
                       source_start_us: operation.source_start_us,
                       source_end_us: operation.source_end_us,
                     }
-                  : operation.operation_type === "transcript_edit"
+                  : operation.operation_type === "transcript_cut"
                     ? {
-                        type: "transcript_edit" as const,
+                        type: "transcript_cut" as const,
                         source_id: operation.source_id,
                         transcript_id: operation.transcript_id,
-                        word_id: operation.word_id,
-                        original_text: operation.original_text,
-                        expected_text: operation.before_text,
-                        replacement_text: operation.after_text,
+                        start_word_id: operation.start_word_id,
+                        end_word_id: operation.end_word_id,
+                        source_start_us: operation.source_start_us,
+                        source_end_us: operation.source_end_us,
+                        start_us: operation.start_us,
+                        end_us: operation.end_us,
                       }
-                    : {
-                        type: "trim" as const,
-                        clip_id: operation.clip_id,
-                        edge: operation.edge,
-                        timeline_position_us: operation.timeline_position_us,
-                      },
+                    : operation.operation_type === "transcript_edit"
+                      ? {
+                          type: "transcript_edit" as const,
+                          source_id: operation.source_id,
+                          transcript_id: operation.transcript_id,
+                          word_id: operation.word_id,
+                          original_text: operation.original_text,
+                          expected_text: operation.before_text,
+                          replacement_text: operation.after_text,
+                        }
+                      : {
+                          type: "trim" as const,
+                          clip_id: operation.clip_id,
+                          edge: operation.edge,
+                          timeline_position_us: operation.timeline_position_us,
+                        },
           ),
         };
         assertApplyDraftTransactionRequest(request);

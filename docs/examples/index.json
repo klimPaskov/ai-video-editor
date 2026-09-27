@@ -23,6 +23,10 @@
     },
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_transcript_cut.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
       "example": "docs/examples/desktop_ipc_manual_edit.example.json"
     },
     {
@@ -60,6 +64,10 @@
     {
       "schema": "docs/schemas/draft_transaction.schema.json",
       "example": "docs/examples/draft_transaction_transcript_edit.example.json"
+    },
+    {
+      "schema": "docs/schemas/draft_transaction.schema.json",
+      "example": "docs/examples/draft_transaction_transcript_cut.example.json"
     },
     {
       "schema": "docs/schemas/pass_checkpoint.schema.json",
@@ -112,6 +120,10 @@
     {
       "schema": "docs/schemas/edit_operation.schema.json",
       "example": "docs/examples/edit_operation_transcript_edit.example.json"
+    },
+    {
+      "schema": "docs/schemas/edit_operation.schema.json",
+      "example": "docs/examples/edit_operation_transcript_cut.example.json"
     },
     {
       "schema": "docs/schemas/export_manifest.schema.json",

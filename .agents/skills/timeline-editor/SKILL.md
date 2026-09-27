@@ -45,11 +45,15 @@ Pending same-directory files may be ignored during recovery, while a corrupt com
 journal entry fails closed. Do not expose filesystem paths or let renderer or model input
 supply a trusted edit origin.
 
-The current P5-02 correction slice adds `transcript_edit` to the same hash-chained draft
-transaction. Main binds a correction to an existing local transcript/source/word, verifies
-the expected current text, and records only a draft metadata override. The override
-survives Undo/Redo and reopen; it never alters the original ASR transcript or recorded
-audio. Transcript-linked ripple cuts are a separate operation and remain future work.
+The completed P5-02 slice adds `transcript_edit` and `transcript_cut` to the same hash-chained
+draft transaction. Main binds a correction to an existing local transcript/source/word,
+verifies the expected current text, and records only a draft metadata override. For a cut,
+main binds the ordered start/end word IDs to the same source and transcript, resolves their
+exact source times from the immutable transcript, and requires one continuous mapping onto
+the current visible clip before committing the ripple delete. Both operations survive
+Undo/Redo and reopen without altering the original ASR transcript or recorded audio. Undo
+is the current restoration path; do not claim that transcript text changes speech, that a
+word cut is meaning-preserving, or that the clip-map edit verifies synchronized A/V joins.
 
 For the partial two-source baseline, preserve the two ordered clip/source identities and
 half-open contiguous timeline intervals. A trim on the first clip must reflow the second
@@ -83,8 +87,10 @@ source joins and may remove one source's complete visible span. Keep the immutab
 source inventory and baseline, reflow surviving fragment positions, derive any new
 right fragment ID from trusted operation authority, and store an exact inverse in the
 shared durable journal. Refresh preview and tool targeting from the committed map;
-newest Undo must restore the previous map after reopen. Do not call this a general
-transcript cut, synchronized A/V render, or model-visible Codex tool.
+newest Undo must restore the previous map after reopen. This output-time
+`ripple_delete` is distinct from `transcript_cut`, which also records source/transcript/word
+IDs and requires a continuous local transcript mapping. Neither operation is a
+synchronized A/V render or a model-visible Codex transcript tool.
 
 For guarded `cut.restore_range`, accept exactly one confirmed missing half-open
 source-time interval per transaction, identified by `source_id`, `source_start_us` and

@@ -67,12 +67,25 @@ export interface TranscriptEditIntent {
   replacement_text: string;
 }
 
+export interface TranscriptCutIntent {
+  type: "transcript_cut";
+  source_id: string;
+  transcript_id: string;
+  start_word_id: string;
+  end_word_id: string;
+  source_start_us: number;
+  source_end_us: number;
+  start_us: number;
+  end_us: number;
+}
+
 export type DraftEditIntent =
   | TrimEdgeIntent
   | SplitClipIntent
   | RippleDeleteIntent
   | RestoreRangeIntent
-  | TranscriptEditIntent;
+  | TranscriptEditIntent
+  | TranscriptCutIntent;
 
 /** Untrusted callers provide intent and freshness only. Authority is injected by the adapter. */
 export interface ApplyDraftTransactionRequest {
@@ -219,12 +232,34 @@ export interface TranscriptEditOperationRecord {
   };
 }
 
+export interface TranscriptCutOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "transcript_cut";
+  source_id: string;
+  transcript_id: string;
+  start_word_id: string;
+  end_word_id: string;
+  source_start_us: number;
+  source_end_us: number;
+  start_us: number;
+  end_us: number;
+  before: DraftTimeline["clips"];
+  after: DraftTimeline["clips"];
+  inverse: {
+    type: "restore_timeline_clips";
+    clips: DraftTimeline["clips"];
+    expected_after_sha256: string;
+  };
+}
+
 export type DraftOperationRecord =
   | TrimOperationRecord
   | SplitOperationRecord
   | RippleDeleteOperationRecord
   | RestoreRangeOperationRecord
-  | TranscriptEditOperationRecord;
+  | TranscriptEditOperationRecord
+  | TranscriptCutOperationRecord;
 
 export interface DraftTransactionRecord {
   schema_version: "1.0";
@@ -580,6 +615,34 @@ export function assertApplyDraftTransactionRequest(
   const clips = new Set<string>();
   let previousRangeStart: number | null = null;
   for (const operation of value.operations) {
+    if (operation?.type === "transcript_cut") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, [
+        "type",
+        "source_id",
+        "transcript_id",
+        "start_word_id",
+        "end_word_id",
+        "source_start_us",
+        "source_end_us",
+        "start_us",
+        "end_us",
+      ]);
+      id(operation.source_id);
+      id(operation.transcript_id);
+      id(operation.start_word_id);
+      id(operation.end_word_id);
+      integer(operation.source_start_us);
+      integer(operation.source_end_us, 1);
+      integer(operation.start_us);
+      integer(operation.end_us, 1);
+      if (
+        operation.source_start_us >= operation.source_end_us ||
+        operation.start_us >= operation.end_us
+      )
+        invalid();
+      continue;
+    }
     if (operation?.type === "transcript_edit") {
       if (value.operations.length !== 1) invalid();
       exact(operation, [

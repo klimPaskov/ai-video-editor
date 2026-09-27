@@ -51,6 +51,7 @@ import {
   assertManualRangeCutRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
+  assertManualTranscriptCutRequest,
   assertManualUndoRequest,
   assertManualRedoRequest,
   type ProjectView,
@@ -882,6 +883,122 @@ async function start(): Promise<void> {
                 original_text: sourceWord.text,
                 expected_text: request.expectedText,
                 replacement_text: request.replacementText,
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.projectTranscriptCut, async (request) => {
+    assertManualTranscriptCutRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError(
+        "Open this project before cutting transcript words.",
+      );
+    let project: ProjectView;
+    try {
+      project = await projectRuntime.view(request.projectId);
+    } catch {
+      throw new UserFacingError(
+        "Reopen the project before cutting transcript words.",
+      );
+    }
+    if (project.stage !== "edit")
+      throw new UserFacingError(
+        "Switch to Edit to cut selected transcript words.",
+      );
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError(
+        "The active project changed. Select the words again.",
+      );
+    const transcriptView = await transcription!.get({
+      schema_version: "1.0",
+      project_id: request.projectId,
+      job_id: null,
+    });
+    const sourceResult = transcriptView.results.find(
+      (result) =>
+        result.source_id === request.sourceId &&
+        result.transcript.transcript_id === request.transcriptId,
+    );
+    const words = sourceResult?.transcript.segments.flatMap(
+      (segment) => segment.words,
+    );
+    const startIndex = words?.findIndex(
+      (word) => word.word_id === request.startWordId,
+    );
+    const endIndex = words?.findIndex(
+      (word) => word.word_id === request.endWordId,
+    );
+    if (
+      !words ||
+      startIndex === undefined ||
+      endIndex === undefined ||
+      startIndex < 0 ||
+      endIndex < startIndex
+    )
+      throw new UserFacingError(
+        "The selected transcript range is unavailable. Refresh it and try again.",
+      );
+    const firstWord = words[startIndex]!;
+    const lastWord = words[endIndex]!;
+    if (firstWord.start_us >= lastWord.end_us)
+      throw new UserFacingError(
+        "The selected transcript range has invalid timing.",
+      );
+    const draft = await drafts.snapshot(request.projectId);
+    const clip = draft.draft.timeline.clips.find(
+      (candidate) =>
+        candidate.source_id === request.sourceId &&
+        candidate.source_start_us <= firstWord.start_us &&
+        candidate.source_end_us >= lastWord.end_us,
+    );
+    if (!clip)
+      throw new UserFacingError(
+        "The selected words are not one continuous visible source range. Choose a smaller range.",
+      );
+    const startUs =
+        clip.timeline_start_us + (firstWord.start_us - clip.source_start_us),
+      endUs = clip.timeline_start_us + (lastWord.end_us - clip.source_start_us);
+    if (startUs >= endUs || endUs > draft.draft.timeline.duration_us)
+      throw new UserFacingError(
+        "The selected transcript range is outside the current draft.",
+      );
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "transcript.cut_words",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "spoken_cut" },
+            reason:
+              "Remove the explicitly selected transcript words from the draft.",
+            operations: [
+              {
+                type: "transcript_cut",
+                source_id: request.sourceId,
+                transcript_id: request.transcriptId,
+                start_word_id: request.startWordId,
+                end_word_id: request.endWordId,
+                source_start_us: firstWord.start_us,
+                source_end_us: lastWord.end_us,
+                start_us: startUs,
+                end_us: endUs,
               },
             ],
           }),
