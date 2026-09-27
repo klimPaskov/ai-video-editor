@@ -357,7 +357,13 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
     "unified_exec_tty",
     "workspace_dependencies",
   ]) {
-    assert.ok(args.includes(`features.${feature}=false`));
+    const index = args.indexOf(`features.${feature}=false`);
+    assert.ok(index > 0, `Missing feature override: ${feature}`);
+    assert.equal(
+      args[index - 1],
+      "-c",
+      `Unpaired feature override: ${feature}`,
+    );
   }
   assert.ok(args.includes("apps._default.enabled=false"));
   assert.ok(args.includes("apps._default.destructive_enabled=false"));
@@ -427,7 +433,13 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
     "unified_exec_tty",
     "workspace_dependencies",
   ]) {
-    assert.ok(dynamicArgs.includes(`features.${feature}=false`));
+    const index = dynamicArgs.indexOf(`features.${feature}=false`);
+    assert.ok(index > 0, `Missing dynamic feature override: ${feature}`);
+    assert.equal(
+      dynamicArgs[index - 1],
+      "-c",
+      `Unpaired dynamic feature override: ${feature}`,
+    );
   }
   assert.ok(dynamicArgs.includes("agents.enabled=true"));
   assert.ok(!dynamicArgs.includes("features.multi_agent=false"));

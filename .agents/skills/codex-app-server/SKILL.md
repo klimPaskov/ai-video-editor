@@ -174,3 +174,5 @@ When restoring a project thread, derive the user-facing terminal state from the 
 For failed turns, project only the pinned `turn.error.codexErrorInfo` category. Map `unauthorized`, explicit rate/usage-limit categories, and service categories to fixed user recovery text; never forward `message` or `additionalDetails`. Do not infer authentication failure from an ambiguous HTTP 401/403 connection code.
 
 For pinned Codex 0.155.1, verify process and start/resume feature gates against the exact packaged `codex features list`. Disable unused default-on browser/CDP, computer-use, shell-snapshot, interactive TTY, workspace-dependency, guardian-approval, and in-app utility surfaces. If the packaged feature list keeps a requested toggle true, remove that claim and record the unresolved boundary. Feature gates are not a global model-visible tool allowlist.
+
+When building CLI arguments, pair every `-c` with exactly one following config expression; tests must assert adjacency for every feature override, not just the presence of the value string. Rebuild and launch the packaged Electron app after changing App Server arguments.
