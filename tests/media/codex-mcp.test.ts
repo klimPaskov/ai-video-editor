@@ -313,6 +313,15 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
   };
   const args = buildCodexAppServerArguments(runtime);
   const serialized = JSON.stringify(args);
+  for (const [index, value] of args.entries())
+    if (value === "-c")
+      assert.notEqual(
+        args[index + 1],
+        undefined,
+        "A config flag must have a following expression.",
+      );
+    else if (index > 0 && args[index - 1] === "-c")
+      assert.match(value, /^[A-Za-z0-9_.-]+=/u);
   assert.match(serialized, /mcp_servers\.codex-video-edit\.command/u);
   assert.match(serialized, /enabled_tools/u);
   assert.match(serialized, /default_tools_approval_mode/u);
@@ -387,6 +396,15 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
   assert.ok(!serialized.includes("filesystem.read"));
 
   const dynamicArgs = buildCodexAppServerArguments();
+  for (const [index, value] of dynamicArgs.entries())
+    if (value === "-c")
+      assert.notEqual(
+        dynamicArgs[index + 1],
+        undefined,
+        "A dynamic config flag must have a following expression.",
+      );
+    else if (index > 0 && dynamicArgs[index - 1] === "-c")
+      assert.match(value, /^[A-Za-z0-9_.-]+=/u);
   assert.ok(dynamicArgs.includes("mcp_servers={}"));
   assert.ok(
     !dynamicArgs.some((arg) => arg.startsWith("mcp_servers.codex-video-edit.")),

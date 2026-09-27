@@ -6,6 +6,12 @@ The exact packaged Linux Codex 0.155.1 binary reports `stable true` by default f
 
 Source: [pinned 0.155.1 feature registry](https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/features/src/lib.rs). It describes `unified_exec` as an execution-implementation feature, separate from shell-tool registration. This observation is limited to the exact packaged Linux binary and feature-list command.
 
+## Pinned 0.155.1 direct-tool configuration limit
+
+The exact tagged `ThreadStartParams` schema has no `allowed_tools` or `allowedTools` member; its `config` is an open JSON object, which does not itself define a tool allowlist. The pinned `core/config.schema.json` defines `ToolsToml` with only `experimental_request_user_input`, `update_plan`, and `web_search`; it has no `disable_defaults` or generic direct-tool-name map. Configured MCP servers have their own `enabled_tools`, and Code Mode has nested namespace exclusions, but those scopes do not constrain every direct built-in. This confirms that the current adapter cannot claim a complete upstream allowlist. Keep the account-contained runtime inventory bounded and the residual direct surface open under P2-07.
+
+Sources: [pinned `ThreadStartParams` schema](https://raw.githubusercontent.com/openai/codex/rust-v0.155.1/codex-rs/app-server-protocol/schema/json/v2/ThreadStartParams.json) and [pinned Codex config schema](https://raw.githubusercontent.com/openai/codex/rust-v0.155.1/codex-rs/core/config.schema.json). This source review corroborates runtime-specific tests; it is not a live authenticated model-tool inventory.
+
 Research date: 2026-09-04
 
 Current foundation review: [P0 research, checked 2026-09-05](P0_FOUNDATION.md). Use that report for current dependency observations, protocol corrections, and explicit limits; the earlier summary below is background research.

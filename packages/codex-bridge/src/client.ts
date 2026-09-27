@@ -69,7 +69,6 @@ const fixedAppServerArguments = [
   "-c",
   "features.shell_tool=false",
   "-c",
-  "-c",
   "features.sleep_tool=false",
   "-c",
   "features.deferred_executor=false",
