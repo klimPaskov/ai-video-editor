@@ -3,10 +3,14 @@ import { env, LogLevel, pipeline } from "@huggingface/transformers";
 import {
   buildLocalTranscript,
   localSpeechModel,
+  localSpeechChunkLengthSeconds,
+  localSpeechChunkStrideSeconds,
+  normalizeTimedWordChunks,
   readSpeechAudioProxy,
   verifySpeechModelCache,
+  type TranscriptBuildFailureReason,
+  TranscriptBuildError,
 } from "../../../packages/media-engine/src/transcription.ts";
-import type { TimedWordChunk } from "../../../packages/media-engine/src/transcription.ts";
 
 interface WorkerData {
   cacheRoot: string;
@@ -24,16 +28,18 @@ interface TranscribeRequest {
   modelSha256: string;
 }
 
-interface PipelineWord {
-  text: string;
-  timestamp: readonly [number, number];
-}
+type WorkerFailureReason =
+  | "model"
+  | "audio_proxy"
+  | "model_inference"
+  | "model_output"
+  | `transcript_${TranscriptBuildFailureReason}`;
 
 type WorkerOutput =
   | { type: "model-progress"; progress: number }
   | { type: "ready" }
   | { type: "source-result"; sourceId: string; transcript: unknown }
-  | { type: "worker-error"; reason: "model" | "source" };
+  | { type: "worker-error"; reason: WorkerFailureReason };
 
 const port = parentPort;
 if (!port) throw new Error("Speech worker requires a parent port.");
@@ -42,26 +48,6 @@ let busy = false;
 
 function send(message: WorkerOutput): void {
   port!.postMessage(message);
-}
-
-function words(value: unknown): TimedWordChunk[] {
-  if (!Array.isArray(value))
-    throw new Error("Local model did not return word timing.");
-  const chunks: TimedWordChunk[] = [];
-  for (const item of value as PipelineWord[]) {
-    if (
-      !item ||
-      typeof item.text !== "string" ||
-      !Array.isArray(item.timestamp) ||
-      item.timestamp.length !== 2 ||
-      !item.timestamp.every(
-        (part) => typeof part === "number" && Number.isFinite(part),
-      )
-    )
-      throw new Error("Local model returned invalid word timing.");
-    chunks.push({ text: item.text, timestamp: item.timestamp });
-  }
-  return chunks;
 }
 
 async function main(): Promise<void> {
@@ -113,37 +99,47 @@ async function main(): Promise<void> {
   send({ type: "ready" });
   port!.on("message", async (request: TranscribeRequest) => {
     if (busy) {
-      send({ type: "worker-error", reason: "source" });
+      send({ type: "worker-error", reason: "model_inference" });
       return;
     }
     busy = true;
+    let failureReason: WorkerFailureReason = "audio_proxy";
     try {
       const audio = await readSpeechAudioProxy(request.audioPath);
+      failureReason = "model_inference";
       const output = await transcriber(audio, {
         return_timestamps: "word",
-        chunk_length_s: 30,
-        stride_length_s: 5,
+        chunk_length_s: localSpeechChunkLengthSeconds,
+        stride_length_s: localSpeechChunkStrideSeconds,
         do_sample: false,
         num_beams: 1,
       });
       if (Array.isArray(output))
         throw new Error("Local model returned multiple outputs.");
-      const chunks = words(output.chunks);
-      const transcript = buildLocalTranscript(
-        {
-          projectId: request.projectId,
-          sourceId: request.sourceId,
-          durationUs: request.durationUs,
-          sourceStartUs: request.sourceStartUs,
-          language: null,
-          modelSha256: request.modelSha256,
-          transcriptId: request.transcriptId,
-        },
-        chunks,
-      );
+      failureReason = "model_output";
+      let transcript;
+      try {
+        const chunks = normalizeTimedWordChunks(output.chunks);
+        transcript = buildLocalTranscript(
+          {
+            projectId: request.projectId,
+            sourceId: request.sourceId,
+            durationUs: request.durationUs,
+            sourceStartUs: request.sourceStartUs,
+            language: null,
+            modelSha256: request.modelSha256,
+            transcriptId: request.transcriptId,
+          },
+          chunks,
+        );
+      } catch (error) {
+        if (error instanceof TranscriptBuildError)
+          failureReason = `transcript_${error.reason}`;
+        throw error;
+      }
       send({ type: "source-result", sourceId: request.sourceId, transcript });
     } catch {
-      send({ type: "worker-error", reason: "source" });
+      send({ type: "worker-error", reason: failureReason });
     } finally {
       busy = false;
     }

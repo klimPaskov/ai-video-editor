@@ -10,6 +10,7 @@ import type {
   TranscriptSegment,
   TranscriptSilence,
   TranscriptWord,
+  TranscriptWordFlag,
 } from "../../domain/src/transcription.ts";
 import {
   assertLocalTranscript,
@@ -25,6 +26,9 @@ export const speechAudioProfile = Object.freeze({
   noiseDb: -40,
   minimumSilenceUs: 250_000,
 });
+
+export const localSpeechChunkLengthSeconds = 30;
+export const localSpeechChunkStrideSeconds = 5;
 
 export const localSpeechModel = Object.freeze({
   id: "Xenova/whisper-base",
@@ -52,6 +56,75 @@ export const localSpeechModel = Object.freeze({
 export interface TimedWordChunk {
   text: string;
   timestamp: readonly [number, number];
+  flags?: TranscriptWordFlag[];
+}
+
+export type TranscriptBuildFailureReason =
+  | "invalid_options"
+  | "invalid_chunk"
+  | "invalid_timing"
+  | "out_of_order"
+  | "outside_source"
+  | "invalid_transcript";
+
+export class TranscriptBuildError extends Error {
+  readonly reason: TranscriptBuildFailureReason;
+
+  constructor(reason: TranscriptBuildFailureReason) {
+    super("Local transcript timing could not be validated.");
+    this.reason = reason;
+  }
+}
+
+/** Keep only empty model chunks without timing; spoken words require exact estimated bounds. */
+export function normalizeTimedWordChunks(
+  value: unknown,
+  maximumBacktrackUs = localSpeechChunkStrideSeconds * 1_000_000,
+): TimedWordChunk[] {
+  if (!Array.isArray(value)) fail();
+  if (!Number.isSafeInteger(maximumBacktrackUs) || maximumBacktrackUs < 0)
+    fail();
+  const chunks: Array<{ word: TimedWordChunk; originalIndex: number }> = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail();
+    const word = raw as Record<string, unknown>;
+    if (typeof word.text !== "string") fail();
+    if (!word.text.trim()) continue;
+    if (
+      !Array.isArray(word.timestamp) ||
+      word.timestamp.length !== 2 ||
+      !word.timestamp.every(
+        (part) => typeof part === "number" && Number.isFinite(part),
+      )
+    )
+      fail();
+    chunks.push({
+      word: {
+        text: word.text,
+        timestamp: [word.timestamp[0] as number, word.timestamp[1] as number],
+      },
+      originalIndex: chunks.length,
+    });
+  }
+  let highestStartSeconds = Number.NEGATIVE_INFINITY;
+  for (const entry of chunks) {
+    const startSeconds = entry.word.timestamp[0];
+    if (
+      Math.round((highestStartSeconds - startSeconds) * 1_000_000) >
+      maximumBacktrackUs
+    )
+      throw new TranscriptBuildError("out_of_order");
+    highestStartSeconds = Math.max(highestStartSeconds, startSeconds);
+  }
+  const ordered = [...chunks].sort(
+    (left, right) =>
+      left.word.timestamp[0] - right.word.timestamp[0] ||
+      left.originalIndex - right.originalIndex,
+  );
+  return ordered.map((entry, index) => ({
+    ...entry.word,
+    ...(entry.originalIndex !== index ? { flags: ["uncertain" as const] } : {}),
+  }));
 }
 
 export interface TranscriptBuildOptions {
@@ -108,7 +181,10 @@ function segmentWords(words: TranscriptWord[]): TranscriptSegment[] {
       segments.push({
         segment_id: `segment-${String(segments.length + 1).padStart(6, "0")}`,
         start_us: first.start_us,
-        end_us: last.end_us,
+        end_us: group.reduce(
+          (latest, word) => Math.max(latest, word.end_us),
+          last.end_us,
+        ),
         text,
         words: group,
       });
@@ -140,8 +216,12 @@ export function buildLocalTranscript(
     options.durationUs < 0 ||
     !Number.isSafeInteger(options.sourceStartUs)
   )
-    fail();
+    throw new TranscriptBuildError("invalid_options");
   const warnings = [...(options.warnings ?? [])];
+  if (chunks.some((chunk) => chunk.flags?.includes("uncertain")))
+    warnings.push(
+      "Word order was reconciled within overlapping local model chunks; review uncertain timings before editing.",
+    );
   const words: TranscriptWord[] = [];
   let priorStartUs = -1;
   for (const chunk of chunks) {
@@ -152,11 +232,12 @@ export function buildLocalTranscript(
       chunk.timestamp.length !== 2 ||
       !chunk.timestamp.every(Number.isFinite)
     )
-      fail();
+      throw new TranscriptBuildError("invalid_chunk");
     const text = cleanWordText(chunk.text);
     if (!text) continue;
     const [startSeconds, endSeconds] = chunk.timestamp;
-    if (startSeconds < 0 || endSeconds < startSeconds) fail();
+    if (startSeconds < 0 || endSeconds < startSeconds)
+      throw new TranscriptBuildError("invalid_timing");
     const startUs =
       Math.round(startSeconds * 1_000_000) + options.sourceStartUs;
     const estimatedEndUs =
@@ -164,13 +245,14 @@ export function buildLocalTranscript(
     if (
       !Number.isSafeInteger(startUs) ||
       !Number.isSafeInteger(estimatedEndUs) ||
-      startUs < 0 ||
-      startUs >= options.durationUs ||
-      startUs < priorStartUs
+      startUs < 0
     )
-      fail();
+      throw new TranscriptBuildError("invalid_timing");
+    if (startUs >= options.durationUs)
+      throw new TranscriptBuildError("outside_source");
+    if (startUs < priorStartUs) throw new TranscriptBuildError("out_of_order");
     const endUs = Math.min(estimatedEndUs, options.durationUs);
-    if (endUs < startUs) fail();
+    if (endUs < startUs) throw new TranscriptBuildError("invalid_timing");
     priorStartUs = startUs;
     words.push({
       word_id: `word-${String(words.length + 1).padStart(8, "0")}`,
@@ -178,7 +260,7 @@ export function buildLocalTranscript(
       start_us: startUs,
       end_us: endUs,
       confidence: null,
-      flags: [],
+      flags: chunk.flags ?? [],
     });
   }
   if (words.length === 0) warnings.push("No speech words were recognized.");
@@ -202,7 +284,11 @@ export function buildLocalTranscript(
     segments: segmentWords(words),
     warnings: [...new Set(warnings)],
   };
-  assertLocalTranscript(transcript);
+  try {
+    assertLocalTranscript(transcript);
+  } catch {
+    throw new TranscriptBuildError("invalid_transcript");
+  }
   return transcript;
 }
 

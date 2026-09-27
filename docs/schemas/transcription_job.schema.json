@@ -69,7 +69,15 @@
             "The project changed. Reopen it before transcribing.",
             "This source's audio timing needs a supported synchronization profile.",
             "Local transcription failed. Check this source's audio and try again.",
-            "The local speech model could not start. Restart the app and try again."
+            "The local speech model could not start. Restart the app and try again.",
+            "The prepared speech audio could not be read. Try transcribing again.",
+            "The local speech model could not process this source. Check its audio or choose a shorter clip.",
+            "The local model returned words without usable timing. Try transcribing again.",
+            "The local model could not use the transcription settings. Try again.",
+            "The local model returned unusable word timing. Try transcribing again.",
+            "The local model returned out-of-order word times. Try another source or transcribe again.",
+            "The local model returned word times outside this source. Check its audio or try another source.",
+            "The local model returned transcript data this editor cannot validate. Try transcribing again."
           ]
         }
       ]

@@ -31,17 +31,61 @@ import {
   buildTranscriptAnalysis,
   downloadSpeechModelWeights,
   localSpeechModel,
+  type TranscriptBuildFailureReason,
 } from "../../../packages/media-engine/src/transcription.ts";
 import type { ProjectStore } from "../../../packages/project-store/src/store.ts";
 
 type Baseline = InitialProjectSnapshot | TwoSourceInitialProjectSnapshot;
 type Source = InitialProjectSnapshot["source"];
+type WorkerFailureReason =
+  | "model"
+  | "audio_proxy"
+  | "model_inference"
+  | "model_output"
+  | `transcript_${TranscriptBuildFailureReason}`;
 type WorkerReply =
   | { type: "model-progress"; progress: number }
   | { type: "ready" }
   | { type: "source-result"; sourceId: string; transcript: unknown }
-  | { type: "worker-error"; reason: "model" | "source" };
+  | { type: "worker-error"; reason: WorkerFailureReason };
 type WorkerResponseType = WorkerReply["type"];
+
+const workerFailureReasons: readonly WorkerFailureReason[] = [
+  "model",
+  "audio_proxy",
+  "model_inference",
+  "model_output",
+  "transcript_invalid_options",
+  "transcript_invalid_chunk",
+  "transcript_invalid_timing",
+  "transcript_out_of_order",
+  "transcript_outside_source",
+  "transcript_invalid_transcript",
+];
+
+const workerFailureMessages: Record<WorkerFailureReason, TranscriptionMessage> =
+  {
+    model:
+      "The local speech model could not start. Restart the app and try again.",
+    audio_proxy:
+      "The prepared speech audio could not be read. Try transcribing again.",
+    model_inference:
+      "The local speech model could not process this source. Check its audio or choose a shorter clip.",
+    model_output:
+      "The local model returned words without usable timing. Try transcribing again.",
+    transcript_invalid_options:
+      "The local model could not use the transcription settings. Try again.",
+    transcript_invalid_chunk:
+      "The local model returned words without usable timing. Try transcribing again.",
+    transcript_invalid_timing:
+      "The local model returned unusable word timing. Try transcribing again.",
+    transcript_out_of_order:
+      "The local model returned out-of-order word times. Try another source or transcribe again.",
+    transcript_outside_source:
+      "The local model returned word times outside this source. Check its audio or try another source.",
+    transcript_invalid_transcript:
+      "The local model returned transcript data this editor cannot validate. Try transcribing again.",
+  };
 
 interface WorkerWaiter {
   types: readonly WorkerResponseType[];
@@ -138,10 +182,13 @@ function parseWorkerReply(value: unknown): WorkerReply {
     case "worker-error":
       if (
         Object.keys(value).sort().join() !== "reason,type" ||
-        (value.reason !== "model" && value.reason !== "source")
+        !workerFailureReasons.includes(value.reason as WorkerFailureReason)
       )
         invalid();
-      return { type: value.type, reason: value.reason };
+      return {
+        type: value.type,
+        reason: value.reason as WorkerFailureReason,
+      };
     default:
       invalid();
   }
@@ -268,9 +315,7 @@ class SpeechWorkerClient {
     });
     const result = await pending;
     if (result.type === "worker-error")
-      throw new TranscriptionTaskError(
-        "Local transcription failed. Check this source's audio and try again.",
-      );
+      throw new TranscriptionTaskError(workerFailureMessages[result.reason]);
     if (result.type !== "source-result") invalid();
     if (result.sourceId !== request.sourceId) invalid();
     assertLocalTranscript(result.transcript);

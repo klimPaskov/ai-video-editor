@@ -23,10 +23,12 @@ import {
   downloadSpeechModelWeights,
   extractSpeechAudioProxy,
   localSpeechModel,
+  normalizeTimedWordChunks,
   parseSilenceDetection,
   readSpeechAudioProxy,
   speechAudioProfile,
   verifySpeechModelCache,
+  TranscriptBuildError,
 } from "../../packages/media-engine/src/transcription.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 
@@ -72,6 +74,122 @@ test("word timing is converted to integer microseconds and bounded to the source
       [{ text: "late", timestamp: [2, 3] }],
     ),
   );
+});
+
+test("empty untimed Whisper chunks are ignored but spoken words require time bounds", () => {
+  assert.deepEqual(
+    normalizeTimedWordChunks([
+      { text: "", timestamp: null },
+      { text: "   ", timestamp: [null, null] },
+      { text: " hello ", timestamp: [1, 2] },
+    ]),
+    [{ text: " hello ", timestamp: [1, 2] }],
+  );
+  assert.throws(() =>
+    normalizeTimedWordChunks([{ text: "hello", timestamp: null }]),
+  );
+  assert.throws(() =>
+    normalizeTimedWordChunks([{ text: 5, timestamp: [1, 2] }]),
+  );
+});
+
+test("overlap-window timing regressions reorder words with uncertainty; larger ones fail closed", () => {
+  const chunks = normalizeTimedWordChunks([
+    { text: "before", timestamp: [0, 0.5] },
+    { text: "after", timestamp: [10, 10.5] },
+    { text: "overlap", timestamp: [9.8, 10.1] },
+  ]);
+  assert.deepEqual(
+    chunks.map((chunk) => chunk.text),
+    ["before", "overlap", "after"],
+  );
+  const transcript = buildLocalTranscript(
+    {
+      projectId: "project-0001",
+      sourceId: "source-0001",
+      durationUs: 15_000_000,
+      sourceStartUs: 0,
+      transcriptId: "transcript-overlap-001",
+    },
+    chunks,
+  );
+  const words = transcript.segments.flatMap((segment) => segment.words);
+  assert.deepEqual(
+    words.map((word) => word.text),
+    ["before", "overlap", "after"],
+  );
+  assert.deepEqual(words[1]?.flags, ["uncertain"]);
+  assert.deepEqual(words[2]?.flags, ["uncertain"]);
+  assert.ok(
+    transcript.warnings?.some((warning) =>
+      warning.includes("reconciled within overlapping local model chunks"),
+    ),
+  );
+  assert.throws(
+    () =>
+      normalizeTimedWordChunks([
+        { text: "before", timestamp: [0, 0.5] },
+        { text: "far later", timestamp: [20, 20.5] },
+        { text: "far earlier", timestamp: [12, 12.5] },
+      ]),
+    (error) =>
+      error instanceof TranscriptBuildError && error.reason === "out_of_order",
+  );
+});
+
+test("overlapping word ends are covered by the transcript segment bounds", () => {
+  const transcript = buildLocalTranscript(
+    {
+      projectId: "project-0001",
+      sourceId: "source-0001",
+      durationUs: 2_000_000,
+      sourceStartUs: 0,
+      transcriptId: "transcript-overlap-002",
+    },
+    [
+      { text: "first", timestamp: [0, 1] },
+      { text: "overlap", timestamp: [0.8, 0.9] },
+    ],
+  );
+  assert.equal(transcript.segments.length, 1);
+  assert.equal(transcript.segments[0]?.start_us, 0);
+  assert.equal(transcript.segments[0]?.end_us, 1_000_000);
+  assert.deepEqual(
+    transcript.segments[0]?.words.map((word) => [word.start_us, word.end_us]),
+    [
+      [0, 1_000_000],
+      [800_000, 900_000],
+    ],
+  );
+});
+
+test("local worker failure guidance is fixed and accepted by the path-free job view", () => {
+  for (const message of [
+    "The prepared speech audio could not be read. Try transcribing again.",
+    "The local speech model could not process this source. Check its audio or choose a shorter clip.",
+    "The local model returned words without usable timing. Try transcribing again.",
+    "The local model could not use the transcription settings. Try again.",
+    "The local model returned unusable word timing. Try transcribing again.",
+    "The local model returned out-of-order word times. Try another source or transcribe again.",
+    "The local model returned word times outside this source. Check its audio or try another source.",
+    "The local model returned transcript data this editor cannot validate. Try transcribing again.",
+  ])
+    assert.doesNotThrow(() =>
+      assertTranscriptionProjectView({
+        project_id: "project-0001",
+        job: {
+          project_id: "project-0001",
+          job_id: "transcription-run-0001",
+          status: "failed",
+          progress_percent: null,
+          source_count: 1,
+          completed_source_count: 0,
+          word_count: 0,
+          message,
+        },
+        results: [],
+      }),
+    );
 });
 
 test("silence analysis retains source times and never creates cuts", () => {
