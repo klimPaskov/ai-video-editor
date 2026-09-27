@@ -57,6 +57,7 @@ For manual restore, first import compatible synthetic sources, remove a known ex
 - Do not call a DOM assertion visual proof.
 - Do not call a virtual device full hardware coverage.
 - Do not count the Linux compatibility probe or guest screenshots as Windows product, capture, installer, or audio-listening acceptance.
+- If Docker reports input/output errors in its containerd content or metadata store, or cannot start a guest process, treat the isolated engine as unhealthy even if `docker ps` responds. Preserve stopped guests and their private projects/evidence; do not prune or remove them to repair the engine. Resume native work only after the operator repairs Docker, the no-mount isolation check passes, and a current-source package builds in a fresh guest. Never fall back to launching Electron on the host.
 
 For screen-reader regressions, preserve failed runs and compare unmodified upstream releases in separate isolated environments. Pin and verify downloaded source hashes. Record exact reader/AT-SPI versions, package and test hashes before startup, confirm supported settings through real API readback, and require both actual reader output and application-owned focus events. Buffered debug text is not a reliable readiness signal. Inspect the visible monitor after it paints; a stale screenshot must remain identified as stale. Never alter the product or reader just to manufacture a passing announcement.
 
