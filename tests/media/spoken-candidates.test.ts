@@ -5,6 +5,7 @@ import {
   assertSpokenCandidatePolicy,
   assertSpokenCandidateReport,
   createDefaultSpokenCandidatePolicy,
+  spokenCandidateContext,
 } from "../../packages/domain/src/spoken-candidates.ts";
 import type {
   LocalTranscript,
@@ -363,6 +364,18 @@ test("adjacent identical transcript segments are review-only repeated-take candi
   assert.equal(repeat?.related_segment_id, "segment-first-01");
   assert.equal(repeat?.disposition, "review_required");
   assert.equal(repeat?.cut_authorized, false);
+  assert.ok(repeat);
+  const context = spokenCandidateContext(transcript, repeat);
+  assert.ok(context);
+  assert.ok(
+    context.excerpt.leadingWords.some(
+      (word) => word.word_id === "word-second-01",
+    ),
+  );
+  assert.deepEqual(
+    context.earlierOccurrence?.leadingWords.map((word) => word.word_id),
+    words.slice(0, 4).map((word) => word.word_id),
+  );
 });
 
 test("analysis rejects transcript/source mismatches and the report rejects cut authority", () => {

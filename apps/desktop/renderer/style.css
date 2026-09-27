@@ -356,7 +356,8 @@ canvas {
   padding: 6px 8px;
 }
 .speech-candidate-title,
-.speech-candidate-excerpt {
+.speech-candidate-excerpt,
+.speech-candidate-related {
   grid-column: 1;
   margin: 0;
 }
@@ -366,6 +367,11 @@ canvas {
 }
 .speech-candidate-excerpt {
   color: #b6bac8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.speech-candidate-related {
+  color: #969bad;
   font-size: 12px;
   line-height: 1.45;
 }

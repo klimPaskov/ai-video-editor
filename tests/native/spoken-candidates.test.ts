@@ -146,6 +146,12 @@ function syntheticTranscript(
       flags: flagged[text] ?? [],
     } satisfies TranscriptWord;
   });
+  const segmentWords = [
+    words.slice(0, 1),
+    words.slice(1, 3),
+    words.slice(3, 5),
+    words.slice(5),
+  ];
   return {
     schema_version: "1.0",
     transcript_id: "transcript-native-candidates-01",
@@ -154,15 +160,13 @@ function syntheticTranscript(
     duration_us: 1_500_000,
     language: "en",
     model: { provider: "local", name: "synthetic-fixture", version: "1" },
-    segments: [
-      {
-        segment_id: "segment-native-candidates-01",
-        start_us: words[0]!.start_us,
-        end_us: words.at(-1)!.end_us,
-        text: words.map((word) => word.text).join(" "),
-        words,
-      },
-    ],
+    segments: segmentWords.map((segment, index) => ({
+      segment_id: `segment-native-candidates-${String(index + 1).padStart(2, "0")}`,
+      start_us: segment[0]!.start_us,
+      end_us: segment.at(-1)!.end_us,
+      text: segment.map((word) => word.text).join(" "),
+      words: segment,
+    })),
     warnings: [
       "Word timings are local model estimates; verify before editing.",
     ],
@@ -279,6 +283,15 @@ try {
   await expect(
     page.getByText("Spoken editor cue · Context only", { exact: false }),
   ).toBeVisible();
+  const repeatedItem = page
+    .locator(".speech-candidate-item")
+    .filter({ hasText: "Repeated phrase · Review" });
+  await expect(repeatedItem.locator(".speech-candidate-excerpt")).toContainText(
+    "the demo the demo",
+  );
+  await expect(repeatedItem.locator(".speech-candidate-related")).toHaveText(
+    "Earlier transcript occurrence: the demo",
+  );
   await expect(page.locator(".speech-candidate-protection")).toContainText(
     "3 protected transcript words",
   );

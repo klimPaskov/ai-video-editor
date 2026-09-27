@@ -112,6 +112,70 @@ export interface SpokenCandidateReport {
   warnings: string[];
 }
 
+export interface SpokenCandidateWordExcerpt {
+  leadingWords: readonly TranscriptWord[];
+  trailingWords: readonly TranscriptWord[];
+  truncated: boolean;
+}
+
+export interface SpokenCandidateContext {
+  excerpt: SpokenCandidateWordExcerpt;
+  earlierOccurrence: SpokenCandidateWordExcerpt | null;
+}
+
+function boundedTranscriptExcerpt(
+  words: readonly TranscriptWord[],
+): SpokenCandidateWordExcerpt {
+  if (words.length <= 32)
+    return { leadingWords: words, trailingWords: [], truncated: false };
+  return {
+    leadingWords: words.slice(0, 16),
+    trailingWords: words.slice(-16),
+    truncated: true,
+  };
+}
+
+export function spokenCandidateContext(
+  transcript: LocalTranscript,
+  candidate: SpokenCandidate,
+): SpokenCandidateContext | null {
+  if (!candidate.start_word_id || !candidate.end_word_id) return null;
+  const words = transcript.segments.flatMap((segment) => segment.words);
+  const startIndex = words.findIndex(
+    (word) => word.word_id === candidate.start_word_id,
+  );
+  const endIndex = words.findIndex(
+    (word) => word.word_id === candidate.end_word_id,
+  );
+  if (startIndex < 0 || endIndex < startIndex) return null;
+
+  const startSegment = transcript.segments.find((segment) =>
+    segment.words.some((word) => word.word_id === candidate.start_word_id),
+  );
+  if (!startSegment) return null;
+
+  const earlierOccurrence =
+    candidate.kind === "repeated_take" &&
+    candidate.related_segment_id &&
+    candidate.related_segment_id !== startSegment.segment_id
+      ? transcript.segments.find(
+          (segment) => segment.segment_id === candidate.related_segment_id,
+        )
+      : undefined;
+
+  return {
+    excerpt: boundedTranscriptExcerpt(
+      words.slice(
+        Math.max(0, startIndex - 4),
+        Math.min(words.length, endIndex + 5),
+      ),
+    ),
+    earlierOccurrence: earlierOccurrence
+      ? boundedTranscriptExcerpt(earlierOccurrence.words)
+      : null,
+  };
+}
+
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
 const hashPattern = /^[a-f0-9]{64}$/u;
 const warningCodes = new Set([

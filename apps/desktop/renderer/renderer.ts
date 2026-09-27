@@ -6,6 +6,7 @@ import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import {
   analyzeSpokenCandidates,
   createDefaultSpokenCandidatePolicy,
+  spokenCandidateContext,
 } from "../../../packages/domain/src/spoken-candidates.ts";
 import type { DesktopBridge, Reply } from "../src/bridge.ts";
 import type {
@@ -23,9 +24,11 @@ import type { ApiProviderId } from "../../../packages/domain/src/api-providers.t
 import type {
   SpokenCandidate,
   SpokenCandidateReport,
+  SpokenCandidateWordExcerpt,
 } from "../../../packages/domain/src/spoken-candidates.ts";
 import { mapSourceTimeToOutputTime } from "../../../packages/domain/src/source-output-map.ts";
 import type {
+  TranscriptWord,
   TranscriptionProjectView,
   TranscriptionSourceResult,
 } from "../../../packages/domain/src/transcription.ts";
@@ -343,9 +346,7 @@ function joinCorrectedTranscriptWords(
     ),
   );
 }
-function joinOriginalTranscriptWords(
-  words: TranscriptionProjectView["results"][number]["transcript"]["segments"][number]["words"],
-): string {
+function joinOriginalTranscriptWords(words: readonly TranscriptWord[]): string {
   return joinTranscriptTokens(words.map((word) => word.text));
 }
 function joinTranscriptTokens(tokens: readonly string[]): string {
@@ -388,30 +389,37 @@ function speechCandidateLabel(candidate: SpokenCandidate): string {
         : "Review";
   return `${kindLabels[candidate.kind]} · ${disposition}`;
 }
-function speechCandidateExcerpt(
+function formatSpeechCandidateExcerpt(
+  excerpt: SpokenCandidateWordExcerpt,
+): string {
+  const leading = joinOriginalTranscriptWords(excerpt.leadingWords);
+  if (!excerpt.truncated) return leading;
+  const trailing = joinOriginalTranscriptWords(excerpt.trailingWords);
+  return [leading, trailing].filter(Boolean).join(" … ");
+}
+function speechCandidateExcerpts(
   result: TranscriptionSourceResult,
   candidate: SpokenCandidate,
-): string {
+): { matched: string; earlierOccurrence: string | null } {
   if (!candidate.start_word_id || !candidate.end_word_id)
-    return "Silence context; no transcript words are attached.";
-  const segment = result.transcript.segments.find(
-    (item) => item.segment_id === candidate.related_segment_id,
-  );
-  if (!segment) return "Transcript context is unavailable.";
-  const start = segment.words.findIndex(
-      (word) => word.word_id === candidate.start_word_id,
-    ),
-    end = segment.words.findIndex(
-      (word) => word.word_id === candidate.end_word_id,
-    );
-  if (start < 0 || end < start) return "Transcript context is unavailable.";
-  const words = segment.words.slice(
-    Math.max(0, start - 4),
-    Math.min(segment.words.length, end + 5),
-  );
-  return (
-    joinOriginalTranscriptWords(words) || "Transcript context is unavailable."
-  );
+    return {
+      matched: "Silence context; no transcript words are attached.",
+      earlierOccurrence: null,
+    };
+  const context = spokenCandidateContext(result.transcript, candidate);
+  if (!context)
+    return {
+      matched: "Transcript context is unavailable.",
+      earlierOccurrence: null,
+    };
+  return {
+    matched:
+      formatSpeechCandidateExcerpt(context.excerpt) ||
+      "Transcript context is unavailable.",
+    earlierOccurrence: context.earlierOccurrence
+      ? formatSpeechCandidateExcerpt(context.earlierOccurrence) || null
+      : null,
+  };
 }
 function clearSpeechCandidateReview(): void {
   speechCandidateProjectId = undefined;
@@ -517,10 +525,17 @@ function renderSpeechCandidateReview(
       const title = document.createElement("p");
       title.className = "speech-candidate-title";
       title.textContent = `${speechCandidateLabel(candidate)} · Source ${time(candidate.source_start_us)}–${time(candidate.source_end_us)}`;
+      const excerpts = speechCandidateExcerpts(group.result, candidate);
       const excerpt = document.createElement("p");
       excerpt.className = "speech-candidate-excerpt";
-      excerpt.textContent = speechCandidateExcerpt(group.result, candidate);
+      excerpt.textContent = excerpts.matched;
       item.append(title, excerpt);
+      if (excerpts.earlierOccurrence) {
+        const earlier = document.createElement("p");
+        earlier.className = "speech-candidate-related";
+        earlier.textContent = `Earlier transcript occurrence: ${excerpts.earlierOccurrence}`;
+        item.append(earlier);
+      }
       const outputTime = mapSourceTimeToOutputTime(
         project.clips,
         project.timeline.durationUs,
