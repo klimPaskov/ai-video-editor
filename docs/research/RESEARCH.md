@@ -6,6 +6,12 @@ The exact packaged Linux Codex 0.155.1 binary reports `stable true` by default f
 
 Source: [pinned 0.155.1 feature registry](https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/features/src/lib.rs). It describes `unified_exec` as an execution-implementation feature, separate from shell-tool registration. This observation is limited to the exact packaged Linux binary and feature-list command.
 
+## Pinned default-on retry, hook and route gates
+
+The exact 0.155.1 feature registry describes `unbounded_connection_retries` as keeping active sampling turns alive until a failed network connection recovers; the app now disables it because uncertain turns must be reconciled before another explicit request. The same inventory shows default-on `hooks`, `skill_search`, and `code_mode_host`. Process overrides and both thread routes now disable hooks, skill-search shadow work, retries, Code Mode, and its host; only dynamic Codex start/resume opts back into Code Mode and the standalone host, while MCP remains off. A packaged `features list` run using the application-generated process config verified `hooks`, `skill_search`, `unbounded_connection_retries`, `code_mode`, and `code_mode_host` all false at process scope. Exact thread-policy tests cover MCP-off and dynamic-on. Allowed native subagents remain separately selected from runtime model metadata.
+
+Source: [pinned 0.155.1 feature registry](https://raw.githubusercontent.com/openai/codex/rust-v0.155.1/codex-rs/features/src/lib.rs). This is feature-policy evidence only; it does not prove the complete effective model-visible tool catalog.
+
 ## Pinned 0.155.1 direct-tool configuration limit
 
 The exact tagged `ThreadStartParams` schema has no `allowed_tools` or `allowedTools` member; its `config` is an open JSON object, which does not itself define a tool allowlist. The pinned `core/config.schema.json` defines `ToolsToml` with only `experimental_request_user_input`, `update_plan`, and `web_search`; it has no `disable_defaults` or generic direct-tool-name map. Configured MCP servers have their own `enabled_tools`, and Code Mode has nested namespace exclusions, but those scopes do not constrain every direct built-in. This confirms that the current adapter cannot claim a complete upstream allowlist. Keep the account-contained runtime inventory bounded and the residual direct surface open under P2-07.

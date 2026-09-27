@@ -34,6 +34,7 @@ const restrictedFeatures = {
   compaction_image_budget: false,
   code_mode_only: false,
   code_mode: {
+    enabled: false,
     excluded_tool_namespaces: [
       "mcp__codex_apps",
       "multi_agent_v1",
@@ -44,6 +45,7 @@ const restrictedFeatures = {
     ],
   },
   code_mode_host: {
+    enabled: false,
     disable_in_process_fallback: true,
   },
   codex_apps_mcp_2026_07_28: false,
@@ -87,6 +89,7 @@ const restrictedFeatures = {
   sleep_tool: false,
   token_budget: false,
   unified_exec_tty: false,
+  unbounded_connection_retries: false,
   workspace_dependencies: false,
   skill_mcp_dependency_install: false,
   skill_search: false,

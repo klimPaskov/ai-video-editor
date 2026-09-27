@@ -327,6 +327,8 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
   assert.match(serialized, /enabled_tools/u);
   assert.match(serialized, /default_tools_approval_mode/u);
   assert.ok(args.includes("features.multi_agent=false"));
+  assert.ok(args.includes("features.code_mode.enabled=false"));
+  assert.ok(args.includes("features.code_mode_host.enabled=false"));
   for (const feature of [
     "api_key_model_discovery",
     "auth_elicitation",
@@ -366,6 +368,9 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
     "shell_snapshot",
     "unified_exec_tty",
     "workspace_dependencies",
+    "hooks",
+    "skill_search",
+    "unbounded_connection_retries",
   ]) {
     const index = args.indexOf(`features.${feature}=false`);
     assert.ok(index > 0, `Missing feature override: ${feature}`);
@@ -413,6 +418,8 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
   );
   assert.ok(dynamicArgs.includes("features.multi_agent=true"));
   assert.ok(dynamicArgs.includes("features.multi_agent_v2=true"));
+  assert.ok(dynamicArgs.includes("features.code_mode.enabled=false"));
+  assert.ok(dynamicArgs.includes("features.code_mode_host.enabled=false"));
   for (const feature of [
     "api_key_model_discovery",
     "auth_elicitation",
@@ -452,6 +459,9 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
     "shell_snapshot",
     "unified_exec_tty",
     "workspace_dependencies",
+    "hooks",
+    "skill_search",
+    "unbounded_connection_retries",
   ]) {
     const index = dynamicArgs.indexOf(`features.${feature}=false`);
     assert.ok(index > 0, `Missing dynamic feature override: ${feature}`);
