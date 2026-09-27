@@ -49,7 +49,7 @@
     {
       "name": "transcript.get_range",
       "mode": "read",
-      "description": "Read a bounded transcript range.",
+      "description": "Read a paginated half-open source-time range of at most five minutes and 250 words from one completed local transcript, without source paths or edit authority.",
       "undoable": false,
       "user_confirmation": "none",
       "allowed_scope": "project_read",

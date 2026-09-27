@@ -377,6 +377,11 @@ try {
   await expect(
     window.getByRole("complementary", { name: "Codex conversation" }),
   ).toBeVisible();
+  await expect(window.locator("#codex-context-notice")).toBeVisible();
+  await expect(window.locator("#codex-context-notice")).toContainText(
+    "included in later turns",
+  );
+  await expect(window.locator("#api-turn-notice")).toBeHidden();
   await expect(window.locator("#codex-thread-status")).toBeHidden();
   await expect(window.locator("#retry-codex-thread")).toBeHidden();
   await window
@@ -411,6 +416,10 @@ try {
     window.getByRole("complementary", { name: "DeepSeek conversation" }),
   ).toBeVisible();
   await expect(window.locator("#api-turn-notice")).toBeVisible();
+  await expect(window.locator("#api-turn-notice")).toContainText(
+    "included in later turns",
+  );
+  await expect(window.locator("#codex-context-notice")).toBeHidden();
   await window.getByRole("button", { name: "Open conversation" }).click();
   await expect(window.locator("#codex-thread-error")).toHaveText(
     "Connect and choose a provider model in Settings to continue.",

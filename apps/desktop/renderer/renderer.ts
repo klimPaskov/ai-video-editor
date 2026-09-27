@@ -2481,7 +2481,9 @@ assistantProvider.addEventListener("change", () => {
   codexDrawerButton.textContent = name;
   codexDrawer.setAttribute("aria-label", `${name} conversation`);
   element("close-codex").setAttribute("aria-label", `Close ${name}`);
-  element("api-turn-notice").hidden = selectedApiProvider() === null;
+  const apiSelected = selectedApiProvider() !== null;
+  element("api-turn-notice").hidden = !apiSelected;
+  element("codex-context-notice").hidden = apiSelected;
   clearAssistantDisplay();
   if (!codexDrawer.hidden) void pollCodex(++codexPollGeneration);
 });

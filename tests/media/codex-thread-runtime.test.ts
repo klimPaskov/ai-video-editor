@@ -200,7 +200,7 @@ test("dynamic thread start and resume retain the route-specific code-mode policy
     assert.ok(dynamicNamespace?.type === "namespace");
     if (dynamicNamespace?.type !== "namespace")
       throw new Error("Expected the owned dynamic namespace");
-    assert.equal(dynamicNamespace.tools.length, 8);
+    assert.equal(dynamicNamespace.tools.length, 9);
     for (const tool of dynamicNamespace.tools) {
       const inputSchema = tool.inputSchema as {
         properties?: { project_id?: { const?: unknown } };

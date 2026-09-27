@@ -323,9 +323,11 @@ function itemProjection(
       ) {
         throw new CodexThreadProtocolError("forbidden");
       }
-      return tool === "project.get_summary" || tool === "timeline.get_summary"
-        ? { id, type, kind: "activity", label: "Reading the project" }
-        : { id, type, kind: "edit", label: "Applying an edit" };
+      return tool === "transcript.get_range"
+        ? { id, type, kind: "activity", label: "Reading the transcript" }
+        : tool === "project.get_summary" || tool === "timeline.get_summary"
+          ? { id, type, kind: "activity", label: "Reading the project" }
+          : { id, type, kind: "edit", label: "Applying an edit" };
     }
     case "dynamicToolCall": {
       const namespace = threadProtocolInternals.identifier(
@@ -344,9 +346,11 @@ function itemProjection(
         !options.allowedDynamicTools?.has(tool)
       )
         throw new CodexThreadProtocolError("forbidden");
-      return tool === "project_get_summary" || tool === "timeline_get_summary"
-        ? { id, type, kind: "activity", label: "Reading the project" }
-        : { id, type, kind: "edit", label: "Applying an edit" };
+      return tool === "transcript_get_range"
+        ? { id, type, kind: "activity", label: "Reading the transcript" }
+        : tool === "project_get_summary" || tool === "timeline_get_summary"
+          ? { id, type, kind: "activity", label: "Reading the project" }
+          : { id, type, kind: "edit", label: "Applying an edit" };
     }
     default:
       throw new CodexThreadProtocolError("forbidden");

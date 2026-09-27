@@ -742,10 +742,18 @@ test("owned read tools report reading activity instead of claiming an edit", () 
     generation: 7,
     threadId: "thread-1",
     allowedMcpServer: "codex-video-edit",
-    allowedMcpTools: new Set(["project.get_summary", "timeline.get_summary"]),
+    allowedMcpTools: new Set([
+      "project.get_summary",
+      "timeline.get_summary",
+      "transcript.get_range",
+    ]),
   });
   stream.beginTurn(7, "turn-read");
-  for (const tool of ["project.get_summary", "timeline.get_summary"]) {
+  for (const tool of [
+    "project.get_summary",
+    "timeline.get_summary",
+    "transcript.get_range",
+  ]) {
     const event = stream.observe(7, "item/started", {
       threadId: "thread-1",
       turnId: "turn-read",
@@ -761,8 +769,44 @@ test("owned read tools report reading activity instead of claiming an edit", () 
     assert.equal(event?.type, "item_started");
     if (event?.type === "item_started") {
       assert.equal(event.kind, "activity");
-      assert.equal(event.label, "Reading the project");
+      assert.equal(
+        event.label,
+        tool === "transcript.get_range"
+          ? "Reading the transcript"
+          : "Reading the project",
+      );
     }
+  }
+});
+
+test("owned dynamic transcript reads report activity instead of edits", () => {
+  const stream = new ThreadStreamProjector({
+    experimentalApiNegotiated: true,
+    generation: 7,
+    threadId: "thread-1",
+    allowedMcpServer: "codex-video-edit",
+    allowedMcpTools: new Set<string>(),
+    allowedDynamicNamespace: "codex_video_edit",
+    allowedDynamicTools: new Set(["transcript_get_range"]),
+  });
+  stream.beginTurn(7, "turn-transcript");
+  const event = stream.observe(7, "item/started", {
+    threadId: "thread-1",
+    turnId: "turn-transcript",
+    startedAtMs: 1,
+    item: {
+      id: "transcript-read",
+      type: "dynamicToolCall",
+      namespace: "codex_video_edit",
+      tool: "transcript_get_range",
+      arguments: { source_start_us: 0, source_end_us: 1000 },
+      status: "inProgress",
+    },
+  });
+  assert.equal(event?.type, "item_started");
+  if (event?.type === "item_started") {
+    assert.equal(event.kind, "activity");
+    assert.equal(event.label, "Reading the transcript");
   }
 });
 

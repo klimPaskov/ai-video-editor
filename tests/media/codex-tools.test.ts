@@ -9,6 +9,7 @@ import {
 } from "../../packages/codex-tools/src/service.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
+import type { TranscriptionProjectView } from "../../packages/domain/src/transcription.ts";
 import { ProjectStore } from "../../packages/project-store/src/store.ts";
 import {
   DraftTransactionStore,
@@ -870,5 +871,197 @@ test("unexpected backend details are replaced with a fixed safe error", async ()
       );
       return true;
     },
+  );
+});
+
+test("transcript.get_range returns bounded path-free source words and stable page identity", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const sourceId = active.source.source_id;
+  const transcriptId = "transcript-local-001";
+  const transcriptView: TranscriptionProjectView = {
+    project_id: projectId,
+    job: {
+      project_id: projectId,
+      job_id: "transcription-local-001",
+      status: "completed",
+      progress_percent: 100,
+      source_count: 1,
+      completed_source_count: 1,
+      word_count: 4,
+      message: "Transcript ready.",
+    },
+    results: [
+      {
+        source_id: sourceId,
+        transcript: {
+          schema_version: "1.0",
+          transcript_id: transcriptId,
+          project_id: projectId,
+          source_id: sourceId,
+          duration_us: active.source.duration_us,
+          language: "en",
+          model: { provider: "local", name: "fixture", version: "1" },
+          segments: [
+            {
+              segment_id: "transcript-segment-001",
+              start_us: 100_000,
+              end_us: 600_000,
+              text: "Um use the panel",
+              words: [
+                {
+                  word_id: "transcript-word-001",
+                  text: "Um",
+                  start_us: 100_000,
+                  end_us: 180_000,
+                  confidence: 0.4,
+                  flags: ["uncertain"],
+                },
+                {
+                  word_id: "transcript-word-002",
+                  text: "use",
+                  start_us: 220_000,
+                  end_us: 300_000,
+                  confidence: 0.95,
+                  flags: [],
+                },
+                {
+                  word_id: "transcript-word-003",
+                  text: "the",
+                  start_us: 400_000,
+                  end_us: 450_000,
+                  confidence: null,
+                  flags: [],
+                },
+                {
+                  word_id: "transcript-word-004",
+                  text: "panel",
+                  start_us: 500_000,
+                  end_us: 600_000,
+                  confidence: null,
+                  flags: ["name"],
+                },
+              ],
+            },
+          ],
+          warnings: [],
+        },
+        analysis: {
+          schema_version: "1.0",
+          project_id: projectId,
+          source_id: sourceId,
+          source_sha256: active.source.sha256,
+          duration_us: active.source.duration_us,
+          silence_policy: {
+            version: "1",
+            noise_db: -40,
+            minimum_duration_us: 250_000,
+          },
+          silences: [],
+        },
+      },
+    ],
+  };
+  const service = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "codex",
+    async (requestedProjectId) => {
+      assert.equal(requestedProjectId, projectId);
+      return transcriptView;
+    },
+  );
+  const request = {
+    schema_version: "1.0",
+    project_id: projectId,
+    source_id: sourceId,
+    source_start_us: 100_000,
+    source_end_us: 500_000,
+    offset: 0,
+    limit: 2,
+  };
+  const first = (await service.invoke("transcript.get_range", request)) as {
+    transcript_id: string;
+    source_sha256: string;
+    total_word_count: number;
+    next_offset: number | null;
+    draft: { draft_sequence: number };
+    words: Array<Record<string, unknown>>;
+  };
+  assert.equal(first.transcript_id, transcriptId);
+  assert.equal(first.source_sha256, active.source.sha256);
+  assert.equal(first.total_word_count, 3);
+  assert.equal(first.next_offset, 2);
+  assert.equal(first.draft.draft_sequence, 0);
+  assert.deepEqual(
+    first.words.map((word) => word.word_id),
+    ["transcript-word-001", "transcript-word-002"],
+  );
+  assert.equal(first.words[0]?.asr_text, "Um");
+  assert.deepEqual(first.words[0]?.flags, ["uncertain"]);
+  assert.equal(first.words[0]?.transcript_override_text, null);
+  assert.doesNotMatch(
+    JSON.stringify(first),
+    /private-source|original_path|managed_path|project_root/u,
+  );
+
+  const second = (await service.invoke("transcript.get_range", {
+    ...request,
+    transcript_id: first.transcript_id,
+    offset: first.next_offset!,
+  })) as { next_offset: number | null; words: Array<Record<string, unknown>> };
+  assert.equal(second.next_offset, null);
+  assert.deepEqual(
+    second.words.map((word) => word.word_id),
+    ["transcript-word-003"],
+  );
+  const beforeCorrection = await drafts.snapshot(projectId);
+  const sourceBeforeCorrection = await readFile(active.source.managed_path);
+  await drafts.applyCodex({
+    schema_version: "1.0",
+    request_id: "codex-transcript-override-001",
+    project_id: projectId,
+    draft_id: beforeCorrection.draft.draft_id,
+    base_revision_id: beforeCorrection.draft.base_revision_id,
+    expected_sequence: beforeCorrection.draft.draft_sequence,
+    expected_timeline_sha256: beforeCorrection.draft.timeline_sha256,
+    pass_group: { pass_group_id: "codex-spoken-cut-001", kind: "spoken_cut" },
+    reason: "Correct transcript display text only.",
+    operations: [
+      {
+        type: "transcript_edit",
+        source_id: sourceId,
+        transcript_id: transcriptId,
+        word_id: "transcript-word-001",
+        original_text: "Um",
+        expected_text: "Um",
+        replacement_text: "Hmm",
+      },
+    ],
+  });
+  const correctedPage = (await service.invoke(
+    "transcript.get_range",
+    request,
+  )) as {
+    draft: { draft_sequence: number };
+    words: Array<Record<string, unknown>>;
+  };
+  assert.equal(correctedPage.words[0]?.asr_text, "Um");
+  assert.equal(correctedPage.words[0]?.transcript_override_text, "Hmm");
+  assert.equal(correctedPage.draft.draft_sequence, 1);
+  assert.deepEqual(
+    await readFile(active.source.managed_path),
+    sourceBeforeCorrection,
+  );
+  await assert.rejects(
+    service.invoke("transcript.get_range", {
+      ...request,
+      transcript_id: "transcript-stale-001",
+    }),
+    expectCode("transcript_unavailable"),
+  );
+  await assert.rejects(
+    service.invoke("transcript.get_range", { ...request, limit: 251 }),
+    expectCode("invalid_request"),
   );
 });

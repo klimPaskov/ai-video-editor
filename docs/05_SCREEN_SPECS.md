@@ -15,7 +15,7 @@ Visible:
 - product mark
 - Sign in with ChatGPT
 - setup action only if a required dependency is missing
-- short context disclosure
+- short context disclosure: Codex may receive prompts, project metadata, requested preview frames and bounded local transcript text during a user-started turn; transcript pages may remain in thread history and be included in later turns, while source audio/video stay local
 - Continue
 
 Hidden under Details: exact versions, paths, protocol events, logs, and repair commands.

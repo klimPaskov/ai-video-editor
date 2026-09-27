@@ -609,7 +609,8 @@ header nav {
   font-size: 13px;
 }
 #codex-drawer > label,
-#api-turn-notice {
+#api-turn-notice,
+#codex-context-notice {
   color: #b6bac8;
   font-size: 13px;
   line-height: 1.4;

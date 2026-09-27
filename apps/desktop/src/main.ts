@@ -250,6 +250,19 @@ async function start(): Promise<void> {
         "Switch to Auto Edit or Edit to view the transcript.",
       );
   };
+  const readTranscriptForTool = async (projectId: string) => {
+    await activeTranscriptProject(projectId);
+    const value = await transcription!.get({
+      schema_version: "1.0",
+      project_id: projectId,
+      job_id: null,
+    });
+    if (activeProjectId !== projectId)
+      throw new UserFacingError(
+        "The active project changed. Refresh the transcript.",
+      );
+    return value;
+  };
   const publishDraftNotice = (notice: ProjectDraftNotice): void => {
     if (!window || window.isDestroyed()) return;
     window.webContents.send(channels.projectDraftChanged, notice);
@@ -272,7 +285,12 @@ async function start(): Promise<void> {
       projectId,
       activeProjectId: () => activeProjectId,
       work: () =>
-        new CodexVideoEditToolService(projectId, drafts).invoke(name, input),
+        new CodexVideoEditToolService(
+          projectId,
+          drafts,
+          "codex",
+          readTranscriptForTool,
+        ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
     });
@@ -312,6 +330,7 @@ async function start(): Promise<void> {
             projectId,
             drafts,
             "api_provider",
+            readTranscriptForTool,
           ).invoke(name, input),
         drafts,
         notify: publishDraftNotice,

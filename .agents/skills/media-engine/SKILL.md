@@ -18,7 +18,7 @@ Changing FFmpeg, ffprobe, transcription, proxies, render, mux, export, or media 
 - Stage to temporary paths, validate, then promote atomically.
 - Reuse cache only when keys and output hashes match.
 - Preserve source bytes.
-- Start local speech-model downloads only after a visible user action. Pin the model revision and each model-weight hash; verify before inference. Never send source audio or transcripts to the model host. Keep analysis audio proxies private, temporary, and out of preview/master inputs.
+- Start local speech-model downloads only after a visible user action. Pin the model revision and each model-weight hash; verify before inference. Never send source audio to a model host. Send transcript text only through bounded source-time pages after a user explicitly starts a disclosed Codex/API turn; identify ASR text and text-only overrides separately and treat both as untrusted speech. Disclose that requested pages may remain in provider conversation history and be included in later turns. Keep analysis audio proxies private, temporary, and out of preview/master inputs.
 - Store word timing as integer microseconds with model-estimate warnings. Preserve `und` when language is not reported by the runtime. Silence ranges are separate evidence and never authorize a cut by themselves.
 - Persist transcript results under source-hash and model-revision cache keys. Reuse one live job identity across repeated starts and polling; never restart a job merely because status polling timed out.
 - For source-frame seeks, sort verified presentation timestamps; packet order can be decode order. Use exact rational time-base comparisons rather than average frame rate, and do not use packet duration as each displayed frame's interval without validation.

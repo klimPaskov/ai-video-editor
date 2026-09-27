@@ -79,13 +79,21 @@
               <option value="openai">OpenAI API</option>
               <option value="gemini">Gemini API</option>
             </select>
+            <p id="codex-context-notice">
+              Requests and the project information Codex reads are sent to
+              OpenAI. Speech work may include bounded local transcript text;
+              transcript pages may remain in this conversation and be included
+              in later turns. Source audio and video stay on this device.
+            </p>
             <p id="codex-thread-status" role="status"></p>
             <div id="codex-thread-messages" aria-live="polite"></div>
             <ul id="codex-thread-activity" aria-label="Assistant activity"></ul>
             <p id="api-turn-notice" hidden>
               Sending shares your request and project/timeline tool results with
-              this provider. It can use paid API credits and up to four model
-              calls.
+              this provider. Speech work may also share local transcript text;
+              transcript pages may remain in this conversation and be included
+              in later turns. API calls can use paid credits and up to four
+              model calls; source audio and video stay on this device.
             </p>
             <button id="open-codex-thread">Open conversation</button>
             <form id="codex-thread-form" hidden>
@@ -321,9 +329,11 @@
         <section id="codex-settings" aria-label="Codex account" hidden>
           <p id="codex-account" role="status"></p>
           <p id="codex-disclosure">
-            Codex may receive project instructions, transcript excerpts,
-            timeline state, requested preview frames and local tool results.
-            Original recordings are not sent by default.
+            Codex may receive project instructions, bounded local transcript
+            pages, timeline state, requested preview frames and tool results
+            during a turn. Transcript pages may remain in thread history and be
+            included in later turns. Source audio/video stays on this device by
+            default.
           </p>
           <div class="codex-actions">
             <button type="button" id="codex-login" hidden>

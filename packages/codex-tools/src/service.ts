@@ -4,6 +4,10 @@ import {
   type DraftProjectReadResult,
   type DraftReadResult,
 } from "../../project-store/src/transactions.ts";
+import {
+  assertTranscriptionProjectView,
+  type TranscriptionProjectView,
+} from "../../domain/src/transcription.ts";
 
 export const codexVideoEditToolNames = [
   "project.get_summary",
@@ -14,6 +18,7 @@ export const codexVideoEditToolNames = [
   "timeline.undo",
   "cut.delete_ranges",
   "cut.restore_range",
+  "transcript.get_range",
 ] as const;
 
 export type CodexVideoEditToolName = (typeof codexVideoEditToolNames)[number];
@@ -27,6 +32,14 @@ type DraftTransactions = {
   undoApiProvider?(value: unknown): Promise<DraftCommitResult>;
 };
 
+type TranscriptReader = (
+  projectId: string,
+) => Promise<TranscriptionProjectView>;
+
+const maxTranscriptPageWords = 250;
+const maxTranscriptRangeUs = 5 * 60 * 1_000_000;
+const maxTranscriptPageBytes = 48 * 1024;
+
 export type CodexVideoEditToolErrorCode =
   | "tool_not_available"
   | "invalid_request"
@@ -35,6 +48,7 @@ export type CodexVideoEditToolErrorCode =
   | "edit_conflict"
   | "storage_unavailable"
   | "outcome_unknown"
+  | "transcript_unavailable"
   | "service_unavailable";
 
 const messages: Record<CodexVideoEditToolErrorCode, string> = {
@@ -50,6 +64,8 @@ const messages: Record<CodexVideoEditToolErrorCode, string> = {
     "The draft could not be read or saved. Reopen the project and try again.",
   outcome_unknown:
     "The edit may have been saved. Reopen the project before retrying.",
+  transcript_unavailable:
+    "A completed local transcript is not available for that source and range.",
   service_unavailable:
     "The editing service is unavailable. Reopen the project and try again.",
 };
@@ -74,14 +90,17 @@ function reject(code: CodexVideoEditToolErrorCode): never {
 function exact(
   value: unknown,
   keys: readonly string[],
+  optional: readonly string[] = [],
 ): Record<string, unknown> {
+  const allowed = [...keys, ...optional];
   if (
     !value ||
     typeof value !== "object" ||
     Array.isArray(value) ||
     Object.getPrototypeOf(value) !== Object.prototype ||
     Object.getOwnPropertySymbols(value).length !== 0 ||
-    Object.keys(value).length !== keys.length ||
+    Object.keys(value).length < keys.length ||
+    Object.keys(value).some((key) => !allowed.includes(key)) ||
     keys.some((key) => !Object.hasOwn(value, key))
   )
     reject("invalid_request");
@@ -222,16 +241,19 @@ export class CodexVideoEditToolService {
   private readonly activeProjectId: string;
   private readonly drafts: DraftTransactions;
   private readonly origin: "codex" | "api_provider";
+  private readonly transcriptReader: TranscriptReader | undefined;
 
   constructor(
     activeProjectId: string,
     drafts: DraftTransactions,
     origin: "codex" | "api_provider" = "codex",
+    transcriptReader?: TranscriptReader,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
     this.drafts = drafts;
     this.origin = origin;
+    this.transcriptReader = transcriptReader;
   }
 
   async invoke(name: unknown, input: unknown): Promise<unknown> {
@@ -242,6 +264,8 @@ export class CodexVideoEditToolService {
           return await this.projectSummary(input);
         case "timeline.get_summary":
           return await this.timelineSummary(input);
+        case "transcript.get_range":
+          return await this.transcriptRange(input);
         case "cut.trim_edge":
           return await this.trimEdge(input);
         case "cut.split":
@@ -307,6 +331,112 @@ export class CodexVideoEditToolService {
     const projectId = readRequest(input, this.activeProjectId);
     const snapshot = await this.drafts.snapshot(projectId);
     return safeDraft(snapshot.draft, snapshot.undo_transaction_id);
+  }
+
+  private async transcriptRange(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      [
+        "schema_version",
+        "project_id",
+        "source_id",
+        "source_start_us",
+        "source_end_us",
+        "offset",
+        "limit",
+      ],
+      ["transcript_id"],
+    );
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    const sourceId = request.source_id,
+      expectedTranscriptId = request.transcript_id,
+      sourceStartUs = request.source_start_us,
+      sourceEndUs = request.source_end_us,
+      offset = request.offset,
+      limit = request.limit;
+    id(sourceId);
+    if (expectedTranscriptId !== undefined) id(expectedTranscriptId);
+    integer(sourceStartUs);
+    integer(sourceEndUs, 1);
+    integer(offset);
+    integer(limit, 1);
+    if (
+      sourceStartUs >= sourceEndUs ||
+      sourceEndUs - sourceStartUs > maxTranscriptRangeUs ||
+      limit > maxTranscriptPageWords
+    )
+      reject("invalid_request");
+    if (!this.transcriptReader) reject("transcript_unavailable");
+
+    const view = await this.transcriptReader(request.project_id);
+    assertTranscriptionProjectView(view);
+    if (view.job.status !== "completed") reject("transcript_unavailable");
+    const result = view.results.find(
+      (item) =>
+        item.source_id === sourceId &&
+        (expectedTranscriptId === undefined ||
+          item.transcript.transcript_id === expectedTranscriptId),
+    );
+    if (!result || sourceEndUs > result.transcript.duration_us)
+      reject("transcript_unavailable");
+
+    const matchingWords = result.transcript.segments.flatMap((segment) =>
+      segment.words.filter(
+        (word) => word.end_us > sourceStartUs && word.start_us < sourceEndUs,
+      ),
+    );
+    if (offset > matchingWords.length) reject("invalid_request");
+    const draft = await this.drafts.snapshot(request.project_id);
+    const overrides = new Map(
+      (draft.draft.timeline.transcript_edits ?? [])
+        .filter(
+          (edit) =>
+            edit.source_id === sourceId &&
+            edit.transcript_id === result.transcript.transcript_id,
+        )
+        .map((edit) => [edit.word_id, edit.replacement_text]),
+    );
+    let pageSize = Math.min(limit, matchingWords.length - offset);
+    for (;;) {
+      const page = matchingWords.slice(offset, offset + pageSize),
+        nextOffset = offset + page.length;
+      const output = {
+        schema_version: "1.0",
+        project_id: this.activeProjectId,
+        source_id: result.source_id,
+        transcript_id: result.transcript.transcript_id,
+        source_sha256: result.analysis.source_sha256,
+        language: result.transcript.language,
+        duration_us: result.transcript.duration_us,
+        requested_source_range: {
+          start_us: sourceStartUs,
+          end_us: sourceEndUs,
+        },
+        draft: {
+          draft_id: draft.draft.draft_id,
+          base_revision_id: draft.draft.base_revision_id,
+          draft_sequence: draft.draft.draft_sequence,
+          timeline_sha256: draft.draft.timeline_sha256,
+        },
+        offset,
+        total_word_count: matchingWords.length,
+        next_offset: nextOffset < matchingWords.length ? nextOffset : null,
+        words: page.map((word) => ({
+          word_id: word.word_id,
+          start_us: word.start_us,
+          end_us: word.end_us,
+          asr_text: word.text,
+          transcript_override_text: overrides.get(word.word_id) ?? null,
+          confidence: word.confidence ?? null,
+          flags: word.flags ?? [],
+        })),
+      };
+      if (Buffer.byteLength(JSON.stringify(output)) <= maxTranscriptPageBytes)
+        return output;
+      if (pageSize <= 1) reject("service_unavailable");
+      pageSize = Math.max(1, Math.floor(pageSize / 2));
+    }
   }
 
   private async trimEdge(input: unknown): Promise<unknown> {

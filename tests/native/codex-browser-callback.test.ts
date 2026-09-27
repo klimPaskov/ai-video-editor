@@ -71,6 +71,15 @@ try {
   await page.getByRole("button", { name: "Codex", exact: true }).click();
   step = "signed-out-login-control";
   await expect(page.locator("#codex-login")).toBeVisible({ timeout: 60000 });
+  await expect(page.locator("#codex-disclosure")).toContainText(
+    "bounded local transcript pages",
+  );
+  await expect(page.locator("#codex-disclosure")).toContainText(
+    "included in later turns",
+  );
+  await expect(page.locator("#codex-disclosure")).toContainText(
+    "Source audio/video stays on this device",
+  );
   step = "signed-out-account-state";
   const initial = await page.evaluate(() => window.desktop.getCodex());
   assert.ok(initial.ok);

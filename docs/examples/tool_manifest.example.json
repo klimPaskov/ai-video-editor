@@ -32,6 +32,21 @@
       ]
     },
     {
+      "name": "transcript.get_range",
+      "mode": "read",
+      "description": "Read a paginated half-open source-time range of at most five minutes and 250 words from a completed local transcript.",
+      "undoable": false,
+      "user_confirmation": "none",
+      "allowed_scope": "project_read",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "change source audio",
+        "authorize a cut",
+        "read filesystem paths"
+      ]
+    },
+    {
       "name": "cut.trim_edge",
       "mode": "mutation",
       "description": "Move a clip boundary to an exact validated output-time position.",

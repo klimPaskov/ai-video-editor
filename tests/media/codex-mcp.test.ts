@@ -127,7 +127,22 @@ test("packaged MCP protocol lists only reviewed tools and forwards a bounded cal
         "timeline.undo",
         "cut.delete_ranges",
         "cut.restore_range",
+        "transcript.get_range",
       ],
+    );
+    const transcript = tools.find(
+      (tool) => tool.name === "transcript.get_range",
+    );
+    assert.ok(transcript);
+    assert.equal(transcript.inputSchema.additionalProperties, false);
+    assert.equal(transcript.inputSchema.properties.source_path, undefined);
+    assert.equal(
+      transcript.inputSchema.required.includes("source_start_us"),
+      true,
+    );
+    assert.equal(
+      transcript.inputSchema.required.includes("source_end_us"),
+      true,
     );
     assert.ok(!JSON.stringify(tools).includes(state.runtime.endpoint));
     const range = tools.find((tool) => tool.name === "cut.delete_range");
