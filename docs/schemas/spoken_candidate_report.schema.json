@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:codex-video-edit:spoken-candidate-report:1.0",
+  "title": "Analysis-only spoken candidate report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project_id",
+    "source_id",
+    "transcript_id",
+    "source_sha256",
+    "duration_us",
+    "language",
+    "authority",
+    "candidates",
+    "protected_words",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "project_id": { "$ref": "#/$defs/identifier" },
+    "source_id": { "$ref": "#/$defs/identifier" },
+    "transcript_id": { "$ref": "#/$defs/identifier" },
+    "source_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "duration_us": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "language": { "type": "string", "minLength": 2, "maxLength": 35 },
+    "authority": { "const": "analysis_only" },
+    "candidates": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": { "$ref": "#/$defs/candidate" }
+    },
+    "protected_words": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": { "$ref": "#/$defs/protected_word" }
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "language_unidentified",
+          "word_timing_estimated",
+          "language_cues_skipped_mismatch",
+          "silence_evidence_is_context_only"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+    },
+    "protected_reason": {
+      "enum": [
+        "manual",
+        "sponsor",
+        "licensed",
+        "uncertain",
+        "name",
+        "number",
+        "negation",
+        "protected",
+        "overlap"
+      ]
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "kind",
+        "disposition",
+        "source_start_us",
+        "source_end_us",
+        "start_word_id",
+        "end_word_id",
+        "word_ids",
+        "related_segment_id",
+        "protected_word_ids",
+        "protected_reasons",
+        "evidence",
+        "cut_authorized"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "string",
+          "pattern": "^candidate-[a-f0-9]{24}$"
+        },
+        "kind": {
+          "enum": [
+            "filler",
+            "false_start",
+            "repeated_take",
+            "self_correction",
+            "editor_cue",
+            "long_pause"
+          ]
+        },
+        "disposition": {
+          "enum": ["review_required", "context_only", "protected"]
+        },
+        "source_start_us": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "source_end_us": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "start_word_id": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/identifier" }]
+        },
+        "end_word_id": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/identifier" }]
+        },
+        "word_ids": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "related_segment_id": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/identifier" }]
+        },
+        "protected_word_ids": {
+          "type": "array",
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "protected_reasons": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/protected_reason" }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "configured_filler_cue",
+              "exact_repeated_segment",
+              "disfluent_restart",
+              "self_correction_marker",
+              "configured_editor_cue",
+              "opted_in_legacy_cue",
+              "quoted_editor_cue",
+              "quoted_filler",
+              "quoted_speech_context",
+              "long_silence_context"
+            ]
+          }
+        },
+        "cut_authorized": { "const": false }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "long_pause" } } },
+          "then": {
+            "properties": {
+              "disposition": { "const": "context_only" },
+              "start_word_id": { "type": "null" },
+              "end_word_id": { "type": "null" },
+              "word_ids": { "maxItems": 0 },
+              "protected_word_ids": { "maxItems": 0 },
+              "protected_reasons": { "maxItems": 0 }
+            }
+          },
+          "else": {
+            "properties": {
+              "start_word_id": { "$ref": "#/$defs/identifier" },
+              "end_word_id": { "$ref": "#/$defs/identifier" },
+              "word_ids": { "minItems": 1 }
+            }
+          }
+        }
+      ]
+    },
+    "protected_word": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["word_id", "reasons"],
+      "properties": {
+        "word_id": { "$ref": "#/$defs/identifier" },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/protected_reason" }
+        }
+      }
+    }
+  }
+}

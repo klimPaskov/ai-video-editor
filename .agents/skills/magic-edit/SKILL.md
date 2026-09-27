@@ -12,7 +12,7 @@ Changing automatic cuts, captions, audio cleanup, layout, pacing, or Magic Wand 
 ## Procedure
 
 1. Read source, transcript, silence, scene, pointer, and visual evidence.
-2. Generate candidate operations with reason and confidence.
+2. Generate analysis-only candidates with evidence and review disposition. Use confidence only when a real analyzer supplies a validated confidence measure; transcript heuristics alone do not invent one.
 3. Protect meaning-critical and uncertain material.
 4. Apply only policy-allowed operations to the active draft.
 5. Stream operations as atomic transactions.
@@ -28,6 +28,8 @@ When an optional API provider is selected for generative assistance, the user ex
 The goal is a useful edit, not maximum change. Do not add random effects or shorten content without evidence.
 
 The current app foundation exposes user-started local word-timed transcription and separate silence evidence in Auto Edit. Edit supports one-word text-only correction and a user-selected word-range structural cut through the shared draft journal; Magic Wand edits remain unimplemented. Treat model timing as approximate, keep language as unidentified when the runtime returns none, and never cut based only on silence. A text correction changes transcript metadata; it does not resynthesize recorded speech. A selected-word cut does not establish semantic safety, synchronized A/V quality, or a verified spoken pass.
+
+The domain speech-candidate analyzer is deterministic and path-free. Its versioned report is strictly `analysis_only`; every record has `cut_authorized: false`. It accepts exact configured cues, keeps the historical Borumi alias opt-in, places quoted matches in context-only disposition, applies word/range protection, and treats long silence as review context. Unknown/mismatched language skips lexical matching. Do not convert this report directly into a cut or claim that it understands complete retakes or meaning.
 
 ## Presets
 

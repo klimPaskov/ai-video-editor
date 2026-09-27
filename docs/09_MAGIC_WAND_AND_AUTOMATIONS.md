@@ -12,6 +12,8 @@ Auto Edit exposes user-started local transcription. A deliberate start downloads
 
 Edit also supports searching and correcting one local transcript word as text-only metadata in the shared journal, plus an explicit start/end word-range ripple cut when the range maps continuously to one visible clip. The original ASR result and recorded audio are unchanged; both operations use shared Undo/Redo. The selected-word cut does not decide whether speech is expendable or verify an audible join. Magic Wand edits and automatic meaning-aware cuts remain unimplemented.
 
+A deterministic, path-free candidate analyzer now validates the transcript, matching source-bound analysis, and versioned cue/protection policy before it emits a candidate report. It records configured fillers, exact adjacent repeats, dash-marked restarts, conservative English self-correction markers, configured editor cues, opt-in legacy cues, protected words/ranges, and long-silence context. Unknown or mismatched language disables lexical cues; quoted candidates are context-only; silence is context-only. The report and every candidate explicitly lack cut authority. No renderer/IPC integration, semantic decision, retake selection, synchronized cut set, or automatic draft transaction is implemented by this analyzer.
+
 ## Entry points
 
 ### Full Magic Edit

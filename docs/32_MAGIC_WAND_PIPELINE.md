@@ -32,6 +32,8 @@ Find scenes, takes, topic changes, screen states, long waits, typing ranges, vis
 
 Generate candidates for dead air, filler, false starts, abandoned phrases, immediate repetitions, failed takes, setup time, and obvious mistakes. Protect facts, names, numbers, negation, warnings, uncertainty, useful pauses, overlapping speech, and visual steps needed to follow the tutorial.
 
+The current deterministic domain slice emits only an analysis report from validated transcript and source-analysis records. Configured phrase matches, adjacent exact repetitions, dash-marked restarts, conservative English correction markers, quoted cues, protected words/ranges, opt-in legacy aliases, and silence context are evidence-backed candidates; none authorizes a cut. UI review, semantic meaning decisions, failed-take/scope analysis, synchronization and final cut application remain later pipeline work.
+
 ### 4. Visual focus
 
 Generate zoom candidates only when a visible target is known. Prefer pointer telemetry and click regions. Confirm targets from preview frames. Omit low-confidence zooms.

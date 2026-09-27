@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "cue_language": "en",
+  "filler_cues": ["um", "uh", "erm", "hmm"],
+  "editor_cue": "Hey Codex",
+  "legacy_editor_cues": ["Hey Borumi"],
+  "legacy_aliases_enabled": false,
+  "pause_review_threshold_us": 1000000,
+  "protected_word_ids": ["word-000001"],
+  "protected_ranges": [
+    { "start_us": 4000000, "end_us": 5600000, "reason": "sponsor" }
+  ]
+}

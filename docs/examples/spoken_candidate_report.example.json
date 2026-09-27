@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "project_id": "project-synthetic-01",
+  "source_id": "source-mic-synthetic-01",
+  "transcript_id": "transcript-synthetic-01",
+  "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "duration_us": 12000000,
+  "language": "en",
+  "authority": "analysis_only",
+  "candidates": [
+    {
+      "candidate_id": "candidate-0123456789abcdef01234567",
+      "kind": "filler",
+      "disposition": "protected",
+      "source_start_us": 350000,
+      "source_end_us": 530000,
+      "start_word_id": "word-000001",
+      "end_word_id": "word-000001",
+      "word_ids": ["word-000001"],
+      "related_segment_id": "segment-synthetic-01",
+      "protected_word_ids": ["word-000001"],
+      "protected_reasons": ["uncertain"],
+      "evidence": ["configured_filler_cue"],
+      "cut_authorized": false
+    },
+    {
+      "candidate_id": "candidate-89abcdef0123456701234567",
+      "kind": "long_pause",
+      "disposition": "context_only",
+      "source_start_us": 10500000,
+      "source_end_us": 11700000,
+      "start_word_id": null,
+      "end_word_id": null,
+      "word_ids": [],
+      "related_segment_id": null,
+      "protected_word_ids": [],
+      "protected_reasons": [],
+      "evidence": ["long_silence_context"],
+      "cut_authorized": false
+    }
+  ],
+  "protected_words": [{ "word_id": "word-000001", "reasons": ["uncertain"] }],
+  "warnings": ["word_timing_estimated", "silence_evidence_is_context_only"]
+}

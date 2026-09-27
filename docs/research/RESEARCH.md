@@ -166,6 +166,10 @@ Sources:
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L3169-L3204
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L3932-L3950
 
+## Current upstream global tool allowlist request, 2026-09-27
+
+The current public-main generated [`ThreadStartParams`](https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/schema/typescript/v2/ThreadStartParams.ts) still has no general `allowed_tools` or `allowedTools` field. The official [openai/codex issue #47652](https://github.com/openai/codex/issues/47652), opened on 2026-09-23 and still open at this review, requests a session-wide hard tool allowlist across built-in, collaboration, hosted, MCP, app and dynamic tool sources. The issue is a feature request, not a released protocol or supported configuration contract. Do not synthesize an undocumented setting or assume thread-local `dynamicTools` restrict other sources. The product retains its pinned 0.155.1 feature gates, read-only/no-network sandbox, empty workspace roots, guarded host tools and fail-closed call quarantine; P2-07 remains open until supported enforcement or stronger pinned evidence establishes the complete effective surface.
+
 ## Pinned Codex 0.155.1 direct utility feature gates, 2026-09-27
 
 The 0.155.1 core tool planner registers `wait_for_environment` only when `Feature::DeferredExecutor` is enabled, and registers `new_context_window` plus `get_context_remaining` only when `Feature::TokenBudget` is enabled. The pinned config schema exposes both feature settings. The app now explicitly disables them in App Server process arguments and both route-derived thread configs; exact unit assertions cover launch, `thread/start` and `thread/resume`. This removes those unnecessary utility tools from the tested configuration but does not establish the complete model-visible catalog or prove that every upstream capability can be disabled.
@@ -208,3 +212,7 @@ Sources:
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/app-server-protocol/src/protocol/v2/thread_data.rs#L1933-L1955
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/protocol/src/error.rs#L2686-L2751
 - https://github.com/openai/codex/issues/43821
+
+## Codex browser OAuth success path, 2026-09-27
+
+The packaged `codex-browser-callback.test.ts --await-browser-success` harness passed in a fresh no-mount Linux guest against the pinned 0.155.1 App Server. The real loopback callback reconciled the user-completed browser sign-in to connected/signed-in account state and a nonempty live model catalog; a separate Electron launch against the same private profile restored signed-in state and models. Guest-only inspection confirmed the actual native Settings window. The account, authorization URL, screenshot, and bounded result remain private and are not source-control evidence. Earlier timeouts remain distinct failed attempts.
