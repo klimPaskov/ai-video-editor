@@ -1,0 +1,54 @@
+{
+  "channel": "projects:transcript-correction",
+  "payload": {
+    "schema_version": "1.0",
+    "projectId": "550e8400-e29b-41d4-a716-446655440000",
+    "draftId": "draft-demo-001",
+    "baseRevisionId": "550e8400-e29b-41d4-a716-446655440001",
+    "expectedSequence": 0,
+    "expectedTimelineSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sourceId": "550e8400-e29b-41d4-a716-446655440002",
+    "transcriptId": "transcript-demo-001",
+    "wordId": "word-00000001",
+    "expectedText": "teh",
+    "replacementText": "the"
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "projectId": "550e8400-e29b-41d4-a716-446655440000",
+      "draft": {
+        "id": "draft-demo-001",
+        "baseRevisionId": "550e8400-e29b-41d4-a716-446655440001",
+        "sequence": 1,
+        "timelineSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "undoTransactionId": "transaction-correction-001",
+        "redoTransactionId": null
+      },
+      "timeline": {
+        "id": "550e8400-e29b-41d4-a716-446655440003",
+        "durationUs": 1000000,
+        "frameRate": { "numerator": 30, "denominator": 1 }
+      },
+      "clips": [
+        {
+          "id": "clip-main",
+          "sourceId": "550e8400-e29b-41d4-a716-446655440002",
+          "timelineStartUs": 0,
+          "timelineEndUs": 1000000,
+          "sourceStartUs": 0,
+          "sourceEndUs": 1000000
+        }
+      ],
+      "transcriptEdits": [
+        {
+          "source_id": "550e8400-e29b-41d4-a716-446655440002",
+          "transcript_id": "transcript-demo-001",
+          "word_id": "word-00000001",
+          "original_text": "teh",
+          "replacement_text": "the"
+        }
+      ]
+    }
+  }
+}

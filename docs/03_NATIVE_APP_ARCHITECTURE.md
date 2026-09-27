@@ -54,6 +54,8 @@ Use typed service boundaries around FFmpeg, ffprobe, local transcription, thumbn
 
 The first local transcription path runs only after an explicit Auto Edit action. Main verifies project sources and runs FFmpeg against immutable managed media to create a private analysis-only 16 kHz mono float32 proxy. The pinned Apache-2.0 Whisper model weights are downloaded into app userData, size/hash checked, and loaded by an isolated worker with a reduced environment. The worker receives only a proxy path and path-free job identity, then returns bounded word timing. Main stores transcript and silence evidence separately from project baselines and drafts. No user audio is sent over the network; the only network use in this path is fetching the fixed model assets. Proxies are temporary and never feed preview or master rendering.
 
+Manual transcript correction is a `transcript_edit` operation in the same hash-chained draft transaction as timeline changes. It records the source/transcript/word identity, original wording, corrected text and inverse in private draft metadata. The project view overlays the correction on the local transcript; the ASR source record, media bytes and audio samples stay unchanged. Shared Undo/Redo and journal replay apply to that text operation. A transcript edit cannot resynthesize speech or imply a transcript-linked media cut.
+
 ### Codex bridge
 
 The main process owns a long-running official `codex app-server` child over stdio. A typed adapter handles JSONL framing, request IDs, notifications, server requests, reconnect, version discovery, and schema generation.

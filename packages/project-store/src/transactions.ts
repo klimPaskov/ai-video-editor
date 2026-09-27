@@ -485,6 +485,56 @@ function prepareApply(
       operationId = authority.operation_ids[index]!;
     if (!validId(operationId) || timeline.operation_ids.includes(operationId))
       fail("conflict");
+    if (intent.type === "transcript_edit") {
+      if (request.operations.length !== 1) fail("invalid");
+      if (
+        !baseline.timeline.clips.some(
+          (clip) => clip.source_id === intent.source_id,
+        )
+      )
+        fail("invalid");
+      const beforeEdits = structuredClone(timeline.transcript_edits ?? []);
+      const key = (edit: (typeof beforeEdits)[number]) =>
+        `${edit.source_id}\0${edit.transcript_id}\0${edit.word_id}`;
+      const targetKey = `${intent.source_id}\0${intent.transcript_id}\0${intent.word_id}`;
+      const existing = beforeEdits.find((edit) => key(edit) === targetKey);
+      const currentText = existing?.replacement_text ?? intent.original_text;
+      if (
+        (existing && existing.original_text !== intent.original_text) ||
+        currentText !== intent.expected_text
+      )
+        fail("conflict");
+      const afterEdits = beforeEdits.filter((edit) => key(edit) !== targetKey);
+      if (intent.replacement_text !== intent.original_text)
+        afterEdits.push({
+          source_id: intent.source_id,
+          transcript_id: intent.transcript_id,
+          word_id: intent.word_id,
+          original_text: intent.original_text,
+          replacement_text: intent.replacement_text,
+        });
+      timeline.transcript_edits = afterEdits;
+      timeline.operation_ids.push(operationId);
+      records.push({
+        schema_version: "1.0",
+        operation_id: operationId,
+        operation_type: "transcript_edit",
+        source_id: intent.source_id,
+        transcript_id: intent.transcript_id,
+        word_id: intent.word_id,
+        original_text: intent.original_text,
+        before_text: currentText,
+        after_text: intent.replacement_text,
+        before: beforeEdits,
+        after: structuredClone(afterEdits),
+        inverse: {
+          type: "restore_transcript_edits",
+          edits: beforeEdits,
+          expected_after_sha256: canonicalSha256(afterEdits),
+        },
+      });
+      continue;
+    }
     if (intent.type === "restore_range") {
       if (request.operations.length !== 1) fail("invalid");
       const sourceClips = baseline.timeline.clips.filter(
@@ -1006,12 +1056,22 @@ export class DraftTransactionStore {
                       source_start_us: operation.source_start_us,
                       source_end_us: operation.source_end_us,
                     }
-                  : {
-                      type: "trim" as const,
-                      clip_id: operation.clip_id,
-                      edge: operation.edge,
-                      timeline_position_us: operation.timeline_position_us,
-                    },
+                  : operation.operation_type === "transcript_edit"
+                    ? {
+                        type: "transcript_edit" as const,
+                        source_id: operation.source_id,
+                        transcript_id: operation.transcript_id,
+                        word_id: operation.word_id,
+                        original_text: operation.original_text,
+                        expected_text: operation.before_text,
+                        replacement_text: operation.after_text,
+                      }
+                    : {
+                        type: "trim" as const,
+                        clip_id: operation.clip_id,
+                        edge: operation.edge,
+                        timeline_position_us: operation.timeline_position_us,
+                      },
           ),
         };
         assertApplyDraftTransactionRequest(request);

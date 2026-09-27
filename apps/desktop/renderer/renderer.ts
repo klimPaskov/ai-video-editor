@@ -77,6 +77,19 @@ const autoEditActions = element("auto-edit-actions"),
   transcriptSummary = element("transcript-summary"),
   transcriptLanguageNote = element("transcript-language-note"),
   transcriptContent = element("transcript-content");
+const transcriptEditPanel = element("transcript-edit-panel"),
+  transcriptEditSource = element<HTMLSelectElement>("transcript-edit-source"),
+  transcriptWordFilter = element<HTMLInputElement>("transcript-word-filter"),
+  transcriptEditWord = element<HTMLSelectElement>("transcript-edit-word"),
+  transcriptCorrectionInput = element<HTMLInputElement>(
+    "transcript-correction-input",
+  ),
+  saveTranscriptCorrectionButton = element<HTMLButtonElement>(
+    "save-transcript-correction",
+  ),
+  transcriptEditNote = element("transcript-edit-note"),
+  transcriptCorrectionStatus = element("transcript-correction-status"),
+  transcriptCorrectionError = element("transcript-correction-error");
 let selected: MediaSummary | undefined;
 let selectedButton: HTMLButtonElement | undefined;
 let requestedTime: number | undefined;
@@ -106,6 +119,11 @@ let transcriptionRequestPending = false;
 let transcriptionActionPending = false;
 let transcriptionPollTimer: number | undefined;
 let transcriptRenderKey = "";
+let transcriptEditSourceProjectId: string | undefined;
+let transcriptWordRenderKey = "";
+let transcriptCorrectionIssue: string | null = null;
+let transcriptCorrectionMessage: string | null = null;
+let transcriptCorrectionPending = false;
 const stageLabels: Record<ProjectStage, string> = {
   record_import: "Record or Import",
   auto_edit: "Auto Edit",
@@ -152,6 +170,7 @@ function renderStage(): void {
   renderEditTools();
   renderDraftIntegrityAction();
   renderTranscriptionActions();
+  renderTranscriptEditor();
 }
 function currentClip(): NonNullable<ProjectView["clips"]>[number] | undefined {
   if (!activeProject?.clips) return undefined;
@@ -228,9 +247,9 @@ function updateTranscriptionText(
 ): void {
   const project = activeProject;
   const results = view && view.project_id === project?.id ? view.results : [];
-  const key = results
+  const key = `${project?.draft.sequence ?? -1}|${results
     .map((result) => `${result.source_id}:${result.transcript.transcript_id}`)
-    .join("|");
+    .join("|")}`;
   if (key === transcriptRenderKey) return;
   transcriptRenderKey = key;
   transcriptContent.replaceChildren();
@@ -244,15 +263,208 @@ function updateTranscriptionText(
       sources.find((source) => source.id === result.source_id)?.name ??
       "Transcript";
     transcript.textContent =
-      result.transcript.segments.map((segment) => segment.text).join(" ") ||
-      "No words were recognized.";
+      result.transcript.segments
+        .map((segment) =>
+          joinCorrectedTranscriptWords(
+            result.source_id,
+            result.transcript.transcript_id,
+            segment.words,
+          ),
+        )
+        .join(" ") || "No words were recognized.";
     block.append(name, transcript);
     transcriptContent.append(block);
   }
 }
+function correctedTranscriptWordText(
+  sourceId: string,
+  transcriptId: string,
+  wordId: string,
+  originalText: string,
+): string {
+  return (
+    activeProject?.transcriptEdits?.find(
+      (edit) =>
+        edit.source_id === sourceId &&
+        edit.transcript_id === transcriptId &&
+        edit.word_id === wordId,
+    )?.replacement_text ?? originalText
+  );
+}
+function joinCorrectedTranscriptWords(
+  sourceId: string,
+  transcriptId: string,
+  words: TranscriptionProjectView["results"][number]["transcript"]["segments"][number]["words"],
+): string {
+  let result = "";
+  for (const word of words) {
+    const token = correctedTranscriptWordText(
+      sourceId,
+      transcriptId,
+      word.word_id,
+      word.text,
+    ).trim();
+    if (!token) continue;
+    if (/^[,.;:!?…%)}\]»”’]+$/u.test(token) || /^[([{«“‘]/u.test(token))
+      result = result.trimEnd() + token;
+    else result = result ? `${result} ${token}` : token;
+  }
+  return result.trim();
+}
+function transcriptEditResult(
+  project: ProjectView,
+  sourceId: string,
+): TranscriptionProjectView["results"][number] | undefined {
+  if (transcriptionView?.project_id !== project.id) return undefined;
+  return transcriptionView.results.find((item) => item.source_id === sourceId);
+}
+function renderTranscriptWordChoices(force = false): void {
+  const project = activeProject;
+  if (!project || project.stage !== "edit") return;
+  const sourceId = transcriptEditSource.value;
+  const result = transcriptEditResult(project, sourceId);
+  const key = [
+    project.id,
+    sourceId,
+    result?.transcript.transcript_id ?? "missing",
+    project.draft.sequence,
+    transcriptWordFilter.value.trim().toLowerCase(),
+  ].join(":");
+  if (!force && key === transcriptWordRenderKey) return;
+  transcriptWordRenderKey = key;
+  const previousWordId = transcriptEditWord.value;
+  transcriptEditWord.replaceChildren();
+  if (!result) {
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "No transcript for this source";
+    transcriptEditWord.append(empty);
+    transcriptEditWord.disabled = true;
+    transcriptCorrectionInput.value = "";
+    return;
+  }
+  const allWords = result.transcript.segments.flatMap(
+    (segment) => segment.words,
+  );
+  const needle = transcriptWordFilter.value.trim().toLowerCase();
+  const matches = allWords.filter((word) =>
+    correctedTranscriptWordText(
+      sourceId,
+      result.transcript.transcript_id,
+      word.word_id,
+      word.text,
+    )
+      .toLowerCase()
+      .includes(needle),
+  );
+  for (const word of matches.slice(0, 500)) {
+    const option = document.createElement("option");
+    option.value = word.word_id;
+    option.textContent = `${time(word.start_us)} · ${correctedTranscriptWordText(
+      sourceId,
+      result.transcript.transcript_id,
+      word.word_id,
+      word.text,
+    )}`;
+    transcriptEditWord.append(option);
+  }
+  transcriptEditWord.disabled = matches.length === 0;
+  if (matches.length > 500)
+    transcriptEditNote.textContent = `Showing the first 500 of ${matches.length} matching words. Refine the search to find another word. Transcript edits do not alter recorded audio.`;
+  else
+    transcriptEditNote.textContent =
+      "Transcript text changes do not alter recorded audio. Undo shares the edit history.";
+  if (matches.some((word) => word.word_id === previousWordId))
+    transcriptEditWord.value = previousWordId;
+  else transcriptEditWord.selectedIndex = 0;
+  const selected = allWords.find(
+    (word) => word.word_id === transcriptEditWord.value,
+  );
+  transcriptCorrectionInput.value = selected
+    ? correctedTranscriptWordText(
+        sourceId,
+        result.transcript.transcript_id,
+        selected.word_id,
+        selected.text,
+      )
+    : "";
+}
+function renderTranscriptEditor(): void {
+  const project = activeProject;
+  const visible =
+    project?.stage === "edit" &&
+    element("inspector").hidden &&
+    element("codex-drawer").hidden;
+  transcriptEditPanel.hidden = !visible;
+  const currentView =
+    project && transcriptionView?.project_id === project.id
+      ? transcriptionView
+      : undefined;
+  const sourceKey = project
+    ? `${project.id}:${currentView?.results.map((item) => item.source_id).join(",") ?? ""}`
+    : "";
+  if (project && transcriptEditSourceProjectId !== sourceKey) {
+    transcriptEditSourceProjectId = sourceKey;
+    transcriptEditSource.replaceChildren();
+    const sources = project.sources ?? [project.source];
+    for (const source of sources) {
+      const result = currentView?.results.some(
+        (item) => item.source_id === source.id,
+      );
+      if (!result) continue;
+      const option = document.createElement("option");
+      option.value = source.id;
+      option.textContent = source.name;
+      transcriptEditSource.append(option);
+    }
+    transcriptWordFilter.value = "";
+    transcriptCorrectionInput.value = "";
+  }
+  transcriptEditSource.disabled =
+    !visible ||
+    transcriptEditSource.options.length === 0 ||
+    navigating ||
+    transcriptCorrectionPending;
+  transcriptWordFilter.disabled =
+    !visible ||
+    transcriptEditSource.options.length === 0 ||
+    navigating ||
+    transcriptCorrectionPending;
+  if (visible) renderTranscriptWordChoices();
+  const selectedWord = currentView?.results
+    .find((item) => item.source_id === transcriptEditSource.value)
+    ?.transcript.segments.flatMap((segment) => segment.words)
+    .find((word) => word.word_id === transcriptEditWord.value);
+  const currentText = selectedWord
+    ? correctedTranscriptWordText(
+        transcriptEditSource.value,
+        currentView!.results.find(
+          (item) => item.source_id === transcriptEditSource.value,
+        )!.transcript.transcript_id,
+        selectedWord.word_id,
+        selectedWord.text,
+      )
+    : "";
+  saveTranscriptCorrectionButton.disabled =
+    !visible ||
+    !selectedWord ||
+    transcriptCorrectionPending ||
+    navigating ||
+    !transcriptCorrectionInput.value.trim() ||
+    transcriptCorrectionInput.value.trim() === currentText;
+  transcriptCorrectionInput.disabled =
+    !visible || !selectedWord || navigating || transcriptCorrectionPending;
+  saveTranscriptCorrectionButton.textContent = transcriptCorrectionPending
+    ? "Saving…"
+    : "Save correction";
+  transcriptCorrectionStatus.textContent = transcriptCorrectionMessage ?? "";
+  transcriptCorrectionStatus.hidden = !visible || !transcriptCorrectionMessage;
+  transcriptCorrectionError.textContent = transcriptCorrectionIssue ?? "";
+  transcriptCorrectionError.hidden = !visible || !transcriptCorrectionIssue;
+}
 function syncTranscriptionPolling(): void {
   if (
-    activeProject?.stage === "auto_edit" &&
+    (activeProject?.stage === "auto_edit" || activeProject?.stage === "edit") &&
     transcriptionView?.project_id === activeProject.id &&
     transcriptionRunning(transcriptionView)
   ) {
@@ -327,7 +539,11 @@ function renderTranscriptionActions(): void {
 }
 async function loadTranscription(): Promise<void> {
   const project = activeProject;
-  if (!project || project.stage !== "auto_edit" || transcriptionRequestPending)
+  if (
+    !project ||
+    (project.stage !== "auto_edit" && project.stage !== "edit") ||
+    transcriptionRequestPending
+  )
     return;
   transcriptionRequestPending = true;
   const requestProjectId = project.id;
@@ -343,6 +559,7 @@ async function loadTranscription(): Promise<void> {
   } finally {
     transcriptionRequestPending = false;
     renderTranscriptionActions();
+    renderTranscriptEditor();
   }
 }
 async function startTranscription(): Promise<void> {
@@ -407,6 +624,69 @@ async function stopTranscription(): Promise<void> {
   } finally {
     transcriptionActionPending = false;
     renderTranscriptionActions();
+  }
+}
+async function saveTranscriptCorrection(): Promise<void> {
+  const project = activeProject;
+  const sourceId = transcriptEditSource.value;
+  const result =
+    project && project.stage === "edit"
+      ? transcriptEditResult(project, sourceId)
+      : undefined;
+  const word = result?.transcript.segments
+    .flatMap((segment) => segment.words)
+    .find((candidate) => candidate.word_id === transcriptEditWord.value);
+  if (
+    !project ||
+    project.stage !== "edit" ||
+    !result ||
+    !word ||
+    manualEditPending ||
+    transcriptCorrectionPending
+  )
+    return;
+  const expectedText = correctedTranscriptWordText(
+      sourceId,
+      result.transcript.transcript_id,
+      word.word_id,
+      word.text,
+    ),
+    replacementText = transcriptCorrectionInput.value.trim();
+  if (!replacementText || replacementText === expectedText) return;
+  transcriptCorrectionPending = true;
+  transcriptCorrectionIssue = null;
+  transcriptCorrectionMessage = null;
+  manualEditPending = true;
+  renderStage();
+  try {
+    const reply = await window.desktop.correctTranscriptWord({
+      schema_version: "1.0",
+      projectId: project.id,
+      draftId: project.draft.id,
+      baseRevisionId: project.draft.baseRevisionId,
+      expectedSequence: project.draft.sequence,
+      expectedTimelineSha256: project.draft.timelineSha256,
+      sourceId,
+      transcriptId: result.transcript.transcript_id,
+      wordId: word.word_id,
+      expectedText,
+      replacementText,
+    });
+    if (activeProject?.id !== project.id) return;
+    if (!reply.ok) transcriptCorrectionIssue = reply.message;
+    else {
+      transcriptCorrectionMessage =
+        "Transcript updated. Recorded audio is unchanged.";
+      applyProjectDraft(reply, Number(seek.value));
+    }
+  } catch {
+    if (activeProject?.id === project.id)
+      transcriptCorrectionIssue =
+        "The transcript could not be corrected. Refresh the word selection and try again.";
+  } finally {
+    transcriptCorrectionPending = false;
+    manualEditPending = false;
+    renderStage();
   }
 }
 function renderEditTools(): void {
@@ -566,7 +846,11 @@ async function navigate(stage: ProjectStage): Promise<void> {
     if (generation === routeGeneration) {
       navigating = false;
       renderStage();
-      if (activeProject?.stage === "auto_edit") void loadTranscription();
+      if (
+        activeProject?.stage === "auto_edit" ||
+        activeProject?.stage === "edit"
+      )
+        void loadTranscription();
       if (
         !settingsDialog.open &&
         document.activeElement === document.body &&
@@ -599,6 +883,10 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
   transcriptionView = undefined;
   transcriptionErrorMessage = null;
   transcriptRenderKey = "";
+  transcriptEditSourceProjectId = undefined;
+  transcriptWordRenderKey = "";
+  transcriptCorrectionIssue = null;
+  transcriptCorrectionMessage = null;
   activeProject = project;
   clearDraftIntegrityResult();
   restoreSourceProjectId = undefined;
@@ -620,7 +908,8 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
   element<HTMLButtonElement>("codex-drawer-button").hidden = false;
   setCodexDrawer(false);
   renderStage();
-  if (project.stage === "auto_edit") void loadTranscription();
+  if (project.stage === "auto_edit" || project.stage === "edit")
+    void loadTranscription();
 }
 async function createProject(
   media: MediaSummary,
@@ -1059,12 +1348,37 @@ function applyProjectDraft(
   requestFrame(position);
   renderEditTools();
   renderDraftIntegrityAction();
+  renderTranscriptionActions();
+  renderTranscriptEditor();
 }
 transcribeLocalButton.addEventListener("click", () => {
   void startTranscription();
 });
 stopTranscriptionButton.addEventListener("click", () => {
   void stopTranscription();
+});
+transcriptEditSource.addEventListener("change", () => {
+  transcriptWordFilter.value = "";
+  transcriptWordRenderKey = "";
+  transcriptCorrectionIssue = null;
+  transcriptCorrectionMessage = null;
+  renderTranscriptEditor();
+});
+transcriptWordFilter.addEventListener("input", () => {
+  transcriptWordRenderKey = "";
+  renderTranscriptEditor();
+});
+transcriptEditWord.addEventListener("change", () => {
+  transcriptCorrectionIssue = null;
+  transcriptCorrectionMessage = null;
+  transcriptWordRenderKey = "";
+  renderTranscriptEditor();
+});
+transcriptCorrectionInput.addEventListener("input", () => {
+  renderTranscriptEditor();
+});
+saveTranscriptCorrectionButton.addEventListener("click", () => {
+  void saveTranscriptCorrection();
 });
 checkDraftIntegrityButton.addEventListener("click", async () => {
   const project = activeProject;
@@ -1527,6 +1841,7 @@ function setInspector(open: boolean): void {
     }
   }
   renderDraftIntegrityAction();
+  renderTranscriptEditor();
 }
 
 let codexThreadView: CodexThreadView | undefined;
@@ -1689,6 +2004,7 @@ function setCodexDrawer(open: boolean): void {
     codexPollGeneration++;
   }
   renderDraftIntegrityAction();
+  renderTranscriptEditor();
 }
 async function pollCodex(generation: number): Promise<void> {
   while (

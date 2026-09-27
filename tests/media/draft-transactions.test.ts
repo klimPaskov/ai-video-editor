@@ -1602,3 +1602,81 @@ test("two writes from one head produce one commit and one stale rejection", asyn
     1,
   );
 });
+
+test("transcript text corrections use the shared journal, Undo, Redo, and reopen", async () => {
+  const { projects, projectStore, baseline, source } = await fixture();
+  const sourceBytes = await readFile(source);
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  const word = {
+    source_id: baseline.source.source_id,
+    transcript_id: "transcript-local-001",
+    word_id: "word-local-000001",
+    original_text: "helo",
+    expected_text: "helo",
+    replacement_text: "hello",
+  };
+  const corrected = await store.applyManual(
+    trim(initial, {
+      request_id: "request-transcript-correction-001",
+      reason: "Correct transcript text; recorded audio is unchanged.",
+      operations: [{ type: "transcript_edit", ...word }],
+    }),
+  );
+  assert.equal(
+    corrected.transaction.operations[0]?.operation_type,
+    "transcript_edit",
+  );
+  assert.deepEqual(corrected.draft.timeline.transcript_edits, [
+    {
+      source_id: word.source_id,
+      transcript_id: word.transcript_id,
+      word_id: word.word_id,
+      original_text: word.original_text,
+      replacement_text: word.replacement_text,
+    },
+  ]);
+  await assert.rejects(
+    store.applyManual(
+      trim(corrected.draft, {
+        request_id: "request-transcript-correction-stale-001",
+        operations: [
+          {
+            type: "transcript_edit",
+            ...word,
+            expected_text: "stale wording",
+            replacement_text: "different",
+          },
+        ],
+      }),
+    ),
+    code("conflict"),
+  );
+  const undone = await store.undoManual(
+    undo(corrected.draft, corrected.transaction.transaction_id),
+  );
+  assert.equal(undone.draft.draft_sequence, 2);
+  assert.equal(undone.draft.timeline.transcript_edits, undefined);
+  const redone = await store.redoManual(
+    redo(
+      undone.draft,
+      undone.transaction.transaction_id,
+      "request-transcript-correction-redo-001",
+    ),
+  );
+  assert.equal(redone.draft.draft_sequence, 3);
+  assert.equal(
+    redone.draft.timeline.transcript_edits?.[0]?.replacement_text,
+    "hello",
+  );
+  const reopened = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopened.draft, redone.draft);
+  assert.deepEqual(await readFile(source), sourceBytes);
+});

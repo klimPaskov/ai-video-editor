@@ -306,6 +306,49 @@ canvas {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.transcript-edit-panel {
+  grid-column: 1 / -1;
+  width: min(100%, 920px);
+  margin: 0 auto;
+  text-align: left;
+}
+.transcript-edit-panel[hidden] {
+  display: none;
+}
+.transcript-edit-panel details {
+  border-top: 1px solid #343744;
+  padding-top: 10px;
+}
+.transcript-edit-controls {
+  display: grid;
+  grid-template-columns: minmax(110px, 160px) minmax(180px, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+.transcript-edit-controls label {
+  color: #b6bac8;
+  font-size: 13px;
+}
+.transcript-edit-controls select,
+.transcript-edit-controls input {
+  width: 100%;
+  min-width: 0;
+}
+#save-transcript-correction {
+  grid-column: 2;
+  justify-self: start;
+}
+#transcript-edit-note,
+#transcript-correction-status,
+#transcript-correction-error {
+  margin: 10px 0 0;
+  color: #b6bac8;
+  font-size: 13px;
+}
+#transcript-correction-error {
+  color: #ed9b9b;
+}
 .edit-actions {
   display: flex;
   align-items: center;

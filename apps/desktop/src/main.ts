@@ -50,6 +50,7 @@ import {
   assertManualSplitRequest,
   assertManualRangeCutRequest,
   assertManualRestoreRangeRequest,
+  assertManualTranscriptCorrectionRequest,
   assertManualUndoRequest,
   assertManualRedoRequest,
   type ProjectView,
@@ -234,6 +235,19 @@ async function start(): Promise<void> {
       throw new UserFacingError("The active project changed. Try again.");
     if (project.stage !== "auto_edit")
       throw new UserFacingError("Switch to Auto Edit to transcribe locally.");
+  };
+  const activeTranscriptProject = async (projectId: string): Promise<void> => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError(
+        "Open this project before reading its transcript.",
+      );
+    const project = await projectRuntime.view(projectId);
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("The active project changed. Try again.");
+    if (project.stage !== "auto_edit" && project.stage !== "edit")
+      throw new UserFacingError(
+        "Switch to Auto Edit or Edit to view the transcript.",
+      );
   };
   const publishDraftNotice = (notice: ProjectDraftNotice): void => {
     if (!window || window.isDestroyed()) return;
@@ -442,7 +456,7 @@ async function start(): Promise<void> {
   });
   register(channels.transcriptionGet, async (request) => {
     assertTranscriptionJobRequest(request);
-    await activeAutoEditProject(request.project_id);
+    await activeTranscriptProject(request.project_id);
     return transcription!.get(request);
   });
   register(channels.transcriptionStart, async (request) => {
@@ -779,6 +793,95 @@ async function start(): Promise<void> {
                 source_id: request.sourceId,
                 source_start_us: request.sourceStartUs,
                 source_end_us: request.sourceEndUs,
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.projectTranscriptCorrection, async (request) => {
+    assertManualTranscriptCorrectionRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError(
+        "Open this project before correcting its transcript.",
+      );
+    let project: ProjectView;
+    try {
+      project = await projectRuntime.view(request.projectId);
+    } catch {
+      throw new UserFacingError(
+        "Reopen the project before correcting its transcript.",
+      );
+    }
+    if (project.stage !== "edit")
+      throw new UserFacingError(
+        "Switch to Edit to correct transcript wording.",
+      );
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError(
+        "The active project changed. Select the word again.",
+      );
+    const transcriptView = await transcription!.get({
+      schema_version: "1.0",
+      project_id: request.projectId,
+      job_id: null,
+    });
+    const sourceResult = transcriptView.results.find(
+      (result) =>
+        result.source_id === request.sourceId &&
+        result.transcript.transcript_id === request.transcriptId,
+    );
+    const sourceWord = sourceResult?.transcript.segments
+      .flatMap((segment) => segment.words)
+      .find((word) => word.word_id === request.wordId);
+    if (!sourceWord)
+      throw new UserFacingError(
+        "That transcript word is no longer available. Refresh the transcript.",
+      );
+    const draft = await drafts.snapshot(request.projectId);
+    const currentOverride = draft.draft.timeline.transcript_edits?.find(
+      (edit) =>
+        edit.source_id === request.sourceId &&
+        edit.transcript_id === request.transcriptId &&
+        edit.word_id === request.wordId,
+    );
+    const currentText = currentOverride?.replacement_text ?? sourceWord.text;
+    if (currentText !== request.expectedText)
+      throw new UserFacingError(
+        "The transcript changed. Select the word again.",
+      );
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "transcript.correct_word",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "manual" },
+            reason: "Correct transcript wording; recorded audio is unchanged.",
+            operations: [
+              {
+                type: "transcript_edit",
+                source_id: request.sourceId,
+                transcript_id: request.transcriptId,
+                word_id: request.wordId,
+                original_text: sourceWord.text,
+                expected_text: request.expectedText,
+                replacement_text: request.replacementText,
               },
             ],
           }),

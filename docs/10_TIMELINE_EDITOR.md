@@ -31,6 +31,8 @@ Do not expose arbitrary track creation in the first release. Empty tracks stay h
 
 Deleting transcript text creates a linked cut operation. Restoring text restores the linked media when no later operation conflicts. Highlight uncertain words and prevent accidental deletion without review.
 
+The current P5-02 slice lets a user search for and correct one locally transcribed word in Edit. The correction is stored as text-only metadata in the draft timeline and commits through the shared transaction journal, so Undo, Redo and project reopen preserve it. The original ASR transcript and recorded audio remain unchanged. Transcript-linked cuts and text restoration are still future work; never imply that changing a transcript word changes speech.
+
 ## Direct manipulation
 
 - Drag cut edges.

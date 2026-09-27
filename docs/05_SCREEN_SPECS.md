@@ -109,9 +109,11 @@ Visible:
 - large preview
 - compact tool rail
 - simple timeline with non-empty tracks only
-- transcript mode
+- transcript mode with word search, source selection, text-only word correction, and shared Undo/Redo
 - one inspector
 - collapsible Codex drawer
+
+The transcript correction view changes draft metadata only and states that the recorded audio is unchanged. Transcript-linked cuts remain unimplemented.
 
 Direct canvas handles appear for the selected zoom, camera, or B-roll item.
 

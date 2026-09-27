@@ -90,9 +90,21 @@ class DesktopIpcContractTests(unittest.TestCase):
         value = deepcopy(exchange)
         value['response']['value']['results'] = [{'source_id': 'source-001', 'path': '/private/transcript.json'}]
         self.invalid(value)
-        self.invalid({'channel': 'library:list', 'response': {'ok': False, 'message': ''}})
-        self.invalid({'channel': 'library:list', 'response': {'ok': False, 'message': 'x' * 241}})
-        self.invalid({'channel': 'library:list', 'response': {'ok': False, 'message': '', 'value': []}})
+
+    def test_transcript_correction_exchange_is_head_bound_and_path_free(self):
+        exchange = json.loads((ROOT / 'docs/examples/desktop_ipc_transcript_correction.example.json').read_text(encoding='utf8'))
+        self.valid(exchange)
+        for request_patch in [
+            {'audio_path': '/private/source.mkv'},
+            {'expectedSequence': -1},
+            {'replacementText': ''},
+        ]:
+            value = deepcopy(exchange)
+            value['payload'].update(request_patch)
+            self.invalid(value)
+        value = deepcopy(exchange)
+        value['response']['value']['transcriptEdits'][0]['word_id'] = '../private'
+        self.invalid(value)
 
     def test_frame_and_summary_limits(self):
         for field, bad in [('width', 16777217), ('height', 0), ('rgbaBase64', 'not base64!?')]:

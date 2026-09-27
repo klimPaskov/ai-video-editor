@@ -33,6 +33,9 @@ export function reconcileProjectDraft(
       ...next,
       draft: changed.draft,
       timeline: changed.timeline,
+      ...(changed.transcriptEdits
+        ? { transcriptEdits: changed.transcriptEdits }
+        : {}),
       ...(changed.clips ? { clips: changed.clips } : {}),
     },
   };

@@ -4,6 +4,8 @@ import {
   mediaIdPattern,
 } from "./library.ts";
 import type { MediaFrame, MediaSummary } from "./library.ts";
+import { assertTranscriptTextOverrides } from "./transcription.ts";
+import type { TranscriptTextOverride } from "./transcription.ts";
 
 export const projectStages = [
   "record_import",
@@ -61,6 +63,8 @@ export interface ProjectDraftView {
   };
   /** Current committed, half-open fragment map. Older exchange fixtures may omit it. */
   clips?: ProjectClipView[];
+  /** Text-only corrections committed through the same reversible draft journal. */
+  transcriptEdits?: TranscriptTextOverride[];
 }
 export interface ProjectDraftIntegrityView {
   draft: ProjectDraftView;
@@ -128,6 +132,19 @@ export interface ManualRestoreRangeRequest {
   sourceId: string;
   sourceStartUs: number;
   sourceEndUs: number;
+}
+export interface ManualTranscriptCorrectionRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  sourceId: string;
+  transcriptId: string;
+  wordId: string;
+  expectedText: string;
+  replacementText: string;
 }
 export interface ManualUndoRequest {
   schema_version: "1.0";
@@ -305,6 +322,39 @@ export function assertManualRestoreRangeRequest(
   positive(value.sourceEndUs);
   if (value.sourceStartUs >= value.sourceEndUs) invalid();
 }
+export function assertManualTranscriptCorrectionRequest(
+  value: unknown,
+): asserts value is ManualTranscriptCorrectionRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "sourceId",
+    "transcriptId",
+    "wordId",
+    "expectedText",
+    "replacementText",
+  ]);
+  assertManualHead(value);
+  id(value.sourceId);
+  opaqueId(value.transcriptId);
+  opaqueId(value.wordId);
+  const text = (candidate: unknown): candidate is string =>
+    typeof candidate === "string" &&
+    candidate.length > 0 &&
+    candidate.length <= 200 &&
+    candidate.trim().length > 0 &&
+    !/[\x00-\x1f\x7f]/u.test(candidate);
+  if (
+    !text(value.expectedText) ||
+    !text(value.replacementText) ||
+    value.expectedText === value.replacementText
+  )
+    invalid();
+}
 export function assertManualUndoRequest(
   value: unknown,
 ): asserts value is ManualUndoRequest {
@@ -374,12 +424,18 @@ export function assertProjectDraftView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "clips");
-  exact(
-    value,
-    hasClips
-      ? ["projectId", "draft", "timeline", "clips"]
-      : ["projectId", "draft", "timeline"],
-  );
+  const hasTranscriptEdits =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "transcriptEdits");
+  exact(value, [
+    "projectId",
+    "draft",
+    "timeline",
+    ...(hasClips ? ["clips"] : []),
+    ...(hasTranscriptEdits ? ["transcriptEdits"] : []),
+  ]);
   id(value.projectId);
   exact(value.draft, [
     "id",
@@ -463,6 +519,7 @@ export function assertProjectDraftView(
       invalid();
     if (position !== value.timeline.durationUs) invalid();
   }
+  if (hasTranscriptEdits) assertTranscriptTextOverrides(value.transcriptEdits);
 }
 export function assertProjectDraftIntegrityView(
   value: unknown,
@@ -493,10 +550,16 @@ export function assertProjectView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "clips");
+  const hasTranscriptEdits =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "transcriptEdits");
   exact(value, [
     ...keys,
     ...(hasSources ? ["sources"] : []),
     ...(hasClips ? ["clips"] : []),
+    ...(hasTranscriptEdits ? ["transcriptEdits"] : []),
   ]);
   id(value.id);
   id(value.revisionId);
@@ -531,8 +594,16 @@ export function assertProjectView(
     draft: value.draft,
     timeline: value.timeline,
     ...(hasClips ? { clips: value.clips } : {}),
+    ...(hasTranscriptEdits ? { transcriptEdits: value.transcriptEdits } : {}),
   };
   assertProjectDraftView(draftView);
+  if (hasTranscriptEdits)
+    assertTranscriptTextOverrides(
+      value.transcriptEdits,
+      hasSources
+        ? (value.sources as MediaSummary[]).map((source) => source.id)
+        : [value.source.id as string],
+    );
   if (hasClips) {
     const clips = draftView.clips;
     if (!clips) invalid();

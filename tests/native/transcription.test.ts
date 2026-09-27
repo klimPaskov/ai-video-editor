@@ -30,6 +30,22 @@ assert.ok(executablePath, "Packaged executable path is required");
 const root = resolve("test-results");
 await mkdir(root, { recursive: true, mode: 0o700 });
 const evidence = await mkdtemp(join(root, "native-transcription-"));
+async function inspectionHold(name: string): Promise<void> {
+  if (!process.argv.includes("--inspect")) return;
+  const ready = join(evidence, `${name}.ready`);
+  const done = join(evidence, `${name}.done`);
+  await writeFile(ready, "ready\n", { mode: 0o600 });
+  const deadline = Date.now() + 10 * 60_000;
+  while (Date.now() < deadline) {
+    try {
+      await access(done);
+      return;
+    } catch {
+      await delay(500);
+    }
+  }
+  await access(done);
+}
 const sampleRevision = "fbe92bd97d48f3ec17779d8d8f2964e1c6bc7634";
 const sampleSha256 =
   "aa81c2552465568567e670f3823117e633900d16bd6202346a72f3c8464c74c8";
@@ -314,6 +330,84 @@ try {
     afterReopen.results[0]!.transcript.transcript_id,
     firstTranscript.transcript_id,
   );
+  const firstWord = firstTranscript.segments[0]!.words[0]!;
+  await page
+    .getByRole("navigation", { name: "Project stages" })
+    .getByRole("button", { name: "Edit", exact: true })
+    .click();
+  await expect(page.locator("#transcript-edit-panel")).toBeVisible();
+  await page.locator("#transcript-edit-details summary").click();
+  await expect
+    .poll(() => page.locator("#transcript-edit-word option").count())
+    .toBeGreaterThan(0);
+  await page.locator("#transcript-edit-word").selectOption(firstWord.word_id);
+  await expect(page.locator("#transcript-correction-input")).toHaveValue(
+    firstWord.text,
+  );
+  await page.locator("#transcript-correction-input").fill("Start");
+  await page
+    .getByRole("button", { name: "Save correction", exact: true })
+    .click();
+  await expect(page.locator("#transcript-correction-status")).toContainText(
+    /recorded audio is unchanged/iu,
+  );
+  let correctedProjects = await page.evaluate(() =>
+    window.desktop.listProjects(),
+  );
+  assert.ok(correctedProjects.ok);
+  let correctedProject = correctedProjects.value.find(
+    (item) => item.id === projectId,
+  );
+  assert.ok(correctedProject);
+  assert.equal(correctedProject.draft.sequence, 1);
+  assert.equal(
+    correctedProject.transcriptEdits?.[0]?.replacement_text,
+    "Start",
+  );
+  const correctedTranscript = await page.evaluate(async (id) => {
+    const reply = await window.desktop.getTranscription({
+      schema_version: "1.0",
+      project_id: id,
+      job_id: null,
+    });
+    if (!reply.ok) throw new Error("Original transcript could not be read");
+    return reply.value.results[0]!.transcript;
+  }, projectId);
+  assert.equal(
+    correctedTranscript.segments[0]!.words[0]!.text,
+    firstWord.text,
+    "a text correction must not rewrite the local ASR result",
+  );
+  await page.locator("#undo-edit").click();
+  await expect(page.locator("#transcript-correction-input")).toHaveValue(
+    firstWord.text,
+  );
+  await page.locator("#redo-edit").click();
+  await expect(page.locator("#transcript-correction-input")).toHaveValue(
+    "Start",
+  );
+  correctedProjects = await page.evaluate(() => window.desktop.listProjects());
+  assert.ok(correctedProjects.ok);
+  correctedProject = correctedProjects.value.find(
+    (item) => item.id === projectId,
+  );
+  assert.equal(correctedProject?.draft.sequence, 3);
+  assert.equal(
+    correctedProject?.transcriptEdits?.[0]?.replacement_text,
+    "Start",
+  );
+  await inspectionHold("transcript-correction-inspection");
+  await page.getByRole("button", { name: "Home", exact: true }).click();
+  await expect(page.locator("#home")).toBeVisible();
+  await page.locator(`#projects [data-project-id="${projectId}"]`).click();
+  await expect(page.locator("#transcript-correction-input")).toHaveValue(
+    "Start",
+    { timeout: 30_000 },
+  );
+  await page
+    .getByRole("navigation", { name: "Project stages" })
+    .getByRole("button", { name: "Auto Edit", exact: true })
+    .click();
   const repeatedCompletedStart = await page.evaluate(async (id) => {
     const reply = await window.desktop.startTranscription({
       schema_version: "1.0",
@@ -338,19 +432,7 @@ try {
   );
   if (process.argv.includes("--inspect")) {
     await page.locator("#transcript-results summary").click();
-    const ready = join(evidence, "transcription-inspection.ready");
-    const done = join(evidence, "transcription-inspection.done");
-    await writeFile(ready, "ready\n", { mode: 0o600 });
-    const deadline = Date.now() + 10 * 60_000;
-    while (Date.now() < deadline) {
-      try {
-        await access(done);
-        break;
-      } catch {
-        await delay(500);
-      }
-    }
-    await access(done);
+    await inspectionHold("transcription-inspection");
   }
   await writeFile(
     join(evidence, "result.json"),
@@ -373,6 +455,9 @@ try {
         pollRetainedJobId: true,
         reopenedProjectHasNoLiveJob: true,
         reopenRetainedTranscript: true,
+        transcriptCorrectionUndoRedo: true,
+        transcriptCorrectionSurvivedReopen: true,
+        transcriptCorrectionIsMetadataOnly: true,
         sourceUnchanged: true,
         paidProviderUsed: false,
         transcriptTextRecorded: false,

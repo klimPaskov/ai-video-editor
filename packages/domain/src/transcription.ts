@@ -88,6 +88,15 @@ export interface TranscriptAnalysis {
   silences: TranscriptSilence[];
 }
 
+/** A text-only correction attached to the shared reversible draft history. */
+export interface TranscriptTextOverride {
+  source_id: string;
+  transcript_id: string;
+  word_id: string;
+  original_text: string;
+  replacement_text: string;
+}
+
 export interface TranscriptionProjectRequest {
   schema_version: typeof transcriptSchemaVersion;
   project_id: string;
@@ -373,6 +382,38 @@ export function assertTranscriptAnalysis(
     )
       invalid();
     priorEnd = range.end_us as number;
+  }
+}
+
+export function assertTranscriptTextOverrides(
+  value: unknown,
+  allowedSourceIds?: readonly string[],
+): asserts value is TranscriptTextOverride[] {
+  if (!Array.isArray(value) || value.length > 100_000) invalid();
+  const seen = new Set<string>();
+  for (const raw of value) {
+    const override = exact(raw, [
+      "source_id",
+      "transcript_id",
+      "word_id",
+      "original_text",
+      "replacement_text",
+    ]);
+    identifier(override.source_id);
+    identifier(override.transcript_id);
+    identifier(override.word_id);
+    text(override.original_text, 200);
+    text(override.replacement_text, 200);
+    if (
+      !override.original_text.trim() ||
+      !override.replacement_text.trim() ||
+      override.original_text === override.replacement_text ||
+      (allowedSourceIds && !allowedSourceIds.includes(override.source_id))
+    )
+      invalid();
+    const key = `${override.source_id}\0${override.transcript_id}\0${override.word_id}`;
+    if (seen.has(key)) invalid();
+    seen.add(key);
   }
 }
 

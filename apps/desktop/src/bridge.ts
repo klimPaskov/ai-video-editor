@@ -23,6 +23,7 @@ import type {
   ManualSplitRequest,
   ManualRangeCutRequest,
   ManualRestoreRangeRequest,
+  ManualTranscriptCorrectionRequest,
   ManualUndoRequest,
   ManualRedoRequest,
 } from "../../../packages/domain/src/project-view.ts";
@@ -121,6 +122,9 @@ export interface DesktopBridge {
   applyManualRestoreRange(
     request: ManualRestoreRangeRequest,
   ): Promise<Reply<ProjectDraftView>>;
+  correctTranscriptWord(
+    request: ManualTranscriptCorrectionRequest,
+  ): Promise<Reply<ProjectDraftView>>;
   undoManualEdit(request: ManualUndoRequest): Promise<Reply<ProjectDraftView>>;
   redoManualEdit(request: ManualRedoRequest): Promise<Reply<ProjectDraftView>>;
   onProjectDraftChanged(
@@ -169,6 +173,7 @@ export const channels = Object.freeze({
   projectManualSplit: "projects:manual-split",
   projectManualRangeCut: "projects:manual-range-cut",
   projectManualRestoreRange: "projects:manual-restore-range",
+  projectTranscriptCorrection: "projects:transcript-correction",
   projectManualUndo: "projects:manual-undo",
   projectManualRedo: "projects:manual-redo",
   projectDraftChanged: "projects:draft-changed",

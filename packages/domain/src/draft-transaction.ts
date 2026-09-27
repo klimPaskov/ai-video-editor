@@ -2,6 +2,8 @@ import type {
   InitialProjectSnapshot,
   TwoSourceInitialProjectSnapshot,
 } from "./project.ts";
+import { assertTranscriptTextOverrides } from "./transcription.ts";
+import type { TranscriptTextOverride } from "./transcription.ts";
 type ProjectBaseline = InitialProjectSnapshot | TwoSourceInitialProjectSnapshot;
 import {
   canonicalSha256,
@@ -9,7 +11,9 @@ import {
   timelineSha256,
 } from "./project.ts";
 
-export type DraftTimeline = InitialProjectSnapshot["timeline"];
+export type DraftTimeline = InitialProjectSnapshot["timeline"] & {
+  transcript_edits?: TranscriptTextOverride[];
+};
 export type DraftOrigin = "manual" | "codex" | "api_provider" | "magic_wand";
 export type DraftPassKind =
   | "manual"
@@ -53,8 +57,22 @@ export interface RestoreRangeIntent {
   source_end_us: number;
 }
 
+export interface TranscriptEditIntent {
+  type: "transcript_edit";
+  source_id: string;
+  transcript_id: string;
+  word_id: string;
+  original_text: string;
+  expected_text: string;
+  replacement_text: string;
+}
+
 export type DraftEditIntent =
-  TrimEdgeIntent | SplitClipIntent | RippleDeleteIntent | RestoreRangeIntent;
+  | TrimEdgeIntent
+  | SplitClipIntent
+  | RippleDeleteIntent
+  | RestoreRangeIntent
+  | TranscriptEditIntent;
 
 /** Untrusted callers provide intent and freshness only. Authority is injected by the adapter. */
 export interface ApplyDraftTransactionRequest {
@@ -182,11 +200,31 @@ export interface RestoreRangeOperationRecord {
   };
 }
 
+export interface TranscriptEditOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "transcript_edit";
+  source_id: string;
+  transcript_id: string;
+  word_id: string;
+  original_text: string;
+  before_text: string;
+  after_text: string;
+  before: TranscriptTextOverride[];
+  after: TranscriptTextOverride[];
+  inverse: {
+    type: "restore_transcript_edits";
+    edits: TranscriptTextOverride[];
+    expected_after_sha256: string;
+  };
+}
+
 export type DraftOperationRecord =
   | TrimOperationRecord
   | SplitOperationRecord
   | RippleDeleteOperationRecord
-  | RestoreRangeOperationRecord;
+  | RestoreRangeOperationRecord
+  | TranscriptEditOperationRecord;
 
 export interface DraftTransactionRecord {
   schema_version: "1.0";
@@ -273,6 +311,27 @@ function exact(
     invalid();
 }
 
+function exactOptional(
+  value: unknown,
+  required: readonly string[],
+  optional: readonly string[],
+): asserts value is Record<string, unknown> {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype ||
+    Object.getOwnPropertySymbols(value).length
+  )
+    invalid();
+  const keys = Object.keys(value);
+  if (
+    required.some((key) => !Object.hasOwn(value, key)) ||
+    keys.some((key) => !required.includes(key) && !optional.includes(key))
+  )
+    invalid();
+}
+
 function id(value: unknown): asserts value is string {
   if (typeof value !== "string" || !idPattern.test(value)) invalid();
 }
@@ -295,6 +354,16 @@ function prose(value: unknown): asserts value is string {
     typeof value !== "string" ||
     !value.trim() ||
     value.length > 1000 ||
+    /[\u0000-\u001f\u007f]/u.test(value)
+  )
+    invalid();
+}
+
+function transcriptText(value: unknown): asserts value is string {
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.length > 200 ||
     /[\u0000-\u001f\u007f]/u.test(value)
   )
     invalid();
@@ -354,21 +423,30 @@ export function assertDraftTimeline(
   value: unknown,
   baseline: DraftTimeline,
 ): asserts value is DraftTimeline {
-  exact(value, [
-    "schema_version",
-    "timeline_id",
-    "project_id",
-    "revision_id",
-    "duration_us",
-    "frame_rate",
-    "canvas",
-    "tracks",
-    "clips",
-    "operation_ids",
-    "zoom_ids",
-    "speed_ids",
-    "created_at",
-  ]);
+  exactOptional(
+    value,
+    [
+      "schema_version",
+      "timeline_id",
+      "project_id",
+      "revision_id",
+      "duration_us",
+      "frame_rate",
+      "canvas",
+      "tracks",
+      "clips",
+      "operation_ids",
+      "zoom_ids",
+      "speed_ids",
+      "created_at",
+    ],
+    ["transcript_edits"],
+  );
+  if (Object.hasOwn(value, "transcript_edits"))
+    assertTranscriptTextOverrides(
+      value.transcript_edits,
+      baseline.clips.map((clip) => clip.source_id),
+    );
   if (
     value.schema_version !== "1.0" ||
     value.timeline_id !== baseline.timeline_id ||
@@ -502,6 +580,26 @@ export function assertApplyDraftTransactionRequest(
   const clips = new Set<string>();
   let previousRangeStart: number | null = null;
   for (const operation of value.operations) {
+    if (operation?.type === "transcript_edit") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, [
+        "type",
+        "source_id",
+        "transcript_id",
+        "word_id",
+        "original_text",
+        "expected_text",
+        "replacement_text",
+      ]);
+      id(operation.source_id);
+      id(operation.transcript_id);
+      id(operation.word_id);
+      transcriptText(operation.original_text);
+      transcriptText(operation.expected_text);
+      transcriptText(operation.replacement_text);
+      if (operation.expected_text === operation.replacement_text) invalid();
+      continue;
+    }
     if (operation?.type === "restore_range") {
       if (value.operations.length !== 1) invalid();
       exact(operation, [

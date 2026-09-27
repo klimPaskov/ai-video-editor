@@ -10,6 +10,7 @@ import {
   assertManualSplitRequest,
   assertManualRangeCutRequest,
   assertManualRestoreRangeRequest,
+  assertManualTranscriptCorrectionRequest,
   assertManualUndoRequest,
   assertManualRedoRequest,
   assertProjectNavigation,
@@ -281,6 +282,49 @@ test("manual edit IPC accepts only exact intent and a valid draft head", () => {
     { ...redo, path: "/private/project" },
   ])
     assert.throws(() => assertManualRedoRequest(bad));
+});
+
+test("transcript corrections are path-free, draft-bound, and tied to a source word", () => {
+  const project = view();
+  const head = {
+    schema_version: "1.0",
+    projectId: project.id,
+    draftId: project.draft.id,
+    baseRevisionId: project.revisionId,
+    expectedSequence: project.draft.sequence,
+    expectedTimelineSha256: project.draft.timelineSha256,
+    sourceId: project.source.id,
+    transcriptId: "transcript-local-001",
+    wordId: "word-local-000001",
+    expectedText: "teh",
+    replacementText: "the",
+  };
+  assertManualTranscriptCorrectionRequest(head);
+  for (const bad of [
+    { ...head, sourcePath: "C:/private/source.mkv" },
+    { ...head, transcriptId: "../private" },
+    { ...head, replacementText: "" },
+    { ...head, expectedText: head.replacementText },
+    { ...head, expectedSequence: -1 },
+  ])
+    assert.throws(() => assertManualTranscriptCorrectionRequest(bad));
+
+  const correction = {
+    source_id: project.source.id,
+    transcript_id: head.transcriptId,
+    word_id: head.wordId,
+    original_text: "teh",
+    replacement_text: "the",
+  };
+  assertProjectView({ ...project, transcriptEdits: [correction] });
+  assert.throws(() =>
+    assertProjectView({
+      ...project,
+      transcriptEdits: [
+        { ...correction, source_id: "55555555-5555-4555-8555-555555555555" },
+      ],
+    }),
+  );
 });
 test("committed fragments retain ordered source intervals and reject overlap or source revisits", () => {
   const base = view();

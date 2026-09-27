@@ -158,6 +158,46 @@
               <div id="transcript-content"></div>
             </details>
           </section>
+          <section
+            id="transcript-edit-panel"
+            class="transcript-edit-panel"
+            hidden
+          >
+            <details id="transcript-edit-details">
+              <summary>Transcript</summary>
+              <div class="transcript-edit-controls">
+                <label for="transcript-edit-source">Source</label>
+                <select id="transcript-edit-source"></select>
+                <label for="transcript-word-filter">Find a word</label>
+                <input
+                  id="transcript-word-filter"
+                  type="search"
+                  maxlength="80"
+                  autocomplete="off"
+                />
+                <label for="transcript-edit-word">Word</label>
+                <select id="transcript-edit-word"></select>
+                <label for="transcript-correction-input">
+                  Correct transcript text
+                </label>
+                <input
+                  id="transcript-correction-input"
+                  type="text"
+                  maxlength="200"
+                  autocomplete="off"
+                />
+                <button id="save-transcript-correction" type="button">
+                  Save correction
+                </button>
+              </div>
+              <p id="transcript-edit-note">
+                Transcript text changes do not alter recorded audio. Undo shares
+                the edit history.
+              </p>
+              <p id="transcript-correction-status" role="status" hidden></p>
+              <p id="transcript-correction-error" role="alert" hidden></p>
+            </details>
+          </section>
           <div id="edit-actions" class="edit-actions" hidden>
             <span id="edit-clip" hidden></span>
             <button id="trim-start">Trim start</button>

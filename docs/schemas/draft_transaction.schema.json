@@ -58,7 +58,8 @@
           { "$ref": "#/$defs/trim_operation" },
           { "$ref": "#/$defs/split_operation" },
           { "$ref": "#/$defs/ripple_delete_operation" },
-          { "$ref": "#/$defs/restore_range_operation" }
+          { "$ref": "#/$defs/restore_range_operation" },
+          { "$ref": "#/$defs/transcript_edit_operation" }
         ]
       }
     },
@@ -87,6 +88,21 @@
         "properties": {
           "operations": {
             "contains": { "$ref": "#/$defs/restore_range_operation" }
+          }
+        },
+        "required": ["operations"]
+      },
+      "then": {
+        "properties": {
+          "operations": { "minItems": 1, "maxItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operations": {
+            "contains": { "$ref": "#/$defs/transcript_edit_operation" }
           }
         },
         "required": ["operations"]
@@ -271,6 +287,59 @@
               "minItems": 1,
               "maxItems": 4096,
               "items": { "$ref": "#/$defs/clip" }
+            },
+            "expected_after_sha256": { "$ref": "#/$defs/hash" }
+          }
+        }
+      }
+    },
+    "transcript_edit_operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation_id",
+        "operation_type",
+        "source_id",
+        "transcript_id",
+        "word_id",
+        "original_text",
+        "before_text",
+        "after_text",
+        "before",
+        "after",
+        "inverse"
+      ],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "operation_id": { "$ref": "#/$defs/id" },
+        "operation_type": { "const": "transcript_edit" },
+        "source_id": { "$ref": "#/$defs/id" },
+        "transcript_id": { "$ref": "#/$defs/id" },
+        "word_id": { "$ref": "#/$defs/id" },
+        "original_text": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "before_text": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "after_text": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "before": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": { "$ref": "timeline.schema.json#/$defs/transcript_edit" }
+        },
+        "after": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": { "$ref": "timeline.schema.json#/$defs/transcript_edit" }
+        },
+        "inverse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "edits", "expected_after_sha256"],
+          "properties": {
+            "type": { "const": "restore_transcript_edits" },
+            "edits": {
+              "type": "array",
+              "maxItems": 100000,
+              "items": { "$ref": "timeline.schema.json#/$defs/transcript_edit" }
             },
             "expected_after_sha256": { "$ref": "#/$defs/hash" }
           }

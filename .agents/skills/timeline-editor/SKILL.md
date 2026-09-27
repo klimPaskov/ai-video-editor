@@ -45,6 +45,12 @@ Pending same-directory files may be ignored during recovery, while a corrupt com
 journal entry fails closed. Do not expose filesystem paths or let renderer or model input
 supply a trusted edit origin.
 
+The current P5-02 correction slice adds `transcript_edit` to the same hash-chained draft
+transaction. Main binds a correction to an existing local transcript/source/word, verifies
+the expected current text, and records only a draft metadata override. The override
+survives Undo/Redo and reopen; it never alters the original ASR transcript or recorded
+audio. Transcript-linked ripple cuts are a separate operation and remain future work.
+
 For the partial two-source baseline, preserve the two ordered clip/source identities and
 half-open contiguous timeline intervals. A trim on the first clip must reflow the second
 through the same transaction and undo journal. Do not mutate either immutable source or
