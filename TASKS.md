@@ -174,7 +174,8 @@ Acceptance: the installed app creates and verifies the default lossless master a
 
 ## P10: user example video acceptance
 
-- [ ] P10-01 Import both supplied example videos through the native UI, preserve each immutable source, and append the second after the first in one editable draft sequence.
+- [x] P10-01 Import both supplied example videos through the native UI, preserve each immutable source, and append the second after the first in one editable draft sequence.
+  Acceptance evidence: a fresh packaged Linux Electron run in the no-mount Docker guest imported both supplied recordings through the app in requested order. Real GPT-6-Luna/high Codex committed one guarded split while the turn ran; shared Undo restored the original draft, reopen succeeded, exact split/join preview checks passed, and original/managed source bytes plus baseline remained unchanged. Guest-only native capture and input inspected the actual window. This accepts ordered import and source immutability only; Magic Wand, semantic editing, full-length review, and lossless export remain open.
 - [ ] P10-02 Run Magic Wand with real Codex and inspect each automation class. Exercise the adapted editorial prompt, including conservative spoken instructions and suggestion-only graphics with no automatic export.
 - [ ] P10-03 Review the complete draft through computer use.
 - [ ] P10-04 Fix defects using manual tools and natural-language edits.
