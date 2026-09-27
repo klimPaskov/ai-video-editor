@@ -289,6 +289,8 @@ test("recent history restores redacted messages and seeds the active turn", () =
     backwardsCursor: "newer-page",
   });
   assert.equal(history.activeTurnId, "turn-active");
+  assert.equal(history.terminalStatus, null);
+  assert.equal(history.retryable, false);
   assert.deepEqual(
     history.messages.map(({ role, complete }) => ({ role, complete })),
     [
@@ -324,6 +326,90 @@ test("recent history restores redacted messages and seeds the active turn", () =
       text: " and continuing",
     },
   );
+});
+
+test("resume retryability comes only from the newest failed user turn", () => {
+  const userMessage = (id: string, text: string) => ({
+    type: "userMessage",
+    id,
+    content: [{ type: "text", text, text_elements: [] }],
+  });
+  const restore = (data: unknown[]) =>
+    projector().restoreHistory({
+      data,
+      nextCursor: null,
+      backwardsCursor: null,
+    });
+  const failed = restore([
+    {
+      id: "turn-failed-newest",
+      items: [userMessage("user-failed-newest", "Retry this request")],
+      status: "failed",
+    },
+    {
+      id: "turn-completed-older",
+      items: [userMessage("user-completed-older", "Earlier request")],
+      status: "completed",
+    },
+  ]);
+  assert.equal(failed.activeTurnId, null);
+  assert.equal(failed.terminalStatus, "failed");
+  assert.equal(failed.retryable, true);
+  assert.equal(failed.messages.at(-1)?.text, "Retry this request");
+
+  const completedAfterFailure = restore([
+    {
+      id: "turn-completed-newest",
+      items: [userMessage("user-completed-newest", "Finished request")],
+      status: "completed",
+    },
+    {
+      id: "turn-failed-older",
+      items: [userMessage("user-failed-older", "Old failed request")],
+      status: "failed",
+    },
+  ]);
+  assert.equal(completedAfterFailure.terminalStatus, "completed");
+  assert.equal(completedAfterFailure.retryable, false);
+
+  const interrupted = restore([
+    {
+      id: "turn-interrupted",
+      items: [userMessage("user-interrupted", "Interrupted request")],
+      status: "interrupted",
+    },
+  ]);
+  assert.equal(interrupted.terminalStatus, "interrupted");
+  assert.equal(interrupted.retryable, false);
+
+  const failedWithoutRequest = restore([
+    { id: "turn-failed-without-request", items: [], status: "failed" },
+  ]);
+  assert.equal(failedWithoutRequest.terminalStatus, "failed");
+  assert.equal(failedWithoutRequest.retryable, false);
+
+  const failedPromptOutsideBoundedHistory = restore([
+    {
+      id: "turn-failed-overflow",
+      items: [
+        userMessage("user-before-bounded-history", "Oldest saved request"),
+        ...Array.from({ length: 200 }, (_, index) => ({
+          type: "agentMessage",
+          id: `agent-${index}`,
+          text: "A saved response.",
+        })),
+      ],
+      status: "failed",
+    },
+  ]);
+  assert.equal(failedPromptOutsideBoundedHistory.messages.length, 200);
+  assert.equal(
+    failedPromptOutsideBoundedHistory.messages.some(
+      (message) => message.role === "user",
+    ),
+    false,
+  );
+  assert.equal(failedPromptOutsideBoundedHistory.retryable, false);
 });
 
 test("history rejects non-app inputs, forbidden tools and divergent pagination", () => {

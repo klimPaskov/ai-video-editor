@@ -968,12 +968,60 @@ test("only a server-confirmed failed turn enables explicit request retry", async
   }
 });
 
+test("a reopened server-confirmed failed turn restores the explicit retry", async () => {
+  const fake = new FakeClient();
+  fake.auth = signedIn();
+  const prompt = "Inspect the current draft and try again.";
+  fake.onOpenThread = async () => {
+    fake.emitHistory({
+      activeTurnId: null,
+      terminalStatus: "failed",
+      retryable: true,
+      messages: [
+        {
+          itemId: "server-failed-user-item",
+          role: "user",
+          text: prompt,
+          complete: true,
+        },
+      ],
+      activities: [],
+    });
+  };
+  const { controller } = harness(fake);
+  try {
+    await controller.get();
+    await controller.select({ modelId: model.id, reasoning: "medium" });
+    const restored = await controller.openThread("project-1");
+    assert.equal(restored.status, "ready");
+    assert.equal(restored.retryable, true);
+    assert.match(restored.message ?? "", /Review the committed draft/u);
+    assert.equal(restored.messages.at(-1)?.text, prompt);
+    assert.ok(!JSON.stringify(restored).includes("server-failed-user-item"));
+
+    const retried = await controller.sendThread(
+      "project-1",
+      [...restored.messages]
+        .reverse()
+        .find((message) => message.role === "user")!.text,
+    );
+    assert.equal(fake.turnCalls.length, 1);
+    assert.equal(fake.turnCalls[0]?.text, prompt);
+    assert.equal(retried.status, "running");
+    assert.equal(retried.retryable, false);
+  } finally {
+    await controller.close();
+  }
+});
+
 test("resumed history replaces server identities before the drawer receives it", async () => {
   const fake = new FakeClient();
   fake.auth = signedIn();
   fake.onOpenThread = async () => {
     fake.emitHistory({
       activeTurnId: "server-active-turn",
+      terminalStatus: null,
+      retryable: false,
       messages: [
         {
           itemId: "server-user-item",

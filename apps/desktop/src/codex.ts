@@ -384,8 +384,13 @@ export class DesktopCodex {
       };
     });
     this.thread.status = history.activeTurnId ? "running" : "ready";
-    this.thread.message = null;
-    this.thread.retryable = false;
+    this.thread.retryable = history.retryable;
+    this.thread.message =
+      history.terminalStatus === "failed"
+        ? "This Codex turn failed. Review the committed draft before retrying."
+        : history.terminalStatus === "interrupted"
+          ? "The Codex turn was interrupted."
+          : null;
   }
   async get(): Promise<CodexView> {
     if (!this.attempted && !this.stopped) return this.reconnect();

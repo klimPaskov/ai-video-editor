@@ -31,6 +31,8 @@ export interface ThreadHistoryActivity {
 /** Main-only projection. Source item/turn IDs are replaced before renderer IPC. */
 export interface ThreadHistorySnapshot {
   activeTurnId: string | null;
+  terminalStatus: Exclude<TurnStatus, "inProgress"> | null;
+  retryable: boolean;
   messages: ThreadHistoryMessage[];
   activities: ThreadHistoryActivity[];
 }
@@ -439,6 +441,9 @@ export class ThreadStreamProjector {
         messages: ThreadHistoryMessage[] = [],
         activities: ThreadHistoryActivity[] = [];
       let activeTurnId: string | null = null,
+        newestTurnId: string | null = null,
+        terminalStatus: Exclude<TurnStatus, "inProgress"> | null = null,
+        retryableUserItemId: string | null = null,
         itemCount = 0,
         textBytes = 0;
       for (let index = 0; index < turns.length; index++) {
@@ -451,6 +456,11 @@ export class ThreadStreamProjector {
           throw new CodexThreadProtocolError("protocol");
         }
         turnIds.add(decoded.id);
+        if (index === 0) {
+          newestTurnId = decoded.id;
+          terminalStatus =
+            decoded.status === "inProgress" ? null : decoded.status;
+        }
         if (decoded.status === "inProgress") {
           if (activeTurnId !== null) {
             throw new CodexThreadProtocolError("protocol");
@@ -489,6 +499,13 @@ export class ThreadStreamProjector {
             const text = historicalUserText(rawItem);
             activeText = text;
             textBytes += Buffer.byteLength(text);
+            if (
+              decoded.id === newestTurnId &&
+              terminalStatus === "failed" &&
+              text.trim().length > 0
+            ) {
+              retryableUserItemId = projected.id;
+            }
             messages.push({
               itemId: projected.id,
               role: "user",
@@ -526,9 +543,16 @@ export class ThreadStreamProjector {
           }
         }
       }
+      const boundedMessages = messages.slice(-200);
       return {
         activeTurnId,
-        messages: messages.slice(-200),
+        terminalStatus,
+        retryable:
+          retryableUserItemId !== null &&
+          boundedMessages.some(
+            (message) => message.itemId === retryableUserItemId,
+          ),
+        messages: boundedMessages,
         activities: activities.slice(-32),
       };
     } catch (error) {

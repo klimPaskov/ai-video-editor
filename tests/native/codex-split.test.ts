@@ -50,7 +50,17 @@ assert.equal(
 );
 assert.notEqual(configRoot, "/");
 if (process.argv.includes("--hostile-app-config")) {
-  assert.ok(process.argv.includes("--require-luna"));
+  const explicitModelId = process.argv
+    .find((argument) => argument.startsWith("--model-id="))
+    ?.slice("--model-id=".length);
+  const explicitReasoning = process.argv
+    .find((argument) => argument.startsWith("--reasoning="))
+    ?.slice("--reasoning=".length);
+  assert.ok(
+    process.argv.includes("--require-luna") ||
+      (explicitModelId === "gpt-5.6-luna" && explicitReasoning === "high"),
+    "Hostile-app probes require GPT-6-Luna/high or the explicit GPT-5.6-Luna/high test choice",
+  );
   assert.ok(process.argv.includes("--require-dynamic"));
   assert.ok(process.argv.includes("--probe-surface"));
 }
@@ -130,6 +140,7 @@ async function verifyToolSurfaceRollout(options: {
   toolRoute: "mcp" | "dynamic";
   multiAgentVersion: "disabled" | "v1" | "v2" | null;
 }): Promise<ToolSurfaceEvidence> {
+  mark("surface-audit-start");
   const codexHome = join(options.userData, "codex/account");
   const cwd = join(options.userData, "codex/context");
   const runtime = join(
@@ -150,6 +161,7 @@ async function verifyToolSurfaceRollout(options: {
   });
   try {
     await transport.start(buildExperimentalInitialize("0.0.0"));
+    mark("surface-audit-thread-read");
     const threadRead: unknown = await transport.request("thread/read", {
       threadId: options.projectThreadId,
       includeTurns: false,
@@ -158,6 +170,7 @@ async function verifyToolSurfaceRollout(options: {
     assert.equal(threadRead.thread.id, options.projectThreadId);
     assert.ok(typeof threadRead.thread.path === "string");
 
+    mark("surface-audit-turn-list");
     let page: unknown;
     try {
       page = await transport.request("thread/turns/list", {
@@ -186,6 +199,7 @@ async function verifyToolSurfaceRollout(options: {
     assert.ok(record(page) && Array.isArray(page.data));
     assert.ok(page.data.length > 0 && page.data.length <= 100);
     const turns = page.data.filter(record);
+    mark("surface-audit-diagnostic-turn");
     const matchingTurns = turns.filter(
       (turn) =>
         Array.isArray(turn.items) &&
@@ -205,6 +219,7 @@ async function verifyToolSurfaceRollout(options: {
     assert.equal(turn.status, "completed");
     assert.ok(typeof turn.id === "string");
 
+    mark("surface-audit-rollout-boundary");
     const accountRoot = await realpath(codexHome);
     const rolloutPath = await realpath(threadRead.thread.path);
     const relativePath = relative(accountRoot, rolloutPath);
@@ -224,6 +239,7 @@ async function verifyToolSurfaceRollout(options: {
       assert.ok(record(item));
       return item;
     });
+    mark("surface-audit-turn-context");
     const turnContextIndexes = records.flatMap((item, index) =>
       item.type === "turn_context" &&
       record(item.payload) &&
@@ -240,6 +256,7 @@ async function verifyToolSurfaceRollout(options: {
       .slice(turnStart, nextTurn < 0 ? undefined : nextTurn)
       .filter((item) => item.type === "response_item" && record(item.payload))
       .map((item) => item.payload as Record<string, unknown>);
+    mark("surface-audit-inventory-call");
     const codeCalls = responseItems.filter(
       (item) =>
         item.type === "custom_tool_call" &&
@@ -264,6 +281,7 @@ async function verifyToolSurfaceRollout(options: {
         )
       );
     });
+    mark("surface-audit-call-correlation");
     assert.equal(
       responseItems.filter(
         (item) => item.type === "custom_tool_call" && item.name !== "exec",
@@ -285,6 +303,7 @@ async function verifyToolSurfaceRollout(options: {
     );
     assert.equal(codeOutputs.length, 1, "Require its correlated tool output");
     assert.ok(JSON.stringify(codeOutputs[0]).length <= 64_000);
+    mark("surface-audit-capability-counts");
     const outputText = collectStrings(codeOutputs[0]).join("\n");
     const expectedAgentCount =
       options.toolRoute === "dynamic" && options.multiAgentVersion === "v1"
@@ -323,6 +342,7 @@ async function verifyToolSurfaceRollout(options: {
         new RegExp(`"${key}"\\s*:\\s*${value}\\b`, "u"),
         `Code-mode output did not report the expected ${key}`,
       );
+    mark("surface-audit-capability-denials");
     for (const key of [
       "apps",
       "goals",
@@ -352,6 +372,7 @@ async function verifyToolSurfaceRollout(options: {
         );
       assert.ok(outputText.includes("clock__curr_time"));
     }
+    mark("surface-audit-complete");
     return {
       route: options.toolRoute,
       ownedToolCount: 8,
@@ -394,19 +415,6 @@ if (process.argv.includes("--require-luna")) {
   configRoot = fresh;
 }
 let step = "fixture";
-let surfaceDiagnostic: string | undefined;
-let surfaceCounts:
-  | {
-      ownedCount: number;
-      agentCount: number;
-      v2AgentCount: number;
-      clockCount: number;
-      appCount: number;
-      unownedCount: number;
-      otherCount: number;
-      unownedNames: string[];
-    }
-  | undefined;
 let surfaceEvidence: ToolSurfaceEvidence | undefined;
 const mark = (value: string): void => {
   step = value;
@@ -772,116 +780,41 @@ try {
         ? "codex_video_edit__"
         : "mcp__codex_video_edit__";
     const diagnostic = `In a code-mode JavaScript cell, evaluate only JSON.stringify({owned: typeof tools.${ownedPrefix}project_get_summary, apps: typeof tools.mcp__codex_apps__adobe_adobe_mandatory_init, goals: typeof tools.update_goal, plan: typeof tools.update_plan, input: typeof tools.request_user_input_async, skills: typeof tools.skills__list, spawn: typeof tools.multi_agent_v1__spawn_agent, images: typeof tools.image_gen__imagegen, web: typeof tools.web__run, shell: typeof tools.exec_command, spawnV2: typeof tools.codex_video_edit_agents__spawn_agent, waitV2: typeof tools.codex_video_edit_agents__wait_agent, ownedCount: ALL_TOOLS.filter(x => x.name.startsWith('${ownedPrefix}')).length, agentCount: ALL_TOOLS.filter(x => x.name.startsWith('multi_agent_v1__')).length, v2AgentCount: ALL_TOOLS.filter(x => x.name.startsWith('codex_video_edit_agents__')).length, clockCount: ALL_TOOLS.filter(x => x.name === 'clock__curr_time').length, appCount: ALL_TOOLS.filter(x => x.name.startsWith('mcp__codex_apps__')).length, unownedCount: ALL_TOOLS.filter(x => !x.name.startsWith('${ownedPrefix}')).length, otherCount: ALL_TOOLS.filter(x => !x.name.startsWith('${ownedPrefix}') && !x.name.startsWith('multi_agent_v1__') && !x.name.startsWith('codex_video_edit_agents__') && x.name !== 'clock__curr_time').length, unownedNames: ALL_TOOLS.filter(x => !x.name.startsWith('${ownedPrefix}')).map(x => x.name)}). Print that exact JSON with text(). Do not invoke any nested tool, access any file or contact any service. Report the observed JSON only.`;
-    surfaceDiagnostic = diagnostic;
     await page.locator("#codex-thread-input").fill(diagnostic);
     await page.locator("#send-codex-thread").click();
     await expect
       .poll(async () => (await thread()).status, { timeout: 120_000 })
       .toBe("ready");
-    const diagnosticState = await thread();
-    const answer = diagnosticState.messages
-      .filter((message) => message.role === "codex" && message.complete)
-      .at(-1)?.text;
-    step = "surface-answer-present";
-    assert.ok(answer);
-    try {
-      const json = answer.match(/\{[^{}]*"ownedCount"[^{}]*\}/u)?.[0];
-      const observed: unknown = json ? JSON.parse(json) : null;
-      if (record(observed)) {
-        const values = [
-          observed.ownedCount,
-          observed.agentCount,
-          observed.v2AgentCount,
-          observed.clockCount,
-          observed.appCount,
-          observed.unownedCount,
-          observed.otherCount,
-        ];
-        if (values.every(Number.isSafeInteger))
-          if (
-            Array.isArray(observed.unownedNames) &&
-            observed.unownedNames.every(
-              (name) =>
-                typeof name === "string" &&
-                name.length <= 128 &&
-                /^[A-Za-z0-9_.:-]+$/u.test(name),
-            )
-          )
-            surfaceCounts = {
-              ownedCount: observed.ownedCount as number,
-              agentCount: observed.agentCount as number,
-              v2AgentCount: observed.v2AgentCount as number,
-              clockCount: observed.clockCount as number,
-              appCount: observed.appCount as number,
-              unownedCount: observed.unownedCount as number,
-              otherCount: observed.otherCount as number,
-              unownedNames: observed.unownedNames as string[],
-            };
-      }
-    } catch {
-      surfaceCounts = undefined;
-    }
-    step = "surface-owned-function";
-    assert.match(answer, /"owned"\s*:\s*"function"/u);
-    step = "surface-owned-count";
-    assert.match(answer, /"ownedCount"\s*:\s*8\b/u);
-    const multiAgentVersion = multiAgentVersionForModel(
-      account.value.selection?.modelId,
+    step = "surface-turn-completed";
+    assert.equal((await thread()).status, "ready");
+    await electron.close();
+    mark("authoritative-surface-rollout");
+    surfaceEvidence = await verifyToolSurfaceRollout({
+      executablePath,
+      userData,
+      projectThreadId: bindings[0]!.threadId,
+      diagnostic,
+      toolRoute,
+      multiAgentVersion: multiAgentVersionForModel(
+        account.value.selection?.modelId,
+      ),
+    });
+    await writeFile(
+      join(evidence, "tool-surface-probe.json"),
+      JSON.stringify(surfaceEvidence),
     );
-    const expectedAgentCount =
-      toolRoute === "dynamic" && multiAgentVersion === "v1" ? 5 : 0;
-    const v2ToolNames =
-      toolRoute === "dynamic" && multiAgentVersion === "v2"
-        ? [
-            "codex_video_edit_agents__spawn_agent",
-            "codex_video_edit_agents__send_message",
-            "codex_video_edit_agents__followup_task",
-            "codex_video_edit_agents__interrupt_agent",
-            "codex_video_edit_agents__list_agents",
-            "codex_video_edit_agents__wait_agent",
-          ]
-        : [];
-    const expectedV2Count = 0;
-    const utilityNames =
-      toolRoute === "dynamic" && multiAgentVersion === "v2"
-        ? ["clock__curr_time"]
-        : [];
-    const expectedUnownedCount =
-      expectedAgentCount + expectedV2Count + utilityNames.length;
-    const expectedOtherCount = 0;
-    step = "surface-agent-count";
-    assert.match(
-      answer,
-      new RegExp(`"agentCount"\\s*:\\s*${expectedAgentCount}\\b`, "u"),
-    );
-    step = "surface-v2-agent-count";
-    assert.match(
-      answer,
-      new RegExp(`"v2AgentCount"\\s*:\\s*${expectedV2Count}\\b`, "u"),
-    );
-    step = "surface-clock-count";
-    assert.match(
-      answer,
-      new RegExp(`"clockCount"\\s*:\\s*${utilityNames.length}\\b`, "u"),
-    );
-    step = "surface-app-count";
-    assert.match(answer, /"appCount"\s*:\s*0\b/u);
-    step = "surface-unowned-count";
-    assert.match(
-      answer,
-      new RegExp(`"unownedCount"\\s*:\\s*${expectedUnownedCount}\\b`, "u"),
-    );
-    step = "surface-other-count";
-    assert.match(
-      answer,
-      new RegExp(`"otherCount"\\s*:\\s*${expectedOtherCount}\\b`, "u"),
-    );
-    step = "surface-clock-helper";
-    if (utilityNames.length > 0) {
-      assert.deepEqual(surfaceCounts?.unownedNames, utilityNames);
-      for (const name of v2ToolNames)
-        assert.ok(!surfaceCounts?.unownedNames.includes(name));
-    }
+    electron = await launch();
+    page = await electron.firstWindow();
+    await page.locator(`#projects [data-project-id="${combined.id}"]`).click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(page.locator("#edit-actions")).toBeVisible();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Open conversation", exact: true })
+      .click();
+    await expect
+      .poll(async () => (await thread()).status, { timeout: 90_000 })
+      .toBe("ready");
   }
   async function records(): Promise<DraftTransactionRecord[]> {
     const folder = join(projectFolder, "draft/journal");
@@ -1049,23 +982,6 @@ try {
     .toBe(true);
   mark("reopen-project");
   await electron.close();
-  if (surfaceDiagnostic) {
-    mark("authoritative-surface-rollout");
-    surfaceEvidence = await verifyToolSurfaceRollout({
-      executablePath,
-      userData,
-      projectThreadId: bindings[0]!.threadId,
-      diagnostic: surfaceDiagnostic,
-      toolRoute,
-      multiAgentVersion: multiAgentVersionForModel(
-        account.value.selection?.modelId,
-      ),
-    });
-    await writeFile(
-      join(evidence, "tool-surface-probe.json"),
-      JSON.stringify(surfaceEvidence),
-    );
-  }
   const offline = new DraftTransactionStore(
     join(userData, "project-store"),
     new ProjectStore(join(userData, "project-store"), library),
@@ -1164,7 +1080,6 @@ try {
       step,
       detailsOmitted: true,
       errorName: error instanceof Error ? error.name : "unknown",
-      ...(surfaceCounts ? { surfaceCounts } : {}),
     }),
   );
   console.error(
