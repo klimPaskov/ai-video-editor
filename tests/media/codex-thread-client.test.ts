@@ -1311,9 +1311,24 @@ test("async user-input server requests are rejected without projecting questions
       (error: unknown) =>
         error instanceof CodexThreadProtocolError && error.code === "forbidden",
     );
+    assert.throws(
+      () =>
+        fixtureState.client.notification("item/agentMessage/delta", {
+          threadId: "thread-1",
+          turnId: "turn-user-input",
+          delta: "private-test-after-quarantine",
+        }),
+      (error: unknown) =>
+        error instanceof CodexThreadProtocolError && error.code === "forbidden",
+    );
     assert.ok(
       !JSON.stringify(fixtureState.events).includes(
         "private-test-user-question",
+      ),
+    );
+    assert.ok(
+      !JSON.stringify(fixtureState.events).includes(
+        "private-test-after-quarantine",
       ),
     );
   } finally {
