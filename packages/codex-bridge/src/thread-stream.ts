@@ -1,6 +1,7 @@
 import {
   CodexThreadProtocolError,
   threadProtocolInternals,
+  type TurnFailureCategory,
   type TurnStatus,
 } from "./thread-protocol.ts";
 import type { ThreadTurnsListResponse } from "./generated/v2/ThreadTurnsListResponse.ts";
@@ -32,6 +33,7 @@ export interface ThreadHistoryActivity {
 export interface ThreadHistorySnapshot {
   activeTurnId: string | null;
   terminalStatus: Exclude<TurnStatus, "inProgress"> | null;
+  failureCategory: TurnFailureCategory | null;
   retryable: boolean;
   messages: ThreadHistoryMessage[];
   activities: ThreadHistoryActivity[];
@@ -69,6 +71,7 @@ export type ThreadStreamEvent =
   | (CorrelatedEvent & {
       type: "turn_terminal";
       status: Exclude<TurnStatus, "inProgress">;
+      failureCategory?: TurnFailureCategory | null;
     })
   | (CorrelatedEvent & { type: "connection_uncertain" });
 
@@ -443,6 +446,7 @@ export class ThreadStreamProjector {
       let activeTurnId: string | null = null,
         newestTurnId: string | null = null,
         terminalStatus: Exclude<TurnStatus, "inProgress"> | null = null,
+        failureCategory: TurnFailureCategory | null = null,
         retryableUserItemId: string | null = null,
         itemCount = 0,
         textBytes = 0;
@@ -460,6 +464,7 @@ export class ThreadStreamProjector {
           newestTurnId = decoded.id;
           terminalStatus =
             decoded.status === "inProgress" ? null : decoded.status;
+          failureCategory = threadProtocolInternals.turnFailureCategory(raw);
         }
         if (decoded.status === "inProgress") {
           if (activeTurnId !== null) {
@@ -547,6 +552,7 @@ export class ThreadStreamProjector {
       return {
         activeTurnId,
         terminalStatus,
+        failureCategory,
         retryable:
           retryableUserItemId !== null &&
           boundedMessages.some(
@@ -660,7 +666,10 @@ export class ThreadStreamProjector {
         return this.event(turn.id, { type: "turn_started" });
       }
       if (turn.status === "inProgress") return this.failProtocol();
-      return this.complete(turn.status);
+      return this.complete(
+        turn.status,
+        threadProtocolInternals.turnFailureCategory(params.turn),
+      );
     }
 
     const turnId = threadProtocolInternals.identifier(
@@ -778,11 +787,16 @@ export class ThreadStreamProjector {
 
   private complete(
     status: Exclude<TurnStatus, "inProgress">,
+    failureCategory: TurnFailureCategory | null = null,
   ): ThreadStreamEvent | null {
     if (!this.active || this.active.terminal) return null;
     this.active.terminal = status;
     this.rememberTerminal(this.active.id, status);
-    return this.event(this.active.id, { type: "turn_terminal", status });
+    return this.event(this.active.id, {
+      type: "turn_terminal",
+      status,
+      ...(failureCategory ? { failureCategory } : {}),
+    });
   }
 
   private rememberTerminal(

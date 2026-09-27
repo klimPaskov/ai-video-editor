@@ -738,6 +738,46 @@ export function decodeThreadSession(
 
 export type TurnStatus = "completed" | "interrupted" | "failed" | "inProgress";
 
+export type TurnFailureCategory =
+  "authentication" | "rate_limit" | "service" | "other";
+
+function turnFailureCategory(value: unknown): TurnFailureCategory | null {
+  if (!record(value) || value.status !== "failed") return null;
+  if (value.error === null || value.error === undefined) return null;
+  if (!record(value.error)) return "other";
+  const info = value.error.codexErrorInfo;
+  if (info === "unauthorized") return "authentication";
+  if (info === "rateLimitExceeded" || info === "usageLimitExceeded")
+    return "rate_limit";
+  if (info === "serverOverloaded" || info === "internalServerError")
+    return "service";
+  if (!record(info)) return "other";
+  const names = Object.keys(info);
+  if (names.length !== 1) return "other";
+  const [name] = names;
+  const details = name ? info[name] : undefined;
+  if (
+    !record(details) ||
+    Object.keys(details).some((key) => key !== "httpStatusCode")
+  ) {
+    return "other";
+  }
+  const status = Number.isSafeInteger(details.httpStatusCode)
+    ? (details.httpStatusCode as number)
+    : null;
+  if (status === 429) return "rate_limit";
+  if (status === 401 || status === 403) return "other";
+  if (
+    name === "httpConnectionFailed" ||
+    name === "responseStreamConnectionFailed" ||
+    name === "responseStreamDisconnected" ||
+    name === "responseTooManyFailedAttempts"
+  ) {
+    return "service";
+  }
+  return "other";
+}
+
 function turn(value: unknown): { id: string; status: TurnStatus } {
   if (!record(value)) throw new CodexThreadProtocolError("protocol");
   const status = value.status;
@@ -772,4 +812,9 @@ export function decodeTurnInterrupt(
   }
 }
 
-export const threadProtocolInternals = { record, identifier, turn };
+export const threadProtocolInternals = {
+  record,
+  identifier,
+  turn,
+  turnFailureCategory,
+};

@@ -938,11 +938,13 @@ test("only a server-confirmed failed turn enables explicit request retry", async
       turnId: "server-private-turn",
       type: "turn_terminal",
       status: "failed",
+      failureCategory: "authentication",
     });
     const failed = controller.getThread("project-1");
     assert.equal(failed.status, "ready");
     assert.equal(failed.retryable, true);
-    assert.match(failed.message ?? "", /Review the committed draft/u);
+    assert.match(failed.message ?? "", /Reconnect in Settings/u);
+    assert.match(failed.message ?? "", /review the draft/iu);
 
     const retry = await controller.sendThread(
       "project-1",
@@ -976,6 +978,7 @@ test("a reopened server-confirmed failed turn restores the explicit retry", asyn
     fake.emitHistory({
       activeTurnId: null,
       terminalStatus: "failed",
+      failureCategory: "authentication",
       retryable: true,
       messages: [
         {
@@ -995,7 +998,8 @@ test("a reopened server-confirmed failed turn restores the explicit retry", asyn
     const restored = await controller.openThread("project-1");
     assert.equal(restored.status, "ready");
     assert.equal(restored.retryable, true);
-    assert.match(restored.message ?? "", /Review the committed draft/u);
+    assert.match(restored.message ?? "", /Reconnect in Settings/u);
+    assert.match(restored.message ?? "", /review the draft/iu);
     assert.equal(restored.messages.at(-1)?.text, prompt);
     assert.ok(!JSON.stringify(restored).includes("server-failed-user-item"));
 
@@ -1021,6 +1025,7 @@ test("resumed history replaces server identities before the drawer receives it",
     fake.emitHistory({
       activeTurnId: "server-active-turn",
       terminalStatus: null,
+      failureCategory: null,
       retryable: false,
       messages: [
         {

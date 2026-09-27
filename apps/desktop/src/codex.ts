@@ -10,7 +10,10 @@ import type {
   ThreadHistorySnapshot,
   ThreadStreamEvent,
 } from "../../../packages/codex-bridge/src/thread-stream.ts";
-import type { NativeSubagentProtocol } from "../../../packages/codex-bridge/src/thread-protocol.ts";
+import type {
+  NativeSubagentProtocol,
+  TurnFailureCategory,
+} from "../../../packages/codex-bridge/src/thread-protocol.ts";
 import { CodexTransportError } from "../../../packages/codex-bridge/src/transport.ts";
 import {
   ProjectThreadRegistry,
@@ -82,6 +85,17 @@ const initial = (): CodexView => ({
   selection: null,
 });
 const SETTINGS_METADATA_REFRESH_INTERVAL_MS = 15_000;
+function failedTurnMessage(
+  category: TurnFailureCategory | null | undefined,
+): string {
+  if (category === "authentication")
+    return "Codex could not authorize this turn. Reconnect in Settings, then review the draft before retrying.";
+  if (category === "rate_limit")
+    return "Codex reached an account usage limit. Check usage in Settings, then review the draft before retrying.";
+  if (category === "service")
+    return "Codex could not reach the service. Check your connection, then review the draft before retrying.";
+  return "This Codex turn failed. Review the committed draft before retrying.";
+}
 const initialThread = (): CodexThreadView => ({
   status: "closed",
   projectId: null,
@@ -347,7 +361,7 @@ export class DesktopCodex {
         for (const activity of this.thread.activities) activity.complete = true;
         this.thread.message =
           event.status === "failed"
-            ? "This Codex turn failed. Review the committed draft before retrying."
+            ? failedTurnMessage(event.failureCategory)
             : event.status === "interrupted"
               ? "The Codex turn was interrupted."
               : null;
@@ -387,7 +401,7 @@ export class DesktopCodex {
     this.thread.retryable = history.retryable;
     this.thread.message =
       history.terminalStatus === "failed"
-        ? "This Codex turn failed. Review the committed draft before retrying."
+        ? failedTurnMessage(history.failureCategory)
         : history.terminalStatus === "interrupted"
           ? "The Codex turn was interrupted."
           : null;

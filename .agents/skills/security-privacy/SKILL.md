@@ -70,3 +70,5 @@ For pinned Codex 0.155.1, disable `features.deferred_executor` and `features.tok
 When native children are enabled, pin the default child model and reasoning to the selected parent pair in both start and resume configuration. Disable the native child route for Astra model IDs. Validate the server-owned child lineage and restrict child authority independently of this model pin.
 
 For pinned Codex 0.155.1, model metadata may enable async user-input functions outside the standard input-tool toggle. The project thread client must reject `item/tool/requestUserInput`, quarantine the thread, reject subsequent notifications, and never project question payloads. Test the quarantine as well as payload redaction. This proves host-side denial, not model-visible unavailability.
+
+For failed Codex turns, expose only the pinned `codexErrorInfo` category through fixed recovery text. Keep raw error messages, additional details, account identifiers, and credential fragments out of the renderer. Treat explicit `unauthorized` as the pinned refresh-token category; do not infer reauthentication from ambiguous HTTP 401/403 connection variants.

@@ -170,3 +170,15 @@ Sources:
 
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/src/tools/spec_plan.rs#L1091-L1131
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/app-server/src/bespoke_event_handling.rs#L823-L868
+
+## Pinned Codex failure categories and async-input opt-out gap, 2026-09-27
+
+The pinned `TurnError` contract carries `codexErrorInfo` alongside human-readable and additional error detail. In the pinned core, `CodexErrorDetails::RefreshTokenFailed` maps to `CodexErrorInfo::Unauthorized`. The application maps only allowlisted categories to fixed Reconnect, usage, or service guidance; raw error messages and additional details stay out of renderer state. A private packaged failed turn carried `unauthorized` with no tool call. This identifies refresh-token failure in the runtime protocol, not which local credential field or account state needs repair.
+
+The upstream [request for an App Server opt-out for `request_user_input_async`](https://github.com/openai/codex/issues/43821) remains a maintainer request, not a released API contract. Its reproduction reports that `tools.experimental_request_user_input.enabled=false` leaves model-advertised asynchronous input visible on 0.153.2; the report inspected, but did not run, a later public-main revision. The exact pinned 0.155.1 planner check above independently shows async registration from model metadata outside that standard toggle. Do not add an undocumented config key or claim complete model-visible restriction. Keep the host quarantine and P2-07 open until an official pinned opt-out or direct allowlist is supported and verified.
+
+Sources:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/app-server-protocol/src/protocol/v2/thread_data.rs#L1933-L1955
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/protocol/src/error.rs#L2686-L2751
+- https://github.com/openai/codex/issues/43821

@@ -290,6 +290,7 @@ test("recent history restores redacted messages and seeds the active turn", () =
   });
   assert.equal(history.activeTurnId, "turn-active");
   assert.equal(history.terminalStatus, null);
+  assert.equal(history.failureCategory, null);
   assert.equal(history.retryable, false);
   assert.deepEqual(
     history.messages.map(({ role, complete }) => ({ role, complete })),
@@ -345,6 +346,12 @@ test("resume retryability comes only from the newest failed user turn", () => {
       id: "turn-failed-newest",
       items: [userMessage("user-failed-newest", "Retry this request")],
       status: "failed",
+      error: {
+        message: "private-authentication-error",
+        codexErrorInfo: "unauthorized",
+        additionalDetails: "private-provider-detail",
+        misalignment: null,
+      },
     },
     {
       id: "turn-completed-older",
@@ -354,8 +361,11 @@ test("resume retryability comes only from the newest failed user turn", () => {
   ]);
   assert.equal(failed.activeTurnId, null);
   assert.equal(failed.terminalStatus, "failed");
+  assert.equal(failed.failureCategory, "authentication");
   assert.equal(failed.retryable, true);
   assert.equal(failed.messages.at(-1)?.text, "Retry this request");
+  assert.ok(!JSON.stringify(failed).includes("private-authentication-error"));
+  assert.ok(!JSON.stringify(failed).includes("private-provider-detail"));
 
   const completedAfterFailure = restore([
     {
@@ -370,6 +380,7 @@ test("resume retryability comes only from the newest failed user turn", () => {
     },
   ]);
   assert.equal(completedAfterFailure.terminalStatus, "completed");
+  assert.equal(completedAfterFailure.failureCategory, null);
   assert.equal(completedAfterFailure.retryable, false);
 
   const interrupted = restore([
@@ -380,12 +391,14 @@ test("resume retryability comes only from the newest failed user turn", () => {
     },
   ]);
   assert.equal(interrupted.terminalStatus, "interrupted");
+  assert.equal(interrupted.failureCategory, null);
   assert.equal(interrupted.retryable, false);
 
   const failedWithoutRequest = restore([
     { id: "turn-failed-without-request", items: [], status: "failed" },
   ]);
   assert.equal(failedWithoutRequest.terminalStatus, "failed");
+  assert.equal(failedWithoutRequest.failureCategory, null);
   assert.equal(failedWithoutRequest.retryable, false);
 
   const failedPromptOutsideBoundedHistory = restore([
@@ -410,6 +423,78 @@ test("resume retryability comes only from the newest failed user turn", () => {
     false,
   );
   assert.equal(failedPromptOutsideBoundedHistory.retryable, false);
+});
+
+test("live failed turns expose only fixed authentication and rate-limit categories", () => {
+  const observeFailure = (id: string, codexErrorInfo: unknown) => {
+    const stream = projector();
+    stream.beginTurn(7, id);
+    return stream.observe(7, "turn/completed", {
+      threadId: "thread-1",
+      turn: {
+        id,
+        status: "failed",
+        items: [],
+        error: {
+          message: "private-raw-error",
+          codexErrorInfo,
+          additionalDetails: "private-detail",
+          misalignment: null,
+        },
+      },
+    });
+  };
+  const authentication = observeFailure("turn-auth-error", "unauthorized");
+  assert.equal(authentication?.type, "turn_terminal");
+  assert.equal(
+    authentication?.type === "turn_terminal"
+      ? authentication.failureCategory
+      : null,
+    "authentication",
+  );
+  assert.ok(!JSON.stringify(authentication).includes("private-raw-error"));
+  assert.ok(!JSON.stringify(authentication).includes("private-detail"));
+
+  const rateLimit = observeFailure("turn-rate-limit", "rateLimitExceeded");
+  assert.equal(
+    rateLimit?.type === "turn_terminal" ? rateLimit.failureCategory : null,
+    "rate_limit",
+  );
+
+  const ambiguousHttpUnauthorized = observeFailure("turn-http-unauthorized", {
+    httpConnectionFailed: { httpStatusCode: 401 },
+  });
+  assert.equal(
+    ambiguousHttpUnauthorized?.type === "turn_terminal"
+      ? ambiguousHttpUnauthorized.failureCategory
+      : null,
+    "other",
+  );
+
+  const malformedErrorCategory = observeFailure(
+    "turn-malformed-error-category",
+    {
+      httpConnectionFailed: { httpStatusCode: 429 },
+      unauthorized: true,
+    },
+  );
+  assert.equal(
+    malformedErrorCategory?.type === "turn_terminal"
+      ? malformedErrorCategory.failureCategory
+      : null,
+    "other",
+  );
+
+  const serviceUnavailable = observeFailure(
+    "turn-service-unavailable",
+    "serverOverloaded",
+  );
+  assert.equal(
+    serviceUnavailable?.type === "turn_terminal"
+      ? serviceUnavailable.failureCategory
+      : null,
+    "service",
+  );
 });
 
 test("history rejects non-app inputs, forbidden tools and divergent pagination", () => {
