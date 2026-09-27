@@ -408,6 +408,20 @@ interface PositionedWord extends TranscriptWord {
   segment_id: string;
 }
 
+function exactAdjacentSegmentRepeat(
+  previous: readonly PositionedWord[],
+  current: readonly PositionedWord[],
+): boolean {
+  if (previous.length < 2 || previous.length !== current.length) return false;
+  const previousEnd = previous.at(-1)!.end_us;
+  if (current[0]!.start_us < previousEnd) return false;
+  return previous.every((word, index) => {
+    const left = normalizedToken(word.text);
+    const right = normalizedToken(current[index]!.text);
+    return left.length > 0 && left === right;
+  });
+}
+
 const flagReasons = Object.freeze({
   uncertain: "uncertain",
   number: "number",
@@ -824,6 +838,13 @@ export function analyzeSpokenCandidates(
         index += repeatedLength * 2 - 1;
       }
     }
+  }
+
+  for (let index = 1; index < wordsBySegment.length; index++) {
+    const previous = wordsBySegment[index - 1]!;
+    const current = wordsBySegment[index]!;
+    if (exactAdjacentSegmentRepeat(previous, current))
+      addCandidate("repeated_take", current, ["exact_repeated_segment"]);
   }
 
   for (const silence of analysis.silences) {

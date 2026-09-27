@@ -258,6 +258,113 @@ test("legacy editor cues stay opt-in and quoted variants stay context-only", () 
   assert.equal(legacy?.cut_authorized, false);
 });
 
+test("adjacent identical transcript segments are review-only repeated-take candidates", () => {
+  const words = [
+    {
+      word_id: "word-first-01",
+      text: "The",
+      start_us: 100_000,
+      end_us: 180_000,
+    },
+    {
+      word_id: "word-first-02",
+      text: "release",
+      start_us: 200_000,
+      end_us: 360_000,
+    },
+    {
+      word_id: "word-first-03",
+      text: "is",
+      start_us: 380_000,
+      end_us: 430_000,
+    },
+    {
+      word_id: "word-first-04",
+      text: "ready.",
+      start_us: 450_000,
+      end_us: 600_000,
+    },
+    {
+      word_id: "word-second-01",
+      text: "the",
+      start_us: 900_000,
+      end_us: 980_000,
+    },
+    {
+      word_id: "word-second-02",
+      text: "release",
+      start_us: 1_000_000,
+      end_us: 1_160_000,
+    },
+    {
+      word_id: "word-second-03",
+      text: "is",
+      start_us: 1_180_000,
+      end_us: 1_230_000,
+    },
+    {
+      word_id: "word-second-04",
+      text: "ready!",
+      start_us: 1_250_000,
+      end_us: 1_400_000,
+    },
+  ] satisfies TranscriptWord[];
+  const transcript: LocalTranscript = {
+    schema_version: "1.0",
+    transcript_id: "transcript-repeated-segments-01",
+    project_id: "project-repeated-segments-01",
+    source_id: "source-repeated-segments-01",
+    duration_us: 2_000_000,
+    language: "en",
+    model: { provider: "local", name: "fixture", version: "1" },
+    segments: [
+      {
+        segment_id: "segment-first-01",
+        start_us: 100_000,
+        end_us: 600_000,
+        text: "The release is ready.",
+        words: words.slice(0, 4),
+      },
+      {
+        segment_id: "segment-second-01",
+        start_us: 900_000,
+        end_us: 1_400_000,
+        text: "the release is ready!",
+        words: words.slice(4),
+      },
+    ],
+    warnings: [],
+  };
+  const analysis: TranscriptAnalysis = {
+    schema_version: "1.0",
+    project_id: transcript.project_id,
+    source_id: transcript.source_id,
+    source_sha256: "b".repeat(64),
+    duration_us: transcript.duration_us,
+    silence_policy: {
+      version: "1",
+      noise_db: -40,
+      minimum_duration_us: 250_000,
+    },
+    silences: [],
+  };
+  const report = analyzeSpokenCandidates(
+    transcript,
+    analysis,
+    createDefaultSpokenCandidatePolicy("en"),
+  );
+  const repeat = report.candidates.find(
+    (candidate) => candidate.kind === "repeated_take",
+  );
+  assert.deepEqual(
+    repeat?.word_ids,
+    words.slice(4).map((word) => word.word_id),
+  );
+  assert.equal(repeat?.related_segment_id, "segment-second-01");
+  assert.equal(repeat?.disposition, "review_required");
+  assert.equal(repeat?.cut_authorized, false);
+});
+
 test("analysis rejects transcript/source mismatches and the report rejects cut authority", () => {
   const { transcript, analysis, policy } = fixture();
   assert.throws(() =>
