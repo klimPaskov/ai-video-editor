@@ -13,6 +13,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron, expect } from "playwright/test";
+import type { ApiProviderId } from "../../packages/domain/src/api-providers.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
@@ -22,6 +23,13 @@ assert.ok(process.env.DBUS_SESSION_BUS_ADDRESS);
 await access("/.dockerenv");
 const executablePath = process.argv[2];
 const privateKeyPath = process.argv[3];
+const providerArgument = process.argv.find((argument) =>
+  argument.startsWith("--provider="),
+);
+const providerValue = providerArgument?.slice("--provider=".length) ?? "openai";
+if (!(["deepseek", "openai", "gemini"] as string[]).includes(providerValue))
+  throw new Error("Unsupported provider test selection");
+const provider = providerValue as ApiProviderId;
 if (
   !executablePath?.startsWith("/home/node/") ||
   !privateKeyPath?.startsWith("/home/node/browser-test/test-results/")
@@ -47,7 +55,7 @@ const configRoot = await mkdtemp(join(evidence, "account-"));
 await chmod(configRoot, 0o700);
 const keyFile = join(
   configRoot,
-  "codex-video-edit/api-provider-keys/openai.key",
+  `codex-video-edit/api-provider-keys/${provider}.key`,
 );
 const sha = (value: Buffer) => createHash("sha256").update(value).digest("hex");
 const resources = join(dirname(executablePath), "resources");
@@ -84,7 +92,7 @@ try {
     await page
       .getByRole("button", { name: "API providers", exact: true })
       .click();
-    await page.locator("#api-provider-id").selectOption("openai");
+    await page.locator("#api-provider-id").selectOption(provider);
     return page;
   };
 
@@ -102,11 +110,17 @@ try {
   );
   const connected = await page.evaluate(() => window.desktop.getApiProviders());
   assert.ok(connected.ok);
-  const openai = connected.value.providers.find((item) => item.id === "openai");
-  assert.ok(openai?.connected && openai.remembered && openai.models.length > 0);
+  const account = connected.value.providers.find(
+    (item) => item.id === provider,
+  );
+  assert.ok(
+    account?.connected && account.remembered && account.models.length > 0,
+  );
   assert.ok(!JSON.stringify(connected.value).includes(key));
   const model =
-    openai.models.find((id) => id === "gpt-4.1-mini") ?? openai.models[0]!;
+    (provider === "openai"
+      ? account.models.find((id) => id === "gpt-4.1-mini")
+      : undefined) ?? account.models[0]!;
   await page.locator("#api-provider-model").selectOption(model);
   await expect(page.locator("#api-provider-model")).toHaveValue(model);
   await expect
@@ -115,7 +129,7 @@ try {
         window.desktop.getApiProviders(),
       );
       return result.ok
-        ? result.value.providers.find((item) => item.id === "openai")
+        ? result.value.providers.find((item) => item.id === provider)
             ?.selectedModel
         : null;
     })
@@ -139,7 +153,7 @@ try {
   const reopened = await page.evaluate(() => window.desktop.getApiProviders());
   assert.ok(reopened.ok);
   const restored = reopened.value.providers.find(
-    (item) => item.id === "openai",
+    (item) => item.id === provider,
   );
   assert.ok(restored?.connected && restored.remembered);
   assert.equal(restored.selectedModel, model);
@@ -170,7 +184,7 @@ try {
   const removed = await page.evaluate(() => window.desktop.getApiProviders());
   assert.ok(removed.ok);
   const disconnected = removed.value.providers.find(
-    (item) => item.id === "openai",
+    (item) => item.id === provider,
   );
   assert.ok(
     disconnected && !disconnected.connected && !disconnected.remembered,
@@ -183,6 +197,7 @@ try {
     JSON.stringify({
       status: "pass",
       scope: "P2-packaged-remembered-api-model",
+      provider,
       packagedNativeWindow: true,
       secureBackend: "gnome_libsecret",
       authenticatedCatalog: true,
