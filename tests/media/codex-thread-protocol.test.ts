@@ -50,9 +50,7 @@ const restrictedFeatures = {
   },
   codex_apps_mcp_2026_07_28: false,
   codex_git_commit: false,
-  codex_hooks: false,
   computer_use: false,
-  connectors: false,
   default_mode_request_user_input: false,
   deferred_executor: false,
   enable_mcp_apps: false,
@@ -63,7 +61,6 @@ const restrictedFeatures = {
   guardian_approval: false,
   hooks: false,
   image_generation: false,
-  imagegenext: false,
   in_app_browser: false,
   in_app_chat: false,
   in_app_dictation: false,
@@ -71,7 +68,6 @@ const restrictedFeatures = {
   in_app_updates: false,
   mcp_oauth_refresh_coordination: false,
   memories: false,
-  memory_tool: false,
   mentions_v2: false,
   multi_agent: false,
   multi_agent_v2: false,
@@ -320,7 +316,6 @@ test("experimental initialization and no-environment requests are exact", () => 
     assert.equal(request.config.features.unified_exec_tty, false);
     assert.equal(request.config.features.workspace_dependencies, false);
     assert.equal(request.config.features.image_generation, false);
-    assert.equal(request.config.features.connectors, false);
     assert.equal(request.config.features.codex_git_commit, false);
     assert.deepEqual(
       request.config.features.code_mode.excluded_tool_namespaces,

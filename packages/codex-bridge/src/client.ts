@@ -166,8 +166,6 @@ const fixedAppServerArguments = [
   "-c",
   "features.apps=false",
   "-c",
-  "features.connectors=false",
-  "-c",
   "features.plugins=false",
   "-c",
   "features.plugin_sharing=false",
