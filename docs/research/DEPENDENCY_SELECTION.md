@@ -10,3 +10,7 @@ Checked 2026-09-05 using the npm registry and the installed executables. Exact d
 - Codex CLI 0.142.3 is available locally. Protocol generation and runtime authenticated acceptance are separate checks. Generating a schema does not establish a working signed-in session.
 
 The foundation does not install application runtimes globally or bundle their binaries. Dependency changes must pass the complete check command and privacy review before publication.
+
+## P5 local speech runtime, 2026-09-27
+
+The first local ASR implementation uses `@huggingface/transformers@4.3.0` with its Node CPU backend and the revision-pinned Apache-2.0 `Xenova/whisper-base` q8 model. The app downloads and hash-checks the model only after the user starts Transcribe locally. The packaged worker and native runtime dependencies are verified in the isolated Docker build. Model weights are not bundled. See [P5_LOCAL_TRANSCRIPTION.md](P5_LOCAL_TRANSCRIPTION.md) for hashes, provenance, privacy boundaries, and fixture limits.

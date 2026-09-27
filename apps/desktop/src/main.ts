@@ -21,6 +21,7 @@ import {
   CODEX_DEVICE_VERIFICATION_URL,
 } from "../../../packages/domain/src/codex-device-login.ts";
 import { PreferencesStore } from "./preferences.ts";
+import { DesktopTranscriptionManager } from "./transcription.ts";
 import { ProjectStore } from "../../../packages/project-store/src/store.ts";
 import {
   DraftTransactionError,
@@ -54,6 +55,11 @@ import {
   type ProjectView,
 } from "../../../packages/domain/src/project-view.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
+import {
+  assertTranscriptionJobRequest,
+  assertTranscriptionProjectRequest,
+  assertTranscriptionStopRequest,
+} from "../../../packages/domain/src/transcription.ts";
 import {
   app,
   BrowserWindow,
@@ -97,14 +103,16 @@ const frameRequests = new Set<AbortController>();
 let quitting = false;
 let codex: DesktopCodex | undefined;
 let mcpBroker: CodexMcpBroker | undefined;
+let transcription: DesktopTranscriptionManager | undefined;
 let servicesClosed = false;
 app.on("before-quit", (event) => {
   quitting = true;
-  if (!servicesClosed && (codex || mcpBroker)) {
+  if (!servicesClosed && (codex || mcpBroker || transcription)) {
     event.preventDefault();
     void Promise.allSettled([
       Promise.resolve().then(() => codex?.close()),
       Promise.resolve().then(() => mcpBroker?.close()),
+      Promise.resolve().then(() => transcription?.close()),
     ]).then(() => {
       servicesClosed = true;
       app.quit();
@@ -211,7 +219,22 @@ async function start(): Promise<void> {
   const projects = new ProjectStore(projectRoot, library);
   const drafts = new DraftTransactionStore(projectRoot, projects);
   const projectRuntime = new DesktopProjectRuntime(drafts, library);
+  transcription = new DesktopTranscriptionManager({
+    projects,
+    library,
+    userData,
+    workerPath: path.join(app.getAppPath(), "transcription-worker.mjs"),
+  });
   let activeProjectId: string | undefined;
+  const activeAutoEditProject = async (projectId: string): Promise<void> => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before transcribing.");
+    const project = await projectRuntime.view(projectId);
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("The active project changed. Try again.");
+    if (project.stage !== "auto_edit")
+      throw new UserFacingError("Switch to Auto Edit to transcribe locally.");
+  };
   const publishDraftNotice = (notice: ProjectDraftNotice): void => {
     if (!window || window.isDestroyed()) return;
     window.webContents.send(channels.projectDraftChanged, notice);
@@ -377,6 +400,10 @@ async function start(): Promise<void> {
   register(channels.projectClose, async (request) => {
     assertProjectRequest(request);
     if (activeProjectId === request.id) {
+      if (transcription!.isRunning(request.id))
+        throw new UserFacingError(
+          "Stop local transcription before closing this project.",
+        );
       if (
         ["opening", "starting", "running", "interrupting"].includes(
           codex!.getThread(request.id).status,
@@ -398,6 +425,7 @@ async function start(): Promise<void> {
           apiThreads.close(request.id, provider),
         ),
       );
+      await transcription!.closeProject(request.id);
       activeProjectId = undefined;
     }
     return null;
@@ -405,8 +433,27 @@ async function start(): Promise<void> {
   register(channels.projectNavigate, async (request) => {
     assertProjectNavigation(request);
     if (activeProjectId !== request.id) throw new Error("Inactive project");
+    if (request.stage !== "auto_edit" && transcription!.isRunning(request.id))
+      throw new UserFacingError(
+        "Stop local transcription before leaving Auto Edit.",
+      );
     await projects.navigate(request.id, request.stage);
     return projectRuntime.view(request.id);
+  });
+  register(channels.transcriptionGet, async (request) => {
+    assertTranscriptionJobRequest(request);
+    await activeAutoEditProject(request.project_id);
+    return transcription!.get(request);
+  });
+  register(channels.transcriptionStart, async (request) => {
+    assertTranscriptionProjectRequest(request);
+    await activeAutoEditProject(request.project_id);
+    return transcription!.start(request);
+  });
+  register(channels.transcriptionStop, async (request) => {
+    assertTranscriptionStopRequest(request);
+    await activeAutoEditProject(request.project_id);
+    return transcription!.stop(request);
   });
   register(channels.projectIntegrityCheck, async (request) => {
     assertProjectRequest(request);

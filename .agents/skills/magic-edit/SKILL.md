@@ -27,6 +27,8 @@ When an optional API provider is selected for generative assistance, the user ex
 
 The goal is a useful edit, not maximum change. Do not add random effects or shorten content without evidence.
 
+The current app foundation exposes user-started local word-timed transcription and separate silence evidence in Auto Edit. It does not yet implement transcript correction or Magic Wand edits. Treat model timing as approximate, keep language as unidentified when the runtime returns none, and never cut based only on silence. A text correction changes transcript metadata; it does not resynthesize recorded speech.
+
 ## Presets
 
 Gentle, Balanced, Tight, and Custom. The exact thresholds belong in versioned policy files and tests.

@@ -14,6 +14,12 @@ import {
   assertApiThreadSendRequest,
   assertApiThreadView,
 } from "../../../packages/domain/src/api-thread-view.ts";
+import {
+  assertTranscriptionJobRequest,
+  assertTranscriptionProjectRequest,
+  assertTranscriptionProjectView,
+  assertTranscriptionStopRequest,
+} from "../../../packages/domain/src/transcription.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import {
   assertProjectDraftView,
@@ -96,6 +102,30 @@ const bridge: DesktopBridge = {
   interruptApiThread: (request) => {
     assertApiThreadProjectRequest(request);
     return invoke(channels.apiThreadInterrupt, request, assertApiThreadView);
+  },
+  getTranscription: (request) => {
+    assertTranscriptionJobRequest(request);
+    return invoke(
+      channels.transcriptionGet,
+      request,
+      assertTranscriptionProjectView,
+    );
+  },
+  startTranscription: (request) => {
+    assertTranscriptionProjectRequest(request);
+    return invoke(
+      channels.transcriptionStart,
+      request,
+      assertTranscriptionProjectView,
+    );
+  },
+  stopTranscription: (request) => {
+    assertTranscriptionStopRequest(request);
+    return invoke(
+      channels.transcriptionStop,
+      request,
+      assertTranscriptionProjectView,
+    );
   },
   getApiProviders: () =>
     invoke(channels.apiProvidersGet, undefined, assertApiProvidersView),

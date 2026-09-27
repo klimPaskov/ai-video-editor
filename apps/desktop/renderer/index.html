@@ -127,6 +127,37 @@
             <button id="previous" aria-label="Previous frame">←</button
             ><button id="next" aria-label="Next frame">→</button>
           </div>
+          <section id="auto-edit-actions" class="auto-edit-actions" hidden>
+            <div class="auto-edit-controls">
+              <button id="transcribe-local" class="primary" type="button">
+                Transcribe locally
+              </button>
+              <button id="stop-transcription" type="button" hidden>Stop</button>
+            </div>
+            <p id="transcription-disclosure">
+              First use downloads about 76 MiB of model weights from Hugging
+              Face. Source audio stays on this device.
+            </p>
+            <progress
+              id="transcription-progress"
+              max="100"
+              value="0"
+              aria-label="Local transcription progress"
+              hidden
+            ></progress>
+            <p id="transcription-status" role="status" hidden></p>
+            <p id="transcription-error" role="alert" hidden></p>
+            <details id="transcript-results" hidden>
+              <summary id="transcript-summary">Transcript</summary>
+              <p id="transcript-timing-note">
+                Word timings are local model estimates. Verify before editing.
+              </p>
+              <p id="transcript-language-note" hidden>
+                The local model did not identify a language.
+              </p>
+              <div id="transcript-content"></div>
+            </details>
+          </section>
           <div id="edit-actions" class="edit-actions" hidden>
             <span id="edit-clip" hidden></span>
             <button id="trim-start">Trim start</button>

@@ -52,6 +52,8 @@ Expose small task-based methods. Never expose raw `ipcRenderer`, filesystem, pro
 
 Use typed service boundaries around FFmpeg, ffprobe, local transcription, thumbnail generation, waveform generation, rendering, and QA. Every process call uses argument arrays, timeouts, cancellation, bounded output, stable errors, and redaction.
 
+The first local transcription path runs only after an explicit Auto Edit action. Main verifies project sources and runs FFmpeg against immutable managed media to create a private analysis-only 16 kHz mono float32 proxy. The pinned Apache-2.0 Whisper model weights are downloaded into app userData, size/hash checked, and loaded by an isolated worker with a reduced environment. The worker receives only a proxy path and path-free job identity, then returns bounded word timing. Main stores transcript and silence evidence separately from project baselines and drafts. No user audio is sent over the network; the only network use in this path is fetching the fixed model assets. Proxies are temporary and never feed preview or master rendering.
+
 ### Codex bridge
 
 The main process owns a long-running official `codex app-server` child over stdio. A typed adapter handles JSONL framing, request IDs, notifications, server requests, reconnect, version discovery, and schema generation.

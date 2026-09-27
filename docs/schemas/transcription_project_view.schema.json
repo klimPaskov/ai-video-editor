@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codex-video-edit.local/schemas/transcription_project_view.schema.json",
+  "title": "Local project transcripts and job status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project_id", "job", "results"],
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+    },
+    "job": { "$ref": "transcription_job.schema.json" },
+    "results": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_id", "transcript", "analysis"],
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+          },
+          "transcript": { "$ref": "transcript.schema.json" },
+          "analysis": { "$ref": "transcription_analysis.schema.json" }
+        }
+      }
+    }
+  },
+  "description": "Runtime additionally requires unique source IDs, matching project/source identities and durations, and word_count equal to the returned transcripts. No source path crosses IPC."
+}

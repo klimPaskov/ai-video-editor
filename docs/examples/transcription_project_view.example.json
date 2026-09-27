@@ -1,0 +1,91 @@
+{
+  "project_id": "project-demo-001",
+  "job": {
+    "project_id": "project-demo-001",
+    "job_id": null,
+    "status": "completed",
+    "progress_percent": 100,
+    "source_count": 1,
+    "completed_source_count": 1,
+    "word_count": 4,
+    "message": "Transcript ready."
+  },
+  "results": [
+    {
+      "source_id": "source-mic-001",
+      "transcript": {
+        "schema_version": "1.0",
+        "transcript_id": "transcript-demo-001",
+        "project_id": "project-demo-001",
+        "source_id": "source-mic-001",
+        "duration_us": 62000000,
+        "language": "en",
+        "model": {
+          "provider": "local",
+          "name": "Xenova/whisper-base-q8",
+          "version": "64da57285918e20ea79ea5c88eed7197933abaa8",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "device": "cpu"
+        },
+        "segments": [
+          {
+            "segment_id": "segment-000001",
+            "start_us": 500000,
+            "end_us": 2300000,
+            "text": "Open the settings page.",
+            "words": [
+              {
+                "word_id": "word-00000001",
+                "text": "Open",
+                "start_us": 500000,
+                "end_us": 900000,
+                "confidence": null,
+                "flags": []
+              },
+              {
+                "word_id": "word-00000002",
+                "text": "the",
+                "start_us": 920000,
+                "end_us": 1100000,
+                "confidence": null,
+                "flags": []
+              },
+              {
+                "word_id": "word-00000003",
+                "text": "settings",
+                "start_us": 1120000,
+                "end_us": 1800000,
+                "confidence": null,
+                "flags": []
+              },
+              {
+                "word_id": "word-00000004",
+                "text": "page.",
+                "start_us": 1810000,
+                "end_us": 2300000,
+                "confidence": null,
+                "flags": []
+              }
+            ]
+          }
+        ],
+        "warnings": [
+          "Word timings are local model estimates; verify before editing."
+        ]
+      },
+      "analysis": {
+        "schema_version": "1.0",
+        "project_id": "project-demo-001",
+        "source_id": "source-mic-001",
+        "source_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "duration_us": 62000000,
+        "silence_policy": {
+          "version": "1",
+          "noise_db": -40,
+          "minimum_duration_us": 250000
+        },
+        "silences": [{ "start_us": 0, "end_us": 420000 }]
+      }
+    }
+  ]
+}

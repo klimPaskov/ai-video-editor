@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 
 from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -14,7 +15,15 @@ class DesktopIpcContractTests(unittest.TestCase):
     def setUpClass(cls):
         cls.schema = json.loads((ROOT / 'docs/schemas/desktop_ipc.schema.json').read_text(encoding='utf8'))
         Draft202012Validator.check_schema(cls.schema)
-        cls.validator = Draft202012Validator(cls.schema)
+        registry = Registry()
+        for schema_path in (ROOT / 'docs/schemas').glob('*.json'):
+            schema_value = json.loads(schema_path.read_text(encoding='utf8'))
+            resource = Resource.from_contents(schema_value)
+            registry = registry.with_resource(schema_path.resolve().as_uri(), resource)
+            schema_id = schema_value.get('$id')
+            if isinstance(schema_id, str):
+                registry = registry.with_resource(schema_id, resource)
+        cls.validator = Draft202012Validator(cls.schema, registry=registry)
         cls.frame = json.loads((ROOT / 'docs/examples/desktop_ipc.example.json').read_text(encoding='utf8'))
         cls.summary = json.loads((ROOT / 'docs/examples/media_library.example.json').read_text(encoding='utf8'))['summary']
 
@@ -67,6 +76,19 @@ class DesktopIpcContractTests(unittest.TestCase):
             self.invalid(value)
         value = deepcopy(self.frame)
         value['response']['value']['path'] = '/private/example'
+        self.invalid(value)
+
+    def test_transcription_exchange_is_path_free_and_job_bound(self):
+        exchange = json.loads((ROOT / 'docs/examples/desktop_ipc_transcription.example.json').read_text(encoding='utf8'))
+        self.valid(exchange)
+        value = deepcopy(exchange)
+        value['payload']['source_path'] = '/private/source.mkv'
+        self.invalid(value)
+        value = deepcopy(exchange)
+        value['response']['value']['job']['job_id'] = '../other-job'
+        self.invalid(value)
+        value = deepcopy(exchange)
+        value['response']['value']['results'] = [{'source_id': 'source-001', 'path': '/private/transcript.json'}]
         self.invalid(value)
         self.invalid({'channel': 'library:list', 'response': {'ok': False, 'message': ''}})
         self.invalid({'channel': 'library:list', 'response': {'ok': False, 'message': 'x' * 241}})

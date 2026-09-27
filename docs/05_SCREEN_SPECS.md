@@ -88,16 +88,19 @@ Do not show raw FFmpeg, transcription, or protocol logs.
 
 ## S07: Auto Edit
 
-The later editorial flow follows docs/47_EDITORIAL_FIRST_CUT.md. Show meaningful current pass progress and actionable unresolved directions from real persisted work, with separate spoken-cut, layout and zoom undo groups. Do not turn the detailed QA requirements into persistent dashboards or extra panels. The configured cue and protected scope belong to relevant project/edit settings.
+The current implemented surface is a user-started local transcription action. First use downloads the pinned approximately 76 MiB Whisper weight set from Hugging Face into app-private storage; source audio is processed on device. Show download or transcription progress, Stop, a read-only transcript, the word-count summary, and warnings that timestamps are estimates and language was not identified. Completed results survive project reopen. The transcription action does not edit the draft or create cuts.
+
+The planned editorial flow follows docs/47_EDITORIAL_FIRST_CUT.md. Show meaningful current pass progress and actionable unresolved directions from real persisted work, with separate spoken-cut, layout and zoom undo groups. Do not turn the detailed QA requirements into persistent dashboards or extra panels. The configured cue and protected scope belong to relevant project/edit settings. Magic Wand presets, transcript correction, automatic cuts, captions, and layout/effect actions remain unimplemented.
 
 Visible:
 
 - video preview
-- Magic Wand as the main action
-- preset menu and simple feature switches
-- optional natural-language instruction
-- concise live activity
-- Stop and Undo
+- Transcribe locally and Stop controls
+- relevant model-download or transcription progress
+- read-only transcript and concise word-count summary
+- timing and unidentified-language disclosure
+
+The intended complete S07 adds Magic Wand, preset menu, simple feature switches, optional natural-language instruction, concise live edit activity, Stop and shared Undo after their operations and acceptance evidence exist.
 
 ## S08: editor (Edit stage)
 

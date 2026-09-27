@@ -41,6 +41,12 @@ import type {
   ApiThreadSendRequest,
   ApiThreadView,
 } from "../../../packages/domain/src/api-thread-view.ts";
+import type {
+  TranscriptionJobRequest,
+  TranscriptionProjectRequest,
+  TranscriptionProjectView,
+  TranscriptionStopRequest,
+} from "../../../packages/domain/src/transcription.ts";
 
 export type Reply<T> = { ok: true; value: T } | { ok: false; message: string };
 export interface DesktopBridge {
@@ -52,6 +58,15 @@ export interface DesktopBridge {
   interruptApiThread(
     request: ApiThreadProjectRequest,
   ): Promise<Reply<ApiThreadView>>;
+  getTranscription(
+    request: TranscriptionJobRequest,
+  ): Promise<Reply<TranscriptionProjectView>>;
+  startTranscription(
+    request: TranscriptionProjectRequest,
+  ): Promise<Reply<TranscriptionProjectView>>;
+  stopTranscription(
+    request: TranscriptionStopRequest,
+  ): Promise<Reply<TranscriptionProjectView>>;
   getApiProviders(): Promise<Reply<ApiProvidersView>>;
   connectApiProvider(
     request: ApiProviderConnectRequest,
@@ -123,6 +138,9 @@ export const channels = Object.freeze({
   apiThreadOpen: "api-thread:open",
   apiThreadSend: "api-thread:send",
   apiThreadInterrupt: "api-thread:interrupt",
+  transcriptionGet: "transcription:get",
+  transcriptionStart: "transcription:start",
+  transcriptionStop: "transcription:stop",
   apiProvidersGet: "api-providers:get",
   apiProvidersConnect: "api-providers:connect",
   apiProvidersRemove: "api-providers:remove",

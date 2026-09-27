@@ -1,6 +1,7 @@
 import { setupCodexSettings } from "./codex-settings.ts";
 import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { reconcileProjectDraft } from "./project-draft.ts";
+import { pollTranscriptionView } from "./transcription-state.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import type { DesktopBridge, Reply } from "../src/bridge.ts";
 import type {
@@ -15,6 +16,7 @@ import type {
 import type { CodexThreadView } from "../../../packages/domain/src/codex-thread-view.ts";
 import type { ApiThreadView } from "../../../packages/domain/src/api-thread-view.ts";
 import type { ApiProviderId } from "../../../packages/domain/src/api-providers.ts";
+import type { TranscriptionProjectView } from "../../../packages/domain/src/transcription.ts";
 declare global {
   interface Window {
     desktop: DesktopBridge;
@@ -62,6 +64,19 @@ const reviewActions = element("review-actions"),
   ),
   draftIntegrityResult = element("draft-integrity-result"),
   draftIntegrityError = element("draft-integrity-error");
+const autoEditActions = element("auto-edit-actions"),
+  transcribeLocalButton = element<HTMLButtonElement>("transcribe-local"),
+  stopTranscriptionButton = element<HTMLButtonElement>("stop-transcription"),
+  transcriptionDisclosure = element("transcription-disclosure"),
+  transcriptionProgress = element<HTMLProgressElement>(
+    "transcription-progress",
+  ),
+  transcriptionStatus = element("transcription-status"),
+  transcriptionError = element("transcription-error"),
+  transcriptResults = element<HTMLDetailsElement>("transcript-results"),
+  transcriptSummary = element("transcript-summary"),
+  transcriptLanguageNote = element("transcript-language-note"),
+  transcriptContent = element("transcript-content");
 let selected: MediaSummary | undefined;
 let selectedButton: HTMLButtonElement | undefined;
 let requestedTime: number | undefined;
@@ -85,6 +100,12 @@ let restoreSourceProjectId: string | undefined;
 let restoreHead: string | undefined;
 let restoreRangeOpen = false;
 let restoreRangeIssue: string | null = null;
+let transcriptionView: TranscriptionProjectView | undefined;
+let transcriptionErrorMessage: string | null = null;
+let transcriptionRequestPending = false;
+let transcriptionActionPending = false;
+let transcriptionPollTimer: number | undefined;
+let transcriptRenderKey = "";
 const stageLabels: Record<ProjectStage, string> = {
   record_import: "Record or Import",
   auto_edit: "Auto Edit",
@@ -130,6 +151,7 @@ function renderStage(): void {
   }
   renderEditTools();
   renderDraftIntegrityAction();
+  renderTranscriptionActions();
 }
 function currentClip(): NonNullable<ProjectView["clips"]>[number] | undefined {
   if (!activeProject?.clips) return undefined;
@@ -192,6 +214,200 @@ function renderDraftIntegrityAction(): void {
   draftIntegrityResult.hidden = !visible || !draftIntegrityMessage;
   draftIntegrityError.textContent = draftIntegrityIssue ?? "";
   draftIntegrityError.hidden = !visible || !draftIntegrityIssue;
+}
+function transcriptionRunning(
+  view: TranscriptionProjectView | undefined,
+): boolean {
+  return (
+    !!view &&
+    ["preparing", "downloading_model", "transcribing"].includes(view.job.status)
+  );
+}
+function updateTranscriptionText(
+  view: TranscriptionProjectView | undefined,
+): void {
+  const project = activeProject;
+  const results = view && view.project_id === project?.id ? view.results : [];
+  const key = results
+    .map((result) => `${result.source_id}:${result.transcript.transcript_id}`)
+    .join("|");
+  if (key === transcriptRenderKey) return;
+  transcriptRenderKey = key;
+  transcriptContent.replaceChildren();
+  if (results.length === 0) return;
+  const sources = project?.sources ?? (project ? [project.source] : []);
+  for (const result of results) {
+    const block = document.createElement("section");
+    const name = document.createElement("strong");
+    const transcript = document.createElement("pre");
+    name.textContent =
+      sources.find((source) => source.id === result.source_id)?.name ??
+      "Transcript";
+    transcript.textContent =
+      result.transcript.segments.map((segment) => segment.text).join(" ") ||
+      "No words were recognized.";
+    block.append(name, transcript);
+    transcriptContent.append(block);
+  }
+}
+function syncTranscriptionPolling(): void {
+  if (
+    activeProject?.stage === "auto_edit" &&
+    transcriptionView?.project_id === activeProject.id &&
+    transcriptionRunning(transcriptionView)
+  ) {
+    if (transcriptionPollTimer === undefined)
+      transcriptionPollTimer = window.setInterval(
+        () => void loadTranscription(),
+        900,
+      );
+  } else if (transcriptionPollTimer !== undefined) {
+    window.clearInterval(transcriptionPollTimer);
+    transcriptionPollTimer = undefined;
+  }
+}
+function renderTranscriptionActions(): void {
+  const project = activeProject;
+  const visible = project?.stage === "auto_edit";
+  const view =
+    transcriptionView?.project_id === project?.id
+      ? transcriptionView
+      : undefined;
+  const running = transcriptionRunning(view);
+  autoEditActions.hidden = !visible;
+  autoEditActions.setAttribute(
+    "aria-busy",
+    String(transcriptionActionPending || running),
+  );
+  transcribeLocalButton.disabled =
+    !visible ||
+    navigating ||
+    transcriptionActionPending ||
+    running ||
+    view?.job.status === "completed";
+  stopTranscriptionButton.hidden = !running;
+  stopTranscriptionButton.disabled = !running || transcriptionActionPending;
+  transcriptionDisclosure.hidden = !!view && view.job.status === "completed";
+  const downloadProgress = view?.job.status === "downloading_model";
+  const progressVisible =
+    running &&
+    view?.job.progress_percent !== null &&
+    view?.job.progress_percent !== undefined;
+  transcriptionProgress.hidden = !progressVisible;
+  transcriptionProgress.value = progressVisible
+    ? (view?.job.progress_percent ?? 0)
+    : 0;
+  const failed =
+    view?.job.status === "failed" || view?.job.status === "cancelled";
+  const baseMessage = view?.job.message;
+  transcriptionStatus.textContent =
+    transcriptionErrorMessage === null && !failed && baseMessage
+      ? view?.job.status === "completed"
+        ? `Transcript complete · ${view.job.word_count} words.`
+        : downloadProgress
+          ? `${baseMessage} ${view?.job.progress_percent ?? 0}%`
+          : view?.job.status === "transcribing"
+            ? `${baseMessage} ${view.job.completed_source_count} of ${view.job.source_count} sources complete.`
+            : baseMessage
+      : "";
+  transcriptionStatus.hidden = !transcriptionStatus.textContent;
+  transcriptionError.textContent =
+    transcriptionErrorMessage ?? (failed ? (baseMessage ?? "") : "");
+  transcriptionError.hidden = !transcriptionError.textContent;
+  const resultCount = view?.results.length ?? 0;
+  transcriptResults.hidden = !visible || resultCount === 0;
+  const wordCount = view?.job.word_count ?? 0;
+  const languageUnknown =
+    view?.results.some((result) => result.transcript.language === "und") ??
+    false;
+  transcriptSummary.textContent = `Transcript · ${wordCount} words${languageUnknown ? " · language not identified" : ""}`;
+  transcriptLanguageNote.hidden = !languageUnknown;
+  updateTranscriptionText(view);
+  syncTranscriptionPolling();
+}
+async function loadTranscription(): Promise<void> {
+  const project = activeProject;
+  if (!project || project.stage !== "auto_edit" || transcriptionRequestPending)
+    return;
+  transcriptionRequestPending = true;
+  const requestProjectId = project.id;
+  try {
+    const result = await pollTranscriptionView(
+      requestProjectId,
+      transcriptionView,
+      window.desktop.getTranscription,
+    );
+    if (activeProject?.id !== requestProjectId) return;
+    transcriptionView = result.view;
+    transcriptionErrorMessage = result.issue;
+  } finally {
+    transcriptionRequestPending = false;
+    renderTranscriptionActions();
+  }
+}
+async function startTranscription(): Promise<void> {
+  const project = activeProject;
+  if (
+    !project ||
+    project.stage !== "auto_edit" ||
+    transcriptionActionPending ||
+    transcriptionRunning(transcriptionView)
+  )
+    return;
+  transcriptionActionPending = true;
+  transcriptionErrorMessage = null;
+  renderTranscriptionActions();
+  try {
+    const reply = await window.desktop.startTranscription({
+      schema_version: "1.0",
+      project_id: project.id,
+    });
+    if (activeProject?.id !== project.id) return;
+    if (!reply.ok) transcriptionErrorMessage = reply.message;
+    else transcriptionView = reply.value;
+  } catch {
+    if (activeProject?.id === project.id)
+      transcriptionErrorMessage =
+        "Local transcription could not start. Try again.";
+  } finally {
+    transcriptionActionPending = false;
+    renderTranscriptionActions();
+  }
+}
+async function stopTranscription(): Promise<void> {
+  const project = activeProject;
+  const jobId =
+    transcriptionView && transcriptionView.project_id === project?.id
+      ? transcriptionView.job.job_id
+      : null;
+  if (
+    !project ||
+    project.stage !== "auto_edit" ||
+    !jobId ||
+    !transcriptionRunning(transcriptionView) ||
+    transcriptionActionPending
+  )
+    return;
+  transcriptionActionPending = true;
+  transcriptionErrorMessage = null;
+  renderTranscriptionActions();
+  try {
+    const reply = await window.desktop.stopTranscription({
+      schema_version: "1.0",
+      project_id: project.id,
+      job_id: jobId,
+    });
+    if (activeProject?.id !== project.id) return;
+    if (!reply.ok) transcriptionErrorMessage = reply.message;
+    else transcriptionView = reply.value;
+  } catch {
+    if (activeProject?.id === project.id)
+      transcriptionErrorMessage =
+        "Local transcription could not stop. Try again.";
+  } finally {
+    transcriptionActionPending = false;
+    renderTranscriptionActions();
+  }
 }
 function renderEditTools(): void {
   const project = activeProject;
@@ -350,6 +566,7 @@ async function navigate(stage: ProjectStage): Promise<void> {
     if (generation === routeGeneration) {
       navigating = false;
       renderStage();
+      if (activeProject?.stage === "auto_edit") void loadTranscription();
       if (
         !settingsDialog.open &&
         document.activeElement === document.body &&
@@ -379,6 +596,9 @@ async function openProject(
   }
 }
 function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
+  transcriptionView = undefined;
+  transcriptionErrorMessage = null;
+  transcriptRenderKey = "";
   activeProject = project;
   clearDraftIntegrityResult();
   restoreSourceProjectId = undefined;
@@ -400,6 +620,7 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
   element<HTMLButtonElement>("codex-drawer-button").hidden = false;
   setCodexDrawer(false);
   renderStage();
+  if (project.stage === "auto_edit") void loadTranscription();
 }
 async function createProject(
   media: MediaSummary,
@@ -839,6 +1060,12 @@ function applyProjectDraft(
   renderEditTools();
   renderDraftIntegrityAction();
 }
+transcribeLocalButton.addEventListener("click", () => {
+  void startTranscription();
+});
+stopTranscriptionButton.addEventListener("click", () => {
+  void stopTranscription();
+});
 checkDraftIntegrityButton.addEventListener("click", async () => {
   const project = activeProject;
   if (!project || project.stage !== "review" || draftIntegrityPending) return;

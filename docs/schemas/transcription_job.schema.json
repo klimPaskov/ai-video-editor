@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codex-video-edit.local/schemas/transcription_job.schema.json",
+  "title": "Local transcription job status",
+  "description": "Path-free progress for a user-started, local-only transcription job.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "project_id",
+    "job_id",
+    "status",
+    "progress_percent",
+    "source_count",
+    "completed_source_count",
+    "word_count",
+    "message"
+  ],
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+    },
+    "job_id": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "pattern": "^transcription-[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      ]
+    },
+    "status": {
+      "enum": [
+        "idle",
+        "preparing",
+        "downloading_model",
+        "transcribing",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "progress_percent": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "source_count": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "completed_source_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "word_count": { "type": "integer", "minimum": 0, "maximum": 100000 },
+    "message": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "enum": [
+            "Preparing audio for transcription.",
+            "Downloading the local speech model.",
+            "Transcribing source audio locally.",
+            "Transcript ready.",
+            "This project has no audio tracks to transcribe.",
+            "One or more sources have no audio track.",
+            "The local speech model could not be downloaded. Try again.",
+            "Local transcription failed. Try again.",
+            "Transcription was interrupted. Start it again.",
+            "The project changed. Reopen it before transcribing.",
+            "This source's audio timing needs a supported synchronization profile.",
+            "Local transcription failed. Check this source's audio and try again.",
+            "The local speech model could not start. Restart the app and try again."
+          ]
+        }
+      ]
+    }
+  }
+}

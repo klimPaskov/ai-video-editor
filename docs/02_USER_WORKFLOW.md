@@ -32,7 +32,9 @@ The user picks one or more local media files and sees one plain processing view.
 
 ## Auto Edit
 
-The Magic Wand is the main action. It opens a small menu with a preset and a few clear switches. While running, the preview and timeline update as validated edit operations arrive. The user can stop without losing completed operations.
+The current Auto Edit action is Transcribe locally. On the first explicit start, the app downloads the pinned Whisper model weights into private application storage, then produces local word timing and separate silence evidence. Source audio remains on this device. The app preserves one live job identity across repeated Start requests and polling, offers Stop, caches results by immutable source hash and model revision, and restores completed transcripts when the project reopens. Model word times are estimates; the local model does not identify a language in this runtime, so the view labels language as unidentified. These results do not change the draft.
+
+The planned Magic Wand remains the main editorial action. It will offer a small preset menu and clear switches, stream validated edits to the active draft, and retain completed reversible work when stopped. Transcript correction, speech cuts, captions, and automatic effects are not implemented by the current transcription slice.
 
 Optional OpenAI API, DeepSeek and Gemini API assistance under ADRs 0014 and 0015 uses a separately connected key and provider-validated model. A paid generation turn starts only when the user explicitly selects it. Local deterministic work does not silently incur API usage.
 

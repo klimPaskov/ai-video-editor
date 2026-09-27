@@ -26,6 +26,8 @@ FFmpeg fixtures, transcription adapters, project recovery, app-server fake trans
 
 Launch the Electron app, obtain the first window, stub native dialogs where needed, interact through accessibility selectors, capture screenshots, and close cleanly.
 
+For P5-01, run the packaged `tests/native/transcription.test.ts` fixture from [the desktop test guide](../tests/desktop/README.md). It verifies the visible local-transcription action, pinned model integrity, word timing, job reuse, source preservation and reopen in Electron. Use guest-only computer capture for the actual Auto Edit and expanded transcript view; model files and transcript content stay inside Docker.
+
 ### Computer use
 
 Operate and capture the actual guest native window using the guarded guest helper. Inspect the latest guest screenshot before choosing a coordinate or key, perform one action, and inspect its resulting screenshot. Test resize, focus, selection, drag handles, menus, keyboard shortcuts, progress, errors, and final playback as implemented. Record exact steps and screenshots privately. Do not infer a visual pass from helper exit status alone.

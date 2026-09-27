@@ -75,6 +75,10 @@ Sources:
 - https://www.electronjs.org/docs/latest/tutorial/security
 - https://playwright.dev/docs/api/class-electron
 
+## Local speech runtime, 2026-09-27
+
+The first P5 local-transcription slice uses revision-pinned `Xenova/whisper-base` through the official Transformers.js ASR pipeline. Weight hashes, local-only audio handling, model-cache behavior, and public test-fixture provenance are recorded in [P5_LOCAL_TRANSCRIPTION.md](P5_LOCAL_TRANSCRIPTION.md). Word boundaries remain model estimates, language is left unidentified when not returned, and silence evidence cannot authorize cuts.
+
 ## Gemini API provider model filter, 2026-09-25
 
 Google's current [function-calling model table](https://ai.google.dev/gemini-api/docs/generate-content/function-calling) lists the stable text/function families used by the editor's reviewed allowlist. The [OpenAI compatibility guide](https://ai.google.dev/gemini-api/docs/openai) describes the fixed OpenAI-compatible endpoints as beta and supports model listing; live account membership alone does not establish the full completion/tool-loop contract. Google release notes dated September 15 and 22 add 3.8 Live and 3.8 Flash TTS variants. The app continues to exclude Live, speech/TTS, image, embedding, transcription, video, and preview families per ADR 0015. New negative model-filter cases cover 3.8 Live, TTS, and Gemini 3.1 Pro Preview. See [P2 provider contract notes](P2_API_PROVIDERS.md#current-gemini-model-review-2026-09-25). No Gemini key was available for authenticated discovery or generation tests.

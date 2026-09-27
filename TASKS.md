@@ -116,7 +116,7 @@ Acceptance: a virtual-device scene becomes a synchronized editable project.
 
 ## P5: transcription, raw cut, and Magic Wand
 
-- [ ] P5-01 Run local word-timed transcription and silence detection. Reuse existing transcription jobs and request missing transcription once; preserve job identity through polling timeouts.
+- [x] P5-01 Run local word-timed transcription and silence detection. Reuse existing transcription jobs and request missing transcription once; preserve job identity through polling timeouts. Unit tests verify exact microsecond timing, silence analysis, source immutability, path-free IPC, and a simulated polling timeout that retries the same job ID. Packaged Electron in the isolated Docker desktop downloaded and verified the pinned local Whisper model after the visible user action, transcribed the pinned public speech fixture, checked 22 bounded words, repeated-start reuse, same-ID polling, immutable source bytes, and transcript persistence after project reopen; the actual guest window and expanded transcript were visually inspected. The test result and screenshots remain in ignored guest evidence. This does not establish broad language accuracy, transcript correction, semantic cuts, audio listening, or Magic Wand acceptance.
 - [ ] P5-02 Implement transcript correction and transcript-linked cuts.
 - [ ] P5-03 Detect silence, filler, false starts, repeated takes, mistakes, and protected speech. Apply the editorial policy: conservative configured cues and opt-in legacy variants, ambiguity retention, final complete retakes, unique context, protected edits and verified synchronized cut sets.
 - [ ] P5-04 Implement Magic Wand presets and a live non-destructive operation stream.

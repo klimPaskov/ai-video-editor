@@ -15,6 +15,10 @@
     },
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_transcription.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
       "example": "docs/examples/desktop_ipc_manual_edit.example.json"
     },
     {
@@ -160,6 +164,18 @@
     {
       "schema": "docs/schemas/transcript.schema.json",
       "example": "docs/examples/transcript.example.json"
+    },
+    {
+      "schema": "docs/schemas/transcription_analysis.schema.json",
+      "example": "docs/examples/transcription_analysis.example.json"
+    },
+    {
+      "schema": "docs/schemas/transcription_job.schema.json",
+      "example": "docs/examples/transcription_job.example.json"
+    },
+    {
+      "schema": "docs/schemas/transcription_project_view.schema.json",
+      "example": "docs/examples/transcription_project_view.example.json"
     },
     {
       "schema": "docs/schemas/ui_state.schema.json",

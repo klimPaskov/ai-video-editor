@@ -243,6 +243,69 @@ canvas {
 .transport button {
   min-width: 50px;
 }
+.auto-edit-actions {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  width: min(100%, 920px);
+  margin: 0 auto;
+  text-align: center;
+}
+.auto-edit-actions[hidden] {
+  display: none;
+}
+.auto-edit-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+#transcription-disclosure,
+#transcription-status,
+#transcription-error {
+  margin: 0;
+  color: #b6bac8;
+  font-size: 13px;
+}
+#transcription-error {
+  color: #ed9b9b;
+}
+#transcription-progress {
+  width: min(100%, 560px);
+  justify-self: center;
+  accent-color: #9c84f2;
+}
+#transcript-results {
+  text-align: left;
+  border-top: 1px solid #343744;
+  padding-top: 10px;
+}
+#transcript-content {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+#transcript-timing-note,
+#transcript-language-note {
+  margin: 8px 0 0;
+  color: #b6bac8;
+  font-size: 12px;
+}
+#transcript-content strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #d6d8e0;
+}
+#transcript-content pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  color: #b6bac8;
+  font: inherit;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .edit-actions {
   display: flex;
   align-items: center;

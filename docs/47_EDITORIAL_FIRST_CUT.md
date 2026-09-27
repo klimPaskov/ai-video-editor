@@ -20,6 +20,8 @@ Discover the current app's exposed guides/capabilities once per runtime connecti
 
 Check transcription state first. Poll an existing job by its real handle. If transcription is absent, request it once, retain its job identity, and poll the documented status until it completes or fails. Do not restart because a poll times out. A missing runtime, project, source, guide or required capability is an actionable blocker, not permission to fabricate results. Report the exact affected prerequisite and preserve unrelated work.
 
+The current local Whisper runtime marks word times as estimates and reports language as unidentified. Recheck names, numbers, negation, sentence boundaries, and every proposed cut against the audible source and visuals before applying edits. Silence analysis remains independent evidence and cannot authorize a cut. Transcript-text correction updates metadata only; it never changes the recorded voice.
+
 Determine the synchronized edit set for camera, screen and microphone from verified source relationships and timing. Narration-based ripple cuts may affect only the appropriate synchronized set; an independent screen layer requires its own evidenced mapping. Inspect approved camera/screen layouts and protected regions, including sponsor segments and licensed material. Treat prior edits as intentional; modify new or requested material only.
 
 ## 2. Interpret spoken directions conservatively
