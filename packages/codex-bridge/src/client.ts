@@ -48,6 +48,7 @@ const fixedAppServerArguments = [
   "app-server",
   "--listen",
   "stdio://",
+  "--strict-config",
   "-c",
   'forced_login_method="chatgpt"',
   "-c",

@@ -176,3 +176,5 @@ For failed turns, project only the pinned `turn.error.codexErrorInfo` category. 
 For pinned Codex 0.155.1, verify process and start/resume feature gates against the exact packaged `codex features list`. Disable unused default-on browser/CDP, computer-use, shell-snapshot, interactive TTY, workspace-dependency, guardian-approval, and in-app utility surfaces. If the packaged feature list keeps a requested toggle true, remove that claim and record the unresolved boundary. Feature gates are not a global model-visible tool allowlist.
 
 When building CLI arguments, pair every `-c` with exactly one following config expression. Tests must assert there is no dangling or consecutive `-c` anywhere in the argument list and check adjacency for every feature override, not just the presence of value strings. Rebuild the packaged Electron app and run the real stdio bootstrap regression after changing App Server arguments.
+
+Pass `--strict-config` to the pinned `app-server` process so misspelled or newly unsupported policy settings fail closed rather than being silently ignored. Include the real packaged stdio bootstrap in validation whenever process-level config changes.

@@ -313,6 +313,7 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
   };
   const args = buildCodexAppServerArguments(runtime);
   const serialized = JSON.stringify(args);
+  assert.ok(args.includes("--strict-config"));
   for (const [index, value] of args.entries())
     if (value === "-c")
       assert.notEqual(
@@ -396,6 +397,7 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
   assert.ok(!serialized.includes("filesystem.read"));
 
   const dynamicArgs = buildCodexAppServerArguments();
+  assert.ok(dynamicArgs.includes("--strict-config"));
   for (const [index, value] of dynamicArgs.entries())
     if (value === "-c")
       assert.notEqual(
