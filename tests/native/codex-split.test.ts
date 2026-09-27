@@ -62,7 +62,9 @@ const providedPaths = process.argv
       argument !== "--require-luna" &&
       argument !== "--require-dynamic" &&
       argument !== "--probe-surface" &&
-      argument !== "--hostile-app-config",
+      argument !== "--hostile-app-config" &&
+      !argument.startsWith("--model-id=") &&
+      !argument.startsWith("--reasoning="),
   );
 assert.ok(
   providedPaths.length === 0 || providedPaths.length === 2,
@@ -558,8 +560,61 @@ try {
       { timeout: 60_000 },
     )
     .toBe(true);
-  const account = await page.evaluate(() => window.desktop.getCodex());
+  let account = await page.evaluate(() => window.desktop.getCodex());
   assert.ok(account.ok);
+  const requestedModelId = process.argv
+    .find((argument) => argument.startsWith("--model-id="))
+    ?.slice("--model-id=".length);
+  const requestedReasoning =
+    process.argv
+      .find((argument) => argument.startsWith("--reasoning="))
+      ?.slice("--reasoning=".length) ?? "high";
+  if (requestedModelId !== undefined) {
+    assert.ok(
+      requestedModelId === "gpt-5.6-luna" || requestedModelId === "gpt-6-luna",
+      "The policy fixture may select only a Luna model",
+    );
+    assert.ok(!process.argv.includes("--require-luna"));
+    const model = account.value.models.find(
+      (item) => item.id === requestedModelId,
+    );
+    assert.ok(model, "The explicitly requested Luna model is unavailable");
+    assert.ok(
+      model.reasoning.includes(requestedReasoning),
+      "The explicitly requested reasoning effort is unavailable",
+    );
+    await page.locator("#codex-model").selectOption(model.id);
+    await expect
+      .poll(
+        async () => {
+          const state = await page!.evaluate(() => window.desktop.getCodex());
+          return (
+            state.ok &&
+            !state.value.busy &&
+            state.value.selection?.modelId === model.id
+          );
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(true);
+    await page.locator("#codex-reasoning").selectOption(requestedReasoning);
+    await expect
+      .poll(
+        async () => {
+          const state = await page!.evaluate(() => window.desktop.getCodex());
+          return state.ok && !state.value.busy ? state.value.selection : null;
+        },
+        { timeout: 60_000 },
+      )
+      .toEqual({ modelId: model.id, reasoning: requestedReasoning });
+    account = await page.evaluate(() => window.desktop.getCodex());
+    assert.ok(account.ok);
+  } else {
+    assert.ok(
+      account.value.selection,
+      "Do not silently choose from a missing default model selection; supply --model-id for an explicit fixture choice",
+    );
+  }
   if (process.argv.includes("--require-luna")) {
     assert.deepEqual(account.value.selection, {
       modelId: "gpt-6-luna",

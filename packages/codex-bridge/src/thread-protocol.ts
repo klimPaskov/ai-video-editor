@@ -212,14 +212,14 @@ function validatedFeaturePolicy(
     !["disabled", "v1", "v2"].includes(supplied.nativeSubagentProtocol) ||
     (supplied.nativeSubagentProtocol !== "disabled" &&
       supplied.route !== "dynamic") ||
-    (supplied.nativeSubagentProtocol === "v2" &&
+    (supplied.nativeSubagentProtocol !== "disabled" &&
       (!hasChildModel ||
         !hasChildReasoning ||
         !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u.test(
           supplied.nativeSubagentModel ?? "",
         ) ||
         !reasoningPattern.test(supplied.nativeSubagentReasoning ?? ""))) ||
-    (supplied.nativeSubagentProtocol !== "v2" &&
+    (supplied.nativeSubagentProtocol === "disabled" &&
       (hasChildModel || hasChildReasoning))
   ) {
     throw new CodexThreadProtocolError("configuration");
@@ -260,6 +260,7 @@ function threadFeatures(policy: ThreadFeaturePolicy) {
     computer_use: false,
     connectors: false,
     default_mode_request_user_input: false,
+    deferred_executor: false,
     enable_mcp_apps: false,
     exec_permission_approvals: false,
     external_agent_memory_import: false,
@@ -298,6 +299,7 @@ function threadFeatures(policy: ThreadFeaturePolicy) {
     search_tool: false,
     shell_tool: false,
     sleep_tool: false,
+    token_budget: false,
     skill_mcp_dependency_install: false,
     skill_search: false,
     standalone_web_search: false,
@@ -379,7 +381,13 @@ export function buildThreadStartRequest(
       },
       agents:
         featurePolicy.nativeSubagentProtocol === "v1"
-          ? { enabled: true, max_depth: 1 }
+          ? {
+              enabled: true,
+              max_depth: 1,
+              default_subagent_model: featurePolicy.nativeSubagentModel!,
+              default_subagent_reasoning_effort:
+                featurePolicy.nativeSubagentReasoning!,
+            }
           : featurePolicy.nativeSubagentProtocol === "v2"
             ? {
                 enabled: true,
@@ -467,7 +475,13 @@ export function buildThreadResumeRequest(
       },
       agents:
         featurePolicy.nativeSubagentProtocol === "v1"
-          ? { enabled: true, max_depth: 1 }
+          ? {
+              enabled: true,
+              max_depth: 1,
+              default_subagent_model: featurePolicy.nativeSubagentModel!,
+              default_subagent_reasoning_effort:
+                featurePolicy.nativeSubagentReasoning!,
+            }
           : featurePolicy.nativeSubagentProtocol === "v2"
             ? {
                 enabled: true,

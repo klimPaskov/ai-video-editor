@@ -281,17 +281,42 @@ try {
     "Real skill discovery must return entries",
   );
   const requireLunaHigh = process.argv.includes("--require-luna-high");
-  const model = requireLunaHigh
-    ? account.value.models.find(
-        (item) => item.id === "gpt-6-luna" && item.reasoning.includes("high"),
-      )
-    : (account.value.models.find(
-        (item) => item.id === account.value.selection?.modelId,
-      ) ?? account.value.models[0]);
+  const requestedModelId = process.argv
+    .find((argument) => argument.startsWith("--model-id="))
+    ?.slice("--model-id=".length);
+  const requestedReasoning = process.argv
+    .find((argument) => argument.startsWith("--reasoning="))
+    ?.slice("--reasoning=".length);
+  if (requestedModelId !== undefined) {
+    assert.ok(
+      requestedModelId === "gpt-5.6-luna" || requestedModelId === "gpt-6-luna",
+      "The authenticated policy fixture may select only a Luna model",
+    );
+    assert.ok(!requireLunaHigh);
+  }
+  const model = requestedModelId
+    ? account.value.models.find((item) => item.id === requestedModelId)
+    : requireLunaHigh
+      ? account.value.models.find(
+          (item) => item.id === "gpt-6-luna" && item.reasoning.includes("high"),
+        )
+      : account.value.models.find(
+          (item) => item.id === account.value.selection?.modelId,
+        );
   assert.ok(model, "The required Codex model is unavailable");
+  const reasoning = requireLunaHigh
+    ? "high"
+    : (requestedReasoning ??
+      (account.value.selection?.modelId === model.id
+        ? account.value.selection.reasoning
+        : model.defaultReasoning));
+  assert.ok(
+    model.reasoning.includes(reasoning),
+    "The required Codex reasoning effort is unavailable",
+  );
   const selection = {
     modelId: model.id,
-    reasoning: requireLunaHigh ? "high" : model.defaultReasoning,
+    reasoning,
   };
   mark("authenticated-settings-select-model");
   await page.locator("#codex-model").selectOption(model.id);

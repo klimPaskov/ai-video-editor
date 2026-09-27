@@ -333,6 +333,118 @@ test("a new ChatGPT account defaults to runtime-listed Luna with high reasoning"
   }
 });
 
+test("V1 native children inherit the selected Luna model and reasoning", async () => {
+  const fake = new FakeClient();
+  fake.auth = signedIn();
+  fake.modelValues = [
+    {
+      ...model,
+      id: "gpt-5.6-luna",
+      model: "runtime-luna-v1",
+      multiAgentVersion: "v1",
+      reasoning: ["medium", "high"],
+      defaultReasoning: "high",
+    },
+  ];
+  const clients: FakeClient[] = [];
+  const { controller } = harness(fake, {
+    toolRouteForProject: async () => "dynamic",
+    createClient: (options) => {
+      const client = clients.length === 0 ? fake : new FakeClient();
+      client.auth = signedIn();
+      client.modelValues = structuredClone(fake.modelValues);
+      client.options = options;
+      clients.push(client);
+      return client;
+    },
+    settings: {
+      read: async () => ({ modelId: "gpt-5.6-luna", reasoning: "high" }),
+      write: async (value) => value as CodexSelection,
+    },
+  });
+  try {
+    const view = await controller.get();
+    assert.equal(view.connection, "connected");
+    assert.equal(view.account, "signed_in");
+    assert.equal(view.busy, false);
+    assert.deepEqual(view.selection, {
+      modelId: "gpt-5.6-luna",
+      reasoning: "high",
+    });
+    await controller.openThread("project-1");
+    assert.equal(
+      clients.at(-1)?.openThreadCalls[0]?.nativeSubagentProtocol,
+      "v1",
+    );
+    assert.equal(
+      clients.at(-1)?.openThreadCalls[0]?.nativeSubagentModel,
+      "runtime-luna-v1",
+    );
+    assert.equal(
+      clients.at(-1)?.openThreadCalls[0]?.nativeSubagentReasoning,
+      "high",
+    );
+  } finally {
+    await controller.close();
+  }
+});
+
+test("Astra catalog entries never enable native child models", async () => {
+  const fake = new FakeClient();
+  fake.auth = signedIn();
+  fake.modelValues = [
+    {
+      ...model,
+      id: "gpt-6-astra",
+      model: "runtime-astra-request-name",
+      multiAgentVersion: "v2",
+      reasoning: ["high"],
+      defaultReasoning: "high",
+    },
+  ];
+  const clients: FakeClient[] = [];
+  const { controller } = harness(fake, {
+    toolRouteForProject: async () => "dynamic",
+    createClient: (options) => {
+      const client = clients.length === 0 ? fake : new FakeClient();
+      client.auth = signedIn();
+      client.modelValues = structuredClone(fake.modelValues);
+      client.options = options;
+      clients.push(client);
+      return client;
+    },
+    settings: {
+      read: async () => ({ modelId: "gpt-6-astra", reasoning: "high" }),
+      write: async (value) => value as CodexSelection,
+    },
+  });
+  try {
+    const view = await controller.get();
+    assert.equal(view.connection, "connected");
+    assert.equal(view.account, "signed_in");
+    assert.equal(view.busy, false);
+    assert.deepEqual(view.selection, {
+      modelId: "gpt-6-astra",
+      reasoning: "high",
+    });
+    await controller.openThread("project-1");
+    assert.equal(
+      clients.at(-1)?.openThreadCalls[0]?.nativeSubagentProtocol,
+      "disabled",
+    );
+    assert.equal(
+      clients.at(-1)?.openThreadCalls[0]?.nativeSubagentModel,
+      undefined,
+    );
+    assert.match(
+      clients.at(-1)?.openThreadCalls[0]?.developerInstructions ?? "",
+      /no native child protocol enabled/u,
+    );
+  } finally {
+    await controller.close();
+  }
+});
+
 test("an unavailable Luna/high default fails closed without replacing the live catalog", async () => {
   const fake = new FakeClient();
   fake.auth = signedIn();
@@ -350,6 +462,28 @@ test("an unavailable Luna/high default fails closed without replacing the live c
     );
     await assert.rejects(controller.openThread("project-1"));
     assert.equal(fake.openThreadCalls.length, 0);
+  } finally {
+    await controller.close();
+  }
+});
+
+test("an unavailable Luna/high default stays actionable when unrelated settings refresh fails", async () => {
+  const fake = new FakeClient();
+  fake.auth = signedIn();
+  fake.skillFailure = true;
+  const { controller } = harness(fake);
+  try {
+    const view = await controller.get();
+    assert.deepEqual(
+      view.models.map((entry) => entry.id),
+      [model.id],
+    );
+    assert.equal(view.selection, null);
+    assert.match(
+      view.message ?? "",
+      /GPT-6-Luna with high reasoning is unavailable/u,
+    );
+    assert.match(view.message ?? "", /settings could not be refreshed/u);
   } finally {
     await controller.close();
   }

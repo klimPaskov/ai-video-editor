@@ -127,7 +127,8 @@ export class CodexProjectThreadClient {
             newThreadToolRoute: "dynamic",
             nativeSubagentProtocol:
               options.nativeSubagentProtocol ?? "disabled",
-            ...(options.nativeSubagentProtocol === "v2"
+            ...(options.nativeSubagentProtocol !== undefined &&
+            options.nativeSubagentProtocol !== "disabled"
               ? {
                   nativeSubagentModel: options.nativeSubagentModel!,
                   nativeSubagentReasoning: options.nativeSubagentReasoning!,

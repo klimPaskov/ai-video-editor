@@ -139,3 +139,23 @@ Sources:
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L496-L523
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L3169-L3204
 - https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L3932-L3950
+
+## Pinned Codex 0.155.1 direct utility feature gates, 2026-09-27
+
+The 0.155.1 core tool planner registers `wait_for_environment` only when `Feature::DeferredExecutor` is enabled, and registers `new_context_window` plus `get_context_remaining` only when `Feature::TokenBudget` is enabled. The pinned config schema exposes both feature settings. The app now explicitly disables them in App Server process arguments and both route-derived thread configs; exact unit assertions cover launch, `thread/start` and `thread/resume`. This removes those unnecessary utility tools from the tested configuration but does not establish the complete model-visible catalog or prove that every upstream capability can be disabled.
+
+Sources:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/src/tools/spec_plan.rs#L1063-L1090
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/src/tools/spec_plan.rs#L1071-L1139
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L748-L751
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L1021-L1024
+
+
+## Pinned Codex 0.155.1 child model inheritance, 2026-09-27
+
+The pinned `AgentsToml` supports `default_subagent_model` and `default_subagent_reasoning_effort` for child spawns without an explicit override. The editor now supplies the selected parent model and effort for both dynamic V1 and V2 policies; the main process disables child protocols for Astra model IDs. Unit tests cover the emitted settings and the Astra block. A packaged V1 child run with explicit GPT-5.6-Luna/high reached the native turn but did not complete, so the source and request assertions are configuration evidence only, not a new live child success.
+
+Source:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L33-L53

@@ -73,6 +73,10 @@ const fixedAppServerArguments = [
   "-c",
   "features.sleep_tool=false",
   "-c",
+  "features.deferred_executor=false",
+  "-c",
+  "features.token_budget=false",
+  "-c",
   "features.view_image=false",
   "-c",
   "features.api_key_model_discovery=false",
@@ -776,7 +780,8 @@ export class CodexClient {
       ...(this.options.dynamicToolInvoker
         ? {
             nativeSubagentProtocol: input.nativeSubagentProtocol ?? "disabled",
-            ...(input.nativeSubagentProtocol === "v2"
+            ...(input.nativeSubagentProtocol !== undefined &&
+            input.nativeSubagentProtocol !== "disabled"
               ? {
                   nativeSubagentModel: input.nativeSubagentModel!,
                   nativeSubagentReasoning: input.nativeSubagentReasoning!,

@@ -175,6 +175,8 @@ test("dynamic thread start and resume retain the route-specific code-mode policy
     allowedMcpTools: new Set<string>(),
     newThreadToolRoute: "dynamic" as const,
     nativeSubagentProtocol: "v1" as const,
+    nativeSubagentModel: policy.model,
+    nativeSubagentReasoning: policy.effort,
     allowedDynamicNamespace: "codex_video_edit",
     allowedDynamicTools: ownedDynamicToolWireNames(),
   };
@@ -184,6 +186,12 @@ test("dynamic thread start and resume retain the route-specific code-mode policy
     assert.equal(opening.method, "thread/start");
     assert.equal(opening.params.config.features.code_mode_only, true);
     assert.equal(opening.params.config.features.multi_agent, true);
+    assert.deepEqual(opening.params.config.agents, {
+      enabled: true,
+      max_depth: 1,
+      default_subagent_model: policy.model,
+      default_subagent_reasoning_effort: policy.effort,
+    });
     assert.deepEqual(
       opening.params.dynamicTools?.[0]?.name,
       "codex_video_edit",
@@ -220,6 +228,12 @@ test("dynamic thread start and resume retain the route-specific code-mode policy
     assert.equal(resumed.method, "thread/resume");
     assert.equal(resumed.params.config.features.code_mode_only, true);
     assert.equal(resumed.params.config.features.multi_agent, true);
+    assert.deepEqual(resumed.params.config.agents, {
+      enabled: true,
+      max_depth: 1,
+      default_subagent_model: policy.model,
+      default_subagent_reasoning_effort: policy.effort,
+    });
     assert.equal("dynamicTools" in resumed.params, false);
   } finally {
     await rm(root, { recursive: true, force: true });

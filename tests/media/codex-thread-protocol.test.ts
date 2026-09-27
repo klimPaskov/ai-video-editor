@@ -51,6 +51,7 @@ const restrictedFeatures = {
   computer_use: false,
   connectors: false,
   default_mode_request_user_input: false,
+  deferred_executor: false,
   enable_mcp_apps: false,
   exec_permission_approvals: false,
   external_agent_memory_import: false,
@@ -74,6 +75,7 @@ const restrictedFeatures = {
   search_tool: false,
   shell_tool: false,
   sleep_tool: false,
+  token_budget: false,
   skill_mcp_dependency_install: false,
   skill_search: false,
   standalone_web_search: false,
@@ -228,10 +230,14 @@ test("experimental initialization and no-environment requests are exact", () => 
   const collaborativeStart = buildThreadStartRequest(policy, {
     route: "dynamic",
     nativeSubagentProtocol: "v1",
+    nativeSubagentModel: "gpt-5.6-luna",
+    nativeSubagentReasoning: "high",
   });
   const collaborativeResume = buildThreadResumeRequest("thread-1", policy, {
     route: "dynamic",
     nativeSubagentProtocol: "v1",
+    nativeSubagentModel: "gpt-5.6-luna",
+    nativeSubagentReasoning: "high",
   });
   const v2Start = buildThreadStartRequest(policy, {
     route: "dynamic",
@@ -252,6 +258,8 @@ test("experimental initialization and no-environment requests are exact", () => 
   assert.deepEqual(v2Start.config.features, dynamicFeatures("v2"));
   assert.deepEqual(v2Resume.config.features, dynamicFeatures("v2"));
   for (const request of [dynamicStart, dynamicResume]) {
+    assert.equal(request.config.features.deferred_executor, false);
+    assert.equal(request.config.features.token_budget, false);
     assert.equal(request.config.features.code_mode_only, true);
     assert.equal(request.config.features.code_mode.enabled, true);
     assert.equal(request.config.features.code_mode_host.enabled, true);
@@ -293,6 +301,8 @@ test("experimental initialization and no-environment requests are exact", () => 
     assert.deepEqual(request.config.agents, {
       enabled: true,
       max_depth: 1,
+      default_subagent_model: "gpt-5.6-luna",
+      default_subagent_reasoning_effort: "high",
     });
     assert.equal(request.approvalPolicy, "never");
     assert.equal(request.sandbox, "read-only");
@@ -482,6 +492,16 @@ test("builders reject renderer-style policy and identifier overrides", () => {
     () =>
       buildThreadStartRequest(policy, {
         route: "mcp",
+        nativeSubagentProtocol: "v1",
+        nativeSubagentModel: "gpt-5.6-luna",
+        nativeSubagentReasoning: "high",
+      }),
+    CodexThreadProtocolError,
+  );
+  assert.throws(
+    () =>
+      buildThreadStartRequest(policy, {
+        route: "dynamic",
         nativeSubagentProtocol: "v1",
       }),
     CodexThreadProtocolError,

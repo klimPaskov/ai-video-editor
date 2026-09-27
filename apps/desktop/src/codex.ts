@@ -102,7 +102,7 @@ const DYNAMIC_PROJECT_THREAD_INSTRUCTIONS = PROJECT_THREAD_INSTRUCTIONS.replace(
   .replace("cut.delete_range", "codex_video_edit__cut_delete_range")
   .replace("cut.restore_range", "codex_video_edit__cut_restore_range");
 const DYNAMIC_V1_CHILD_INSTRUCTIONS =
-  "Dynamic-bound Codex threads may use a native child only when the selected model advertises the supported V1 protocol. Spawn with fork_context=true, give the child only this active project and ask it to use codex_video_edit__project_get_summary and codex_video_edit__timeline_get_summary. Main validates the completed parent spawn, child turn and each read, allows no child edits, and hides child transcripts and identities. MCP-bound threads do not expose children. Do not request an Astra model or claim a child ran without completed server-owned spawn and child-owned summary reads.";
+  "Dynamic-bound Codex threads may use a native child only when the selected model advertises the supported V1 protocol. The app pins the default child model and reasoning to this thread's selected model and effort; never request a model override or choose Astra. Spawn with fork_context=true, give the child only this active project and ask it to use codex_video_edit__project_get_summary and codex_video_edit__timeline_get_summary. Main validates the completed parent spawn, child turn and each read, allows no child edits, and hides child transcripts and identities. MCP-bound threads do not expose children. Do not claim a child ran without completed server-owned spawn and child-owned summary reads.";
 const DYNAMIC_V2_CHILD_INSTRUCTIONS =
   "This GPT-6-Luna thread may use the guarded V2 native child route for one read-only project task. First read the active project's path-free project and timeline summaries with codex_video_edit__project_get_summary and codex_video_edit__timeline_get_summary. Invoke the direct top-level native codex_video_edit_agents__spawn_agent tool at most once with fork_turns=none and no model or reasoning override; give the child only the active project_id and those two summary JSON values. The child uses only that snapshot and must not ask for more access. These V2 functions are direct model tools, not nested code-mode helpers. The app locks the child model to the selected Luna model, disables model overrides, limits concurrent children to one, and rejects all child edits except the summary reads if any are attempted. Wait with the direct native codex_video_edit_agents__wait_agent tool; do not use send_message or followup_task, attempt another child, or request a model change. Never claim a child ran without completed server-owned spawn correlation and a completed child turn.";
 const DYNAMIC_NO_CHILD_INSTRUCTIONS =
@@ -127,6 +127,8 @@ const preferredSubscriptionModel: CodexSelection = {
 };
 const preferredModelUnavailable =
   "GPT-6-Luna with high reasoning is unavailable for this account. Choose an available Codex model in Settings.";
+const metadataRefreshFailed =
+  "Some Codex settings could not be refreshed. Reconnect to try again.";
 const label = (value: string, max: number) =>
   value
     .replace(/[\u0000-\u001f\u007f]/gu, " ")
@@ -598,7 +600,9 @@ export class DesktopCodex {
           this.requestModels.set(entry.id, entry.model);
           this.nativeSubagentVersions.set(
             entry.id,
-            entry.multiAgentVersion ?? "disabled",
+            entry.id.toLocaleLowerCase().includes("astra")
+              ? "disabled"
+              : (entry.multiAgentVersion ?? "disabled"),
           );
           return {
             id: entry.id,
@@ -627,14 +631,13 @@ export class DesktopCodex {
           }
       }
       if (work.some((result) => result.status === "rejected"))
-        this.state.message =
-          "Some Codex settings could not be refreshed. Reconnect to try again.";
+        this.state.message = metadataRefreshFailed;
       else if (this.state.account === "signed_in" && !this.state.models.length)
         this.state.message =
           "No compatible Codex models are available for this account. Reconnect or check your ChatGPT access.";
       else if (
         [
-          "Some Codex settings could not be refreshed. Reconnect to try again.",
+          metadataRefreshFailed,
           "No compatible Codex models are available for this account. Reconnect or check your ChatGPT access.",
         ].includes(this.state.message ?? "")
       )
@@ -662,8 +665,12 @@ export class DesktopCodex {
         this.state.selection = preferred
           ? { ...preferredSubscriptionModel }
           : null;
-        if (!preferred && this.state.models.length && !this.state.message)
-          this.state.message = preferredModelUnavailable;
+        if (!preferred && this.state.models.length)
+          this.state.message = work.some(
+            (result) => result.status === "rejected",
+          )
+            ? `${preferredModelUnavailable} ${metadataRefreshFailed}`
+            : preferredModelUnavailable;
         else if (preferred && this.state.message === preferredModelUnavailable)
           this.state.message = null;
       }
@@ -801,7 +808,7 @@ export class DesktopCodex {
       throw new Error(
         "Choose an available Codex model before opening the conversation.",
       );
-    if (nativeSubagentProtocol === "v2") {
+    if (nativeSubagentProtocol !== "disabled") {
       nativeSubagentModel = requestModel;
       nativeSubagentReasoning = selection.reasoning;
     }
@@ -819,7 +826,7 @@ export class DesktopCodex {
         model: requestModel,
         effort: selection.reasoning,
         ...(route === "dynamic" ? { nativeSubagentProtocol } : {}),
-        ...(route === "dynamic" && nativeSubagentProtocol === "v2"
+        ...(route === "dynamic" && nativeSubagentProtocol !== "disabled"
           ? {
               nativeSubagentModel: nativeSubagentModel!,
               nativeSubagentReasoning: nativeSubagentReasoning!,

@@ -117,9 +117,17 @@ export class ProjectThreadRuntime {
       options.nativeSubagentProtocol !== "disabled"
     )
       throw new CodexThreadProtocolError("configuration");
+    const nativeSubagentProtocol =
+      options.newThreadToolRoute === "dynamic"
+        ? (options.nativeSubagentProtocol ?? "disabled")
+        : "disabled";
+    const hasChildModel = options.nativeSubagentModel !== undefined;
+    const hasChildReasoning = options.nativeSubagentReasoning !== undefined;
     if (
-      options.nativeSubagentProtocol === "v2" &&
-      (!options.nativeSubagentModel || !options.nativeSubagentReasoning)
+      (nativeSubagentProtocol !== "disabled" &&
+        (!options.nativeSubagentModel || !options.nativeSubagentReasoning)) ||
+      (nativeSubagentProtocol === "disabled" &&
+        (hasChildModel || hasChildReasoning))
     )
       throw new CodexThreadProtocolError("configuration");
     const reviewedDynamicNames = ownedDynamicToolWireNames();
@@ -142,7 +150,13 @@ export class ProjectThreadRuntime {
     // Validate the complete no-environment thread policy at construction.
     buildThreadStartRequest(this.options.policy, {
       route: this.options.newThreadToolRoute ?? "mcp",
-      nativeSubagentProtocol: "disabled",
+      nativeSubagentProtocol,
+      ...(nativeSubagentProtocol !== "disabled"
+        ? {
+            nativeSubagentModel: options.nativeSubagentModel!,
+            nativeSubagentReasoning: options.nativeSubagentReasoning!,
+          }
+        : {}),
     });
   }
 
@@ -173,7 +187,7 @@ export class ProjectThreadRuntime {
     const featurePolicy: ThreadFeaturePolicy = {
       route: toolRoute,
       nativeSubagentProtocol,
-      ...(nativeSubagentProtocol === "v2"
+      ...(nativeSubagentProtocol !== "disabled"
         ? {
             nativeSubagentModel: this.options.nativeSubagentModel!,
             nativeSubagentReasoning: this.options.nativeSubagentReasoning!,

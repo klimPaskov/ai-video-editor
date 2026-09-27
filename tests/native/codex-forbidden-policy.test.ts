@@ -484,6 +484,8 @@ try {
         buildThreadResumeRequest(threadId, auditPolicy, {
           route: "dynamic",
           nativeSubagentProtocol: "v1",
+          nativeSubagentModel: model.id,
+          nativeSubagentReasoning: reasoning,
         }),
       );
       return turns(
@@ -580,6 +582,8 @@ try {
     buildThreadResumeRequest(parentThreadId, auditPolicy, {
       route: "dynamic",
       nativeSubagentProtocol: "v1",
+      nativeSubagentModel: model.id,
+      nativeSubagentReasoning: reasoning,
     }),
   );
   mark("parent-policy-thread");
