@@ -1,7 +1,6 @@
 import { build } from "esbuild";
 import { packager } from "@electron/packager";
 import {
-  access,
   chmod,
   cp,
   copyFile,
@@ -17,15 +16,9 @@ import { execFileSync } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { resolve, join, relative, sep } from "node:path";
 import assert from "node:assert/strict";
+import { assertNativeTestEnvironment } from "./native-test-environment.ts";
 
-assert.equal(
-  process.platform,
-  "linux",
-  "Automated builds run only in the isolated guest",
-);
-assert.equal(process.getuid(), 1000);
-assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const root = resolve(import.meta.dirname, "..");
 const evidence = join(root, "test-results");
 await mkdir(evidence, { recursive: true });

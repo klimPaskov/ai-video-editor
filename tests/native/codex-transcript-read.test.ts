@@ -18,11 +18,9 @@ import { assertTwoSourceInitialProjectSnapshot } from "../../packages/domain/src
 import type { TranscriptionProjectView } from "../../packages/domain/src/transcription.ts";
 import { sha256 } from "../../packages/media-engine/src/lossless.ts";
 import { verifySpeechModelCache } from "../../packages/media-engine/src/transcription.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
-assert.equal(process.platform, "linux");
-assert.equal(process.getuid?.(), 1000);
-assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 
 const executablePath = process.argv[2],
   configArgument = process.argv[3],
@@ -54,6 +52,24 @@ const mark = (value: string): void => {
   step = value;
   console.log(`STEP ${value}`);
 };
+
+async function inspectionHold(name: string): Promise<void> {
+  if (!process.argv.includes("--inspect")) return;
+  const ready = join(evidence, `${name}.ready`);
+  const done = join(evidence, `${name}.done`);
+  await writeFile(ready, "ready\n", { mode: 0o600 });
+  console.log(`INSPECTION_READY ${name}`);
+  const deadline = Date.now() + 5 * 60_000;
+  while (Date.now() < deadline) {
+    try {
+      await access(done);
+      return;
+    } catch {
+      await delay(500);
+    }
+  }
+  throw new Error(`Native visual inspection timed out at ${name}`);
+}
 
 async function hashFile(path: string): Promise<string> {
   const hash = createHash("sha256");
@@ -286,6 +302,13 @@ try {
   await expect(page.locator("#transcription-status")).toContainText(
     "Transcript complete",
   );
+  await page
+    .locator("#transcript-results")
+    .evaluate((details: HTMLDetailsElement) => {
+      details.open = true;
+    });
+  await expect(page.locator("#transcript-results")).toBeVisible();
+  await inspectionHold("transcript-complete-inspection");
   const readCallsBefore = await codexThread(page, project.id);
   const assistantMessagesBefore = readCallsBefore.messages.filter(
     (message) => message.role === "codex",
@@ -341,6 +364,7 @@ try {
     transcriptReadActivityCount >= 2,
     "Codex must read one transcript page for each source",
   );
+  await inspectionHold("codex-transcript-read-inspection");
 
   const afterRead = (await projectList(page)).find(
     (item) => item.id === project.id,

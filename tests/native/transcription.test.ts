@@ -12,20 +12,14 @@ import {
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { _electron, expect } from "playwright/test";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 import { verifySpeechModelCache } from "../../packages/media-engine/src/transcription.ts";
 import { ProjectStore } from "../../packages/project-store/src/store.ts";
 
-assert.equal(
-  process.platform,
-  "linux",
-  "Native tests require the isolated guest",
-);
-assert.equal(process.getuid?.(), 1000);
-assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 assert.ok(executablePath, "Packaged executable path is required");
 const root = resolve("test-results");
@@ -534,7 +528,7 @@ try {
     sourceSha256,
   );
   if (process.argv.includes("--inspect")) {
-    await page.locator("#transcript-results summary").click();
+    await page.locator("#transcript-summary").click();
     await inspectionHold("transcription-inspection");
   }
   await writeFile(
