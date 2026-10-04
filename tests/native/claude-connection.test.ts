@@ -67,7 +67,7 @@ const browserLog = join(evidence, "browser-open.log");
 const privateUrl = join(evidence, "private-sign-in-url.txt");
 await writeFile(
   join(stubDirectory, "xdg-open"),
-  `#!/bin/sh\nprintf '%s\\n' "$1" | sed -E 's#^https://([^/]+)/.*#\\1#' >> '${browserLog}'\nif [ -n "$CLAUDE_TEST_KEEP_URL" ]; then umask 077; printf '%s\\n' "$1" > '${privateUrl}'; fi\n`,
+  `#!/bin/sh\nprintf '%s\\n' "$1" | sed -E 's#^https://([^/]+)/.*#\\1#' >> '${browserLog}'\n${holdSignIn ? `umask 077; printf '%s\\n' "$1" > '${privateUrl}'\n` : ""}`,
   { mode: 0o700 },
 );
 await chmod(join(stubDirectory, "xdg-open"), 0o700);
@@ -113,7 +113,6 @@ const env = {
   ...process.env,
   XDG_CONFIG_HOME: configRoot,
   PATH: `${stubDirectory}:${resolve(claudeBin)}:${process.env.PATH ?? "/usr/bin:/bin"}`,
-  ...(holdSignIn ? { CLAUDE_TEST_KEEP_URL: "1" } : {}),
 };
 const launch = () =>
   _electron.launch({
