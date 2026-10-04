@@ -355,7 +355,7 @@ function assertRecordEnvelope(value: unknown): DraftTransactionRecord {
     !validId(record.draft_id) ||
     !validId(record.base_revision_id) ||
     !["apply", "undo", "redo"].includes(record.kind as string) ||
-    !["manual", "codex", "api_provider", "magic_wand"].includes(
+    !["manual", "codex", "claude", "api_provider", "magic_wand"].includes(
       record.origin as string,
     ) ||
     typeof record.reason !== "string" ||
@@ -1354,6 +1354,10 @@ export class DraftTransactionStore {
     return this.applyAs("codex", value);
   }
 
+  applyClaude(value: unknown): Promise<DraftCommitResult> {
+    return this.applyAs("claude", value);
+  }
+
   applyApiProvider(value: unknown): Promise<DraftCommitResult> {
     return this.applyAs("api_provider", value);
   }
@@ -1638,6 +1642,10 @@ export class DraftTransactionStore {
     return this.undoAs("codex", value);
   }
 
+  undoClaude(value: unknown): Promise<DraftCommitResult> {
+    return this.undoAs("claude", value);
+  }
+
   undoApiProvider(value: unknown): Promise<DraftCommitResult> {
     return this.undoAs("api_provider", value);
   }
@@ -1719,6 +1727,10 @@ export class DraftTransactionStore {
 
   redoCodex(value: unknown): Promise<DraftCommitResult> {
     return this.redoAs("codex", value);
+  }
+
+  redoClaude(value: unknown): Promise<DraftCommitResult> {
+    return this.redoAs("claude", value);
   }
 
   redoApiProvider(value: unknown): Promise<DraftCommitResult> {

@@ -1,4 +1,11 @@
 import { DesktopCodex } from "./codex.ts";
+import { ClaudeUserError, DesktopClaude } from "./claude.ts";
+import {
+  assertClaudeThreadProjectRequest,
+  assertClaudeThreadSendRequest,
+  assertClaudeThreadView,
+  assertClaudeView,
+} from "../../../packages/domain/src/claude-view.ts";
 import { DesktopApiProviders } from "./api-providers.ts";
 import { ApiProviderThreads } from "./api-thread.ts";
 import { ProviderKeyStore } from "./provider-keys.ts";
@@ -107,15 +114,23 @@ const frameRequests = new Set<AbortController>();
 let quitting = false;
 let codex: DesktopCodex | undefined;
 let mcpBroker: CodexMcpBroker | undefined;
+let claude: DesktopClaude | undefined;
+let claudeBroker: CodexMcpBroker | undefined;
 let transcription: DesktopTranscriptionManager | undefined;
 let servicesClosed = false;
 app.on("before-quit", (event) => {
   quitting = true;
-  if (!servicesClosed && (codex || mcpBroker || transcription)) {
+  if (
+    !servicesClosed &&
+    (codex || mcpBroker || claude || claudeBroker || transcription)
+  ) {
     event.preventDefault();
     void Promise.allSettled([
       Promise.resolve().then(() => codex?.close()),
       Promise.resolve().then(() => mcpBroker?.close()),
+      Promise.resolve()
+        .then(() => claude?.close())
+        .then(() => claudeBroker?.close()),
       Promise.resolve().then(() => transcription?.close()),
     ]).then(() => {
       servicesClosed = true;
@@ -166,7 +181,7 @@ function register(
       return {
         ok: false,
         message:
-          error instanceof UserFacingError
+          error instanceof UserFacingError || error instanceof ClaudeUserError
             ? error.message
             : "This operation could not finish. Check the file is available and try again.",
       };
@@ -323,6 +338,40 @@ async function start(): Promise<void> {
     (url) => shell.openExternal(url),
     { mcpRuntime, dynamicToolInvoker: invokeCodexTool },
   );
+  // Claude reaches the same guarded tool service through its own broker, so
+  // every Claude transaction is attributed to the Claude origin.
+  const invokeClaudeTool = async (name: unknown, input: unknown) => {
+    if (!activeProjectId) throw new CodexVideoEditToolError("inactive_project");
+    const projectId = activeProjectId;
+    return invokeWithProjectDraftRefresh({
+      toolName: name,
+      projectId,
+      activeProjectId: () => activeProjectId,
+      work: () =>
+        new CodexVideoEditToolService(
+          projectId,
+          drafts,
+          "claude",
+          readTranscriptForTool,
+        ).invoke(name, input),
+      drafts,
+      notify: publishDraftNotice,
+    });
+  };
+  claudeBroker = await CodexMcpBroker.open(
+    path.join(userData, "claude-mcp-runtime"),
+    invokeClaudeTool,
+  );
+  const claudeMcpRuntime = claudeBroker.runtime(
+    process.execPath,
+    await resolveCodexMcpScript(process.resourcesPath),
+  );
+  claude = new DesktopClaude(userData, {
+    platform: process.platform,
+    env: process.env,
+    openExternal: (url) => shell.openExternal(url),
+    mcpRuntime: () => claudeMcpRuntime,
+  });
   const apiClient = new ApiProviderClient();
   const apiProviders = new DesktopApiProviders(
     new ProviderKeyStore(path.join(userData, "api-provider-keys"), safeStorage),
@@ -411,6 +460,43 @@ async function start(): Promise<void> {
     assertCodexView(value);
     return value;
   });
+  const claudeView = async (work: () => Promise<unknown>) => {
+    const value = await work();
+    assertClaudeView(value);
+    return value;
+  };
+  register(channels.claudeGet, async (request) => {
+    assertEmptyRequest(request);
+    return claudeView(() => claude!.get());
+  });
+  register(channels.claudeCheck, async (request) => {
+    assertEmptyRequest(request);
+    return claudeView(() => claude!.check());
+  });
+  register(channels.claudeSignIn, async (request) => {
+    assertEmptyRequest(request);
+    return claudeView(() => claude!.signIn());
+  });
+  register(channels.claudeOpenSignIn, async (request) => {
+    assertEmptyRequest(request);
+    return claudeView(() => claude!.openSignInPage());
+  });
+  register(channels.claudeCancelSignIn, async (request) => {
+    assertEmptyRequest(request);
+    return claudeView(() => claude!.cancelSignIn());
+  });
+  register(channels.claudeSignOut, async (request) => {
+    assertEmptyRequest(request);
+    return claudeView(() => claude!.signOut());
+  });
+  register(channels.claudeSelect, async (request) =>
+    claudeView(() => claude!.select(request as never)),
+  );
+  register(channels.claudeInstallGuide, async (request) => {
+    assertEmptyRequest(request);
+    await claude!.openInstallGuide();
+    return null;
+  });
   register(channels.projectList, async (request) => {
     assertEmptyRequest(request);
     const value = await Promise.all(
@@ -460,6 +546,10 @@ async function start(): Promise<void> {
         throw new UserFacingError(
           "Stop the running Codex turn before leaving this project.",
         );
+      if (claude!.busy(request.id))
+        throw new UserFacingError(
+          "Stop the running Claude turn before leaving this project.",
+        );
       for (const provider of apiProviderIds) {
         const turn = await apiThreads.get(request.id, provider);
         if (turn.status === "running" || turn.status === "interrupting")
@@ -468,6 +558,7 @@ async function start(): Promise<void> {
           );
       }
       await codex!.closeThread(request.id);
+      await claude!.closeThread(request.id);
       await Promise.all(
         apiProviderIds.map((provider) =>
           apiThreads.close(request.id, provider),
@@ -560,6 +651,43 @@ async function start(): Promise<void> {
     await activeCodexProject(request.project_id);
     const value = await codex!.interruptThread(request.project_id);
     assertCodexThreadView(value);
+    return value;
+  });
+  register(channels.claudeThreadGet, async (request) => {
+    assertClaudeThreadProjectRequest(request);
+    await activeCodexProject(request.project_id);
+    const value = claude!.getThread(request.project_id);
+    assertClaudeThreadView(value);
+    return value;
+  });
+  register(channels.claudeThreadOpen, async (request) => {
+    assertClaudeThreadProjectRequest(request);
+    await activeCodexProject(request.project_id);
+    const state = await claude!.settled();
+    if (state.status === "signed_out" || state.status === "signing_in")
+      throw new UserFacingError("Sign in to Claude in Settings to continue.");
+    if (state.status !== "signed_in")
+      throw new UserFacingError("Set up Claude in Settings to continue.");
+    if (!state.selection)
+      throw new UserFacingError(
+        "Choose a Claude model in Settings to continue.",
+      );
+    const value = await claude!.openThread(request.project_id);
+    assertClaudeThreadView(value);
+    return value;
+  });
+  register(channels.claudeThreadSend, async (request) => {
+    assertClaudeThreadSendRequest(request);
+    await activeCodexProject(request.project_id);
+    const value = await claude!.sendThread(request.project_id, request.text);
+    assertClaudeThreadView(value);
+    return value;
+  });
+  register(channels.claudeThreadInterrupt, async (request) => {
+    assertClaudeThreadProjectRequest(request);
+    await activeCodexProject(request.project_id);
+    const value = await claude!.interruptThread(request.project_id);
+    assertClaudeThreadView(value);
     return value;
   });
   register(channels.apiThreadGet, async (request) => {
@@ -1243,7 +1371,11 @@ async function showStartupFailure(): Promise<void> {
     });
   } finally {
     quitting = true;
-    await Promise.all([codex?.close(), mcpBroker?.close()]);
+    await Promise.all([
+      codex?.close(),
+      mcpBroker?.close(),
+      claude?.close().then(() => claudeBroker?.close()),
+    ]);
     servicesClosed = true;
     app.exit(1);
   }

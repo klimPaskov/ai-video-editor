@@ -21,6 +21,7 @@ import type {
 import type { CodexThreadView } from "../../../packages/domain/src/codex-thread-view.ts";
 import type { ApiThreadView } from "../../../packages/domain/src/api-thread-view.ts";
 import type { ApiProviderId } from "../../../packages/domain/src/api-providers.ts";
+import type { ClaudeThreadView } from "../../../packages/domain/src/claude-view.ts";
 import type {
   SpokenCandidate,
   SpokenCandidateReport,
@@ -2339,6 +2340,7 @@ function setInspector(open: boolean): void {
 
 let codexThreadView: CodexThreadView | undefined;
 let apiThreadView: ApiThreadView | undefined;
+let claudeThreadView: ClaudeThreadView | undefined;
 let codexThreadIssue: string | null = null;
 let codexPollGeneration = 0;
 const assistantProvider = element<HTMLSelectElement>("assistant-provider");
@@ -2349,7 +2351,15 @@ function selectedApiProvider(): ApiProviderId | null {
     ? assistantProvider.value
     : null;
 }
+function claudeSelected(): boolean {
+  return assistantProvider.value === "claude";
+}
+/** Identifies the drawer route so stale replies are discarded after a switch. */
+function assistantRoute(): string {
+  return assistantProvider.value;
+}
 function assistantName(): string {
+  if (claudeSelected()) return "Claude";
   return assistantProvider.value === "deepseek"
     ? "DeepSeek"
     : assistantProvider.value === "openai"
@@ -2464,6 +2474,71 @@ function renderApiThread(view: ApiThreadView): void {
   if (nextIssue && revealIssue) issue.scrollIntoView({ block: "nearest" });
   messages.scrollTop = messages.scrollHeight;
 }
+function renderClaudeThread(view: ClaudeThreadView): void {
+  claudeThreadView = view;
+  const status = element("codex-thread-status");
+  status.textContent = {
+    closed: "",
+    ready: "",
+    running: "Claude is working…",
+    interrupting: "Stopping…",
+    failed: "",
+  }[view.status];
+  status.hidden = !status.textContent;
+  const messages = element("codex-thread-messages");
+  messages.replaceChildren();
+  const entries = [...view.messages];
+  if (view.streaming)
+    entries.push({ id: "streaming", role: "assistant", text: view.streaming });
+  for (const item of entries) {
+    const message = document.createElement("p");
+    message.className = `codex-message ${item.role}`;
+    const role = document.createElement("strong");
+    role.textContent = item.role === "user" ? "You" : "Claude";
+    const text = document.createElement("span");
+    text.textContent = item.text;
+    message.append(role, text);
+    messages.append(message);
+  }
+  const activity = element("codex-thread-activity");
+  activity.replaceChildren();
+  for (const item of view.activities.filter((entry) => !entry.complete)) {
+    const row = document.createElement("li");
+    row.textContent = item.label;
+    activity.append(row);
+  }
+  activity.hidden = activity.childElementCount === 0;
+  element("claude-api-notice").hidden = view.billing !== "api";
+  element<HTMLButtonElement>("open-codex-thread").hidden =
+    view.status !== "closed";
+  element<HTMLFormElement>("codex-thread-form").hidden =
+    view.status === "closed";
+  const input = element<HTMLTextAreaElement>("codex-thread-input");
+  input.disabled = view.status !== "ready" && view.status !== "failed";
+  element<HTMLButtonElement>("send-codex-thread").disabled =
+    input.disabled || !input.value.trim();
+  const stop = element<HTMLButtonElement>("interrupt-codex-thread");
+  stop.hidden = view.status !== "running" && view.status !== "interrupting";
+  stop.disabled = view.status !== "running";
+  const retry = element<HTMLButtonElement>("retry-codex-thread");
+  retry.hidden = true;
+  retry.disabled = true;
+  const issue = element("codex-thread-error");
+  const nextIssue = view.message ?? codexThreadIssue ?? "";
+  const revealIssue = issue.hidden || issue.textContent !== nextIssue;
+  issue.textContent = nextIssue;
+  issue.hidden = !issue.textContent;
+  if (nextIssue && revealIssue) issue.scrollIntoView({ block: "nearest" });
+  messages.scrollTop = messages.scrollHeight;
+}
+function renderAssistantReply(
+  route: string,
+  value: CodexThreadView | ApiThreadView | ClaudeThreadView,
+): void {
+  if (route === "claude") renderClaudeThread(value as ClaudeThreadView);
+  else if (route === "codex") renderCodexThread(value as CodexThreadView);
+  else renderApiThread(value as ApiThreadView);
+}
 function clearAssistantDisplay(): void {
   element("codex-thread-status").hidden = true;
   element("codex-thread-messages").replaceChildren();
@@ -2481,12 +2556,16 @@ assistantProvider.addEventListener("change", () => {
   codexDrawerButton.textContent = name;
   codexDrawer.setAttribute("aria-label", `${name} conversation`);
   element("close-codex").setAttribute("aria-label", `Close ${name}`);
-  const apiSelected = selectedApiProvider() !== null;
-  element("api-turn-notice").hidden = !apiSelected;
-  element("codex-context-notice").hidden = apiSelected;
+  syncAssistantNotices();
   clearAssistantDisplay();
   if (!codexDrawer.hidden) void pollCodex(++codexPollGeneration);
 });
+function syncAssistantNotices(): void {
+  element("api-turn-notice").hidden = selectedApiProvider() === null;
+  element("codex-context-notice").hidden = assistantRoute() !== "codex";
+  element("claude-context-notice").hidden = !claudeSelected();
+  element("claude-api-notice").hidden = true;
+}
 function setCodexDrawer(open: boolean): void {
   codexDrawer.hidden = !open;
   codexDrawerButton.setAttribute("aria-expanded", String(open));
@@ -2509,27 +2588,33 @@ async function pollCodex(generation: number): Promise<void> {
   ) {
     const project = activeProject;
     const provider = selectedApiProvider();
+    const route = assistantRoute();
     try {
-      const reply = provider
-        ? await window.desktop.getApiThread({
-            schema_version: "1.0",
-            project_id: project.id,
-            provider,
-          })
-        : await window.desktop.getCodexThread({
-            schema_version: "1.0",
-            project_id: project.id,
-          });
+      const reply =
+        route === "claude"
+          ? await window.desktop.getClaudeThread({
+              schema_version: "1.0",
+              project_id: project.id,
+            })
+          : provider
+            ? await window.desktop.getApiThread({
+                schema_version: "1.0",
+                project_id: project.id,
+                provider,
+              })
+            : await window.desktop.getCodexThread({
+                schema_version: "1.0",
+                project_id: project.id,
+              });
       if (
         generation !== codexPollGeneration ||
         codexDrawer.hidden ||
         activeProject?.id !== project.id ||
-        selectedApiProvider() !== provider
+        assistantRoute() !== route
       )
         return;
       if (reply.ok) {
-        if (provider) renderApiThread(reply.value as ApiThreadView);
-        else renderCodexThread(reply.value as CodexThreadView);
+        renderAssistantReply(route, reply.value);
       } else {
         codexThreadIssue = reply.message;
         const issue = element("codex-thread-error");
@@ -2555,27 +2640,42 @@ element("open-codex-thread").addEventListener("click", async () => {
   if (!activeProject || codexThreadView?.status === "opening") return;
   const project = activeProject;
   const provider = selectedApiProvider();
+  const route = assistantRoute();
   codexThreadIssue = null;
   element<HTMLButtonElement>("open-codex-thread").disabled = true;
-  const reply = provider
-    ? await window.desktop.openApiThread({
-        schema_version: "1.0",
-        project_id: project.id,
-        provider,
-      })
-    : await window.desktop.openCodexThread({
-        schema_version: "1.0",
-        project_id: project.id,
-      });
+  const reply =
+    route === "claude"
+      ? await window.desktop.openClaudeThread({
+          schema_version: "1.0",
+          project_id: project.id,
+        })
+      : provider
+        ? await window.desktop.openApiThread({
+            schema_version: "1.0",
+            project_id: project.id,
+            provider,
+          })
+        : await window.desktop.openCodexThread({
+            schema_version: "1.0",
+            project_id: project.id,
+          });
   element<HTMLButtonElement>("open-codex-thread").disabled = false;
-  if (activeProject?.id !== project.id || selectedApiProvider() !== provider)
-    return;
+  if (activeProject?.id !== project.id || assistantRoute() !== route) return;
   if (reply.ok) {
-    if (provider) renderApiThread(reply.value as ApiThreadView);
-    else renderCodexThread(reply.value as CodexThreadView);
+    renderAssistantReply(route, reply.value);
   } else {
     codexThreadIssue = reply.message;
-    if (provider)
+    if (route === "claude")
+      renderClaudeThread({
+        status: "closed",
+        projectId: null,
+        messages: [],
+        activities: [],
+        streaming: null,
+        billing: null,
+        message: null,
+      });
+    else if (provider)
       renderApiThread({
         status: "closed",
         projectId: null,
@@ -2597,7 +2697,9 @@ element("open-codex-thread").addEventListener("click", async () => {
 element<HTMLTextAreaElement>("codex-thread-input").addEventListener(
   "input",
   () => {
-    if (selectedApiProvider()) {
+    if (claudeSelected()) {
+      if (claudeThreadView) renderClaudeThread(claudeThreadView);
+    } else if (selectedApiProvider()) {
       if (apiThreadView) renderApiThread(apiThreadView);
     } else if (codexThreadView) renderCodexThread(codexThreadView);
   },
@@ -2608,11 +2710,15 @@ element<HTMLFormElement>("codex-thread-form").addEventListener(
     event.preventDefault();
     if (!activeProject) return;
     const provider = selectedApiProvider();
+    const route = assistantRoute();
     if (
-      provider
-        ? apiThreadView?.status !== "ready" &&
-          apiThreadView?.status !== "failed"
-        : codexThreadView?.status !== "ready"
+      route === "claude"
+        ? claudeThreadView?.status !== "ready" &&
+          claudeThreadView?.status !== "failed"
+        : provider
+          ? apiThreadView?.status !== "ready" &&
+            apiThreadView?.status !== "failed"
+          : codexThreadView?.status !== "ready"
     )
       return;
     const input = element<HTMLTextAreaElement>("codex-thread-input");
@@ -2620,25 +2726,31 @@ element<HTMLFormElement>("codex-thread-form").addEventListener(
     if (!text) return;
     const project = activeProject;
     input.value = "";
-    const reply = provider
-      ? await window.desktop.sendApiThread({
-          schema_version: "1.0",
-          project_id: project.id,
-          provider,
-          text,
-        })
-      : await window.desktop.sendCodexThread({
-          schema_version: "1.0",
-          project_id: project.id,
-          text,
-        });
+    const reply =
+      route === "claude"
+        ? await window.desktop.sendClaudeThread({
+            schema_version: "1.0",
+            project_id: project.id,
+            text,
+          })
+        : provider
+          ? await window.desktop.sendApiThread({
+              schema_version: "1.0",
+              project_id: project.id,
+              provider,
+              text,
+            })
+          : await window.desktop.sendCodexThread({
+              schema_version: "1.0",
+              project_id: project.id,
+              text,
+            });
     if (
       activeProject?.id === project.id &&
-      selectedApiProvider() === provider &&
+      assistantRoute() === route &&
       reply.ok
     ) {
-      if (provider) renderApiThread(reply.value as ApiThreadView);
-      else renderCodexThread(reply.value as CodexThreadView);
+      renderAssistantReply(route, reply.value);
     } else if (!reply.ok) {
       const issue = element("codex-thread-error");
       issue.textContent = reply.message;
@@ -2653,7 +2765,7 @@ element<HTMLButtonElement>("retry-codex-thread").addEventListener(
     const view = codexThreadView;
     if (
       !project ||
-      selectedApiProvider() !== null ||
+      assistantRoute() !== "codex" ||
       view?.projectId !== project.id ||
       view.status !== "ready" ||
       !view.retryable
@@ -2671,7 +2783,7 @@ element<HTMLButtonElement>("retry-codex-thread").addEventListener(
         project_id: project.id,
         text,
       });
-      if (activeProject?.id !== project.id || selectedApiProvider() !== null)
+      if (activeProject?.id !== project.id || assistantRoute() !== "codex")
         return;
       if (reply.ok) renderCodexThread(reply.value);
       else {
@@ -2695,29 +2807,37 @@ element("interrupt-codex-thread").addEventListener("click", async () => {
   if (!activeProject) return;
   const project = activeProject;
   const provider = selectedApiProvider();
+  const route = assistantRoute();
   if (
-    provider
-      ? apiThreadView?.status !== "running"
-      : codexThreadView?.status !== "running"
+    route === "claude"
+      ? claudeThreadView?.status !== "running"
+      : provider
+        ? apiThreadView?.status !== "running"
+        : codexThreadView?.status !== "running"
   )
     return;
-  const reply = provider
-    ? await window.desktop.interruptApiThread({
-        schema_version: "1.0",
-        project_id: project.id,
-        provider,
-      })
-    : await window.desktop.interruptCodexThread({
-        schema_version: "1.0",
-        project_id: project.id,
-      });
+  const reply =
+    route === "claude"
+      ? await window.desktop.interruptClaudeThread({
+          schema_version: "1.0",
+          project_id: project.id,
+        })
+      : provider
+        ? await window.desktop.interruptApiThread({
+            schema_version: "1.0",
+            project_id: project.id,
+            provider,
+          })
+        : await window.desktop.interruptCodexThread({
+            schema_version: "1.0",
+            project_id: project.id,
+          });
   if (
     activeProject?.id === project.id &&
-    selectedApiProvider() === provider &&
+    assistantRoute() === route &&
     reply.ok
   ) {
-    if (provider) renderApiThread(reply.value as ApiThreadView);
-    else renderCodexThread(reply.value as CodexThreadView);
+    renderAssistantReply(route, reply.value);
   }
 });
 detailsButton.addEventListener("click", () => {

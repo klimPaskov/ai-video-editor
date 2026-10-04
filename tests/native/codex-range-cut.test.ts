@@ -618,7 +618,8 @@ try {
   mark("open-edit-stage");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 120_000 });
-  await page.getByRole("button", { name: "Codex", exact: true }).click();
+  await page.locator("#codex-drawer-button").click();
+  await page.locator("#assistant-provider").selectOption("codex");
   await page
     .getByRole("button", { name: "Open conversation", exact: true })
     .click();

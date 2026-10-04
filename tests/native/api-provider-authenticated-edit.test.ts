@@ -358,7 +358,7 @@ try {
   await page.keyboard.press("Escape");
 
   step = "explicit-live-send";
-  await page.getByRole("button", { name: "Codex", exact: true }).click();
+  await page.locator("#codex-drawer-button").click();
   await page.locator("#assistant-provider").selectOption(provider);
   await expect(page.locator("#api-turn-notice")).toBeVisible();
   await expect(page.locator("#codex-context-notice")).toBeHidden();

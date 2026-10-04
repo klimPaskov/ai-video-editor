@@ -315,7 +315,8 @@ try {
   ).length;
 
   mark("open-codex-transcript-read");
-  await page.getByRole("button", { name: "Codex", exact: true }).click();
+  await page.locator("#codex-drawer-button").click();
+  await page.locator("#assistant-provider").selectOption("codex");
   await expect(page.locator("#codex-context-notice")).toBeVisible();
   await expect(page.locator("#codex-context-notice")).toContainText(
     "included in later turns",

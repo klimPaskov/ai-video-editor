@@ -50,8 +50,36 @@ import type {
   TranscriptionStopRequest,
 } from "../../../packages/domain/src/transcription.ts";
 
+import type {
+  ClaudeSelection,
+  ClaudeThreadProjectRequest,
+  ClaudeThreadSendRequest,
+  ClaudeThreadView,
+  ClaudeView,
+} from "../../../packages/domain/src/claude-view.ts";
+
 export type Reply<T> = { ok: true; value: T } | { ok: false; message: string };
 export interface DesktopBridge {
+  getClaude(): Promise<Reply<ClaudeView>>;
+  checkClaude(): Promise<Reply<ClaudeView>>;
+  signInClaude(): Promise<Reply<ClaudeView>>;
+  openClaudeSignInPage(): Promise<Reply<ClaudeView>>;
+  cancelClaudeSignIn(): Promise<Reply<ClaudeView>>;
+  signOutClaude(): Promise<Reply<ClaudeView>>;
+  selectClaudeModel(value: ClaudeSelection): Promise<Reply<ClaudeView>>;
+  openClaudeInstallGuide(): Promise<Reply<null>>;
+  getClaudeThread(
+    request: ClaudeThreadProjectRequest,
+  ): Promise<Reply<ClaudeThreadView>>;
+  openClaudeThread(
+    request: ClaudeThreadProjectRequest,
+  ): Promise<Reply<ClaudeThreadView>>;
+  sendClaudeThread(
+    request: ClaudeThreadSendRequest,
+  ): Promise<Reply<ClaudeThreadView>>;
+  interruptClaudeThread(
+    request: ClaudeThreadProjectRequest,
+  ): Promise<Reply<ClaudeThreadView>>;
   getApiThread(request: ApiThreadProjectRequest): Promise<Reply<ApiThreadView>>;
   openApiThread(
     request: ApiThreadProjectRequest,
@@ -142,6 +170,18 @@ export interface DesktopBridge {
   cancelImport(): Promise<Reply<null>>;
 }
 export const channels = Object.freeze({
+  claudeGet: "claude:get",
+  claudeCheck: "claude:check",
+  claudeSignIn: "claude:sign-in",
+  claudeOpenSignIn: "claude:open-sign-in",
+  claudeCancelSignIn: "claude:cancel-sign-in",
+  claudeSignOut: "claude:sign-out",
+  claudeSelect: "claude:select",
+  claudeInstallGuide: "claude:install-guide",
+  claudeThreadGet: "claude-thread:get",
+  claudeThreadOpen: "claude-thread:open",
+  claudeThreadSend: "claude-thread:send",
+  claudeThreadInterrupt: "claude-thread:interrupt",
   apiThreadGet: "api-thread:get",
   apiThreadOpen: "api-thread:open",
   apiThreadSend: "api-thread:send",

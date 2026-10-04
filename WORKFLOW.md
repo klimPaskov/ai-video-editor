@@ -2,7 +2,7 @@
 
 ## 0. Onboarding
 
-Required onboarding offers Claude account sign-in as the default AI connection, with retained ChatGPT-managed Codex sign-in and separate optional OpenAI API, DeepSeek and Gemini key connections. Claude integration is pending; its supported authentication/runtime design must be established before presenting a working control. It reads supported live model catalogs and explains which selected provider receives project context. API billing is separate from the ChatGPT subscription; a paid turn starts only when the user explicitly invokes it. Technical details remain collapsed.
+Required onboarding offers Claude account sign-in as the default AI connection, with retained ChatGPT-managed Codex sign-in and separate optional OpenAI API, DeepSeek and Gemini key connections. Claude runs through the user's installed Claude Code CLI; Sign in with Claude starts Claude Code's own Anthropic browser sign-in, and the app never handles Claude credentials. It reads supported live model catalogs and explains which selected provider receives project context. API billing is separate from the ChatGPT subscription; a paid turn starts only when the user explicitly invokes it. Technical details remain collapsed.
 
 ## 1. Home
 

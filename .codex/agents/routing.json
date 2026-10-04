@@ -58,10 +58,11 @@
       ]
     },
     {
-      "need": "Codex protocol, auth, threads, models, skills and tools; explicit OpenAI API and DeepSeek provider adapters",
+      "need": "Codex protocol, auth, threads, models, skills and tools; explicit OpenAI API and DeepSeek provider adapters; default Claude connection through the user's Claude Code CLI",
       "subagent": "codex-bridge-engineer",
       "path": ".codex/agents/codex-bridge-engineer.md",
       "skills": [
+        "claude-code-connection",
         "codex-app-server",
         "timeline-editor",
         "security-privacy"

@@ -1,6 +1,6 @@
 # Real Codex integration
 
-ADR 0018 makes Claude account sign-in the required application default, with implementation pending. This document describes the retained Codex integration; its runtime/model choices do not select the Claude design.
+ADR 0018 makes Claude account sign-in the application default; it is implemented through the user's Claude Code CLI in `docs/48_CLAUDE_CONNECTION.md`. This document describes the retained Codex integration; its runtime/model choices do not apply to Claude.
 
 ## Provider scope
 

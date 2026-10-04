@@ -40,7 +40,7 @@
             aria-controls="codex-drawer"
             hidden
           >
-            Codex</button
+            Claude</button
           ><button
             id="source-details"
             aria-expanded="false"
@@ -67,19 +67,31 @@
             </div>
             <dl id="source-properties"></dl>
           </aside>
-          <aside id="codex-drawer" aria-label="Codex conversation" hidden>
+          <aside id="codex-drawer" aria-label="Claude conversation" hidden>
             <div class="panel-header">
               <h2>Assistant</h2>
-              <button id="close-codex" aria-label="Close Codex">×</button>
+              <button id="close-codex" aria-label="Close Claude">×</button>
             </div>
             <label for="assistant-provider">Provider</label>
             <select id="assistant-provider">
+              <option value="claude" selected>Claude</option>
               <option value="codex">Codex</option>
               <option value="deepseek">DeepSeek</option>
               <option value="openai">OpenAI API</option>
               <option value="gemini">Gemini API</option>
             </select>
-            <p id="codex-context-notice">
+            <p id="claude-context-notice">
+              Requests and the project information Claude reads through the
+              editor's tools are sent to Anthropic. Speech work may include
+              bounded local transcript text; earlier messages in this
+              conversation are included in later turns. Source audio and video
+              stay on this device.
+            </p>
+            <p id="claude-api-notice" hidden>
+              This Claude Code sign-in uses Anthropic Console API billing, so
+              each turn you send can use paid credits.
+            </p>
+            <p id="codex-context-notice" hidden>
               Requests and the project information Codex reads are sent to
               OpenAI. Speech work may include bounded local transcript text;
               transcript pages may remain in this conversation and be included
@@ -306,6 +318,9 @@
           <button type="button" id="settings-appearance" aria-pressed="true">
             Appearance
           </button>
+          <button type="button" id="settings-claude" aria-pressed="false">
+            Claude
+          </button>
           <button type="button" id="settings-codex" aria-pressed="false">
             Codex
           </button>
@@ -326,6 +341,39 @@
             <option value="2">200%</option>
           </select>
         </div>
+        <section id="claude-settings" aria-label="Claude account" hidden>
+          <p id="claude-account" role="status"></p>
+          <p id="claude-disclosure">
+            Claude runs through Claude Code on this device. You sign in through
+            Anthropic in your browser; this app never receives your password or
+            sign-in token. During a turn you start, Claude may receive your
+            request, project and timeline details and bounded local transcript
+            pages. Source audio and video stay on this device.
+          </p>
+          <div class="codex-actions">
+            <button type="button" id="claude-sign-in" hidden>
+              Sign in with Claude
+            </button>
+            <button type="button" id="claude-open-sign-in" hidden>
+              Open sign-in page
+            </button>
+            <button type="button" id="claude-cancel-sign-in" hidden>
+              Cancel sign-in
+            </button>
+            <button type="button" id="claude-sign-out" hidden>Sign out</button>
+            <button type="button" id="claude-install" hidden>
+              Get Claude Code
+            </button>
+            <button type="button" id="claude-check" hidden>Check again</button>
+          </div>
+          <p id="claude-error" role="alert" hidden></p>
+          <div id="claude-model-settings" hidden>
+            <label for="claude-model">Default model</label
+            ><select id="claude-model"></select>
+            <label for="claude-effort">Effort</label
+            ><select id="claude-effort"></select>
+          </div>
+        </section>
         <section id="codex-settings" aria-label="Codex account" hidden>
           <p id="codex-account" role="status"></p>
           <p id="codex-disclosure">

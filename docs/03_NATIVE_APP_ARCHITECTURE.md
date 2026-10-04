@@ -113,3 +113,7 @@ An unexpected renderer loss cancels pending media work and offers one explicit R
 ## Version policy
 
 Research and pin compatible stable versions at P0. Do not encode an unverified version in the product spec. Regenerate Codex protocol types from the installed official binary and record its version.
+
+## Claude connection
+
+`packages/claude-bridge` resolves the user's Claude Code CLI, builds the restricted child environment, parses `auth status`, reads the live catalog through one `initialize` control request, runs `auth login --claudeai`, and projects one headless stream-json turn while enforcing the init tool inventory. `apps/desktop/src/claude.ts` owns sign-in state, the remembered model, per-project conversations and the per-turn MCP config. A second `CodexMcpBroker` instance with its own token serves the packaged editor MCP script to Claude, and its tool service attributes transactions to the `claude` origin. See `docs/48_CLAUDE_CONNECTION.md`.

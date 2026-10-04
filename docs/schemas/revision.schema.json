@@ -45,6 +45,7 @@
         "user",
         "magic_wand",
         "codex",
+        "claude",
         "api_provider",
         "recovery",
         "import"

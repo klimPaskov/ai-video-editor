@@ -1,5 +1,7 @@
 # Handoff to Claude
 
+> **Current state (2026-10-04).** The identity slice below was validated and published (PR #62, stacked on #61). The Claude default connection is implemented through the user's unmodified Claude Code CLI; read ADR 0018's Decision section, `docs/48_CLAUDE_CONNECTION.md` and the latest `docs/workflow/progress/P2.md` entry. Open P2 gates: P2-07, P2-09 and P2-11 signed-in acceptance (a user-completed Anthropic sign-in in the isolated guest). The "stopping state" section below is the original handoff record.
+
 Take ownership of **AI Video Editor** in this existing repository. Use your own engineering judgment: inspect the code and evidence, reassess the design and backlog, and choose the implementation approach and work sequence. Treat the previous assistant's architectural suggestions and unfinished patches as material to evaluate, not as instructions to follow blindly. Preserve the user's requirements and existing work; revise design decisions and contracts when the evidence warrants it.
 
 ## Latest user requirements

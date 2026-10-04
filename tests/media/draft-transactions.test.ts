@@ -352,6 +352,29 @@ test("one journal orders manual, Magic Wand, Codex and API-provider edits with d
     providerTrim.transaction.previous_transaction_sha256,
     providerUndo.transaction.transaction_sha256,
   );
+  // Claude edits share the same journal, hash chain and newest-first Undo.
+  const claudeUndo = await reopened.undoClaude({
+    ...undo(providerTrim.draft, providerTrim.transaction.transaction_id),
+    request_id: "request-undo-claude-001",
+  });
+  assert.equal(claudeUndo.transaction.origin, "claude");
+  assert.equal(claudeUndo.draft.timeline.duration_us, 1_000_000);
+  const claudeTrim = await reopened.applyClaude({
+    ...trim(claudeUndo.draft),
+    request_id: "request-trim-claude-001",
+    pass_group: { pass_group_id: "pass-claude-001", kind: "manual" },
+  });
+  assert.equal(claudeTrim.transaction.origin, "claude");
+  assert.equal(
+    claudeTrim.transaction.previous_transaction_sha256,
+    claudeUndo.transaction.transaction_sha256,
+  );
+  const manualUndo = await reopened.undoManual({
+    ...undo(claudeTrim.draft, claudeTrim.transaction.transaction_id),
+    request_id: "request-undo-manual-claude-001",
+  });
+  assert.equal(manualUndo.transaction.origin, "manual");
+  assert.equal(manualUndo.draft.timeline.duration_us, 1_000_000);
 
   assert.deepEqual(
     await Promise.all([

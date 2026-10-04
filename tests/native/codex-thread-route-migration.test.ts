@@ -111,7 +111,8 @@ try {
     project_id: binding.projectId as string,
   };
   step = "reopen-conversation";
-  await page.getByRole("button", { name: "Codex", exact: true }).click();
+  await page.locator("#codex-drawer-button").click();
+  await page.locator("#assistant-provider").selectOption("codex");
   await page
     .getByRole("button", { name: "Open conversation", exact: true })
     .click();

@@ -1,0 +1,31 @@
+{
+  "channel": "claude-thread:get",
+  "payload": {
+    "schema_version": "1.0",
+    "project_id": "8a3f6d6e-1c2b-4c55-9f0e-2d7a4b1c9e10"
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "status": "running",
+      "projectId": "8a3f6d6e-1c2b-4c55-9f0e-2d7a4b1c9e10",
+      "messages": [
+        {
+          "id": "message-1",
+          "role": "user",
+          "text": "Split the first clip at one second."
+        }
+      ],
+      "activities": [
+        {
+          "id": "toolu_01",
+          "label": "Splitting a clip",
+          "complete": false
+        }
+      ],
+      "streaming": "Reading the timeline first.",
+      "billing": "subscription",
+      "message": null
+    }
+  }
+}

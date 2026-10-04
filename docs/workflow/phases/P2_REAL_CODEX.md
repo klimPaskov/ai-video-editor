@@ -2,7 +2,7 @@
 
 ## Latest user requirement, 2026-10-04
 
-ADR 0018 adds supported Claude account sign-in as the default AI connection. This is unimplemented and expands the open P2 scope. The next Claude implementer independently selects a supported authentication/runtime/model and integration strategy; prior Codex-specific designs below apply to the retained Codex route, not automatically to Claude. Update the detailed contracts/tests with the chosen implementation and preserve existing user data/provider behavior.
+ADR 0018 adds supported Claude account sign-in as the default AI connection and expands the open P2 scope (P2-11). Claude account sign-in through the user's unmodified Claude Code CLI is implemented as the default AI connection (see `docs/48_CLAUDE_CONNECTION.md`); signed-out native behavior is verified, while real signed-in account, edit, Undo, Stop and restart acceptance remains open. Prior Codex-specific designs below apply to the retained Codex route.
 
 Pinned 0.155.1 process and thread policy also disables default-on browser/CDP, computer-use, shell-snapshot, interactive unified-exec TTY, workspace-dependency, guardian-approval, in-app utility, fast-mode, image-budget, mention, and personality capabilities when the product does not use them. Verify exact names against the packaged runtime inventory. The inventory currently reports `unified_exec` true despite an explicit false override; do not count that backend as disabled. This is defense-in-depth only; complete effective tool confinement remains a separate acceptance requirement.
 

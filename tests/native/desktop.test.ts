@@ -373,9 +373,29 @@ try {
   await window
     .getByRole("button", { name: "Source details", exact: true })
     .click();
-  await window.getByRole("button", { name: "Codex", exact: true }).click();
+  // Claude is the default assistant route; this guest has no Claude Code.
+  await window.getByRole("button", { name: "Claude", exact: true }).click();
   await expect(window.locator("#review-actions")).toBeHidden();
   await expect(window.locator("#inspector")).toBeHidden();
+  await expect(
+    window.getByRole("complementary", { name: "Claude conversation" }),
+  ).toBeVisible();
+  await expect(window.locator("#assistant-provider")).toHaveValue("claude");
+  await expect(window.locator("#claude-context-notice")).toBeVisible();
+  await expect(window.locator("#codex-context-notice")).toBeHidden();
+  await expect(window.locator("#api-turn-notice")).toBeHidden();
+  await window
+    .getByRole("button", { name: "Open conversation", exact: true })
+    .click();
+  await expect(window.locator("#codex-thread-error")).toHaveText(
+    "Set up Claude in Settings to continue.",
+    { timeout: 30_000 },
+  );
+  await expect(window.locator("#codex-thread-messages p")).toHaveCount(0);
+  await window.screenshot({
+    path: join(evidence, "claude-drawer-unavailable.png"),
+  });
+  await window.locator("#assistant-provider").selectOption("codex");
   await expect(
     window.getByRole("complementary", { name: "Codex conversation" }),
   ).toBeVisible();
@@ -655,6 +675,7 @@ try {
         preferencesPersisted: true,
         keyboardFocus: true,
         modalIsolation: true,
+        claudeDefaultUnavailable: true,
         codexDrawerSignedOut: true,
         inspectorDrawerExclusive: true,
         fabricatedConversationMessages: false,
