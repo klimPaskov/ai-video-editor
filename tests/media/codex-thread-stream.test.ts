@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { appIdentity } from "../../packages/domain/src/app-identity.ts";
 import {
   ThreadStreamProjector,
   threadStreamInternals,
@@ -11,7 +12,7 @@ function projector(): ThreadStreamProjector {
     experimentalApiNegotiated: true,
     generation: 7,
     threadId: "thread-1",
-    allowedMcpServer: "codex-video-edit",
+    allowedMcpServer: appIdentity.stableMcpServerId,
     allowedMcpTools: new Set(["draft.trim"]),
   });
 }
@@ -139,7 +140,7 @@ test("owned MCP activity omits arguments, results and paths", () => {
     item: {
       id: "mcp-1",
       type: "mcpToolCall",
-      server: "codex-video-edit",
+      server: appIdentity.stableMcpServerId,
       tool: "draft.trim",
       arguments: { source: "C:\\private\\source.mp4", token: "SECRET" },
       result: { private: true },
@@ -232,7 +233,7 @@ test("recent history restores redacted messages and seeds the active turn", () =
           {
             type: "mcpToolCall",
             id: "edit-active",
-            server: "codex-video-edit",
+            server: appIdentity.stableMcpServerId,
             tool: "draft.trim",
             status: "inProgress",
             arguments: { token: "SECRET" },
@@ -271,7 +272,7 @@ test("recent history restores redacted messages and seeds the active turn", () =
           {
             type: "mcpToolCall",
             id: "edit-complete",
-            server: "codex-video-edit",
+            server: appIdentity.stableMcpServerId,
             tool: "draft.trim",
             status: "completed",
             arguments: { source: "C:\\private" },
@@ -575,7 +576,7 @@ test("history accepts omitted wire defaults and preserves completed active items
           {
             type: "mcpToolCall",
             id: "edit-complete",
-            server: "codex-video-edit",
+            server: appIdentity.stableMcpServerId,
             tool: "draft.trim",
             status: "completed",
           },
@@ -617,7 +618,7 @@ test("history accepts omitted wire defaults and preserves completed active items
       item: {
         type: "mcpToolCall",
         id: "edit-complete",
-        server: "codex-video-edit",
+        server: appIdentity.stableMcpServerId,
         tool: "draft.trim",
         status: "completed",
       },
@@ -741,7 +742,7 @@ test("owned read tools report reading activity instead of claiming an edit", () 
     experimentalApiNegotiated: true,
     generation: 7,
     threadId: "thread-1",
-    allowedMcpServer: "codex-video-edit",
+    allowedMcpServer: appIdentity.stableMcpServerId,
     allowedMcpTools: new Set([
       "project.get_summary",
       "timeline.get_summary",
@@ -761,7 +762,7 @@ test("owned read tools report reading activity instead of claiming an edit", () 
       item: {
         id: tool,
         type: "mcpToolCall",
-        server: "codex-video-edit",
+        server: appIdentity.stableMcpServerId,
         tool,
         status: "inProgress",
       },
@@ -784,7 +785,7 @@ test("owned dynamic transcript reads report activity instead of edits", () => {
     experimentalApiNegotiated: true,
     generation: 7,
     threadId: "thread-1",
-    allowedMcpServer: "codex-video-edit",
+    allowedMcpServer: appIdentity.stableMcpServerId,
     allowedMcpTools: new Set<string>(),
     allowedDynamicNamespace: "codex_video_edit",
     allowedDynamicTools: new Set(["transcript_get_range"]),
@@ -815,7 +816,7 @@ test("owned dynamic tool activity hides arguments and survives history restore",
     experimentalApiNegotiated: true as const,
     generation: 7,
     threadId: "thread-1",
-    allowedMcpServer: "codex-video-edit",
+    allowedMcpServer: appIdentity.stableMcpServerId,
     allowedMcpTools: new Set<string>(),
     allowedDynamicNamespace: "codex_video_edit",
     allowedDynamicTools: new Set(["project_get_summary", "cut_trim_edge"]),
@@ -879,7 +880,7 @@ test("foreign dynamic tool activity remains forbidden", () => {
     experimentalApiNegotiated: true,
     generation: 7,
     threadId: "thread-1",
-    allowedMcpServer: "codex-video-edit",
+    allowedMcpServer: appIdentity.stableMcpServerId,
     allowedMcpTools: new Set(),
     allowedDynamicNamespace: "codex_video_edit",
     allowedDynamicTools: new Set(["project_get_summary"]),

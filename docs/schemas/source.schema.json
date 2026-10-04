@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.codex-video-edit.invalid/source.schema.json",
+  "$id": "https://schemas.ai-video-editor.invalid/source.schema.json",
   "title": "Immutable source media",
   "type": "object",
   "additionalProperties": false,

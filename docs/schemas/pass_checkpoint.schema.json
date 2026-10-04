@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.codex-video-edit.invalid/pass_checkpoint.schema.json",
+  "$id": "https://schemas.ai-video-editor.invalid/pass_checkpoint.schema.json",
   "title": "Verified editorial pass checkpoint",
   "type": "object",
   "additionalProperties": false,

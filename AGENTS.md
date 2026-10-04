@@ -27,7 +27,7 @@ Do not stop at planning. Do not replace the product with a browser app, static m
 - The app is a standalone Electron desktop app.
 - Browser use is for research only.
 - The renderer loads packaged local content only.
-- Real Codex app-server remains mandatory; explicit OpenAI API and DeepSeek API-key providers are also required under ADR 0014.
+- Claude account sign-in is the required default AI connection under ADR 0018; its supported implementation remains open and unverified. Real Codex app-server and the existing API-key providers remain supported alternatives.
 - Source media is immutable.
 - AI and manual edits target the same non-destructive draft timeline.
 - Every edit is undoable until revision commit.
@@ -56,7 +56,7 @@ Never launch the app on the user's host. Launch it in the agent's isolated deskt
 
 ## Final workspace requirements
 
-The project name and repository root are `codex-video-edit`. Read `docs/44_LOSSLESS_MEDIA_POLICY.md`, `docs/45_OPEN_SOURCE_DEVELOPMENT.md`, and `docs/references/IMPLEMENTATION_NOTES.md` before implementation. They resolve the latest quality, publishing, and screenshot requirements.
+The project name and repository root are `ai-video-editor`. Read `docs/44_LOSSLESS_MEDIA_POLICY.md`, `docs/45_OPEN_SOURCE_DEVELOPMENT.md`, and `docs/references/IMPLEMENTATION_NOTES.md` before implementation. They resolve the latest quality, publishing, and screenshot requirements.
 
 Default media operations must not add lossy encoding. Verify the lossless boundary instead of trusting codec names. The renderer must not quietly reduce precision for a master. Preview quality and export quality are separate settings.
 

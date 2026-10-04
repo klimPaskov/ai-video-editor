@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://codex-video-edit.local/schemas/transcription_project_view.schema.json",
+  "$id": "https://ai-video-editor.local/schemas/transcription_project_view.schema.json",
   "title": "Local project transcripts and job status",
   "type": "object",
   "additionalProperties": false,

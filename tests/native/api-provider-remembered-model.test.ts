@@ -55,7 +55,7 @@ const configRoot = await mkdtemp(join(evidence, "account-"));
 await chmod(configRoot, 0o700);
 const keyFile = join(
   configRoot,
-  `codex-video-edit/api-provider-keys/${provider}.key`,
+  `ai-video-editor/api-provider-keys/${provider}.key`,
 );
 const sha = (value: Buffer) => createHash("sha256").update(value).digest("hex");
 const resources = join(dirname(executablePath), "resources");
@@ -82,7 +82,7 @@ try {
     assert.ok(electron);
     const page = await electron.firstWindow();
     assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-    assert.equal(page.url(), "codex-video-edit://app/index.html");
+    assert.equal(page.url(), "ai-video-editor://app/index.html");
     const storage = await electron.evaluate(({ safeStorage }) => ({
       available: safeStorage.isEncryptionAvailable(),
       backend: safeStorage.getSelectedStorageBackend(),

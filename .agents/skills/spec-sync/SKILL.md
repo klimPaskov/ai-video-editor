@@ -32,3 +32,5 @@ Use the phase-result writer only after acceptance and remote revision verificati
 When fidelity, native UI, or publishing changes, include docs/44_LOSSLESS_MEDIA_POLICY.md, docs/45_OPEN_SOURCE_DEVELOPMENT.md, docs/references/IMPLEMENTATION_NOTES.md, their tasks, skill routes, and contract examples in the sync pass.
 
 Public package validation checks accepted record structure and repository-contained artifact references without requiring private evidence in CI. This does not rerun or prove native/media acceptance. The phase-result writer always requires the actual nonempty local artifacts before writing, and reviewed source/remote revision checks remain mandatory. Never publish private artifacts to satisfy public CI.
+
+Include `CLAUDE.md` and the relevant `.claude/` skill/agent/rule entry points in synchronization when their guidance is affected. Recording a new provider requirement is not runtime implementation; identify the remaining schema, onboarding, prompt and native-test frontier explicitly.

@@ -1,7 +1,11 @@
 # Active phase
 
+## Latest user requirement, 2026-10-04
+
+ADR 0018 adds supported Claude account sign-in as the default AI connection. This is unimplemented and expands the open P2 scope. The next Claude implementer independently selects a supported authentication/runtime/model and integration strategy; prior Codex-specific designs below apply to the retained Codex route, not automatically to Claude. Update the detailed contracts/tests with the chosen implementation and preserve existing user data/provider behavior.
+
 - Phase ID: `P2`
-- Task IDs: `P2-01` through `P2-10`
+- Task IDs: `P2-01` through `P2-11`
 - Prompt: `docs/workflow/phases/P2_REAL_CODEX.md`
 - Required skills: `codex-app-server`, `security-privacy`, `native-app-testing`, `spec-sync`; apply `timeline-editor` to the shared transaction foundation and `open-source-development` to publication. Apply ADRs 0014 and 0015's fixed API-key provider boundary to P2-08 through P2-10.
 - Required result: `docs/workflow/results/P2.json`

@@ -37,6 +37,7 @@ import type {
 import { codexVideoEditToolNames } from "../../codex-tools/src/service.ts";
 import { codexVideoEditMcpTools } from "../../codex-tools/src/mcp-tools.ts";
 import type { CodexVideoEditToolName } from "../../codex-tools/src/service.ts";
+import { appIdentity } from "../../domain/src/app-identity.ts";
 import type { CodexMcpRuntime } from "../../codex-tools/src/broker.ts";
 
 export const CODEX_VERSION = "0.155.1";
@@ -220,27 +221,28 @@ export function buildCodexAppServerArguments(
     return args;
   }
   const quoted = (value: string) => JSON.stringify(value);
+  const ownedServer = appIdentity.stableMcpServerId;
   args.push(
     "-c",
-    `mcp_servers.codex-video-edit.command=${quoted(mcp.command)}`,
+    `mcp_servers.${ownedServer}.command=${quoted(mcp.command)}`,
     "-c",
-    `mcp_servers.codex-video-edit.args=[${quoted(mcp.script)}]`,
+    `mcp_servers.${ownedServer}.args=[${quoted(mcp.script)}]`,
     "-c",
-    'mcp_servers.codex-video-edit.env_vars=["ELECTRON_RUN_AS_NODE","CODEX_VIDEO_EDIT_MCP_ENDPOINT","CODEX_VIDEO_EDIT_MCP_TOKEN"]',
+    `mcp_servers.${ownedServer}.env_vars=["ELECTRON_RUN_AS_NODE","AI_VIDEO_EDITOR_MCP_ENDPOINT","AI_VIDEO_EDITOR_MCP_TOKEN"]`,
     "-c",
-    `mcp_servers.codex-video-edit.enabled_tools=${JSON.stringify(codexVideoEditToolNames)}`,
+    `mcp_servers.${ownedServer}.enabled_tools=${JSON.stringify(codexVideoEditToolNames)}`,
     "-c",
-    'mcp_servers.codex-video-edit.default_tools_approval_mode="approve"',
+    `mcp_servers.${ownedServer}.default_tools_approval_mode="approve"`,
     "-c",
-    "mcp_servers.codex-video-edit.enabled=true",
+    `mcp_servers.${ownedServer}.enabled=true`,
     "-c",
-    "mcp_servers.codex-video-edit.required=true",
+    `mcp_servers.${ownedServer}.required=true`,
     "-c",
-    "mcp_servers.codex-video-edit.supports_parallel_tool_calls=false",
+    `mcp_servers.${ownedServer}.supports_parallel_tool_calls=false`,
     "-c",
-    "mcp_servers.codex-video-edit.startup_timeout_sec=10",
+    `mcp_servers.${ownedServer}.startup_timeout_sec=10`,
     "-c",
-    "mcp_servers.codex-video-edit.tool_timeout_sec=40",
+    `mcp_servers.${ownedServer}.tool_timeout_sec=40`,
   );
   return args;
 }
@@ -349,14 +351,14 @@ function validateOwnedMcpStatus(
   const server = value.data[0];
   if (
     !protocolRecord(server) ||
-    server.name !== "codex-video-edit" ||
+    server.name !== appIdentity.stableMcpServerId ||
     server.authStatus !== "unsupported" ||
     !Array.isArray(server.resources) ||
     server.resources.length !== 0 ||
     !Array.isArray(server.resourceTemplates) ||
     server.resourceTemplates.length !== 0 ||
     !protocolRecord(server.serverInfo) ||
-    server.serverInfo.name !== "codex-video-edit" ||
+    server.serverInfo.name !== appIdentity.stableMcpServerId ||
     server.serverInfo.version !== "0.0.1" ||
     !protocolRecord(server.tools)
   )
@@ -438,11 +440,13 @@ function validateAppServerMcpStatus(
   const disabled = hasOwnedMcp
     ? value.data.filter(
         (server) =>
-          protocolRecord(server) && server.name !== "codex-video-edit",
+          protocolRecord(server) &&
+          server.name !== appIdentity.stableMcpServerId,
       )
     : value.data;
   const owned = value.data.filter(
-    (server) => protocolRecord(server) && server.name === "codex-video-edit",
+    (server) =>
+      protocolRecord(server) && server.name === appIdentity.stableMcpServerId,
   );
   validateDisabledMcpStatus(
     { data: disabled, nextCursor: null },
@@ -454,11 +458,11 @@ function validateAppServerMcpStatus(
     validateOwnedMcpStatus({ data: owned, nextCursor: null });
   } else if (owned.length !== 0) {
     // A configured server using our reserved name is not part of the dynamic route.
-    if (!disabledNames.includes("codex-video-edit"))
+    if (!disabledNames.includes(appIdentity.stableMcpServerId))
       throw new CodexTransportError("protocol");
     validateDisabledMcpStatus(
       { data: owned, nextCursor: null },
-      ["codex-video-edit"],
+      [appIdentity.stableMcpServerId],
       requireRuntimeDisabled,
     );
   }
@@ -591,8 +595,8 @@ export class CodexClient {
       }
       if (mcp) {
         env.ELECTRON_RUN_AS_NODE = "1";
-        env.CODEX_VIDEO_EDIT_MCP_ENDPOINT = mcp.endpoint;
-        env.CODEX_VIDEO_EDIT_MCP_TOKEN = mcp.token;
+        env.AI_VIDEO_EDITOR_MCP_ENDPOINT = mcp.endpoint;
+        env.AI_VIDEO_EDITOR_MCP_TOKEN = mcp.token;
       }
       const version = await execute(executable, ["--version"], {
         cwd,
@@ -612,7 +616,7 @@ export class CodexClient {
         env,
         startupAbort.signal,
       );
-      if (mcp && disabledMcpServers.includes("codex-video-edit"))
+      if (mcp && disabledMcpServers.includes(appIdentity.stableMcpServerId))
         throw new CodexTransportError("configuration");
       transport = new CodexStdioTransport({
         executable,
@@ -809,7 +813,7 @@ export class CodexClient {
           : { developerInstructions: input.developerInstructions }),
       },
       registry: this.threadRegistry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(codexVideoEditToolNames),
       ...(this.options.dynamicToolInvoker
         ? { dynamicToolInvoker: this.options.dynamicToolInvoker }

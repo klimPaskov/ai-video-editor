@@ -60,7 +60,7 @@
   ],
   "syscalls": [
     {
-      "comment": "Modified by codex-video-edit: permit Chromium sandbox user namespace creation; retain the upstream default-deny policy. See SECCOMP.md.",
+      "comment": "Modified by ai-video-editor: permit Chromium sandbox user namespace creation; retain the upstream default-deny policy. See SECCOMP.md.",
       "names": [
         "clone",
         "setns",
@@ -72,7 +72,7 @@
       "excludes": {}
     },
     {
-      "comment": "Modified by codex-video-edit: allow Chromium to chroot inside its nested user namespace without granting outer container capabilities. See SECCOMP.md.",
+      "comment": "Modified by ai-video-editor: allow Chromium to chroot inside its nested user namespace without granting outer container capabilities. See SECCOMP.md.",
       "names": [
         "chroot"
       ],

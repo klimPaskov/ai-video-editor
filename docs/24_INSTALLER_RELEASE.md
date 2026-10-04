@@ -42,4 +42,4 @@ Keep platform capture and packaging behind interfaces. Do not claim macOS suppor
 
 ## Public development starts before release
 
-Follow `docs/45_OPEN_SOURCE_DEVELOPMENT.md` from P0 onward. Repository name, package identity, executable display name, and working folder are `codex-video-edit`. Public source commits happen throughout implementation. Binary releases remain subject to the installer, privacy, licensing, native acceptance, and lossless media gates.
+Follow `docs/45_OPEN_SOURCE_DEVELOPMENT.md` from P0 onward. The product display name is **AI Video Editor**; repository, package, executable and working-folder identities use `ai-video-editor`. Public source commits happen throughout implementation. Binary releases remain subject to the installer, privacy, licensing, native acceptance, and lossless media gates.

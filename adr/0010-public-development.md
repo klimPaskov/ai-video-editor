@@ -4,7 +4,7 @@ Status: accepted product requirement
 
 ## Decision
 
-Use the actual codex-video-edit root and public repository. Publish reviewed working slices throughout development. Never include private recordings or credentials. Apply docs/45_OPEN_SOURCE_DEVELOPMENT.md.
+Use the actual ai-video-editor root and public repository. Publish reviewed working slices throughout development. Never include private recordings or credentials. Apply docs/45_OPEN_SOURCE_DEVELOPMENT.md.
 
 ## Verification
 

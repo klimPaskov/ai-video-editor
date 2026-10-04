@@ -1,4 +1,4 @@
-FROM codex-video-edit-desktop:p0
+FROM ai-video-editor-desktop:p0
 
 USER root
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \

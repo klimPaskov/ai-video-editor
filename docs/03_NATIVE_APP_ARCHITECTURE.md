@@ -68,7 +68,11 @@ The main-owned adapter classifies later generation-time HTTP 401/403 separately 
 
 ### App-specific MCP server
 
-Expose only validated codex-video-edit project operations. Runtime Codex does not receive unrestricted access to the app installation or source repository.
+Expose only validated AI Video Editor project operations. Runtime Codex does not receive unrestricted access to the app installation or source repository.
+
+## Product identity compatibility
+
+ADR 0017 sets the visible product name to AI Video Editor and the package/executable/local URL-scheme slug to `ai-video-editor`. Main chooses a prior per-user data directory when it exists, and otherwise creates the new-slug directory before readiness. It does not copy, merge or delete private projects during startup. The owned MCP server and dynamic-tool wire identities stay stable so stored Codex threads can reopen. The packaged native identity fixture is designed to check import and restart in both new and existing stores, with exact synthetic preview pixels and unchanged source/baseline data. That fixture has not yet been run for the identity slice.
 
 ## Suggested repository layout
 

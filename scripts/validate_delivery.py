@@ -26,7 +26,7 @@ def main() -> None:
     parser.add_argument("--check-integrity", action="store_true")
     args = parser.parse_args()
     meta = load("PACKAGE_METADATA.json")
-    require(ROOT.name == "codex-video-edit", "Expected actual codex-video-edit working root")
+    require(ROOT.name == "ai-video-editor", "Expected actual ai-video-editor working root")
     goal = (ROOT / "GOAL_PROMPT.md").read_text(encoding="utf-8")
     require(len(goal) < 4000, "Goal exceeds the under-4000-character limit")
     require(len(goal) == meta["goal_prompt_characters"], "Goal length metadata is stale")

@@ -11,7 +11,7 @@ const wslEvidence: NativeTestEnvironmentEvidence = {
   display: ":99",
   dockerMarker: false,
   wslTestMarker: "1",
-  wslDistroName: "codex-video-edit-test-recovered",
+  wslDistroName: "private-test-recovered",
   kernelRelease: "6.6.87.2-microsoft-standard-WSL2",
   wslConfig:
     "[automount]\nenabled=false\n[interop]\nenabled=false\nappendWindowsPath=false\n",

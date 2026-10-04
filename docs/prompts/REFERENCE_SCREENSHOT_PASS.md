@@ -4,7 +4,7 @@ Read `docs/references/manifest.json` and inspect every new screenshot with built
 
 For each image:
 
-1. Map it to one or more codex-video-edit screen IDs.
+1. Map it to one or more ai-video-editor screen IDs.
 2. Record the useful traits: hierarchy, spacing, disclosure, navigation, control density, and interaction pattern.
 3. Record what must not be copied: brand, text, icons, artwork, exact layout, or proprietary elements.
 4. Compare it with `docs/04_SIMPLE_UI_SPEC.md` and `docs/05_SCREEN_SPECS.md`.

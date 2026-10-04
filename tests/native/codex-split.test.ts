@@ -394,13 +394,13 @@ const resultRoot = resolve("test-results");
 await mkdir(resultRoot, { recursive: true });
 const evidence = await mkdtemp(join(resultRoot, "native-codex-split-"));
 if (process.argv.includes("--require-luna")) {
-  const source = join(configRoot, "codex-video-edit/codex/account/auth.json");
+  const source = join(configRoot, "ai-video-editor/codex/account/auth.json");
   const info = await stat(source);
   assert.ok(info.isFile());
   assert.equal(info.mode & 0o077, 0);
-  const fresh = await mkdtemp("/tmp/codex-video-edit-luna-edit-");
+  const fresh = await mkdtemp("/tmp/ai-video-editor-luna-edit-");
   await chmod(fresh, 0o700);
-  const target = join(fresh, "codex-video-edit/codex/account");
+  const target = join(fresh, "ai-video-editor/codex/account");
   await mkdir(target, { recursive: true, mode: 0o700 });
   await copyFile(source, join(target, "auth.json"));
   await chmod(join(target, "auth.json"), 0o600);
@@ -535,7 +535,7 @@ async function seek(active: Page, timeUs: number): Promise<void> {
 try {
   page = await electron.firstWindow();
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   assert.ok(
     !electron
       .process()
@@ -691,7 +691,7 @@ try {
   const userData = await electron.evaluate(({ app }) =>
     app.getPath("userData"),
   );
-  assert.equal(await realpath(userData), join(configRoot, "codex-video-edit"));
+  assert.equal(await realpath(userData), join(configRoot, "ai-video-editor"));
   const projectFolder = join(userData, "project-store", combined.id);
   const baselinePath = join(projectFolder, "baseline.json");
   const baselineBytes = await readFile(baselinePath);

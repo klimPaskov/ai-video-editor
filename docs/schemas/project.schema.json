@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.codex-video-edit.invalid/project.schema.json",
-  "title": "codex-video-edit project",
+  "$id": "https://schemas.ai-video-editor.invalid/project.schema.json",
+  "title": "AI Video Editor project",
   "type": "object",
   "additionalProperties": false,
   "required": [

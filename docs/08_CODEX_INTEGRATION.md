@@ -1,5 +1,7 @@
 # Real Codex integration
 
+ADR 0018 makes Claude account sign-in the required application default, with implementation pending. This document describes the retained Codex integration; its runtime/model choices do not select the Claude design.
+
 ## Provider scope
 
 Codex remains the mandatory App Server provider. ADRs 0014 and 0015 also require optional OpenAI API, DeepSeek and Gemini API key connections, each on a fixed provider endpoint. Do not show disabled competitors or an empty marketplace. Show only implemented provider rows and models verified against the relevant live catalog and reviewed endpoint contract. Fixed-endpoint/fake-transport tests and packaged Settings tests cover OpenAI and DeepSeek; the Gemini native fixture is tracked separately. A packaged OpenAI API key authenticated a live catalog read and model selection but its attempted paid edit returned HTTP 429. A separate packaged DeepSeek run authenticated live discovery and committed one paid guarded trim. Authenticated Gemini remains untested.
@@ -33,7 +35,7 @@ Use stdio JSONL for the required local child-process integration. Current offici
 
 ## Runtime project thread
 
-Each codex-video-edit project owns a durable Codex thread. The thread receives:
+Each ai-video-editor project owns a durable Codex thread. The thread receives:
 
 - project brief
 - current timeline summary
@@ -42,7 +44,7 @@ Each codex-video-edit project owns a durable Codex thread. The thread receives:
 - contact sheets or requested preview frames
 - user instruction
 - available skills
-- guarded codex-video-edit tool descriptions
+- guarded ai-video-editor tool descriptions
 
 Do not send raw full-resolution media unless a supported tool and user disclosure require it.
 
@@ -165,7 +167,7 @@ The pinned 0.155.1 `ThreadStartParams` schema has no `allowed_tools` or `allowed
 
 Build `thread/start` and `thread/resume` feature flags from the resolved route and live model protocol. Both routes explicitly disable the pinned runtime's supported unrelated browser, app, plugin, shell, search, image, memory, hook, remote-control and commit features. Only the dynamic route sets `code_mode_only`, `code_mode.enabled` and `code_mode_host.enabled`; both routes disable the code-mode host's in-process fallback. MCP-bound threads retain `code_mode_only: false` and explicitly set `code_mode.enabled=false` and `code_mode_host.enabled=false`; the dynamic route alone enables those two features. MCP-bound threads also disable native agents. Dynamic-bound V1 models may use V1 children at depth 1. GPT-6-Luna V2 enables direct-only native child functions under `codex_video_edit_agents`, with capacity two (root plus one child) and parent-read summary snapshots; those functions remain absent from nested code-mode. Unit tests assert start/resume policy and reject native children on MCP. Packaged Luna/high split and V2 child runs passed their bounded native checks. This request policy preserves existing MCP threads and does not establish a complete upstream effective-tool catalog.
 
-Before starting App Server, main asks the pinned Codex CLI for `codex mcp list --json`, bounds and validates configured names, and supplies `mcp_servers.<name>.enabled=false` for every server. Keep `mcp_servers={}` as defense in depth, but do not rely on an empty table to clear user configuration: Codex merges it non-destructively ([upstream issue #16045](https://github.com/openai/codex/issues/16045)). Verify the same complete inventory in `mcpServerStatus/list` before opening a project thread and again for its active thread before enabling the conversation. External servers must have no tools, resources or templates and report disabled after thread start/resume. Fail closed on a changed or malformed inventory. The owned `codex-video-edit` MCP route rejects a configured server with that reserved name.
+Before starting App Server, main asks the pinned Codex CLI for `codex mcp list --json`, bounds and validates configured names, and supplies `mcp_servers.<name>.enabled=false` for every server. Keep `mcp_servers={}` as defense in depth, but do not rely on an empty table to clear user configuration: Codex merges it non-destructively ([upstream issue #16045](https://github.com/openai/codex/issues/16045)). Verify the same complete inventory in `mcpServerStatus/list` before opening a project thread and again for its active thread before enabling the conversation. External servers must have no tools, resources or templates and report disabled after thread start/resume. Fail closed on a changed or malformed inventory. The owned MCP server keeps its existing wire identifier so stored Codex threads remain resumable across the product rename, and rejects any configured server with that reserved identifier.
 
 Every `thread/start` and `thread/resume` explicitly sets `features.apps`, `features.plugins` and `features.remote_plugin` to false. This suppresses the host-owned `codex_apps` MCP service for the tested authenticated 0.155.1 runtime; its registration is gated by the Apps feature and ChatGPT authentication in the [tagged runtime source](https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/codex-mcp/src/mcp/mod.rs). Do not rely on the process launch flag alone. The packaged native child fixture created a synthetic hostile external MCP config, confirmed it was disabled before the real read-only child turn, and preserved project, source and journal. This proves the tested configured-MCP and Apps boundary for that runtime, not the absence of every future built-in or upstream tool. P2-07 remains open.
 

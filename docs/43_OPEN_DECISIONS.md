@@ -4,7 +4,7 @@ Resolve these through research, prototypes, or user input at the phase where the
 
 ## Branding
 
-- product name is fixed as `codex-video-edit`
+- product name is fixed as `ai-video-editor`
 - icon and visual identity
 - light theme at first release or later
 

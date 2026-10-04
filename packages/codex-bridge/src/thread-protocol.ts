@@ -80,7 +80,7 @@ function instruction(value: string | undefined): string | undefined {
 export interface ExperimentalInitializeRequest {
   clientInfo: {
     name: "codex_video_edit";
-    title: "codex-video-edit";
+    title: "AI Video Editor";
     version: string;
   };
   capabilities: {
@@ -102,7 +102,7 @@ export function buildExperimentalInitialize(
   return {
     clientInfo: {
       name: "codex_video_edit",
-      title: "codex-video-edit",
+      title: "AI Video Editor",
       version,
     },
     capabilities: {
@@ -154,12 +154,12 @@ function validatePolicy(policy: ThreadRuntimePolicy): ThreadRuntimePolicy {
   };
 }
 
-export const CODEX_VIDEO_EDIT_V2_AGENT_NAMESPACE = "codex_video_edit_agents";
+export const AI_VIDEO_EDITOR_V2_AGENT_NAMESPACE = "codex_video_edit_agents";
 
 type CodeModeNamespace =
   | "mcp__codex_apps"
   | "multi_agent_v1"
-  | typeof CODEX_VIDEO_EDIT_V2_AGENT_NAMESPACE
+  | typeof AI_VIDEO_EDITOR_V2_AGENT_NAMESPACE
   | "skills"
   | "functions"
   | "image_gen";
@@ -190,7 +190,7 @@ function codeModeExclusions(
   return [
     "mcp__codex_apps",
     "multi_agent_v1",
-    CODEX_VIDEO_EDIT_V2_AGENT_NAMESPACE,
+    AI_VIDEO_EDITOR_V2_AGENT_NAMESPACE,
     "skills",
     "functions",
     "image_gen",
@@ -247,7 +247,7 @@ function threadFeatures(policy: ThreadFeaturePolicy) {
       ),
       ...(policy.nativeSubagentProtocol === "v2"
         ? {
-            direct_only_tool_namespaces: [CODEX_VIDEO_EDIT_V2_AGENT_NAMESPACE],
+            direct_only_tool_namespaces: [AI_VIDEO_EDITOR_V2_AGENT_NAMESPACE],
           }
         : {}),
     },

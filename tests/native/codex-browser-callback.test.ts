@@ -54,7 +54,7 @@ try {
   });
   let page = await electron.firstWindow();
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   await electron.evaluate(({ shell }) => {
     const testState = globalThis as typeof globalThis & {
       __codexCallbackTest?: { urls: string[] };
@@ -158,7 +158,7 @@ try {
     const userData = await electron.evaluate(({ app }) =>
       app.getPath("userData"),
     );
-    assert.equal(resolve(userData), join(configRoot, "codex-video-edit"));
+    assert.equal(resolve(userData), join(configRoot, "ai-video-editor"));
     const authFile = join(userData, "codex/account/auth.json");
     const authMetadata = await stat(authFile);
     assert.ok(authMetadata.isFile());
@@ -174,7 +174,7 @@ try {
     });
     page = await electron.firstWindow();
     assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-    assert.equal(page.url(), "codex-video-edit://app/index.html");
+    assert.equal(page.url(), "ai-video-editor://app/index.html");
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Codex", exact: true }).click();
     await expect

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:codex-video-edit:spoken-candidate-policy:1.0",
+  "$id": "urn:ai-video-editor:spoken-candidate-policy:1.0",
   "title": "Spoken candidate analysis policy",
   "type": "object",
   "additionalProperties": false,

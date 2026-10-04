@@ -11,9 +11,9 @@ Settings persists 100%, 125%, 150%, or 200% interface size through main-owned va
 Provision and verify `tests/desktop/README.md` first. Never build or launch this application directly on the host.
 
 1. Run `python scripts/stage_desktop.py`. It audits an explicit source subset and prints a fresh guest workspace, without host mounts.
-2. In that guest directory run `docker exec -w <guest-workspace> codex-video-edit-desktop npm ci --ignore-scripts`.
-3. Run `docker exec -w <guest-workspace> codex-video-edit-desktop npm run desktop:build`. The builder outputs the packaged executable path. It refuses a host build.
-4. Run `docker exec -w <guest-workspace> codex-video-edit-desktop npm run test:native -- <packaged-executable>`. It generates and verifies a lossless fixture, imports it via the native window, checks exact canvas pixels, security boundaries, reopening and source hashes. Native test evidence stays private in the guest workspace.
+2. In that guest directory run `docker exec -w <guest-workspace> ai-video-editor-desktop npm ci --ignore-scripts`.
+3. Run `docker exec -w <guest-workspace> ai-video-editor-desktop npm run desktop:build`. The builder outputs the packaged executable path. It refuses a host build.
+4. Run `docker exec -w <guest-workspace> ai-video-editor-desktop npm run test:native -- <packaged-executable>`. It generates and verifies a lossless fixture, imports it via the native window, checks exact canvas pixels, security boundaries, reopening and source hashes. Native test evidence stays private in the guest workspace.
 5. Inspect that packaged application through the native guest viewer as well. Playwright screenshots alone do not prove the computer-use pass.
 
 FFmpeg/ffprobe are externally installed test dependencies. They are not bundled. The packaged binary is a development artifact, not a signed installer or a Windows release. Later phases add recording, full editing/playback, Magic Wand, review, export and release packaging.

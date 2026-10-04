@@ -12,7 +12,7 @@ class DesktopBoundaryTests(unittest.TestCase):
     def setUp(self):
         self.inspection = {
             'Config': {'User': '1000:1000', 'Labels': {
-                'dev.codex-video-edit.environment': 'isolated-native-test'}},
+                'dev.ai-video-editor.environment': 'isolated-native-test'}},
             'HostConfig': {'CapDrop': ['ALL'], 'SecurityOpt': [
                 'no-new-privileges:true', 'seccomp=' + json.dumps(json.loads(
                     (ROOT / 'tests/desktop/seccomp.json').read_text(encoding='utf-8')))],

@@ -196,7 +196,7 @@
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://codex-video-edit.local/schemas/graphics_opportunity.schema.json",
+  "$id": "https://ai-video-editor.local/schemas/graphics_opportunity.schema.json",
   "title": "Suggestion-only graphics opportunity",
   "$defs": {
     "text": {

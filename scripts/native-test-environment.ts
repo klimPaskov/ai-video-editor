@@ -176,7 +176,7 @@ export function validateNativeTestEnvironment(
   if (evidence.dockerMarker) return "docker";
 
   assert.equal(evidence.wslTestMarker, "1");
-  assert.match(evidence.wslDistroName ?? "", /^codex-video-edit-test/u);
+  assert.match(evidence.wslDistroName ?? "", /-test-recovered$/u);
   assert.match(evidence.kernelRelease, /microsoft.*wsl2/iu);
   assert.equal(wslSetting(evidence.wslConfig, "automount", "enabled"), "false");
   assert.equal(wslSetting(evidence.wslConfig, "interop", "enabled"), "false");
@@ -216,7 +216,7 @@ export async function assertNativeTestEnvironment(): Promise<NativeTestEnvironme
     uid: process.getuid?.(),
     display: process.env.DISPLAY,
     dockerMarker,
-    wslTestMarker: process.env.CODEX_VIDEO_EDIT_WSL_TEST,
+    wslTestMarker: process.env.AI_VIDEO_EDITOR_WSL_TEST,
     wslDistroName: process.env.WSL_DISTRO_NAME,
     kernelRelease,
     wslConfig,

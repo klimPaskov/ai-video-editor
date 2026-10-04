@@ -225,7 +225,7 @@ try {
             throw new Error("Unexpected test credential");
           if (
             new Headers(init?.headers).get("x-goog-api-client") !==
-            (args.provider === "gemini" ? "codex-video-edit/0.0.0" : null)
+            (args.provider === "gemini" ? "ai-video-editor/0.0.0" : null)
           )
             throw new Error("Unexpected Gemini client header");
           if (url === args.modelUrl && method === "GET") {
@@ -437,7 +437,7 @@ try {
   }
   let page = await electron.firstWindow();
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   await electron.evaluate(({ shell }) => {
     shell.openExternal = async () => {
       throw new Error("External launch disabled");

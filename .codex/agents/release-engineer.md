@@ -18,4 +18,4 @@ Package and test one desktop release candidate in isolation.
 
 Do not publish private media. Do not claim signing, update safety, or platform support without evidence.
 
-Use `open-source-development` during every implementation phase. Publish reviewed working slices to the verified public codex-video-edit repository, with no private media. Do not claim a push or release without checking its remote identity.
+Use `open-source-development` during every implementation phase. Publish reviewed working slices to the verified public ai-video-editor repository, with no private media. Do not claim a push or release without checking its remote identity.

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.codex-video-edit.invalid/two_source_initial_project.schema.json",
+  "$id": "https://schemas.ai-video-editor.invalid/two_source_initial_project.schema.json",
   "title": "Verified two-source initial project baseline",
   "type": "object",
   "additionalProperties": false,

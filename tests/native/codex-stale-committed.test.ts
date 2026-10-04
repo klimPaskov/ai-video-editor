@@ -23,6 +23,7 @@ import {
 } from "../../packages/codex-tools/src/service.ts";
 import type { DraftTransactionRecord } from "../../packages/domain/src/draft-transaction.ts";
 import { assertInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
+import { appIdentity } from "../../packages/domain/src/app-identity.ts";
 import { sha256 } from "../../packages/media-engine/src/lossless.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { ProjectStore } from "../../packages/project-store/src/store.ts";
@@ -54,7 +55,7 @@ let transport: CodexStdioTransport | undefined;
 try {
   const original = join(evidence, "Color sequence.mkv");
   const originalHash = sha256(await readFile(original));
-  const userData = join(configRoot, "codex-video-edit");
+  const userData = join(configRoot, "ai-video-editor");
   const projectsRoot = join(userData, "project-store");
   const matches: Array<{
     projectId: string;
@@ -216,7 +217,7 @@ try {
   });
   const page = await electron.firstWindow();
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   await electron.evaluate(({ shell }) => {
     shell.openExternal = async () => {
       throw new Error("External launch disabled in isolated test");
@@ -349,7 +350,7 @@ try {
         item.namespace === "codex_video_edit" &&
         item.tool === "cut_trim_edge"
       : item.type === "mcpToolCall" &&
-        item.server === "codex-video-edit" &&
+        item.server === appIdentity.stableMcpServerId &&
         item.tool === "cut.trim_edge",
   );
   assert.equal(staleCalls.length, 1, "Require one live guarded stale call");

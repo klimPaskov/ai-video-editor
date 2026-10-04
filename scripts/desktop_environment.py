@@ -9,9 +9,9 @@ import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-NAME = 'codex-video-edit-desktop'
-IMAGE = 'codex-video-edit-desktop:p0'
-LABEL = 'dev.codex-video-edit.environment=isolated-native-test'
+NAME = 'ai-video-editor-desktop'
+IMAGE = 'ai-video-editor-desktop:p0'
+LABEL = 'dev.ai-video-editor.environment=isolated-native-test'
 
 
 def start_arguments() -> list[str]:
@@ -24,7 +24,7 @@ def start_arguments() -> list[str]:
 
 def validate_inspection(value: dict) -> None:
     config, host = value['Config'], value['HostConfig']
-    if config.get('Labels', {}).get('dev.codex-video-edit.environment') != 'isolated-native-test':
+    if config.get('Labels', {}).get('dev.ai-video-editor.environment') != 'isolated-native-test':
         raise ValueError('Container is not the project test environment')
     if config.get('User') != '1000:1000':
         raise ValueError('Desktop must run as the unprivileged test user')

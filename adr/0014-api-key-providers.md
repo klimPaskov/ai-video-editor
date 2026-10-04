@@ -3,7 +3,7 @@
 - Status: Accepted user requirement; implementation and native acceptance pending
 - Date: 2026-09-19
 - Supersedes: ADR 0002's first-release Codex-only provider limit and API-key exclusion
-- Extended by: ADR 0015's fixed Gemini API-key provider
+- Extended by: ADR 0015's fixed Gemini API-key provider and ADR 0018's default Claude account connection
 
 ## Decision
 

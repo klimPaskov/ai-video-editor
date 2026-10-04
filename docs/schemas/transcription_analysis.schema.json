@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://codex-video-edit.local/schemas/transcription_analysis.schema.json",
+  "$id": "https://ai-video-editor.local/schemas/transcription_analysis.schema.json",
   "title": "Local silence analysis",
   "description": "Path-free analysis of one immutable source. Silence is evidence only; it never authorizes an edit.",
   "type": "object",

@@ -91,7 +91,7 @@ async function seek(page: Page, timeUs: number): Promise<void> {
 try {
   let page = await electron.firstWindow();
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   await electron.evaluate(({ dialog }, paths) => {
     let index = 0;
     dialog.showOpenDialog = async () => ({

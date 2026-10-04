@@ -31,3 +31,5 @@ Starting or continuing any implementation session.
 - Never spawn a GPT-6 Astra implementation subagent or select Astra for a native Codex child test. Honor the user's preferred runtime-discovered Luna/high Codex subscription default and report its unavailability rather than silently switching models.
 - Do not claim visual success from process output.
 - Preserve failed evidence that helps diagnosis.
+
+For Claude continuation, `CLAUDE.md` and `.claude/skills/` provide the native entry points to these canonical guides; optional Claude role definitions are under `.claude/agents/`. ADR 0018 records the unimplemented default Claude-account requirement. The main implementer owns supported runtime/model/architecture decisions and may revise prior assistant-selected choices with evidence and synchronized contracts.

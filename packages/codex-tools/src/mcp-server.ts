@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { connect } from "node:net";
+import { appIdentity } from "../../domain/src/app-identity.ts";
 import { codexVideoEditMcpTools } from "./mcp-tools.ts";
 
 const MAX_FRAME_BYTES = 1024 * 1024;
-const endpoint = process.env.CODEX_VIDEO_EDIT_MCP_ENDPOINT;
-const token = process.env.CODEX_VIDEO_EDIT_MCP_TOKEN;
-delete process.env.CODEX_VIDEO_EDIT_MCP_ENDPOINT;
-delete process.env.CODEX_VIDEO_EDIT_MCP_TOKEN;
+const endpoint = process.env.AI_VIDEO_EDITOR_MCP_ENDPOINT;
+const token = process.env.AI_VIDEO_EDITOR_MCP_TOKEN;
+delete process.env.AI_VIDEO_EDITOR_MCP_ENDPOINT;
+delete process.env.AI_VIDEO_EDITOR_MCP_TOKEN;
 
 type RpcId = string | number;
 
@@ -111,7 +112,10 @@ async function request(message: Record<string, unknown>): Promise<void> {
       result: {
         protocolVersion: message.params.protocolVersion,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "codex-video-edit", version: "0.0.1" },
+        serverInfo: {
+          name: appIdentity.stableMcpServerId,
+          version: "0.0.1",
+        },
       },
     });
   }

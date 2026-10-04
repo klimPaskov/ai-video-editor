@@ -58,7 +58,7 @@ test("each provider uses its pinned HTTPS models and completion endpoint without
       );
       assert.equal(
         new Headers(init?.headers).get("x-goog-api-client"),
-        gemini ? "codex-video-edit/0.0.0" : null,
+        gemini ? "ai-video-editor/0.0.0" : null,
       );
       if (init?.method === "GET")
         return json({ data: [{ id: "test-model" }, { id: "test-model" }] });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { appIdentity } from "../../packages/domain/src/app-identity.ts";
 import { CodexThreadProtocolError } from "../../packages/codex-bridge/src/thread-protocol.ts";
 import { ownedDynamicToolWireNames } from "../../packages/codex-bridge/src/dynamic-tools.ts";
 import { ProjectThreadRegistry } from "../../packages/codex-bridge/src/thread-registry.ts";
@@ -27,7 +28,7 @@ test("project runtime requires experimental negotiation and owns server IDs", as
           projectId: "project-1",
           policy,
           registry,
-          allowedMcpServer: "codex-video-edit",
+          allowedMcpServer: appIdentity.stableMcpServerId,
           allowedMcpTools: new Set(["draft.trim"]),
           clientMessageId: () => "message-1",
         }),
@@ -40,7 +41,7 @@ test("project runtime requires experimental negotiation and owns server IDs", as
       projectId: "project-1",
       policy,
       registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["draft.trim"]),
       clientMessageId: () => "message-1",
     });
@@ -121,7 +122,7 @@ test("project runtime requires experimental negotiation and owns server IDs", as
       projectId: "project-1",
       policy,
       registry: await ProjectThreadRegistry.open(root),
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["draft.trim"]),
       clientMessageId: () => "message-2",
     });
@@ -148,7 +149,7 @@ test("dynamic thread creation requires the exact reviewed host inventory", async
           projectId: "project-1",
           policy,
           registry,
-          allowedMcpServer: "codex-video-edit",
+          allowedMcpServer: appIdentity.stableMcpServerId,
           allowedMcpTools: new Set(),
           newThreadToolRoute: "dynamic",
           allowedDynamicNamespace: "codex_video_edit",
@@ -171,7 +172,7 @@ test("dynamic thread start and resume retain the route-specific code-mode policy
     projectId: "dynamic-project",
     policy,
     registry: await ProjectThreadRegistry.open(root),
-    allowedMcpServer: "codex-video-edit",
+    allowedMcpServer: appIdentity.stableMcpServerId,
     allowedMcpTools: new Set<string>(),
     newThreadToolRoute: "dynamic" as const,
     nativeSubagentProtocol: "v1" as const,

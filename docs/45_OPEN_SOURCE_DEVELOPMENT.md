@@ -2,7 +2,7 @@
 
 ## Required repository
 
-The project is `codex-video-edit`. During P0, resolve the authenticated GitHub owner, check for an existing repository with that exact name, and create it as public if absent. Inspect ownership, purpose, contents, and existing permissions before reusing one. Do not overwrite unrelated repositories or use the name of an earlier application.
+The project is `ai-video-editor`. During P0, resolve the authenticated GitHub owner, check for an existing repository with that exact name, and create it as public if absent. Inspect ownership, purpose, contents, and existing permissions before reusing one. Do not overwrite unrelated repositories or use the name of an earlier application.
 
 The user has requested public development. Publish reviewed source, specifications, tests, safe UI mockups, and build configuration from the beginning. Do not wait until release. Never make account-wide settings changes or bypass repository protections. If the tool or account cannot create or write the repository, record the exact blocker and continue dependency-safe local work. Do not claim publication has happened.
 
@@ -36,3 +36,5 @@ P9 must build an installable desktop release with verified checksums, correct de
 Public package validation checks accepted record structure and repository-contained artifact references without requiring private evidence in CI. This does not rerun or prove native/media acceptance. The phase-result writer always requires the actual nonempty local artifacts before writing, and reviewed source/remote revision checks remain mandatory. Never publish private artifacts to satisfy public CI.
 
 Repository guidance under `.agents/skills/` and direct Markdown role prompts plus `routing.json` under `.codex/agents/` are reviewed source. The source scanner and staged-content audit permit that narrow agent catalog without permitting account files, sessions, nested runtime data or other `.codex` contents. Reference PNGs remain restricted to `docs/references/screenshots/`; moving their documentation does not authorize publishing other binaries.
+
+Claude Code project source includes `CLAUDE.md` plus reviewed `.claude/settings.json`, direct `agents/` and `rules/` Markdown, and `skills/<name>/SKILL.md` adapters. The source enumerator and index audit admit only these layouts under `.claude/`; local settings, account files, sessions, worktrees and `CLAUDE.local.md` remain private. Credentials are never part of a project login implementation artifact.

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.codex-video-edit.invalid/timeline.schema.json",
+  "$id": "https://schemas.ai-video-editor.invalid/timeline.schema.json",
   "title": "Canonical non-destructive timeline",
   "type": "object",
   "additionalProperties": false,
