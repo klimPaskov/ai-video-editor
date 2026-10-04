@@ -10,6 +10,7 @@ import {
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
 import type { Page } from "playwright/test";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { assertInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import { projectStages } from "../../packages/domain/src/project-view.ts";
 import {
@@ -28,7 +29,7 @@ assert.equal(
 assert.ok(process.getuid);
 assert.equal(process.getuid(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 assert.ok(executablePath, "Packaged executable path is required");
 const evidenceRoot = resolve("test-results");
