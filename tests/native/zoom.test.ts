@@ -1,6 +1,6 @@
 /**
  * Packaged native zoom: mark a range, add a zoom by clicking its target in
- * the preview, change its strength, undo and redo it, export a verified
+ * the preview, change its strength, undo and redo it by keyboard, export a verified
  * lossless master in which only the zoomed frames differ, then remove it.
  *
  * node tests/native/zoom.test.ts <packaged-executable>
@@ -118,9 +118,13 @@ try {
 
   step = "mark-range";
   await seekTo(page, 1_000_000);
-  await page.locator("#mark-in").click();
+  // Marks by keyboard shortcut; they act through the same buttons.
+  await page.keyboard.press("i");
   await seekTo(page, 2_500_000);
-  await page.locator("#mark-out").click();
+  await page.keyboard.press("o");
+  await expect(page.locator("#cut-selection")).toHaveText(
+    "In 0:01.000 · Out 0:02.500",
+  );
   const add = page.getByRole("button", { name: "Zoom the marked range" });
   await expect(add).toBeEnabled();
 
@@ -185,11 +189,11 @@ try {
   assert.equal(changed.center_x, added[0]!.center_x);
 
   step = "undo-redo";
-  await page.locator("#undo-edit").click();
+  await page.keyboard.press("Control+z");
   await expect
     .poll(async () => (await zooms(page))[0]?.scale, { timeout: 30_000 })
     .toBe(2);
-  await page.locator("#redo-edit").click();
+  await page.keyboard.press("Control+Shift+z");
   await expect
     .poll(async () => (await zooms(page))[0]?.scale, { timeout: 30_000 })
     .toBe(3);

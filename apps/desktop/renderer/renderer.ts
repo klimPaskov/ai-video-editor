@@ -2643,8 +2643,8 @@ function renderZoomTools(
     marked ? "Zoom the marked range" : "Zoom two seconds from the playhead",
   );
   zoomAdd.title = marked
-    ? "Zoom the marked range"
-    : "Zoom two seconds from the playhead";
+    ? "Zoom the marked range (Z)"
+    : "Zoom two seconds from the playhead (Z)";
   const zoom = zoomUnderPlayhead();
   zoomControls.hidden = !zoom;
   if (zoom) {
@@ -3476,6 +3476,42 @@ async function savePreferences(): Promise<void> {
     });
   }
 }
+/** Edit-step shortcuts act through their buttons, so the same guards apply. */
+function editShortcut(event: KeyboardEvent): boolean {
+  const target = event.target as HTMLElement | null;
+  if (
+    activeProject?.stage !== "edit" ||
+    settingsDialog.open ||
+    event.altKey ||
+    (target &&
+      (target.isContentEditable ||
+        ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) &&
+      target !== seek)
+  )
+    return false;
+  const command = event.ctrlKey || event.metaKey;
+  const key = event.key.toLowerCase();
+  const button = command
+    ? key === "z" && !event.shiftKey
+      ? undoEdit
+      : (key === "z" && event.shiftKey) || key === "y"
+        ? redoEdit
+        : undefined
+    : event.shiftKey
+      ? undefined
+      : (
+          {
+            i: markInButton,
+            o: markOutButton,
+            s: splitClip,
+            z: zoomAdd,
+          } as const
+        )[key];
+  if (!button) return false;
+  event.preventDefault();
+  if (!button.disabled && !editActions.hidden) button.click();
+  return true;
+}
 document.addEventListener("keydown", (event) => {
   const target = event.target as HTMLElement | null;
   if (
@@ -3493,6 +3529,20 @@ document.addEventListener("keydown", (event) => {
     setZoomPicking(undefined);
     renderEditTools();
     zoomAdd.focus();
+    return;
+  }
+  if (editShortcut(event)) return;
+  if (
+    (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !settingsDialog.open &&
+    (target === document.body || target === canvas)
+  ) {
+    const button = event.key === "ArrowLeft" ? previous : next;
+    event.preventDefault();
+    if (!button.disabled && !button.hidden) button.click();
     return;
   }
   if ((event.ctrlKey || event.metaKey) && event.key === ",") {
