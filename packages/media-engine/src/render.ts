@@ -493,6 +493,45 @@ export function planExport(
 
 const quiet = ["-hide_banner", "-loglevel", "error", "-nostdin"];
 
+/** Retimes a graphics segment so its first frame is output frame `startFrame`. */
+export function graphicsTiming(
+  startFrame: number,
+  frameRate: { numerator: number; denominator: number },
+): string {
+  return `setpts='(N+${startFrame})*${frameRate.denominator}/(${frameRate.numerator}*TB)'`;
+}
+
+/**
+ * The overlay format that keeps the frames' own layout and precision, so
+ * frames without graphics pass through unchanged; null when the overlay
+ * cannot draw at this precision.
+ */
+export function graphicsOverlayFormat(pixelFormat: string): string | null {
+  const formats: Record<string, string> = {
+    yuv420p: "yuv420",
+    yuvj420p: "yuv420",
+    yuv420p10le: "yuv420p10",
+    yuv422p: "yuv422",
+    yuvj422p: "yuv422",
+    yuv422p10le: "yuv422p10",
+    yuv444p: "yuv444",
+    yuvj444p: "yuv444",
+    yuv444p10le: "yuv444p10",
+    gbrp: "gbrp",
+    bgra: "rgb",
+    rgba: "rgb",
+    argb: "rgb",
+    abgr: "rgb",
+    bgr0: "rgb",
+    rgb0: "rgb",
+    "0bgr": "rgb",
+    "0rgb": "rgb",
+    rgb24: "rgb",
+    bgr24: "rgb",
+  };
+  return formats[pixelFormat] ?? null;
+}
+
 function seconds6(value: number): string {
   return value.toFixed(6);
 }
@@ -594,8 +633,23 @@ export interface ExportRequest {
 }
 
 export interface ExportComposition {
-  /** FFmpeg filtergraph from the draft frames to the composed frames. */
+  /** FFmpeg filters applied first, at the draft's size (e.g. zooms). */
   filter: string;
+  /**
+   * Motion graphics drawn over the frames after `filter`: per segment, an
+   * FFV1 BGRA file with premultiplied alpha holding exactly the frames
+   * [startFrame, startFrame + frameCount). Frames outside the segments are
+   * not touched.
+   */
+  graphics?: {
+    segments: readonly {
+      path: string;
+      startFrame: number;
+      frameCount: number;
+    }[];
+  };
+  /** Filters applied after the graphics (e.g. reframing a short). */
+  after?: string;
   ass?: string;
   width: number;
   height: number;
@@ -1069,19 +1123,43 @@ export async function exportDraft(
         await writeFile(join(staging, "overlay.ass"), composition.ass, {
           mode: 0o600,
         });
-      const graph = [
-        composition.filter ? `[0:v]${composition.filter}[framed]` : null,
-        `[${composition.filter ? "framed" : "0:v"}]${
-          composition.ass !== undefined ? "ass=overlay.ass," : ""
-        }${
+      const chains: string[] = [];
+      let label = "0:v";
+      if (composition.filter) {
+        chains.push(`[${label}]${composition.filter}[framed]`);
+        label = "framed";
+      }
+      const graphics = composition.graphics;
+      if (graphics && graphics.segments.length) {
+        const format = graphicsOverlayFormat(video.pixelFormat);
+        if (!format)
+          throw new MediaError(
+            "UNSUPPORTED_PROFILE",
+            "Graphics cannot be drawn on video of this precision yet.",
+          );
+        // Each segment's overlay draws only while it has frames: main frames
+        // before its first frame and after its last pass through untouched.
+        for (const [index, segment] of graphics.segments.entries()) {
+          chains.push(
+            `[${index + 1}:v]${graphicsTiming(segment.startFrame, video.frameRate)}[gfx${index}]`,
+            `[${label}][gfx${index}]overlay=0:0:format=${format}:alpha=premultiplied:repeatlast=0:eof_action=pass[drawn${index}]`,
+          );
+          label = `drawn${index}`;
+        }
+      }
+      if (composition.after) {
+        chains.push(`[${label}]${composition.after}[after]`);
+        label = "after";
+      }
+      chains.push(
+        `[${label}]${composition.ass !== undefined ? "ass=overlay.ass," : ""}${
           target.pixelFormat.startsWith("yuv") &&
           !video.pixelFormat.startsWith("yuv")
             ? "scale=out_color_matrix=bt709:out_range=tv,"
             : ""
         }format=${target.pixelFormat}[out]`,
-      ]
-        .filter(Boolean)
-        .join(";");
+      );
+      const graph = chains.join(";");
       const child = track(
         startProcess(
           executables.ffmpeg,
@@ -1097,6 +1175,8 @@ export async function exportDraft(
             `${video.frameRate.numerator}/${video.frameRate.denominator}`,
             "-i",
             "pipe:0",
+            ...(graphics?.segments.flatMap((segment) => ["-i", segment.path]) ??
+              []),
             // A relative name avoids filter-argument escaping of full paths.
             "-filter_complex",
             graph,

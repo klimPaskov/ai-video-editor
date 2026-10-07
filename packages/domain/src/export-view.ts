@@ -34,6 +34,7 @@ export const exportUnsupported = Object.freeze([
   "A clip refers to an unknown source.",
   "This source has no video stream.",
   "This source cannot be read.",
+  "Graphics cannot be drawn on video of this precision yet.",
 ] as const);
 
 const messageSet = new Set<string>([

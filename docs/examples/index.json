@@ -51,6 +51,10 @@
     },
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_manual_graphic.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
       "example": "docs/examples/desktop_ipc_recording_region.example.json"
     },
     {

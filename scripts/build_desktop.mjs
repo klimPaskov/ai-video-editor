@@ -162,7 +162,14 @@ await build({
   platform: "browser",
   target: "chrome152",
 });
-for (const file of ["index.html", "style.css", "region.html", "region.css"])
+for (const file of [
+  "index.html",
+  "style.css",
+  "region.html",
+  "region.css",
+  "stage.html",
+  "stage.css",
+])
   await copyFile(
     join(root, "apps/desktop/renderer", file),
     join(staging, "renderer", file),

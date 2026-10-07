@@ -5,6 +5,7 @@ import { setupCaptions } from "./captions-panel.ts";
 import { setupShortsPanel } from "./shorts-panel.ts";
 import { setupAudioPanel } from "./audio-panel.ts";
 import { mediaRect, setupZoomPreview } from "./zoom-preview.ts";
+import { setupGraphicsPreview } from "./graphics-preview.ts";
 import {
   zoomAt,
   zoomLimits,
@@ -1261,12 +1262,12 @@ const timelineStrip = setupTimelineStrip({
 });
 const captions = setupCaptions({ preview: canvas.parentElement! });
 const zoomPreview = setupZoomPreview(canvas.parentElement!);
+const graphicsPreview = setupGraphicsPreview(canvas.parentElement!);
 const audioPanel = setupAudioPanel();
 function refreshZoom(us = Number(seek.value)): void {
-  zoomPreview.render(
-    selected?.previewAvailable ? activeProject : undefined,
-    us,
-  );
+  const project = selected?.previewAvailable ? activeProject : undefined;
+  zoomPreview.render(project, us);
+  graphicsPreview.render(project, us);
 }
 function refreshCaptions(): void {
   refreshZoom();
@@ -1289,6 +1290,7 @@ function renderTimeline(): void {
       outUs: currentMarks ? markOutUs : undefined,
     },
     zoomPreview.intervals(),
+    graphicsPreview.intervals(),
   );
   timelineStrip.playhead(Number(seek.value));
 }
