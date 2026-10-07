@@ -248,6 +248,22 @@
                 <p id="magic-status" role="status" hidden></p>
                 <p id="magic-error" role="alert" hidden></p>
               </div>
+              <div id="audio-card" class="captions-card">
+                <div class="captions-controls">
+                  <span class="card-title" data-icon="audio">Audio</span>
+                  <label class="switch" for="audio-normalize"
+                    ><input id="audio-normalize" type="checkbox" />Even out
+                    volume</label
+                  >
+                  <label class="switch" for="audio-denoise"
+                    ><input id="audio-denoise" type="checkbox" />Reduce
+                    background noise</label
+                  >
+                </div>
+                <p id="audio-note" class="muted">
+                  Applied when exporting. Your recording is not changed.
+                </p>
+              </div>
               <div id="captions-card" class="captions-card">
                 <div class="captions-controls">
                   <span class="card-title" data-icon="captions">Captions</span>
@@ -495,6 +511,45 @@
                 <button id="export-again" type="button">Export again</button>
               </div>
               <p id="export-error" role="alert" hidden></p>
+              <div id="shorts" class="shorts">
+                <div class="shorts-header">
+                  <span class="card-title" data-icon="clips">Short clips</span>
+                  <button id="shorts-find" type="button" data-icon="sparkle">
+                    Find clips
+                  </button>
+                </div>
+                <div class="shorts-options">
+                  <select id="shorts-format" aria-label="Clip format">
+                    <option value="vertical">Vertical 9:16</option>
+                    <option value="square">Square 1:1</option>
+                    <option value="landscape">Landscape 16:9</option>
+                  </select>
+                  <select id="shorts-framing" aria-label="Clip framing">
+                    <option value="fit">Fit with blurred background</option>
+                    <option value="fill">Fill the frame</option>
+                  </select>
+                  <input
+                    id="shorts-position"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="50"
+                    aria-label="Crop position"
+                    hidden
+                  />
+                  <label class="switch" for="shorts-captions"
+                    ><input id="shorts-captions" type="checkbox" checked />Burn
+                    in captions</label
+                  >
+                </div>
+                <p id="shorts-note" class="muted"></p>
+                <ul
+                  id="shorts-list"
+                  class="shorts-list"
+                  aria-label="Short clips"
+                ></ul>
+                <p id="shorts-error" role="alert" hidden></p>
+              </div>
             </section>
           </div>
         </div>

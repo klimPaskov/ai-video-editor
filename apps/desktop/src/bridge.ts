@@ -21,6 +21,17 @@ import type {
   CaptionSettingsUpdate,
 } from "../../../packages/domain/src/captions.ts";
 import type {
+  AudioSettings,
+  AudioSettingsRequest,
+  AudioSettingsUpdate,
+} from "../../../packages/domain/src/audio-settings.ts";
+import type {
+  ShortClipRequest,
+  ShortClipsView,
+  ShortExportRequest,
+  ShortProjectRequest,
+} from "../../../packages/domain/src/short-clips-view.ts";
+import type {
   PlaybackProjectRequest,
   PlaybackView,
 } from "../../../packages/domain/src/playback-view.ts";
@@ -152,6 +163,15 @@ export interface DesktopBridge {
     request: CodexThreadProjectRequest,
   ): Promise<Reply<CodexThreadView>>;
   getPlayback(request: PlaybackProjectRequest): Promise<Reply<PlaybackView>>;
+  getAudioSettings(
+    request: AudioSettingsRequest,
+  ): Promise<Reply<AudioSettings>>;
+  setAudioSettings(request: AudioSettingsUpdate): Promise<Reply<AudioSettings>>;
+  getShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
+  findShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
+  discardShortClip(request: ShortClipRequest): Promise<Reply<ShortClipsView>>;
+  exportShortClip(request: ShortExportRequest): Promise<Reply<ShortClipsView>>;
+  cancelShortClip(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
   getCaptionSettings(
     request: CaptionSettingsRequest,
   ): Promise<Reply<CaptionSettings>>;
@@ -221,6 +241,13 @@ export interface DesktopBridge {
 }
 export const channels = Object.freeze({
   playbackGet: "playback:get",
+  audioGet: "audio:get",
+  audioSet: "audio:set",
+  shortsGet: "shorts:get",
+  shortsFind: "shorts:find",
+  shortsDiscard: "shorts:discard",
+  shortsExport: "shorts:export",
+  shortsCancel: "shorts:cancel",
   captionsGet: "captions:get",
   captionsSet: "captions:set",
   recordingDevices: "recording:devices",

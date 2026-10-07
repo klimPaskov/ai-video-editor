@@ -6,6 +6,10 @@ import {
   type CaptionCue,
   type CaptionSettings,
 } from "../../../packages/domain/src/captions.ts";
+import {
+  defaultAudioSettings,
+  type AudioSettings,
+} from "../../../packages/domain/src/audio-settings.ts";
 import { access, mkdir, open, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -17,6 +21,7 @@ import {
   type ExportView,
 } from "../../../packages/domain/src/export-view.ts";
 import { MediaError } from "../../../packages/media-engine/src/process.ts";
+import { draftWindowClips } from "../../../packages/domain/src/short-clips.ts";
 import { probePresentationTiming } from "../../../packages/media-engine/src/presentation-timing.ts";
 import {
   exportDraft,
@@ -49,6 +54,8 @@ export interface DesktopExportOptions {
   captions?: (
     projectId: string,
   ) => Promise<{ cues: CaptionCue[]; settings: CaptionSettings } | null>;
+  /** Audio cleanup chosen for the project. */
+  audio?: (projectId: string) => Promise<AudioSettings>;
 }
 
 interface Job {
@@ -58,6 +65,7 @@ interface Job {
   outputPath: string;
   draftSequence: number;
   captions: { cues: CaptionCue[]; settings: CaptionSettings } | null;
+  audio: AudioSettings;
 }
 
 const unsupportedSet = new Set<string>(exportUnsupported);
@@ -70,6 +78,72 @@ function safeName(name: string): string {
     .trim()
     .slice(0, 120);
   return base || "Video";
+}
+
+/**
+ * Plans the export of the active draft, or of output time [startUs, endUs)
+ * of it when a window is given. Throws `MediaError` with a fixed message.
+ */
+export async function planDraft(
+  drafts: DraftReader,
+  ffprobe: string,
+  projectId: string,
+  window?: { startUs: number; endUs: number },
+): Promise<{
+  plan: ReturnType<typeof planExport>;
+  snapshot: DraftProjectReadResult;
+}> {
+  const snapshot = await drafts.snapshotWithProject(projectId);
+  const project = snapshot.project;
+  const sources =
+    project.schema_version === "1.1" ? project.sources : [project.source];
+  const probes =
+    project.schema_version === "1.1"
+      ? project.source_probes
+      : [project.source_probe];
+  const ordered = [...snapshot.draft.timeline.clips]
+    .filter((clip) => clip.enabled)
+    .sort((a, b) => a.timeline_start_us - b.timeline_start_us);
+  const clips = window
+    ? draftWindowClips(
+        ordered.map((clip) => ({
+          sourceId: clip.source_id,
+          timelineStartUs: clip.timeline_start_us,
+          timelineEndUs: clip.timeline_end_us,
+          sourceStartUs: clip.source_start_us,
+          sourceEndUs: clip.source_end_us,
+        })),
+        window.startUs,
+        window.endUs,
+      )
+    : ordered.map((clip) => ({
+        sourceId: clip.source_id,
+        sourceStartUs: clip.source_start_us,
+        sourceEndUs: clip.source_end_us,
+      }));
+  const used = new Set(clips.map((clip) => clip.sourceId));
+  const exportSources: ExportSource[] = [];
+  for (const [index, source] of sources.entries()) {
+    if (!used.has(source.source_id)) continue;
+    const probe = probes[index]! as Record<string, unknown>;
+    const video = (
+      probe.streams as Record<string, unknown>[] | undefined
+    )?.find((stream) => stream.codec_type === "video");
+    if (!video)
+      throw new MediaError("UNSUPPORTED_PROFILE", exportUnsupported[15]);
+    exportSources.push({
+      sourceId: source.source_id,
+      path: source.managed_path,
+      sha256: source.sha256,
+      probe,
+      timing: await probePresentationTiming(
+        ffprobe,
+        source.managed_path,
+        video,
+      ),
+    });
+  }
+  return { plan: planExport(clips, exportSources), snapshot };
 }
 
 /**
@@ -114,51 +188,19 @@ export class DesktopExports {
       if (this.job.projectId === projectId) return this.get(projectId);
       throw new MediaError("INVALID_INPUT", exportIssues.busy);
     }
-    const snapshot = await this.options.drafts.snapshotWithProject(projectId);
-    const project = snapshot.project;
-    const sources =
-      project.schema_version === "1.1" ? project.sources : [project.source];
-    const probes =
-      project.schema_version === "1.1"
-        ? project.source_probes
-        : [project.source_probe];
-    const clips = [...snapshot.draft.timeline.clips]
-      .filter((clip) => clip.enabled)
-      .sort((a, b) => a.timeline_start_us - b.timeline_start_us)
-      .map((clip) => ({
-        sourceId: clip.source_id,
-        sourceStartUs: clip.source_start_us,
-        sourceEndUs: clip.source_end_us,
-      }));
-    let plan: ReturnType<typeof planExport>;
+    let draft: Awaited<ReturnType<typeof planDraft>>;
     try {
-      const used = new Set(clips.map((clip) => clip.sourceId));
-      const exportSources: ExportSource[] = [];
-      for (const [index, source] of sources.entries()) {
-        if (!used.has(source.source_id)) continue;
-        const probe = probes[index]! as Record<string, unknown>;
-        const video = (
-          probe.streams as Record<string, unknown>[] | undefined
-        )?.find((stream) => stream.codec_type === "video");
-        if (!video)
-          throw new MediaError("UNSUPPORTED_PROFILE", exportUnsupported[15]);
-        exportSources.push({
-          sourceId: source.source_id,
-          path: source.managed_path,
-          sha256: source.sha256,
-          probe,
-          timing: await probePresentationTiming(
-            this.options.ffprobe ?? "ffprobe",
-            source.managed_path,
-            video,
-          ),
-        });
-      }
-      plan = planExport(clips, exportSources);
+      draft = await planDraft(
+        this.options.drafts,
+        this.options.ffprobe ?? "ffprobe",
+        projectId,
+      );
     } catch (error) {
       this.fail(projectId, profile, error);
       return this.get(projectId);
     }
+    const { plan, snapshot } = draft;
+    const project = snapshot.project;
     const extension = profile === "lossless_master" ? ".mkv" : ".mp4";
     const suffix = profile === "lossless_master" ? "master" : "share";
     const chosen = await this.options.chooseDestination({
@@ -187,8 +229,12 @@ export class DesktopExports {
     }
     // Captions are fixed when the export starts, like the draft itself.
     const captions = await this.options.captions?.(projectId).catch(() => null);
+    const audio =
+      (await this.options.audio?.(projectId).catch(() => null)) ??
+      defaultAudioSettings;
     const controller = new AbortController();
     const job: Job = {
+      audio,
       captions: captions && captions.cues.length ? captions : null,
       projectId,
       profile,
@@ -227,6 +273,7 @@ export class DesktopExports {
           ffprobe: this.options.ffprobe ?? "ffprobe",
         },
         signal: job.controller.signal,
+        audioCleanup: job.audio,
         ...(job.captions?.settings.burnIn
           ? {
               overlayAss: toAss(
@@ -291,6 +338,9 @@ export class DesktopExports {
         draftSequence: job.draftSequence,
         captionsFileName,
         captionsBurnedIn: job.captions?.settings.burnIn === true,
+        audioCleaned:
+          plan.format.audio !== null &&
+          (job.audio.normalize || job.audio.denoise),
       },
       message,
     });

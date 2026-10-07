@@ -32,6 +32,35 @@ import {
 } from "../../packages/media-engine/src/transcription.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 
+test("a final word at the end of the audio is left out; one far beyond fails", () => {
+  const options = {
+    projectId: "project-0001",
+    sourceId: "source-0001",
+    durationUs: 2_000_000,
+    sourceStartUs: 0,
+    language: null,
+    modelSha256: "a".repeat(64),
+    transcriptId: "transcript-0001",
+  };
+  const transcript = buildLocalTranscript(options, [
+    { text: "Hello", timestamp: [0.1, 0.5] },
+    { text: "world.", timestamp: [2.0, 2.0] },
+  ]);
+  assert.deepEqual(
+    transcript.segments.flatMap((segment) =>
+      segment.words.map((word) => word.text),
+    ),
+    ["Hello"],
+  );
+  assert.ok(
+    (transcript.warnings ?? []).some((warning) => warning.includes("very end")),
+  );
+  assertLocalTranscript(transcript);
+  assert.throws(() =>
+    buildLocalTranscript(options, [{ text: "late", timestamp: [2.3, 2.4] }]),
+  );
+});
+
 test("word timing is converted to integer microseconds and bounded to the source", () => {
   const transcript = buildLocalTranscript(
     {

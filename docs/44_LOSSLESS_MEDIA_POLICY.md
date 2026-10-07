@@ -71,3 +71,5 @@ Implement these checks in P0, P3, P4, P8, P9, and P10. Store actual evidence, no
 Checked 2026-09-05. The technical boundaries above are product requirements, not evidence of an implemented encoder.
 
 Burned-in captions (2026-10-07): the master's canonical render is the source frames with the caption overlay drawn by libass in the same pixel format; untouched frames are bit-identical to the source and the exported master decodes to exactly the composed frames. Without burn-in nothing changes.
+
+Audio cleanup (2026-10-07): when the user turns on noise reduction or volume evening, the canonical audio is the processed audio (exact sample count kept) and a master is verified against it. With both off, audio samples are the sources' samples exactly, as before.

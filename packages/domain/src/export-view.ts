@@ -54,6 +54,8 @@ export interface ExportResultView {
   captionsFileName: string | null;
   /** Captions were drawn into the exported frames. */
   captionsBurnedIn: boolean;
+  /** Audio was cleaned (noise reduction and/or loudness) before encoding. */
+  audioCleaned: boolean;
 }
 
 export interface ExportView {
@@ -208,8 +210,13 @@ export function assertExportView(value: unknown): asserts value is ExportView {
       "draftSequence",
       "captionsFileName",
       "captionsBurnedIn",
+      "audioCleaned",
     ]);
-    if (typeof result.captionsBurnedIn !== "boolean") invalid();
+    if (
+      typeof result.captionsBurnedIn !== "boolean" ||
+      typeof result.audioCleaned !== "boolean"
+    )
+      invalid();
     if (
       result.captionsFileName !== null &&
       (typeof result.captionsFileName !== "string" ||

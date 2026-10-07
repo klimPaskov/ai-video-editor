@@ -10,6 +10,10 @@ import {
   defaultCaptionSettings,
   toAss,
 } from "../../packages/domain/src/captions.ts";
+import {
+  reframeFilter,
+  shortSize,
+} from "../../packages/domain/src/short-clips.ts";
 import { probePresentationTiming } from "../../packages/media-engine/src/presentation-timing.ts";
 import {
   exportDraft,
@@ -674,6 +678,197 @@ test(
       assert.equal(changed.at(-1), end - 1);
       assert.equal(changed.length, end - 15);
       assert.ok(original.length > 0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "a vertical short reframes with a blurred fill and burned captions",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-short-"));
+    try {
+      const input = await source(directory, "wide.mp4", h264Args(4, 440));
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 1_000_000,
+            sourceEndUs: 3_000_000,
+          },
+        ],
+        [input],
+      );
+      const { width, height } = shortSize("vertical");
+      const cues = buildCaptionCues([
+        { text: "Short", startUs: 0, endUs: 400_000 },
+        { text: "clip.", startUs: 400_000, endUs: 900_000 },
+      ]);
+      const output = join(directory, "short.mp4");
+      const evidence = await exportDraft({
+        plan,
+        profile: "smaller_mp4",
+        outputPath: output,
+        replace: false,
+        compose: {
+          filter: reframeFilter("vertical", "fit"),
+          ass: toAss(
+            cues,
+            { ...defaultCaptionSettings, enabled: true },
+            width,
+            height,
+            {
+              marginFraction: 0.2,
+            },
+          ),
+          width,
+          height,
+          pixelFormat: "yuv420p",
+          color: {
+            range: "tv",
+            space: "bt709",
+            primaries: "bt709",
+            transfer: "bt709",
+          },
+        },
+      });
+      assert.equal(evidence.frameCount, 60);
+      const probe = JSON.parse(
+        (
+          await runProcess({
+            executable: "ffprobe",
+            args: ["-v", "error", "-show_streams", "-of", "json", output],
+          })
+        ).stdout.toString(),
+      ) as { streams: Record<string, unknown>[] };
+      const video = probe.streams.find(
+        (stream) => stream.codec_type === "video",
+      )!;
+      assert.equal(video.width, 1080);
+      assert.equal(video.height, 1920);
+      assert.equal(video.color_space, "bt709");
+      const frame = await ffmpeg([
+        "-i",
+        output,
+        "-frames:v",
+        "1",
+        "-pix_fmt",
+        "rgb24",
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ]);
+      assert.equal(frame.length, 1080 * 1920 * 3);
+      // The fitted 16:9 picture sits in the middle third; above it is the
+      // blurred fill of the same picture, not black.
+      const at = (x: number, y: number) => (y * 1080 + x) * 3;
+      const top = frame.subarray(at(540, 300), at(540, 300) + 3);
+      assert.ok(top[0]! + top[1]! + top[2]! > 30, `top ${[...top]}`);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "audio cleanup evens loudness and lowers noise without changing length",
+  { timeout: 180_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-audio-"));
+    try {
+      // A quiet tone for 4 s, then 2 s of steady hiss alone.
+      const input = await source(directory, "quiet.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=30:duration=6",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=300:sample_rate=48000:duration=6,volume=0.05,volume=enable='gte(t,4)':volume=0[tone];anoisesrc=d=6:c=pink:a=0.01:r=48000[noise];[tone][noise]amix=inputs=2:normalize=0",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "rgb",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-c:a",
+        "pcm_s16le",
+      ]);
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 0,
+            sourceEndUs: 6_000_000,
+          },
+        ],
+        [input],
+      );
+      const measure = async (file: string, from: number, to: number) => {
+        const result = await runProcess({
+          executable: "ffmpeg",
+          args: [
+            "-hide_banner",
+            "-nostdin",
+            "-ss",
+            String(from),
+            "-to",
+            String(to),
+            "-i",
+            file,
+            "-map",
+            "0:a:0",
+            "-af",
+            "ebur128",
+            "-f",
+            "null",
+            "-",
+          ],
+        });
+        const text = result.stderr.toString();
+        return Number(
+          /I:\s+(-?[\d.]+) LUFS/u.exec(
+            text.slice(text.lastIndexOf("Summary")),
+          )![1],
+        );
+      };
+      const plain = join(directory, "plain.mkv");
+      await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: plain,
+        replace: false,
+      });
+      const cleaned = join(directory, "cleaned.mkv");
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: cleaned,
+        replace: false,
+        audioCleanup: { normalize: true, denoise: true },
+      });
+      assert.equal(evidence.samplesEqual, true);
+      assert.equal(evidence.audioSampleCount, plan.sampleCount);
+      const loud = await measure(cleaned, 0, 6);
+      assert.ok(Math.abs(loud - -16) <= 1.5, `integrated ${loud} LUFS`);
+      // Hiss relative to speech level drops after noise reduction.
+      const gapBefore =
+        (await measure(plain, 0, 4)) - (await measure(plain, 4.2, 6));
+      const gapAfter =
+        (await measure(cleaned, 0, 4)) - (await measure(cleaned, 4.2, 6));
+      assert.ok(
+        gapAfter > gapBefore + 3,
+        `before ${gapBefore} dB, after ${gapAfter} dB`,
+      );
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

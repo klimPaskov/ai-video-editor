@@ -21,7 +21,8 @@
         "samplesEqual": true,
         "draftSequence": 1,
         "captionsFileName": null,
-        "captionsBurnedIn": false
+        "captionsBurnedIn": false,
+        "audioCleaned": false
       },
       "message": null
     }

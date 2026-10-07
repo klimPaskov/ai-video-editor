@@ -161,7 +161,7 @@ Acceptance: automatic effects improve focus and remain directly adjustable. The 
 - [ ] P8-03 Implement text, image, shape, overlay, and simple transition elements. Keep editorial motion-graphics opportunities suggestion-only with final-cut intervals and complete grounded prompts; asset creation/import requires a separate explicit request.
 - [ ] P8-04 Index local B-roll and music with provenance and searchable metadata.
 - [ ] P8-05 Let Codex suggest and place local B-roll with source fallback.
-- [ ] P8-06 Implement noise cleanup, loudness, fades, gain, music, and speech-priority ducking.
+- [ ] P8-06 Implement noise cleanup, loudness, fades, gain, music, and speech-priority ducking. Noise reduction and loudness normalisation for exports are implemented (docs/15); fades, gain, music and ducking remain.
 - [ ] P8-07 Implement asset relink and missing-media recovery.
 
 Acceptance: a composed segment renders with licensed local assets and clear speech. Also verify approved-layout reuse, PiP collision avoidance, section boundaries/midpoints, complete final-timed graphics suggestions and absence of unauthorized asset side effects under docs/47_EDITORIAL_FIRST_CUT.md.
@@ -190,3 +190,11 @@ Acceptance: the installed app creates and verifies the default lossless master a
 - [ ] P10-07 Update every affected spec, skill, task, schema, and reference entry.
 
 Acceptance: `docs/workflow/results/P10.json` records the exact final evidence and known limits.
+
+## P11: short clips (user requirement 2026-10-07)
+
+- [ ] P11-01 Find self-contained short moments in a finished draft. Local transcript rules, candidate cards, preview, discard and stale detection are implemented (docs/49); AI proposals and ranking through the guarded tools remain.
+- [ ] P11-02 Export a clip as vertical, square or landscape MP4 with fit or fill framing and burned-in captions through the verified render pipeline. Implemented and natively tested with a public talk excerpt (docs/49); face and webcam-aware framing remain.
+- [ ] P11-03 Add speed, titles, a clip library and multi-clip export.
+
+Acceptance: a finished video yields reviewed, captioned short clips without leaving the app.

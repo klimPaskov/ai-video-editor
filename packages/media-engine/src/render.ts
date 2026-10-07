@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { createWriteStream } from "node:fs";
+import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { once } from "node:events";
@@ -555,12 +555,129 @@ export interface ExportRequest {
    * The composed frames become the canonical render the export verifies.
    */
   overlayAss?: string;
+  /**
+   * A composition that changes the frame (for example reframing a short),
+   * optionally followed by burned-in captions at the new size.
+   */
+  compose?: ExportComposition;
+  /** Speech cleanup applied to the assembled audio before encoding. */
+  audioCleanup?: { normalize: boolean; denoise: boolean };
+}
+
+export interface ExportComposition {
+  /** FFmpeg filtergraph from the draft frames to the composed frames. */
+  filter: string;
+  ass?: string;
+  width: number;
+  height: number;
+  pixelFormat: string;
+  /** Colour description of the composed frames; defaults to the draft's. */
+  color?: WorkingVideoFormat["color"];
 }
 
 const defaultExecutables: MediaExecutables = {
   ffmpeg: "ffmpeg",
   ffprobe: "ffprobe",
 };
+
+/**
+ * Speech cleanup on the assembled canonical audio: optional spectral noise
+ * reduction, then optional two-pass loudness normalisation (measure, then a
+ * linear gain where possible). The result is resampled to the working rate
+ * and cut or padded to exactly the planned sample count, so it stays in sync
+ * with the frames. The processed audio becomes the canonical audio.
+ */
+async function cleanAudio(options: {
+  ffmpeg: string;
+  audio: WorkingAudioFormat;
+  audioPath: string;
+  staging: string;
+  sampleCount: number;
+  normalize: boolean;
+  denoise: boolean;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const { audio } = options;
+  const input = [
+    "-f",
+    audio.raw,
+    "-ar",
+    String(audio.sampleRate),
+    "-ch_layout",
+    audio.channelLayout,
+    "-i",
+    options.audioPath,
+  ];
+  const filters: string[] = [];
+  if (options.denoise) filters.push("afftdn=nr=12:nf=-50:tn=1");
+  if (options.normalize) {
+    const target = "I=-16:TP=-1.5:LRA=11";
+    const measured = await runProcess({
+      executable: options.ffmpeg,
+      args: [
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "info",
+        ...input,
+        "-af",
+        [...filters, `loudnorm=${target}:print_format=json`].join(","),
+        "-f",
+        "null",
+        "-",
+      ],
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    const text = measured.stderr.toString();
+    const json = text.slice(text.lastIndexOf("{"), text.lastIndexOf("}") + 1);
+    const values = JSON.parse(json) as Record<string, string>;
+    const number = (key: string) => {
+      const value = Number(values[key]);
+      if (!Number.isFinite(value))
+        throw new MediaError("PROCESS_FAILED", "Media executable failed.");
+      return value;
+    };
+    const inputI = number("input_i");
+    // Near-silent audio has no meaningful loudness; leave its level alone.
+    if (inputI > -70)
+      filters.push(
+        `loudnorm=${target}:measured_I=${inputI}:measured_TP=${number("input_tp")}:measured_LRA=${number("input_lra")}:measured_thresh=${number("input_thresh")}:offset=${number("target_offset")}:linear=true`,
+      );
+  }
+  filters.push(
+    `aresample=${audio.sampleRate}`,
+    "apad",
+    `atrim=end_sample=${options.sampleCount}`,
+  );
+  const processed = join(options.staging, "processed-audio.raw");
+  await runProcess({
+    executable: options.ffmpeg,
+    args: [
+      ...quiet,
+      ...input,
+      "-af",
+      filters.join(","),
+      "-c:a",
+      `pcm_${audio.raw}`,
+      "-f",
+      audio.raw,
+      processed,
+    ],
+    ...(options.signal ? { signal: options.signal } : {}),
+  });
+  const expected =
+    options.sampleCount * rawSampleBytes[audio.raw] * audio.channels;
+  if ((await stat(processed)).size !== expected)
+    throw new MediaError(
+      "FIDELITY_MISMATCH",
+      "Cleaned audio does not match the draft length.",
+    );
+  await rename(processed, options.audioPath);
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(options.audioPath))
+    hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
 
 /**
  * Renders, encodes, verifies and publishes one export. Throws `MediaError`
@@ -726,20 +843,63 @@ export async function exportDraft(
       for (const source of decodedAudio.values())
         await rm(source.file, { force: true });
       canonicalAudioSha256 = hash.digest("hex");
+      const cleanup = request.audioCleanup;
+      if (cleanup && (cleanup.normalize || cleanup.denoise)) {
+        canonicalAudioSha256 = await cleanAudio({
+          ffmpeg: executables.ffmpeg,
+          audio,
+          audioPath,
+          staging,
+          sampleCount: plan.sampleCount,
+          normalize: cleanup.normalize,
+          denoise: cleanup.denoise,
+          ...(signal ? { signal } : {}),
+        });
+      }
     }
 
     // 2. Canonical video frames streamed straight into the encoder.
+    const composition: ExportComposition | null =
+      request.compose ??
+      (request.overlayAss !== undefined
+        ? {
+            filter: "",
+            ass: request.overlayAss,
+            width: video.width,
+            height: video.height,
+            pixelFormat: video.pixelFormat,
+          }
+        : null);
+    const target = composition
+      ? {
+          width: composition.width,
+          height: composition.height,
+          pixelFormat: composition.pixelFormat,
+          frameBytes: rawFrameBytes(
+            composition.pixelFormat,
+            composition.width,
+            composition.height,
+          ),
+          color: composition.color ?? video.color,
+        }
+      : {
+          width: video.width,
+          height: video.height,
+          pixelFormat: video.pixelFormat,
+          frameBytes: plan.frameBytes,
+          color: video.color,
+        };
     const encoderArgs = [
       ...quiet,
       "-f",
       "rawvideo",
       "-pixel_format",
-      video.pixelFormat,
+      target.pixelFormat,
       "-video_size",
-      `${video.width}x${video.height}`,
+      `${target.width}x${target.height}`,
       "-framerate",
       `${video.frameRate.numerator}/${video.frameRate.denominator}`,
-      ...colorArgs(video.color),
+      ...colorArgs(target.color),
       "-i",
       "pipe:0",
       ...(audio
@@ -774,10 +934,10 @@ export async function exportDraft(
             "-slicecrc",
             "1",
             "-pix_fmt",
-            `+${video.pixelFormat}`,
+            `+${target.pixelFormat}`,
             "-fps_mode",
             "passthrough",
-            ...colorArgs(video.color),
+            ...colorArgs(target.color),
             ...(audio ? ["-c:a", pcmCodec(audio)] : []),
             // Deterministic muxing: identical renders give identical files.
             "-fflags",
@@ -794,7 +954,7 @@ export async function exportDraft(
             "18",
             "-pix_fmt",
             "yuv420p",
-            ...colorArgs(video.color),
+            ...colorArgs(target.color),
             ...(audio ? ["-c:a", "aac", "-b:a", "192k"] : []),
             "-movflags",
             "+faststart",
@@ -811,15 +971,29 @@ export async function exportDraft(
     encoder.stdout?.resume();
     encoder.stdin!.on("error", () => undefined);
     const videoHash = createHash("sha256");
-    // With an overlay, decoded frames pass through one compositor that draws
+    // With a composition, decoded frames pass through one compositor that draws
     // the script in the frames' own pixel format; frames it does not touch
     // stay bit-identical. Its output is what is hashed and encoded.
     let compositor: ChildProcess | null = null;
     let composed: Promise<number> | null = null;
-    if (request.overlayAss !== undefined) {
-      await writeFile(join(staging, "overlay.ass"), request.overlayAss, {
-        mode: 0o600,
-      });
+    if (composition) {
+      if (composition.ass !== undefined)
+        await writeFile(join(staging, "overlay.ass"), composition.ass, {
+          mode: 0o600,
+        });
+      const graph = [
+        composition.filter ? `[0:v]${composition.filter}[framed]` : null,
+        `[${composition.filter ? "framed" : "0:v"}]${
+          composition.ass !== undefined ? "ass=overlay.ass," : ""
+        }${
+          target.pixelFormat.startsWith("yuv") &&
+          !video.pixelFormat.startsWith("yuv")
+            ? "scale=out_color_matrix=bt709:out_range=tv,"
+            : ""
+        }format=${target.pixelFormat}[out]`,
+      ]
+        .filter(Boolean)
+        .join(";");
       const child = track(
         startProcess(
           executables.ffmpeg,
@@ -836,14 +1010,16 @@ export async function exportDraft(
             "-i",
             "pipe:0",
             // A relative name avoids filter-argument escaping of full paths.
-            "-vf",
-            "ass=overlay.ass",
+            "-filter_complex",
+            graph,
+            "-map",
+            "[out]",
             "-fps_mode",
             "passthrough",
             "-c:v",
             "rawvideo",
             "-pix_fmt",
-            video.pixelFormat,
+            target.pixelFormat,
             "-f",
             "rawvideo",
             "pipe:1",
@@ -862,7 +1038,7 @@ export async function exportDraft(
           bytes += chunk.length;
           videoHash.update(chunk);
           await writeChunk(encoder.stdin!, chunk, halt.signal);
-          const frames = Math.floor(bytes / plan.frameBytes);
+          const frames = Math.floor(bytes / target.frameBytes);
           if (frames > reported) {
             progress("rendering", frames - reported);
             reported = frames;
@@ -930,7 +1106,7 @@ export async function exportDraft(
       }
       if (compositor && composed) {
         compositor.stdin!.end();
-        if ((await composed) !== plan.frameCount * plan.frameBytes)
+        if ((await composed) !== plan.frameCount * target.frameBytes)
           throw new MediaError(
             "FIDELITY_MISMATCH",
             "The overlay did not return every rendered frame.",
@@ -970,18 +1146,18 @@ export async function exportDraft(
       outStreams.length !== (audio ? 2 : 1) ||
       (audio && !outAudio) ||
       outVideo.codec_name !== expectedVideoCodec ||
-      outVideo.width !== video.width ||
-      outVideo.height !== video.height ||
+      outVideo.width !== target.width ||
+      outVideo.height !== target.height ||
       (profile === "lossless_master" &&
-        (outVideo.pix_fmt !== video.pixelFormat ||
-          (video.color.range !== undefined &&
-            outVideo.color_range !== video.color.range) ||
-          (video.color.space !== undefined &&
-            outVideo.color_space !== video.color.space) ||
-          (video.color.primaries !== undefined &&
-            outVideo.color_primaries !== video.color.primaries) ||
-          (video.color.transfer !== undefined &&
-            outVideo.color_transfer !== video.color.transfer))) ||
+        (outVideo.pix_fmt !== target.pixelFormat ||
+          (target.color.range !== undefined &&
+            outVideo.color_range !== target.color.range) ||
+          (target.color.space !== undefined &&
+            outVideo.color_space !== target.color.space) ||
+          (target.color.primaries !== undefined &&
+            outVideo.color_primaries !== target.color.primaries) ||
+          (target.color.transfer !== undefined &&
+            outVideo.color_transfer !== target.color.transfer))) ||
       (audio &&
         (Number(outAudio!.sample_rate) !== audio.sampleRate ||
           Number(outAudio!.channels) !== audio.channels ||
@@ -1006,7 +1182,7 @@ export async function exportDraft(
           "-c:v",
           "rawvideo",
           "-pix_fmt",
-          profile === "lossless_master" ? video.pixelFormat : "yuv420p",
+          profile === "lossless_master" ? target.pixelFormat : "yuv420p",
           "-f",
           "rawvideo",
           "pipe:1",
@@ -1018,8 +1194,8 @@ export async function exportDraft(
     const decodedVideoHash = createHash("sha256");
     const decodedFrameBytes =
       profile === "lossless_master"
-        ? plan.frameBytes
-        : rawFrameBytes("yuv420p", video.width, video.height);
+        ? target.frameBytes
+        : rawFrameBytes("yuv420p", target.width, target.height);
     let decodedBytes = 0;
     let verifiedFrames = 0;
     await drain(decodeVideo.stdout!, (chunk) => {

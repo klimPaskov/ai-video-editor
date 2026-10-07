@@ -2,6 +2,8 @@ import { setupCodexSettings } from "./codex-settings.ts";
 import { iconElement, setupIcons } from "./icons.ts";
 import { setupTimelineStrip } from "./timeline-strip.ts";
 import { setupCaptions } from "./captions-panel.ts";
+import { setupShortsPanel } from "./shorts-panel.ts";
+import { setupAudioPanel } from "./audio-panel.ts";
 import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { setupExportPanel } from "./export-panel.ts";
 import { setupPlayback } from "./playback.ts";
@@ -258,13 +260,26 @@ function clearDraftIntegrityResult(): void {
   draftIntegrityIssue = null;
 }
 const exportPanel = setupExportPanel();
+/** End of a short clip being previewed; playback stops there. */
+let previewEndUs: number | undefined;
+const shortsPanel = setupShortsPanel({
+  preview: (startUs, endUs) => {
+    playback.stop();
+    requestFrame(startUs);
+    previewEndUs = endUs;
+    // Play once the start frame is requested; playback reads the position.
+    setTimeout(() => {
+      if (!playback.playing()) playback.toggle();
+    }, 50);
+  },
+});
 function renderDraftIntegrityAction(): void {
-  exportPanel.render(
-    activeProject,
+  const exportVisible =
     activeProject?.stage === "export" &&
-      element("inspector").hidden === true &&
-      element("codex-drawer").hidden === true,
-  );
+    element("inspector").hidden === true &&
+    element("codex-drawer").hidden === true;
+  exportPanel.render(activeProject, exportVisible);
+  shortsPanel.render(activeProject, exportVisible);
   const project = activeProject,
     visible =
       project?.stage === "review" &&
@@ -1223,7 +1238,9 @@ const timelineStrip = setupTimelineStrip({
   time,
 });
 const captions = setupCaptions({ preview: canvas.parentElement! });
+const audioPanel = setupAudioPanel();
 function refreshCaptions(): void {
+  audioPanel.render(activeProject?.id);
   captions.render(
     selected?.previewAvailable ? activeProject : undefined,
     transcriptionView,
@@ -2022,6 +2039,10 @@ const playback = setupPlayback({
     element("time").textContent = time(us);
     timelineStrip.playhead(us);
     captions.position(us);
+    if (previewEndUs !== undefined && us >= previewEndUs) {
+      previewEndUs = undefined;
+      playback.stop();
+    }
     previous.disabled = us <= 0;
     next.disabled = us >= Number(seek.max);
   },

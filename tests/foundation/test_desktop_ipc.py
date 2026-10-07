@@ -63,6 +63,31 @@ class DesktopIpcContractTests(unittest.TestCase):
             self.invalid({'channel': 'captions:set', 'payload': dict(request, settings=wrong), 'response': {'ok': True, 'value': settings}})
         self.invalid({'channel': 'captions:get', 'payload': dict(request, path='/x.srt'), 'response': {'ok': True, 'value': settings}})
 
+    def test_short_clips_are_path_free_with_fixed_messages(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        clip = {'id': 'clip-1000000-31000000', 'title': 'Why do demos feel slow?', 'startUs': 1000000, 'endUs': 31000000,
+                'score': 0.82, 'reasons': ['Opens with a question'], 'excerpt': 'Why do demos feel slow? Because...'}
+        job = {'status': 'completed', 'clipId': clip['id'], 'fraction': None, 'fileName': 'Why do demos feel slow.mp4', 'message': None}
+        view = {'status': 'ready', 'candidates': [clip], 'job': job, 'message': None}
+        for channel in ['get', 'find', 'cancel']:
+            self.valid({'channel': 'shorts:' + channel, 'payload': request, 'response': {'ok': True, 'value': view}})
+        self.valid({'channel': 'shorts:discard', 'payload': dict(request, clip_id=clip['id']), 'response': {'ok': True, 'value': view}})
+        export = dict(request, clip_id=clip['id'], format='vertical', framing='fill', position=0.3, captions=True)
+        self.valid({'channel': 'shorts:export', 'payload': export, 'response': {'ok': False, 'message': 'A clip is already exporting.'}})
+        for wrong in [dict(export, format='9:16'), dict(export, position=2), dict(export, clip_id='../x'), dict(export, path='/tmp/x.mp4')]:
+            self.invalid({'channel': 'shorts:export', 'payload': wrong, 'response': {'ok': True, 'value': view}})
+        for bad in [dict(view, job=dict(job, fileName='/home/user/x.mp4')), dict(view, message='ffmpeg failed'),
+                    dict(view, candidates=[dict(clip, path='/x')])]:
+            self.invalid({'channel': 'shorts:get', 'payload': request, 'response': {'ok': True, 'value': bad}})
+
+    def test_audio_settings_are_two_choices(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        settings = {'normalize': True, 'denoise': False}
+        self.valid({'channel': 'audio:get', 'payload': request, 'response': {'ok': True, 'value': settings}})
+        self.valid({'channel': 'audio:set', 'payload': dict(request, settings=settings), 'response': {'ok': True, 'value': settings}})
+        for wrong in [dict(settings, gainDb=6), {'normalize': 'yes', 'denoise': False}, {'normalize': True}]:
+            self.invalid({'channel': 'audio:set', 'payload': dict(request, settings=wrong), 'response': {'ok': True, 'value': settings}})
+
     def test_playback_view_is_path_free(self):
         request = {'schema_version': '1.0', 'project_id': 'project-1'}
         for value in [{'status': 'ready', 'progress': None, 'message': None},

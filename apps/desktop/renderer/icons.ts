@@ -42,6 +42,8 @@ const paths: Record<string, string> = {
   export: "M12 15V3M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5",
   send: "M4 12 20 4l-6 16-3-7Z",
   captions: "M3 5h18v14H3ZM7 11h4M13 11h4M7 15h7M16 15h1",
+  clips: "M7 3h10v18H7ZM3 6h2v12H3ZM19 6h2v12h-2ZM10 9l4 3-4 3Z",
+  audio: "M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2",
   film: "M4 4h16v16H4ZM8 4v16M16 4v16M4 8h4M4 16h4M16 8h4M16 16h4",
   monitor: "M3 5h18v11H3ZM8 20h8M12 16v4",
   mic: "M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3ZM5 11a7 7 0 0 0 14 0M12 18v3",

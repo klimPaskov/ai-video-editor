@@ -9,6 +9,95 @@
       "additionalProperties": false,
       "required": ["channel", "payload", "response"],
       "properties": {
+        "channel": { "const": "audio:get" },
+        "payload": { "$ref": "#/$defs/captionSettingsRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/audioSettings" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
+        "channel": { "const": "audio:set" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_version", "project_id", "settings"],
+          "properties": {
+            "schema_version": { "const": "1.0" },
+            "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+            "settings": { "$ref": "#/$defs/audioSettings" }
+          }
+        },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/audioSettings" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
+        "channel": { "enum": ["shorts:get", "shorts:find", "shorts:cancel"] },
+        "payload": { "$ref": "#/$defs/shortProjectRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/shortClipsView" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
+        "channel": { "const": "shorts:discard" },
+        "payload": { "$ref": "#/$defs/shortClipRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/shortClipsView" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
+        "channel": { "const": "shorts:export" },
+        "payload": { "$ref": "#/$defs/shortExportRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/shortClipsView" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
         "channel": { "const": "captions:get" },
         "payload": { "$ref": "#/$defs/captionSettingsRequest" },
         "response": { "oneOf": [
@@ -1877,6 +1966,91 @@
     }
   ],
   "$defs": {
+    "audioSettings": {
+      "description": "Per-project audio cleanup applied when exporting; sources are never changed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalize", "denoise"],
+      "properties": {
+        "normalize": { "type": "boolean" },
+        "denoise": { "type": "boolean" }
+      }
+    },
+    "shortProjectRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "project_id"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }
+      }
+    },
+    "shortClipId": { "type": "string", "pattern": "^clip-\\d{1,16}-\\d{1,16}$" },
+    "shortClipRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "project_id", "clip_id"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "clip_id": { "$ref": "#/$defs/shortClipId" }
+      }
+    },
+    "shortExportRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "project_id", "clip_id", "format", "framing", "position", "captions"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "clip_id": { "$ref": "#/$defs/shortClipId" },
+        "format": { "enum": ["vertical", "square", "landscape"] },
+        "framing": { "enum": ["fit", "fill"] },
+        "position": { "type": "number", "minimum": 0, "maximum": 1 },
+        "captions": { "type": "boolean" }
+      }
+    },
+    "shortMessage": { "anyOf": [{ "type": "null" }, { "enum": ["Short clips use the transcript. Transcribe the video first.", "No self-contained moments of 15 to 60 seconds were found in this draft.", "A clip is already exporting.", "The clip could not be exported. Try again.", "The draft changed since these clips were found. Find clips again.", "That clip is no longer available. Find clips again."] }] },
+    "shortClipsView": {
+      "description": "Short clips found locally in the draft transcript. Output paths stay in main; only the exported file name is shown.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "candidates", "job", "message"],
+      "properties": {
+        "status": { "enum": ["none", "ready", "stale"] },
+        "candidates": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "title", "startUs", "endUs", "score", "reasons", "excerpt"],
+            "properties": {
+              "id": { "$ref": "#/$defs/shortClipId" },
+              "title": { "type": "string", "maxLength": 120 },
+              "startUs": { "type": "integer", "minimum": 0 },
+              "endUs": { "type": "integer", "minimum": 1 },
+              "score": { "type": "number", "minimum": 0, "maximum": 1 },
+              "reasons": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 80 } },
+              "excerpt": { "type": "string", "maxLength": 400 }
+            }
+          }
+        },
+        "job": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "clipId", "fraction", "fileName", "message"],
+          "properties": {
+            "status": { "enum": ["idle", "running", "completed", "failed"] },
+            "clipId": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/shortClipId" }] },
+            "fraction": { "anyOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 1 }] },
+            "fileName": { "anyOf": [{ "type": "null" }, { "type": "string", "maxLength": 255, "pattern": "^[^\\\\/:\\u0000-\\u001f\\u007f]+\\.mp4$" }] },
+            "message": { "$ref": "#/$defs/shortMessage" }
+          }
+        },
+        "message": { "$ref": "#/$defs/shortMessage" }
+      }
+    },
     "captionSettingsRequest": {
       "type": "object",
       "additionalProperties": false,
@@ -2299,7 +2473,8 @@
                 "samplesEqual",
                 "draftSequence",
                 "captionsFileName",
-                "captionsBurnedIn"
+                "captionsBurnedIn",
+                "audioCleaned"
               ],
               "properties": {
                 "fileName": {
@@ -2347,6 +2522,10 @@
                 },
                 "captionsBurnedIn": {
                   "description": "Captions were drawn into the exported frames; the verified render includes them.",
+                  "type": "boolean"
+                },
+                "audioCleaned": {
+                  "description": "Audio cleanup (noise reduction and/or loudness) was applied; the verified render includes it.",
                   "type": "boolean"
                 }
               }

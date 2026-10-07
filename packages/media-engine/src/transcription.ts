@@ -207,6 +207,9 @@ function segmentWords(words: TranscriptWord[]): TranscriptSegment[] {
   return segments;
 }
 
+const endOfAudioWarning =
+  "A word the local model placed at the very end of the audio was left out.";
+
 export function buildLocalTranscript(
   options: TranscriptBuildOptions,
   chunks: readonly TimedWordChunk[],
@@ -248,8 +251,16 @@ export function buildLocalTranscript(
       startUs < 0
     )
       throw new TranscriptBuildError("invalid_timing");
-    if (startUs >= options.durationUs)
-      throw new TranscriptBuildError("outside_source");
+    if (startUs >= options.durationUs) {
+      // The model can place a final word at or just past the end of the
+      // audio (its window edge). Such a word is left out with a warning; a
+      // word well beyond the end means the audio does not match the source.
+      if (startUs - options.durationUs > 250_000)
+        throw new TranscriptBuildError("outside_source");
+      if (!warnings.includes(endOfAudioWarning))
+        warnings.push(endOfAudioWarning);
+      continue;
+    }
     if (startUs < priorStartUs) throw new TranscriptBuildError("out_of_order");
     const endUs = Math.min(estimatedEndUs, options.durationUs);
     if (endUs < startUs) throw new TranscriptBuildError("invalid_timing");

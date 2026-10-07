@@ -113,6 +113,20 @@ import { DesktopMagicWand } from "./magic-wand.ts";
 import { DesktopRecorder, RecordingError } from "./recording.ts";
 import { DesktopPlaybackProxies } from "./playback-proxies.ts";
 import { CaptionSettingsStore } from "./caption-settings.ts";
+import { ProjectSettingsStore } from "./project-settings.ts";
+import {
+  assertAudioSettings,
+  assertAudioSettingsRequest,
+  assertAudioSettingsUpdate,
+  defaultAudioSettings,
+} from "../../../packages/domain/src/audio-settings.ts";
+import { DesktopShortClips, ShortClipError } from "./short-clips.ts";
+import {
+  assertShortClipRequest,
+  assertShortClipsView,
+  assertShortExportRequest,
+  assertShortProjectRequest,
+} from "../../../packages/domain/src/short-clips-view.ts";
 import {
   assertCaptionSettingsRequest,
   assertCaptionSettingsUpdate,
@@ -164,6 +178,7 @@ let resolvePlaybackSource:
 let servicesClosed = false;
 let recorder: DesktopRecorder | undefined;
 let playbackProxies: DesktopPlaybackProxies | undefined;
+let shortClips: DesktopShortClips | undefined;
 app.on("before-quit", (event) => {
   quitting = true;
   if (
@@ -187,6 +202,7 @@ app.on("before-quit", (event) => {
       Promise.resolve().then(() => exports?.close()),
       Promise.resolve().then(() => recorder?.cancel()),
       Promise.resolve().then(() => playbackProxies?.close()),
+      Promise.resolve().then(() => shortClips?.close()),
     ]).then(() => {
       servicesClosed = true;
       app.quit();
@@ -369,6 +385,21 @@ async function start(): Promise<void> {
   const captionSettings = new CaptionSettingsStore(
     path.join(userData, "caption-settings"),
   );
+  const audioSettings = new ProjectSettingsStore(
+    path.join(userData, "audio-settings"),
+    assertAudioSettings,
+    defaultAudioSettings,
+  );
+  register(channels.audioGet, async (request) => {
+    assertAudioSettingsRequest(request);
+    return audioSettings.get(request.project_id);
+  });
+  register(channels.audioSet, async (request) => {
+    assertAudioSettingsUpdate(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before changing audio.");
+    return audioSettings.set(request.project_id, request.settings);
+  });
   /** Captions for the current draft when they are on and a transcript exists. */
   const draftCaptions = async (projectId: string) => {
     const settings = await captionSettings.get(projectId);
@@ -388,6 +419,83 @@ async function start(): Promise<void> {
     );
     return cues.length ? { cues, settings } : null;
   };
+  shortClips = new DesktopShortClips({
+    root: path.join(userData, "short-clips"),
+    drafts,
+    draftWords: async (projectId) => {
+      const project = await projectRuntime.view(projectId);
+      const view = await transcription!.get({
+        schema_version: "1.0",
+        project_id: projectId,
+        job_id: null,
+      });
+      return {
+        words:
+          view.results.length === 0
+            ? null
+            : captionWordsForDraft(
+                captionSourceWords(view.results, project.transcriptEdits ?? []),
+                project.clips ?? [],
+              ),
+        sequence: project.draft.sequence,
+        timelineSha256: project.draft.timelineSha256,
+      };
+    },
+    captionSettings: (projectId) => captionSettings.get(projectId),
+    audioSettings: (projectId) => audioSettings.get(projectId),
+    defaultDirectory: () => app.getPath("videos"),
+    chooseDestination: async (defaultPath) => {
+      if (!window) return null;
+      const chosen = await dialog.showSaveDialog(window, {
+        title: "Export short clip",
+        defaultPath,
+        filters: [{ name: "MP4 video", extensions: ["mp4"] }],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      });
+      return chosen.canceled || !chosen.filePath ? null : chosen.filePath;
+    },
+  });
+  const shorts = async (projectId: string, work: () => Promise<unknown>) => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before making clips.");
+    try {
+      const value = await work();
+      assertShortClipsView(value);
+      return value;
+    } catch (error) {
+      if (error instanceof ShortClipError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  };
+  register(channels.shortsGet, async (request) => {
+    assertShortProjectRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.view(request.project_id),
+    );
+  });
+  register(channels.shortsFind, async (request) => {
+    assertShortProjectRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.find(request.project_id),
+    );
+  });
+  register(channels.shortsDiscard, async (request) => {
+    assertShortClipRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.discard(request.project_id, request.clip_id),
+    );
+  });
+  register(channels.shortsExport, async (request) => {
+    assertShortExportRequest(request);
+    return shorts(request.project_id, () => shortClips!.export(request));
+  });
+  register(channels.shortsCancel, async (request) => {
+    assertShortProjectRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.cancel(request.project_id),
+    );
+  });
   register(channels.captionsGet, async (request) => {
     assertCaptionSettingsRequest(request);
     return captionSettings.get(request.project_id);
@@ -467,6 +575,7 @@ async function start(): Promise<void> {
   });
   exports = new DesktopExports({
     captions: draftCaptions,
+    audio: (projectId) => audioSettings.get(projectId),
     drafts,
     recordRoot: path.join(userData, "exports"),
     defaultDirectory: () => app.getPath("videos"),
@@ -897,6 +1006,10 @@ async function start(): Promise<void> {
   const assertProjectIdle = async (projectId: string): Promise<void> => {
     if (magicWandBusy(projectId))
       throw new UserFacingError("Stop Magic Edit before leaving this project.");
+    if (shortClips?.busy(projectId))
+      throw new UserFacingError(
+        "Wait for the clip to finish exporting or cancel it before leaving this project.",
+      );
     if (exports!.busy(projectId))
       throw new UserFacingError(
         "Wait for the export to finish or cancel it before leaving this project.",

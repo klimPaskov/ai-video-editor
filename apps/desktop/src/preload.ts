@@ -39,6 +39,17 @@ import {
   assertCaptionSettingsUpdate,
 } from "../../../packages/domain/src/captions.ts";
 import {
+  assertAudioSettings,
+  assertAudioSettingsRequest,
+  assertAudioSettingsUpdate,
+} from "../../../packages/domain/src/audio-settings.ts";
+import {
+  assertShortClipRequest,
+  assertShortClipsView,
+  assertShortExportRequest,
+  assertShortProjectRequest,
+} from "../../../packages/domain/src/short-clips-view.ts";
+import {
   assertPlaybackProjectRequest,
   assertPlaybackView,
 } from "../../../packages/domain/src/playback-view.ts";
@@ -261,6 +272,34 @@ const bridge: DesktopBridge = {
   getPlayback: (request) => {
     assertPlaybackProjectRequest(request);
     return invoke(channels.playbackGet, request, assertPlaybackView);
+  },
+  getAudioSettings: (request) => {
+    assertAudioSettingsRequest(request);
+    return invoke(channels.audioGet, request, assertAudioSettings);
+  },
+  setAudioSettings: (request) => {
+    assertAudioSettingsUpdate(request);
+    return invoke(channels.audioSet, request, assertAudioSettings);
+  },
+  getShortClips: (request) => {
+    assertShortProjectRequest(request);
+    return invoke(channels.shortsGet, request, assertShortClipsView);
+  },
+  findShortClips: (request) => {
+    assertShortProjectRequest(request);
+    return invoke(channels.shortsFind, request, assertShortClipsView);
+  },
+  discardShortClip: (request) => {
+    assertShortClipRequest(request);
+    return invoke(channels.shortsDiscard, request, assertShortClipsView);
+  },
+  exportShortClip: (request) => {
+    assertShortExportRequest(request);
+    return invoke(channels.shortsExport, request, assertShortClipsView);
+  },
+  cancelShortClip: (request) => {
+    assertShortProjectRequest(request);
+    return invoke(channels.shortsCancel, request, assertShortClipsView);
   },
   getCaptionSettings: (request) => {
     assertCaptionSettingsRequest(request);

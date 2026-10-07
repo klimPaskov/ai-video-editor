@@ -423,14 +423,16 @@ export function toAss(
   settings: CaptionSettings,
   width: number,
   height: number,
+  options: { marginFraction?: number } = {},
 ): string {
+  // Sized from the frame's short side, so tall frames keep lines inside.
   const fontSize = Math.max(
     8,
-    Math.round(height * captionSizeFraction[settings.size]),
+    Math.round(Math.min(width, height) * captionSizeFraction[settings.size]),
   );
   const boxed = settings.style !== "minimal";
   const alignment = settings.position === "top" ? 8 : 2;
-  const margin = Math.round(height * 0.07);
+  const margin = Math.round(height * (options.marginFraction ?? 0.07));
   // Colours are &HAABBGGRR; alpha 00 is opaque. The box is 72% opaque black.
   const style = [
     "Default",

@@ -236,6 +236,7 @@ try {
   step = "export";
   await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
   await page.locator("#captions-burn-in").check();
+  await page.locator("#audio-normalize").check();
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await page.locator("#export-start").click();
   await expect(page.locator("#export-done")).toBeVisible({ timeout: 300_000 });
@@ -245,6 +246,7 @@ try {
   await expect(page.locator("#export-result")).toContainText(
     "captions burned in",
   );
+  await expect(page.locator("#export-result")).toContainText("audio cleaned");
   await expect(page.locator("#export-result")).toContainText(
     "verified lossless",
   );

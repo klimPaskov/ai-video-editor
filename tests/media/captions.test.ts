@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  defaultCaptionSettings,
+  toAss,
   balanceLines,
   buildCaptionCues,
   captionWordsForDraft,
@@ -143,4 +145,20 @@ test("SRT and WebVTT sidecars use exact cue times", () => {
     toVtt(cues),
     "WEBVTT\n\n00:00:01.235 --> 01:00:02.000\nTom &amp; &lt;Jerry&gt;\nsecond line\n",
   );
+});
+
+test("burned captions are sized from the frame's short side", () => {
+  const cue = {
+    startUs: 0,
+    endUs: 1_000_000,
+    lines: ["Hello"],
+    lineWordCounts: [1],
+    words: [{ text: "Hello", startUs: 0, endUs: 500_000 }],
+  };
+  const size = (script: string) =>
+    Number(/Style: Default,Arial,(\d+),/u.exec(script)![1]);
+  const wide = size(toAss([cue], defaultCaptionSettings, 1920, 1080));
+  const tall = size(toAss([cue], defaultCaptionSettings, 1080, 1920));
+  assert.equal(wide, tall);
+  assert.equal(wide, Math.round(1080 * 0.054));
 });
