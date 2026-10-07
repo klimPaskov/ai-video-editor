@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -35,7 +35,9 @@ function recorder(
 }
 
 test("devices hide FFmpeg names and report unavailable sessions", async () => {
-  const root = await mkdtemp(join(tmpdir(), "recording-service-"));
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "recording-service-")),
+  );
   try {
     const x11 = await recorder(root, { DISPLAY: ":0" }).devices();
     assert.deepEqual(x11, {
@@ -80,7 +82,9 @@ test(
   "a synthetic take records, pauses, imports and leaves no working files",
   { timeout: 120_000 },
   async () => {
-    const root = await mkdtemp(join(tmpdir(), "recording-service-"));
+    const root = await realpath(
+      await mkdtemp(join(tmpdir(), "recording-service-")),
+    );
     try {
       const service = recorder(root, { AI_VIDEO_EDITOR_TEST_CAPTURE: "1" });
       const devices = await service.devices();

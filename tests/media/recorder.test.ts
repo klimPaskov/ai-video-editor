@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -136,7 +136,9 @@ test(
   "a paused and resumed take becomes one exact, aligned, exportable lossless file",
   { timeout: 120_000 },
   async () => {
-    const directory = await mkdtemp(join(tmpdir(), "recorder-"));
+    const directory = await realpath(
+      await mkdtemp(join(tmpdir(), "recorder-")),
+    );
     try {
       const session = new CaptureSession({
         ffmpeg: "ffmpeg",
