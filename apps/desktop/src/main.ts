@@ -144,6 +144,7 @@ import {
 import {
   assertRecordingStartRequest,
   assertRecordingRegionRequest,
+  assertInterruptedTakeRequest,
   assertRecordingRegionResult,
   assertRecordingView,
 } from "../../../packages/domain/src/recording-view.ts";
@@ -642,6 +643,16 @@ async function start(): Promise<void> {
           primary: display.id === screen.getPrimaryDisplay().id,
         };
       }),
+    // Captures stop by themselves if this app quits or crashes.
+    supervisor: {
+      executable: process.execPath,
+      script: path.join(
+        process.resourcesPath,
+        "capture",
+        "capture-supervisor.cjs",
+      ),
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    },
     pickArea: (displayId) => {
       const displays = screen.getAllDisplays();
       const index = /^display-(\d{1,2})$/u.exec(displayId);
@@ -670,6 +681,18 @@ async function start(): Promise<void> {
   register(channels.recordingGet, async (request) => {
     assertEmptyRequest(request);
     return recording(async () => recorder!.get());
+  });
+  register(channels.recordingInterrupted, async (request) => {
+    assertEmptyRequest(request);
+    return recorder!.interrupted();
+  });
+  register(channels.recordingRecover, async (request) => {
+    assertInterruptedTakeRequest(request);
+    return recording(() => recorder!.recover(request.take_id));
+  });
+  register(channels.recordingDiscardInterrupted, async (request) => {
+    assertInterruptedTakeRequest(request);
+    return recorder!.discardInterrupted(request.take_id);
   });
   register(channels.recordingPickRegion, async (request) => {
     assertRecordingRegionRequest(request);

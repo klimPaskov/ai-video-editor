@@ -30,6 +30,19 @@
             <span class="tile-icon" data-icon="folder-large"></span>Import video
           </button>
         </div>
+        <section
+          id="recovery"
+          class="recovery-notice"
+          aria-label="Interrupted recording"
+          hidden
+        >
+          <span class="tile-icon record" data-icon="record"></span>
+          <p id="recovery-text"></p>
+          <button type="button" id="recovery-discard">Discard</button
+          ><button type="button" id="recovery-recover" class="primary">
+            Recover
+          </button>
+        </section>
         <section id="projects-section" aria-label="Projects" hidden>
           <h2>Projects</h2>
           <ul id="projects" class="card-grid" aria-label="Projects"></ul>

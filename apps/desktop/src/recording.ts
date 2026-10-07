@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, rename, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   captureSize,
@@ -11,14 +11,20 @@ import {
   type CapturePlatform,
   type DisplayTarget,
 } from "../../../packages/recorder/src/capture.ts";
-import { CaptureSession } from "../../../packages/recorder/src/session.ts";
+import {
+  CaptureSession,
+  takeRecordName,
+} from "../../../packages/recorder/src/session.ts";
 import type { MediaSummary } from "../../../packages/domain/src/library.ts";
 import {
+  assertInterruptedTakes,
   assertRecordingDevices,
   assertRecordingRegion,
   assertRecordingView,
   minimumRegionSize,
   recordingIssues,
+  type InterruptedTake,
+  type InterruptedTakes,
   type RecordingDevices,
   type RecordingRegion,
   type RecordingStartRequest,
@@ -46,6 +52,12 @@ export interface RecorderOptions {
   ffprobe?: string;
   displays(): PhysicalDisplay[];
   importFile(path: string): Promise<MediaSummary>;
+  /** Runs captures under the capture supervisor (see the session). */
+  supervisor?: {
+    executable: string;
+    script: string;
+    env?: NodeJS.ProcessEnv;
+  };
   /** Overridable for tests; lists capture microphones. */
   listOutput?(executable: string, args: string[]): Promise<string>;
   /**
@@ -298,6 +310,9 @@ export class DesktopRecorder {
       ffmpeg: this.ffmpeg,
       ffprobe: this.ffprobe,
       directory,
+      ...(this.options.supervisor
+        ? { supervisor: this.options.supervisor }
+        : {}),
       request: {
         platform,
         ...(platform === "linux" && this.options.env.DISPLAY
@@ -392,6 +407,98 @@ export class DesktopRecorder {
       message: null,
     };
     return this.get();
+  }
+
+  /** Take folders a crash left without a finished recording, newest first. */
+  async interrupted(): Promise<InterruptedTakes> {
+    const takes: InterruptedTake[] = [];
+    for (const name of await readdir(this.options.root).catch(() => [])) {
+      const directory = join(this.options.root, name);
+      if (
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+          name,
+        ) ||
+        directory === this.directory
+      )
+        continue;
+      const files = await readdir(directory).catch(() => [] as string[]);
+      if (
+        files.includes("session.json") ||
+        !files.includes(takeRecordName) ||
+        !files.some((file) => /^segment-\d{3}\.mkv$/u.test(file))
+      )
+        continue;
+      const record = await readFile(join(directory, takeRecordName), "utf8")
+        .then((text) => JSON.parse(text) as { created_at?: unknown })
+        .catch(() => null);
+      const createdAt =
+        typeof record?.created_at === "string" &&
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u.test(
+          record.created_at,
+        )
+          ? record.created_at
+          : null;
+      if (createdAt) takes.push({ id: name, createdAt });
+    }
+    const value = {
+      takes: takes
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 32),
+    };
+    assertInterruptedTakes(value);
+    return value;
+  }
+
+  /** Aligns, joins and imports an interrupted take, like Stop would. */
+  async recover(takeId: string): Promise<RecordingView> {
+    if (this.busy()) throw new RecordingError(recordingIssues.busy);
+    const take = (await this.interrupted()).takes.find(
+      (item) => item.id === takeId,
+    );
+    if (!take) throw new RecordingError(recordingIssues.recover);
+    const directory = join(this.options.root, take.id);
+    let media: MediaSummary;
+    try {
+      const session = await CaptureSession.recover({
+        ffmpeg: this.ffmpeg,
+        ffprobe: this.ffprobe,
+        directory,
+      });
+      const finished = await session.stop();
+      const named = join(
+        directory,
+        `${takeName(new Date(take.createdAt))}.mkv`,
+      );
+      await rename(finished.path, named);
+      media = await this.options.importFile(named);
+    } catch {
+      // The segments stay so the user can try again or discard them.
+      throw new RecordingError(recordingIssues.recover);
+    }
+    for (const name of await readdir(directory).catch(() => []))
+      if (name !== "session.json")
+        await rm(join(directory, name), { force: true }).catch(() => undefined);
+    this.view = {
+      status: "finished",
+      elapsedUs: media.durationUs,
+      missedFrames: 0,
+      media,
+      message: null,
+    };
+    return this.get();
+  }
+
+  /** Deletes an interrupted take's folder. */
+  async discardInterrupted(takeId: string): Promise<InterruptedTakes> {
+    const take = (await this.interrupted()).takes.find(
+      (item) => item.id === takeId,
+    );
+    if (take)
+      await rm(join(this.options.root, take.id), {
+        recursive: true,
+        force: true,
+      });
+    return this.interrupted();
   }
 
   /** Discards an unfinished take, or clears a finished or failed result. */

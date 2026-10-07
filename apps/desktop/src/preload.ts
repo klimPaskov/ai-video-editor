@@ -57,6 +57,8 @@ import {
   assertRecordingDevices,
   assertRecordingStartRequest,
   assertRecordingRegionRequest,
+  assertInterruptedTakes,
+  assertInterruptedTakeRequest,
   assertRecordingRegionResult,
   assertRecordingView,
 } from "../../../packages/domain/src/recording-view.ts";
@@ -334,6 +336,20 @@ const bridge: DesktopBridge = {
     invoke(channels.recordingDevices, undefined, assertRecordingDevices),
   getRecording: () =>
     invoke(channels.recordingGet, undefined, assertRecordingView),
+  getInterruptedRecordings: () =>
+    invoke(channels.recordingInterrupted, undefined, assertInterruptedTakes),
+  recoverRecording: (request) => {
+    assertInterruptedTakeRequest(request);
+    return invoke(channels.recordingRecover, request, assertRecordingView);
+  },
+  discardInterruptedRecording: (request) => {
+    assertInterruptedTakeRequest(request);
+    return invoke(
+      channels.recordingDiscardInterrupted,
+      request,
+      assertInterruptedTakes,
+    );
+  },
   pickRecordingRegion: (request) => {
     assertRecordingRegionRequest(request);
     return invoke(

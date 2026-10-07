@@ -185,6 +185,54 @@
       "additionalProperties": false,
       "required": ["channel", "payload", "response"],
       "properties": {
+        "channel": { "const": "recording:interrupted" },
+        "payload": { "type": "null" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/interruptedTakes" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
+        "channel": { "const": "recording:recover" },
+        "payload": { "$ref": "#/$defs/interruptedTakeRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/recordingView" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
+        "channel": { "const": "recording:discard-interrupted" },
+        "payload": { "$ref": "#/$defs/interruptedTakeRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/interruptedTakes" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
         "channel": { "const": "recording:pick-region" },
         "payload": { "$ref": "#/$defs/recordingRegionRequest" },
         "response": { "oneOf": [
@@ -2187,7 +2235,7 @@
       "maxLength": 200,
       "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
     },
-    "recordingMessage": {"anyOf": [{"type": "null"}, {"enum": ["Screen recording needs FFmpeg screen capture on this device.", "Screen recording needs an X11 session on Linux. Sign in with an X11 session to record.", "A recording is already in progress.", "The selected screen or microphone is no longer available.", "Recording could not start. Check screen and microphone permissions and try again.", "Recording stopped unexpectedly. The part recorded so far was kept.", "The recording could not be saved. Try recording again.", "Nothing was recorded.", "Choose a larger area to record.", "Recording part of the screen is not available on this device."]}]},
+    "recordingMessage": {"anyOf": [{"type": "null"}, {"enum": ["Screen recording needs FFmpeg screen capture on this device.", "Screen recording needs an X11 session on Linux. Sign in with an X11 session to record.", "A recording is already in progress.", "The selected screen or microphone is no longer available.", "Recording could not start. Check screen and microphone permissions and try again.", "Recording stopped unexpectedly. The part recorded so far was kept.", "The recording could not be saved. Try recording again.", "Nothing was recorded.", "Choose a larger area to record.", "This recording could not be recovered. You can try again or discard it.", "Recording part of the screen is not available on this device."]}]},
     "recordingDevices": {
       "description": "Screens and microphones offered for recording. Ids are opaque; FFmpeg device names and coordinates stay in main.",
       "type": "object",
@@ -2249,6 +2297,36 @@
         "y": { "type": "integer", "minimum": 0 },
         "width": { "type": "integer", "minimum": 64, "maximum": 16384 },
         "height": { "type": "integer", "minimum": 64, "maximum": 16384 }
+      }
+    },
+    "interruptedTakes": {
+      "description": "Takes a crash or forced quit left without a finished recording, newest first. Ids are the take folders' random UUIDs; no paths.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["takes"],
+      "properties": {
+        "takes": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "createdAt"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+              "createdAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$" }
+            }
+          }
+        }
+      }
+    },
+    "interruptedTakeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "take_id"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "take_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" }
       }
     },
     "recordingRegionRequest": {

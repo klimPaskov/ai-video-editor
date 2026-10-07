@@ -78,6 +78,16 @@ await writeFile(
   join(codexResources, "manifest.json"),
   JSON.stringify(codexManifest, null, 2),
 );
+const captureResources = join(output, "capture");
+await mkdir(captureResources);
+await build({
+  entryPoints: [join(root, "packages/recorder/src/capture-supervisor.ts")],
+  outfile: join(captureResources, "capture-supervisor.cjs"),
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node24",
+});
 const mcpResources = join(output, "mcp");
 await mkdir(mcpResources);
 const mcpScript = join(mcpResources, "ai-video-editor-mcp.cjs");
@@ -251,7 +261,7 @@ const packages = await packager({
   arch: "x64",
   electronVersion: "44.2.0",
   asar: { unpackDir: "node_modules" },
-  extraResource: [codexResources, mcpResources],
+  extraResource: [codexResources, mcpResources, captureResources],
   prune: false,
   overwrite: false,
 });

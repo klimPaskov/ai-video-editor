@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { open, rename, writeFile } from "node:fs/promises";
+import { open, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   audioAlignmentFilter,
@@ -55,6 +55,15 @@ export interface SessionOptions {
   directory: string;
   request: Omit<SegmentRequest, "outputPath">;
   onUpdate?: () => void;
+  /**
+   * Runs each capture through `capture-supervisor` so FFmpeg stops when the
+   * app goes away. `executable` runs `script` as Node.
+   */
+  supervisor?: {
+    executable: string;
+    script: string;
+    env?: NodeJS.ProcessEnv;
+  };
 }
 
 interface Running {
@@ -100,18 +109,133 @@ function run(executable: string, args: string[]): Promise<string> {
   });
 }
 
+/**
+ * Progress record kept beside the segments while a take is running, so a
+ * take cut short by a crash can still be aligned and joined later.
+ */
+export interface TakeRecord {
+  schema_version: "1.0";
+  session_id: string;
+  created_at: string;
+  platform: SegmentRequest["platform"];
+  display: string;
+  microphone: string | null;
+  frame_rate: 30 | 60;
+  segments: SegmentRecord[];
+  pauses: { afterFrames: number }[];
+}
+
+export const takeRecordName = "take.json";
+
 export class CaptureSession {
-  readonly id = randomUUID();
+  readonly id: string = randomUUID();
   private readonly options: SessionOptions;
   private readonly segments: SegmentRecord[] = [];
   private current: Running | null = null;
   private status: SessionStatus = "paused";
   private readonly pauses: { afterFrames: number }[] = [];
   private readonly frameRate: number;
+  private readonly createdAt = new Date().toISOString();
+  private saving: Promise<void> = Promise.resolve();
 
   constructor(options: SessionOptions) {
     this.options = options;
     this.frameRate = options.request.frameRate;
+  }
+
+  /**
+   * A session for a take left behind by a crash, ready for `stop()`: its
+   * segments come from the take record; one still open is interrupted.
+   */
+  static async recover(options: {
+    ffmpeg: string;
+    ffprobe: string;
+    directory: string;
+  }): Promise<CaptureSession> {
+    const record = JSON.parse(
+      await readFile(join(options.directory, takeRecordName), "utf8"),
+    ) as TakeRecord;
+    if (
+      record?.schema_version !== "1.0" ||
+      !Array.isArray(record.segments) ||
+      !Array.isArray(record.pauses) ||
+      (record.frame_rate !== 30 && record.frame_rate !== 60)
+    )
+      throw new Error("This recording cannot be recovered.");
+    const session = new CaptureSession({
+      ...options,
+      request: {
+        platform: record.platform,
+        display: {
+          id: "recovered",
+          label: String(record.display),
+          x: 0,
+          y: 0,
+          width: 2,
+          height: 2,
+        },
+        // Only whether there was a microphone matters when finishing.
+        microphone:
+          record.microphone === null
+            ? null
+            : {
+                id: "recovered",
+                label: String(record.microphone),
+                format: "test_tone",
+                device: "",
+              },
+        frameRate: record.frame_rate,
+      },
+    });
+    for (const segment of record.segments) {
+      // Segment files are always the session's own numbered files.
+      const file = join(
+        options.directory,
+        String(segment.file).split(/[\\/]/u).pop() ?? "",
+      );
+      if (!/^segment-\d{3}\.mkv$/u.test(file.split(/[\\/]/u).pop()!)) continue;
+      session.segments.push({ ...segment, file });
+    }
+    session.pauses.push(...record.pauses);
+    return session;
+  }
+
+  /** Persists the take record; writes are serialised and best effort. */
+  private saveTake(): void {
+    const running = this.current;
+    const segments = [...this.segments];
+    if (running) {
+      const starts = parseInputStarts(running.stderr);
+      segments.push({
+        ...running.record,
+        frames: running.counters.frames,
+        videoStartSeconds: starts[0] ?? null,
+        audioStartSeconds: this.options.request.microphone
+          ? (starts[1] ?? null)
+          : null,
+        interrupted: true,
+      });
+    }
+    const record: TakeRecord = {
+      schema_version: "1.0",
+      session_id: this.id,
+      created_at: this.createdAt,
+      platform: this.options.request.platform,
+      display: this.options.request.display.label,
+      microphone: this.options.request.microphone?.label ?? null,
+      frame_rate: this.options.request.frameRate,
+      segments,
+      pauses: [...this.pauses],
+    };
+    const file = join(this.options.directory, takeRecordName);
+    this.saving = this.saving
+      .then(async () => {
+        await writeFile(`${file}.partial`, JSON.stringify(record, null, 2), {
+          mode: 0o600,
+        });
+        await rename(`${file}.partial`, file);
+      })
+      .catch(() => undefined);
   }
 
   state(): SessionState {
@@ -148,11 +272,23 @@ export class CaptureSession {
       ...this.options.request,
       outputPath: file,
     });
-    const child = spawn(this.options.ffmpeg, args, {
-      shell: false,
-      windowsHide: true,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    const supervisor = this.options.supervisor;
+    const child = supervisor
+      ? spawn(
+          supervisor.executable,
+          [supervisor.script, this.options.ffmpeg, ...args],
+          {
+            shell: false,
+            windowsHide: true,
+            stdio: ["pipe", "pipe", "pipe"],
+            ...(supervisor.env ? { env: supervisor.env } : {}),
+          },
+        )
+      : spawn(this.options.ffmpeg, args, {
+          shell: false,
+          windowsHide: true,
+          stdio: ["pipe", "pipe", "pipe"],
+        });
     const running: Running = {
       child,
       stderr: "",
@@ -200,6 +336,7 @@ export class CaptureSession {
       this.status = "failed";
       throw new Error("The screen could not be captured.");
     }
+    this.saveTake();
     this.options.onUpdate?.();
   }
 
@@ -218,6 +355,7 @@ export class CaptureSession {
       this.current = null;
       if (this.status === "recording") this.status = "paused";
     }
+    this.saveTake();
     this.options.onUpdate?.();
   }
 
@@ -247,6 +385,7 @@ export class CaptureSession {
   /** Stops, aligns and joins the take; returns the finished lossless file. */
   async stop(): Promise<FinishedRecording> {
     await this.end();
+    await this.saving;
     this.status = "finishing";
     this.options.onUpdate?.();
     try {

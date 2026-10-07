@@ -14,6 +14,7 @@ Also disable the pinned runtime's default-on `hooks`, shadow `skill_search`, and
 - Validate every IPC sender and payload.
 - Expose only narrow preload functions.
 - Never render arbitrary remote HTML inside a privileged view.
+- Screen capture never outlives the app: each FFmpeg capture runs under a supervisor that finishes it when the app's pipe closes or the app process goes away.
 - The recording area picker is a separate sandboxed window on packaged `region.html` whose preload can only send one rectangle (fractions of the display) or a cancellation; main accepts it only from that window's own page and refuses areas outside the display.
 
 ## Filesystem

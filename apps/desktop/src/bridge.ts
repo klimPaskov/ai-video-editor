@@ -39,6 +39,8 @@ import type {
   RecordingDevices,
   RecordingStartRequest,
   RecordingRegionRequest,
+  InterruptedTakes,
+  InterruptedTakeRequest,
   RecordingRegionResult,
   RecordingView,
 } from "../../../packages/domain/src/recording-view.ts";
@@ -196,6 +198,13 @@ export interface DesktopBridge {
   pickRecordingRegion(
     request: RecordingRegionRequest,
   ): Promise<Reply<RecordingRegionResult>>;
+  getInterruptedRecordings(): Promise<Reply<InterruptedTakes>>;
+  recoverRecording(
+    request: InterruptedTakeRequest,
+  ): Promise<Reply<RecordingView>>;
+  discardInterruptedRecording(
+    request: InterruptedTakeRequest,
+  ): Promise<Reply<InterruptedTakes>>;
   pauseRecording(): Promise<Reply<RecordingView>>;
   resumeRecording(): Promise<Reply<RecordingView>>;
   stopRecording(): Promise<Reply<RecordingView>>;
@@ -272,6 +281,9 @@ export const channels = Object.freeze({
   recordingGet: "recording:get",
   recordingStart: "recording:start",
   recordingPickRegion: "recording:pick-region",
+  recordingInterrupted: "recording:interrupted",
+  recordingRecover: "recording:recover",
+  recordingDiscardInterrupted: "recording:discard-interrupted",
   recordingPause: "recording:pause",
   recordingResume: "recording:resume",
   recordingStop: "recording:stop",

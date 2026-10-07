@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import type { ChildProcess } from "node:child_process";
 import { mkdtemp, readFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   audioAlignmentFilter,
@@ -285,6 +287,80 @@ test(
       for (let i = 0; i < bgr0.length; i += 4)
         rgba.set([bgr0[i + 2]!, bgr0[i + 1]!, bgr0[i]!, 255], i);
       assert.ok(Buffer.from(frame.rgbaBase64, "base64").equals(rgba));
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "the capture supervisor finishes FFmpeg when the app's pipe closes",
+  { timeout: 60_000 },
+  async () => {
+    const directory = await realpath(
+      await mkdtemp(join(tmpdir(), "capture-supervisor-")),
+    );
+    try {
+      const session = new CaptureSession({
+        ffmpeg: "ffmpeg",
+        ffprobe: "ffprobe",
+        directory,
+        supervisor: {
+          executable: process.execPath,
+          script: fileURLToPath(
+            new URL(
+              "../../packages/recorder/src/capture-supervisor.ts",
+              import.meta.url,
+            ),
+          ),
+        },
+        request: {
+          platform: "test",
+          display: {
+            id: "test-pattern",
+            label: "Test pattern (not a screen)",
+            x: 0,
+            y: 0,
+            width: 160,
+            height: 90,
+          },
+          microphone: null,
+          frameRate: 30,
+        },
+      });
+      await session.record();
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      const running = (
+        session as unknown as {
+          current: { child: ChildProcess; done: Promise<void> };
+        }
+      ).current;
+      // What a crash of the app does to the supervisor: its stdin closes.
+      running.child.stdin!.destroy();
+      const started = Date.now();
+      await running.done;
+      assert.ok(Date.now() - started < 8_000, "capture ended promptly");
+      assert.equal(session.state().status, "paused");
+      // FFmpeg finished the file cleanly, so it has a duration.
+      const probe = JSON.parse(
+        (
+          await runProcess({
+            executable: "ffprobe",
+            args: [
+              "-v",
+              "error",
+              "-show_entries",
+              "format=duration",
+              "-of",
+              "json",
+              join(directory, "segment-001.mkv"),
+            ],
+          })
+        ).stdout.toString(),
+      ) as { format: { duration?: string } };
+      assert.ok(Number(probe.format.duration) > 0.5);
+      const finished = await session.stop();
+      assert.ok(finished.frames >= 15);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

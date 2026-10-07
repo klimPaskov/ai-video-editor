@@ -3,6 +3,7 @@ import type {
   RecordingDevices,
   RecordingView,
   RecordingRegion,
+  InterruptedTake,
 } from "../../../packages/domain/src/recording-view.ts";
 import { iconElement } from "./icons.ts";
 
@@ -58,6 +59,75 @@ export function setupRecordPanel(options: {
   let counting = false;
 
   openButton.hidden = false;
+
+  const recovery = element("recovery");
+  const recoveryText = element("recovery-text");
+  const recover = element<HTMLButtonElement>("recovery-recover");
+  const discard = element<HTMLButtonElement>("recovery-discard");
+  let interrupted: InterruptedTake | undefined;
+
+  function renderRecovery(takes: InterruptedTake[], message?: string): void {
+    interrupted = takes[0];
+    recovery.hidden = !interrupted;
+    recover.disabled = false;
+    discard.disabled = false;
+    recover.textContent = "Recover";
+    if (!interrupted) return;
+    const started = new Date(interrupted.createdAt).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+    recoveryText.textContent =
+      message ??
+      `A recording from ${started} was interrupted. Recover what was captured?`;
+  }
+
+  async function refreshRecovery(): Promise<void> {
+    const reply = await window.desktop
+      .getInterruptedRecordings()
+      .catch(() => null);
+    if (reply?.ok) renderRecovery(reply.value.takes);
+  }
+
+  recover.addEventListener("click", async () => {
+    const take = interrupted;
+    if (!take || busy) return;
+    recover.disabled = true;
+    discard.disabled = true;
+    recover.textContent = "Recovering…";
+    const reply = await window.desktop
+      .recoverRecording({ schema_version: "1.0", take_id: take.id })
+      .catch(() => null);
+    if (reply?.ok && reply.value.media) {
+      await refreshRecovery();
+      await options.finished(reply.value.media);
+      return;
+    }
+    renderRecovery(
+      [take],
+      reply && !reply.ok
+        ? reply.message
+        : "This recording could not be recovered. You can try again or discard it.",
+    );
+  });
+  discard.addEventListener("click", async () => {
+    const take = interrupted;
+    if (
+      !take ||
+      !window.confirm(
+        "Discard the interrupted recording? It cannot be recovered afterwards.",
+      )
+    )
+      return;
+    recover.disabled = true;
+    discard.disabled = true;
+    const reply = await window.desktop
+      .discardInterruptedRecording({ schema_version: "1.0", take_id: take.id })
+      .catch(() => null);
+    if (reply?.ok) renderRecovery(reply.value.takes);
+    else renderRecovery([take], "The recording could not be discarded.");
+  });
+  void refreshRecovery();
 
   function showError(message: string | null): void {
     error.textContent = message ?? "";

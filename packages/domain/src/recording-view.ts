@@ -51,6 +51,22 @@ export interface RecordingRegionResult {
   region: RecordingRegion | null;
 }
 
+/** A take cut short by a crash or forced quit, offered for recovery. */
+export interface InterruptedTake {
+  id: string;
+  /** When the take started (ISO 8601). */
+  createdAt: string;
+}
+
+export interface InterruptedTakes {
+  takes: InterruptedTake[];
+}
+
+export interface InterruptedTakeRequest {
+  schema_version: "1.0";
+  take_id: string;
+}
+
 /** Smallest area worth recording, in physical pixels. */
 export const minimumRegionSize = 64;
 
@@ -86,6 +102,8 @@ export const recordingIssues = Object.freeze({
   finish: "The recording could not be saved. Try recording again.",
   empty: "Nothing was recorded.",
   region: "Choose a larger area to record.",
+  recover:
+    "This recording could not be recovered. You can try again or discard it.",
   regionUnavailable:
     "Recording part of the screen is not available on this device.",
 } as const);
@@ -178,6 +196,37 @@ export function assertRecordingStartRequest(
   id(request.display_id);
   if (request.microphone_id !== null) id(request.microphone_id);
   if (hasRegion) assertRecordingRegion(request.region);
+}
+
+const takeIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+
+export function assertInterruptedTakes(
+  value: unknown,
+): asserts value is InterruptedTakes {
+  const result = exact(value, ["takes"]);
+  if (!Array.isArray(result.takes) || result.takes.length > 32) invalid();
+  for (const take of result.takes) {
+    const item = exact(take, ["id", "createdAt"]);
+    if (typeof item.id !== "string" || !takeIdPattern.test(item.id)) invalid();
+    if (
+      typeof item.createdAt !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u.test(item.createdAt)
+    )
+      invalid();
+  }
+}
+
+export function assertInterruptedTakeRequest(
+  value: unknown,
+): asserts value is InterruptedTakeRequest {
+  const request = exact(value, ["schema_version", "take_id"]);
+  if (
+    request.schema_version !== "1.0" ||
+    typeof request.take_id !== "string" ||
+    !takeIdPattern.test(request.take_id)
+  )
+    invalid();
 }
 
 export function assertRecordingRegionRequest(

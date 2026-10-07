@@ -968,6 +968,22 @@ dd {
   background: #5fd39a;
   border-radius: 3px;
 }
+.recovery-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+.recovery-notice p {
+  flex: 1;
+  margin: 0;
+}
+.recovery-notice .tile-icon {
+  flex: none;
+}
 .area-choice {
   display: inline-flex;
   padding: 3px;
