@@ -1462,6 +1462,50 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
   renderStage();
   if (project.stage === "auto_edit" || project.stage === "edit")
     void loadTranscription();
+  void watchPlayback(project.id);
+}
+let playbackWatch = 0;
+/**
+ * Sources Chromium cannot decode play through a playback copy that main
+ * prepares in the background; Play waits for it. Frame preview is exact
+ * throughout.
+ */
+async function watchPlayback(projectId: string): Promise<void> {
+  const watch = ++playbackWatch;
+  const status = element("playback-status");
+  const showStatus = (text: string | null, title = "") => {
+    status.textContent = text ?? "";
+    status.hidden = !text;
+    playButton.title = title;
+  };
+  showStatus(null);
+  playButton.disabled = false;
+  while (watch === playbackWatch && activeProject?.id === projectId) {
+    const reply = await window.desktop
+      .getPlayback({ schema_version: "1.0", project_id: projectId })
+      .catch(() => null);
+    if (watch !== playbackWatch || activeProject?.id !== projectId) return;
+    if (!reply?.ok) {
+      showStatus(null);
+      return;
+    }
+    const view = reply.value;
+    if (view.status === "ready") {
+      playButton.disabled = false;
+      showStatus(null);
+      return;
+    }
+    playButton.disabled = true;
+    if (view.status === "failed") {
+      showStatus("Playback unavailable", view.message ?? "");
+      return;
+    }
+    showStatus(
+      `Preparing playback ${Math.round((view.progress ?? 0) * 100)}%`,
+      "Preparing playback",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
 }
 async function createProject(
   media: MediaSummary,
@@ -1898,6 +1942,7 @@ back.addEventListener("click", async () => {
   }
   routeGeneration++;
   activeProject = undefined;
+  playbackWatch++;
   navigating = false;
   renderStage();
   selected = undefined;

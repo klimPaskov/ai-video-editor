@@ -16,6 +16,10 @@ import type {
   MagicWandView,
 } from "../../../packages/domain/src/magic-wand-view.ts";
 import type {
+  PlaybackProjectRequest,
+  PlaybackView,
+} from "../../../packages/domain/src/playback-view.ts";
+import type {
   RecordingDevices,
   RecordingStartRequest,
   RecordingView,
@@ -142,6 +146,7 @@ export interface DesktopBridge {
   interruptCodexThread(
     request: CodexThreadProjectRequest,
   ): Promise<Reply<CodexThreadView>>;
+  getPlayback(request: PlaybackProjectRequest): Promise<Reply<PlaybackView>>;
   getRecordingDevices(): Promise<Reply<RecordingDevices>>;
   getRecording(): Promise<Reply<RecordingView>>;
   startRecording(request: RecordingStartRequest): Promise<Reply<RecordingView>>;
@@ -204,6 +209,7 @@ export interface DesktopBridge {
   cancelImport(): Promise<Reply<null>>;
 }
 export const channels = Object.freeze({
+  playbackGet: "playback:get",
   recordingDevices: "recording:devices",
   recordingGet: "recording:get",
   recordingStart: "recording:start",

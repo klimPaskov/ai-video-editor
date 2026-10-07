@@ -111,6 +111,11 @@ import {
 import { DesktopExports } from "./export.ts";
 import { DesktopMagicWand } from "./magic-wand.ts";
 import { DesktopRecorder, RecordingError } from "./recording.ts";
+import { DesktopPlaybackProxies } from "./playback-proxies.ts";
+import {
+  assertPlaybackProjectRequest,
+  assertPlaybackView,
+} from "../../../packages/domain/src/playback-view.ts";
 import {
   assertRecordingStartRequest,
   assertRecordingView,
@@ -150,6 +155,7 @@ let resolvePlaybackSource:
   | undefined;
 let servicesClosed = false;
 let recorder: DesktopRecorder | undefined;
+let playbackProxies: DesktopPlaybackProxies | undefined;
 app.on("before-quit", (event) => {
   quitting = true;
   if (
@@ -172,6 +178,7 @@ app.on("before-quit", (event) => {
       Promise.resolve().then(() => transcription?.close()),
       Promise.resolve().then(() => exports?.close()),
       Promise.resolve().then(() => recorder?.cancel()),
+      Promise.resolve().then(() => playbackProxies?.close()),
     ]).then(() => {
       servicesClosed = true;
       app.quit();
@@ -441,6 +448,34 @@ async function start(): Promise<void> {
       if (failure) throw new UserFacingError("The video could not be opened.");
     },
   });
+  playbackProxies = new DesktopPlaybackProxies({
+    root: path.join(userData, "playback-proxies"),
+  });
+  const playbackSources = async (projectId: string) => {
+    const { project } = await drafts.snapshotWithProject(projectId);
+    const sources =
+      project.schema_version === "1.1" ? project.sources : [project.source];
+    const probes =
+      project.schema_version === "1.1"
+        ? project.source_probes
+        : [project.source_probe];
+    return sources.map((source, index) => ({
+      id: source.source_id,
+      sha256: source.sha256,
+      path: source.managed_path,
+      probe: probes[index] as unknown,
+    }));
+  };
+  register(channels.playbackGet, async (request) => {
+    assertPlaybackProjectRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before playing it.");
+    const value = await playbackProxies!.view(
+      await playbackSources(request.project_id),
+    );
+    assertPlaybackView(value);
+    return value;
+  });
   resolvePlaybackSource = async (projectId, sourceId) => {
     if (activeProjectId !== projectId) return null;
     const { project } = await drafts.snapshotWithProject(projectId);
@@ -462,7 +497,15 @@ async function start(): Promise<void> {
         : name.includes("matroska")
           ? "video/x-matroska"
           : "application/octet-stream";
-    return { path: sources[index]!.managed_path, mime };
+    // Sources Chromium cannot decode are served through their playback copy.
+    return playbackProxies!.resolve(
+      {
+        sha256: sources[index]!.sha256,
+        path: sources[index]!.managed_path,
+        probe: probes[index] as unknown,
+      },
+      mime,
+    );
   };
   const activeExportProject = (projectId: string) => {
     if (activeProjectId !== projectId)

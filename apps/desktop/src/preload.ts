@@ -34,6 +34,10 @@ import {
   assertMagicWandView,
 } from "../../../packages/domain/src/magic-wand-view.ts";
 import {
+  assertPlaybackProjectRequest,
+  assertPlaybackView,
+} from "../../../packages/domain/src/playback-view.ts";
+import {
   assertRecordingDevices,
   assertRecordingStartRequest,
   assertRecordingView,
@@ -248,6 +252,10 @@ const bridge: DesktopBridge = {
       request,
       assertCodexThreadView,
     );
+  },
+  getPlayback: (request) => {
+    assertPlaybackProjectRequest(request);
+    return invoke(channels.playbackGet, request, assertPlaybackView);
   },
   getRecordingDevices: () =>
     invoke(channels.recordingDevices, undefined, assertRecordingDevices),

@@ -162,6 +162,32 @@ try {
   ]);
   result.durationUs = durationUs;
   result.previewEqualsDecode = true;
+
+  step = "playback";
+  // FFV1/PCM is not playable in Chromium; Play waits for the playback copy.
+  await expect(page.locator("#play")).toBeEnabled({ timeout: 120_000 });
+  await expect(page.locator("#playback-status")).toBeHidden();
+  await page.locator("#play").click();
+  await expect(page.locator("#play")).toHaveAttribute("aria-label", "Pause");
+  const playing = page.locator("video.preview-video:visible");
+  await expect(playing).toHaveCount(1, { timeout: 10_000 });
+  await expect
+    .poll(
+      () => playing.evaluate((node) => (node as HTMLVideoElement).currentTime),
+      {
+        timeout: 10_000,
+      },
+    )
+    .toBeGreaterThan(0.5);
+  const served = await playing.evaluate(
+    (node) => (node as HTMLVideoElement).src,
+  );
+  assert.match(served, /\/media\//u);
+  await expect(page.locator("#play")).toHaveAttribute("aria-label", "Play", {
+    timeout: 15_000,
+  });
+  await expect(page.locator("#error")).toBeHidden();
+  result.playedThroughCopy = true;
   result.step = "complete";
   await writeFile(
     join(evidence, "result.json"),

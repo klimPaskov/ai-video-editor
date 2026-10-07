@@ -54,6 +54,19 @@ class DesktopIpcContractTests(unittest.TestCase):
         for size in [{'width': 321}, {'height': 1281}]:
             self.invalid({'channel': 'library:thumbnail', 'payload': payload, 'response': {'ok': True, 'value': dict(picture, **size)}})
 
+    def test_playback_view_is_path_free(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        for value in [{'status': 'ready', 'progress': None, 'message': None},
+                      {'status': 'preparing', 'progress': 0.4, 'message': None},
+                      {'status': 'failed', 'progress': None, 'message': 'Playback could not be prepared for this video. Frame preview and export still work.'}]:
+            self.valid({'channel': 'playback:get', 'payload': request, 'response': {'ok': True, 'value': value}})
+        for wrong in [{'status': 'ready', 'progress': 1, 'message': None},
+                      {'status': 'preparing', 'progress': 1.5, 'message': None},
+                      {'status': 'failed', 'progress': None, 'message': 'ffmpeg: libx264 missing'},
+                      {'status': 'ready', 'progress': None, 'message': None, 'path': '/home/user/proxy.mp4'}]:
+            self.invalid({'channel': 'playback:get', 'payload': request, 'response': {'ok': True, 'value': wrong}})
+        self.invalid({'channel': 'playback:get', 'payload': {'project_id': 'project-1'}, 'response': {'ok': False, 'message': 'x'}})
+
     def test_recording_channels_use_opaque_ids_and_fixed_messages(self):
         devices = {'displays': [{'id': 'display-1', 'label': 'Built-in display', 'width': 2560, 'height': 1600, 'primary': True}],
                    'microphones': [{'id': 'pulse-1', 'label': 'USB microphone'}], 'message': None}

@@ -56,3 +56,7 @@ Evidence: `tests/native/playback.test.ts` cuts the second of a red/green/blue/ye
 ## Card pictures (2026-10-07)
 
 `MediaLibrary.thumbnail` decodes one frame about a tenth of the way in (at most 1 s), scales it to at most 320 px wide with FFmpeg defaults, forces opaque alpha and caches it per source hash. Main allows four requests at a time and the renderer asks one at a time. The result is decorative and is never used for review, analysis or rendering.
+
+## Playback copies (2026-10-07)
+
+Sources Chromium cannot decode (any video codec other than H.264, VP8, VP9 or AV1, or audio other than AAC, Opus, Vorbis, MP3 or FLAC, which includes lossless FFV1/PCM recordings) play through a display-only copy. Main makes it in the background, one source at a time, keyed by source hash under the app's data folder: H.264 without B-frames, a key frame every second, BT.709 limited range, and AAC in MP4, or VP9 and Opus in WebM when libx264 is missing. Frames are passed through at their source times, so preview positions map one to one; `tests/media/playback-proxy.test.ts` compares every frame time against the source. The copy is written to a `.partial` file and renamed when complete, so the media route never serves part of one. While it is being made, the player bar shows "Preparing playback N%" and Play waits; still frames remain exact. The copy is never used for still frames, analysis or export. Copies are not yet removed when their sources are no longer used.

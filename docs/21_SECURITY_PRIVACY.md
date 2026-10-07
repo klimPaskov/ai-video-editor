@@ -109,3 +109,5 @@ Claude runs through the user's installed, unmodified Claude Code CLI (ADR 0018, 
 ## Preview media route (2026-10-07)
 
 The renderer plays sources through `ai-video-editor://app/media/<project>/<source>`. Main serves only managed sources of the currently active project, read-only with byte ranges and `Cache-Control: no-store`; any other path, project or source returns 404. The page CSP adds `media-src 'self'` and still has no `connect-src`, so renderer script cannot read media bytes with `fetch`.
+
+Playback copies (2026-10-07): `playback:get` reports only a status, a progress fraction and one fixed message. The media route still serves only the active project's sources, now through their playback copy when one is needed; copy paths stay in main.
