@@ -420,7 +420,6 @@ class DesktopIpcContractTests(unittest.TestCase):
             'status': 'signed_in',
             'version': '2.1.285',
             'account': {'billing': 'subscription', 'plan': 'max'},
-            'signInPageAvailable': False,
             'models': [{'value': 'default', 'label': 'Default (recommended)', 'detail': 'Opus 5.5', 'efforts': ['high']}],
             'selection': {'model': 'default', 'effort': None},
             'message': None,

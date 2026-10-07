@@ -1357,7 +1357,6 @@
             "claude:get",
             "claude:check",
             "claude:sign-in",
-            "claude:open-sign-in",
             "claude:cancel-sign-in",
             "claude:sign-out"
           ]
@@ -2938,7 +2937,6 @@
         "status",
         "version",
         "account",
-        "signInPageAvailable",
         "models",
         "selection",
         "message"
@@ -2999,9 +2997,6 @@
               "type": "null"
             }
           ]
-        },
-        "signInPageAvailable": {
-          "type": "boolean"
         },
         "models": {
           "type": "array",
@@ -3102,24 +3097,6 @@
               },
               "selection": {
                 "type": "null"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "status": {
-                "not": {
-                  "const": "signing_in"
-                }
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "signInPageAvailable": {
-                "const": false
               }
             }
           }

@@ -31,7 +31,6 @@ export interface ClaudeView {
     billing: "subscription" | "api" | "other";
     plan: string | null;
   } | null;
-  signInPageAvailable: boolean;
   models: ClaudeModelOption[];
   selection: ClaudeSelection | null;
   message: string | null;
@@ -165,7 +164,6 @@ export function assertClaudeView(value: unknown): asserts value is ClaudeView {
     "status",
     "version",
     "account",
-    "signInPageAvailable",
     "models",
     "selection",
     "message",
@@ -179,7 +177,6 @@ export function assertClaudeView(value: unknown): asserts value is ClaudeView {
       "signed_in",
       "error",
     ].includes(view.status as string) ||
-    typeof view.signInPageAvailable !== "boolean" ||
     !Array.isArray(view.models) ||
     view.models.length > 32
   )
@@ -222,7 +219,6 @@ export function assertClaudeView(value: unknown): asserts value is ClaudeView {
   if (view.message !== null && !issueSet.has(view.message as string)) invalid();
   if (
     (view.status === "signed_in") !== (view.account !== null) ||
-    (view.signInPageAvailable && view.status !== "signing_in") ||
     (view.models.length !== 0 && view.status !== "signed_in") ||
     (view.version === null &&
       !["checking", "unavailable", "error"].includes(view.status as string))

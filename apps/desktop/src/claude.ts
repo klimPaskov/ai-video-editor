@@ -158,7 +158,6 @@ export class DesktopClaude {
     status: "checking",
     version: null,
     account: null,
-    signInPageAvailable: false,
     models: [],
     selection: null,
     message: null,
@@ -233,7 +232,6 @@ export class DesktopClaude {
         account: null,
         models: [],
         selection: null,
-        signInPageAvailable: false,
         message: null,
       });
     await this.refresh();
@@ -251,7 +249,6 @@ export class DesktopClaude {
         account: null,
         models: [],
         selection: null,
-        signInPageAvailable: false,
         message: claudeIssues.storage,
       });
       return;
@@ -277,7 +274,6 @@ export class DesktopClaude {
         account: null,
         models: [],
         selection: null,
-        signInPageAvailable: false,
         message:
           error instanceof ClaudeCliError && error.code === "outdated"
             ? claudeIssues.outdated
@@ -301,7 +297,6 @@ export class DesktopClaude {
         account: null,
         models: [],
         selection: null,
-        signInPageAvailable: false,
         message: claudeIssues.status,
       });
       return;
@@ -314,7 +309,6 @@ export class DesktopClaude {
         account: null,
         models: [],
         selection: null,
-        signInPageAvailable: false,
         message: null,
       });
       return;
@@ -341,7 +335,6 @@ export class DesktopClaude {
       },
       models: catalog?.models ?? [],
       selection,
-      signInPageAvailable: false,
       message,
     });
   }
@@ -438,8 +431,6 @@ export class DesktopClaude {
     });
     let signedIn = false;
     while (!this.loginCancelled && Date.now() < deadline) {
-      if (this.login === login)
-        this.set({ signInPageAvailable: login.url !== null });
       try {
         const result = await runProcess(
           runtime.executable,
@@ -461,16 +452,9 @@ export class DesktopClaude {
     await login.done;
     if (this.login !== login) return;
     this.login = null;
-    this.set({ signInPageAvailable: false });
     await this.refresh();
     if (!signedIn && !this.loginCancelled && this.view.status === "signed_out")
       this.set({ message: claudeIssues.signInFailed });
-  }
-
-  async openSignInPage(): Promise<ClaudeView> {
-    const url = this.login?.url;
-    if (url) await this.options.openExternal(url);
-    return this.snapshot();
   }
 
   async cancelSignIn(): Promise<ClaudeView> {

@@ -63,7 +63,6 @@ export interface DesktopBridge {
   getClaude(): Promise<Reply<ClaudeView>>;
   checkClaude(): Promise<Reply<ClaudeView>>;
   signInClaude(): Promise<Reply<ClaudeView>>;
-  openClaudeSignInPage(): Promise<Reply<ClaudeView>>;
   cancelClaudeSignIn(): Promise<Reply<ClaudeView>>;
   signOutClaude(): Promise<Reply<ClaudeView>>;
   selectClaudeModel(value: ClaudeSelection): Promise<Reply<ClaudeView>>;
@@ -173,7 +172,6 @@ export const channels = Object.freeze({
   claudeGet: "claude:get",
   claudeCheck: "claude:check",
   claudeSignIn: "claude:sign-in",
-  claudeOpenSignIn: "claude:open-sign-in",
   claudeCancelSignIn: "claude:cancel-sign-in",
   claudeSignOut: "claude:sign-out",
   claudeSelect: "claude:select",

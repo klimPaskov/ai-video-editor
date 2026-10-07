@@ -67,3 +67,38 @@ test("rejects a privileged process, unexpected display, or non-WSL host", () => 
   ])
     assert.throws(() => validateNativeTestEnvironment(rejected));
 });
+
+const cloudEvidence: NativeTestEnvironmentEvidence = {
+  ...wslEvidence,
+  wslTestMarker: undefined,
+  wslDistroName: undefined,
+  kernelRelease: "6.18.44-fc-v77",
+  wslConfig: "",
+  mounts: "/dev/vda / ext4 rw 0 0\ntmpfs /dev/shm tmpfs rw 0 0\n",
+  cloudTestMarker: "1",
+  cloudRunner: true,
+  hostingCredentialReadable: false,
+};
+
+test("accepts an opted-in cloud agent VM with unreadable hosting credentials", () => {
+  assert.equal(validateNativeTestEnvironment(cloudEvidence), "cloud");
+});
+
+test("rejects a cloud VM that is privileged, unmarked or can read hosting credentials", () => {
+  for (const rejected of [
+    { ...cloudEvidence, hostingCredentialReadable: true },
+    { ...cloudEvidence, hostingCredentialReadable: undefined },
+    { ...cloudEvidence, cloudRunner: false },
+    { ...cloudEvidence, cloudTestMarker: "yes" },
+    { ...cloudEvidence, kernelRelease: "6.8.0-generic" },
+    { ...cloudEvidence, kernelRelease: "6.6.87.2-microsoft-fc-WSL2" },
+    { ...cloudEvidence, wslTestMarker: "1" },
+    { ...cloudEvidence, uid: 0 },
+    { ...cloudEvidence, display: ":0" },
+    {
+      ...cloudEvidence,
+      mounts: `${cloudEvidence.mounts}C: /mnt/c drvfs rw 0 0\n`,
+    },
+  ])
+    assert.throws(() => validateNativeTestEnvironment(rejected));
+});

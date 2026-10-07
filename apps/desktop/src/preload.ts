@@ -162,8 +162,6 @@ const bridge: DesktopBridge = {
   checkClaude: () => invoke(channels.claudeCheck, undefined, assertClaudeView),
   signInClaude: () =>
     invoke(channels.claudeSignIn, undefined, assertClaudeView),
-  openClaudeSignInPage: () =>
-    invoke(channels.claudeOpenSignIn, undefined, assertClaudeView),
   cancelClaudeSignIn: () =>
     invoke(channels.claudeCancelSignIn, undefined, assertClaudeView),
   signOutClaude: () =>

@@ -566,43 +566,14 @@ export function readCatalog(
   });
 }
 
-const signInHosts = new Set([
-  "claude.com",
-  "claude.ai",
-  "platform.claude.com",
-  "console.anthropic.com",
-]);
-
-/** Accepts only an Anthropic-hosted HTTPS sign-in page printed by the CLI. */
-export function parseSignInUrl(output: string): string | null {
-  const match = /visit:\s*(https:\/\/\S+)/u.exec(output);
-  if (!match) return null;
-  try {
-    const url = new URL(match[1]!);
-    if (
-      url.protocol !== "https:" ||
-      url.username ||
-      url.password ||
-      url.port ||
-      !signInHosts.has(url.hostname) ||
-      url.href.length > 4096
-    )
-      return null;
-    return url.href;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Runs `claude auth login --claudeai`. Claude Code opens the browser and
- * receives Anthropic's callback itself; the app only watches for the printed
- * fallback page and never writes to the CLI's code prompt.
+ * receives Anthropic's callback on its own loopback listener. The CLI's
+ * printed fallback page ends with a code for the CLI's prompt; the app never
+ * relays that code, so it neither reads nor offers that page.
  */
 export class ClaudeLoginProcess {
   private readonly child: ChildProcess;
-  private output = "";
-  private signInUrl: string | null = null;
   readonly done: Promise<number | null>;
 
   constructor(
@@ -620,22 +591,14 @@ export class ClaudeLoginProcess {
         stdio: ["pipe", "pipe", "pipe"],
       },
     );
-    const collect = (chunk: Buffer) => {
-      if (this.output.length > 64 * 1024) return;
-      this.output += chunk.toString("utf8");
-      this.signInUrl ??= parseSignInUrl(this.output);
-    };
-    this.child.stdout?.on("data", collect);
-    this.child.stderr?.on("data", collect);
+    // Output is drained unread: it carries only prompts and the fallback page.
+    this.child.stdout?.resume();
+    this.child.stderr?.resume();
     this.child.stdin?.on("error", () => undefined);
     this.done = new Promise((resolve) => {
       this.child.once("error", () => resolve(null));
       this.child.once("close", (code) => resolve(code));
     });
-  }
-
-  get url(): string | null {
-    return this.signInUrl;
   }
 
   stop(): void {

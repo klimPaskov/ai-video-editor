@@ -373,7 +373,8 @@ try {
   await window
     .getByRole("button", { name: "Source details", exact: true })
     .click();
-  // Claude is the default assistant route; this guest has no Claude Code.
+  // Claude is the default assistant route. The guest has either no Claude
+  // Code or a signed-out one; either way the drawer must gate the turn.
   await window.getByRole("button", { name: "Claude", exact: true }).click();
   await expect(window.locator("#review-actions")).toBeHidden();
   await expect(window.locator("#inspector")).toBeHidden();
@@ -388,7 +389,7 @@ try {
     .getByRole("button", { name: "Open conversation", exact: true })
     .click();
   await expect(window.locator("#codex-thread-error")).toHaveText(
-    "Set up Claude in Settings to continue.",
+    /^(Set up|Sign in to) Claude in Settings to continue\.$/u,
     { timeout: 30_000 },
   );
   await expect(window.locator("#codex-thread-messages p")).toHaveCount(0);

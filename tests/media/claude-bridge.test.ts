@@ -24,7 +24,6 @@ import {
   parseAuthStatus,
   parseCatalogResponse,
   parseClaudeVersion,
-  parseSignInUrl,
   restrictedSessionArguments,
   type ClaudeRuntime,
 } from "../../packages/claude-bridge/src/cli.ts";
@@ -188,24 +187,6 @@ test("catalog parsing keeps model names and drops API list prices", () => {
   assert.doesNotMatch(JSON.stringify(catalog), /\$/u);
   assert.throws(() => parseCatalogResponse({ models: [] }));
   assert.throws(() => parseCatalogResponse(null));
-});
-
-test("only Anthropic HTTPS sign-in pages are offered", () => {
-  assert.equal(
-    parseSignInUrl(
-      "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true\n",
-    ),
-    "https://claude.com/cai/oauth/authorize?code=true",
-  );
-  for (const output of [
-    "visit: http://claude.com/x",
-    "visit: https://claude.com.evil.test/x",
-    "visit: https://evil.test/claude.com",
-    "visit: https://user@claude.com/x",
-    "visit: https://claude.com:8443/x",
-    "no url here",
-  ])
-    assert.equal(parseSignInUrl(output), null, output);
 });
 
 test("turn arguments disable built-in tools, settings and prompts", () => {
@@ -645,8 +626,8 @@ test("cancelled sign-in returns to signed out without an error", async () => {
     await claude.signIn();
     await waitFor(
       () => claude.get(),
-      (value) => value.signInPageAvailable,
-      "sign-in page",
+      (value) => value.status === "signing_in",
+      "signing in",
     );
     const view = await claude.cancelSignIn();
     assert.equal(view.status, "signed_out");
@@ -687,7 +668,6 @@ test("domain assertions reject leaked or inconsistent Claude state", () => {
     status: "signed_out",
     version: "2.1.285",
     account: null,
-    signInPageAvailable: false,
     models: [],
     selection: null,
     message: null,
@@ -695,7 +675,8 @@ test("domain assertions reject leaked or inconsistent Claude state", () => {
   assertClaudeView(signedOut);
   for (const bad of [
     { ...signedOut, token: "secret" },
-    { ...signedOut, signInPageAvailable: true },
+    // The removed fallback page must not reappear as an unchecked field.
+    { ...signedOut, signInPageAvailable: false },
     { ...signedOut, selection: { model: "default", effort: null } },
     { ...signedOut, message: "Not logged in · Please run /login" },
     { ...signedOut, status: "signed_in" },

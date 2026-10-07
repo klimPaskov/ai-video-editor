@@ -477,10 +477,6 @@ async function start(): Promise<void> {
     assertEmptyRequest(request);
     return claudeView(() => claude!.signIn());
   });
-  register(channels.claudeOpenSignIn, async (request) => {
-    assertEmptyRequest(request);
-    return claudeView(() => claude!.openSignInPage());
-  });
   register(channels.claudeCancelSignIn, async (request) => {
     assertEmptyRequest(request);
     return claudeView(() => claude!.cancelSignIn());

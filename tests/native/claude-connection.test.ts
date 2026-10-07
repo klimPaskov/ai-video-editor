@@ -6,10 +6,15 @@
  *
  * <claude-bin-dir> contains the official, unmodified `claude` executable. The
  * signed-out path always runs: runtime detection, Anthropic browser sign-in
- * initiation by the real CLI, the fallback page, cancellation, the default
- * drawer route and its sign-in gate. A signed-in profile (created by the user
- * completing Anthropic's sign-in during --hold-sign-in) additionally runs a
- * real Claude edit, shared Undo, Stop and restart. No credential is copied.
+ * initiation by the real CLI, absence of any app-opened sign-in page,
+ * cancellation, the default drawer route and its sign-in gate. A signed-in
+ * profile (created by the user completing Anthropic's sign-in during
+ * --hold-sign-in) additionally runs a real Claude edit, shared Undo, Stop and
+ * restart. No credential is copied.
+ *
+ * The URL the CLI opens returns to Claude Code's loopback listener inside this
+ * guest, so --hold-sign-in can complete only from a browser running in the
+ * same guest. Opening it on another machine cannot reach that listener.
  */
 import assert from "node:assert/strict";
 import {
@@ -192,7 +197,8 @@ const result: Record<string, unknown> = {
   runtimeDetected: false,
   signedOutSettings: false,
   officialBrowserSignInStarted: false,
-  fallbackPageAnthropicOnly: false,
+  cliBrowserAnthropicOnly: false,
+  noAppSignInPage: false,
   cancelledSignIn: false,
   noCredentialFilesAfterCancel: false,
   claudeDefaultDrawer: false,
@@ -244,16 +250,18 @@ try {
       .poll(browserHosts, { timeout: 60_000 })
       .toContain("claude.com");
     result.officialBrowserSignInStarted = true;
-    await expect(page.locator("#claude-open-sign-in")).toBeVisible({
-      timeout: 30_000,
-    });
-    await page.locator("#claude-open-sign-in").click();
-    await expect
-      .poll(async () => openedHosts(electron), { timeout: 30_000 })
-      .toEqual(["claude.com"]);
-    result.fallbackPageAnthropicOnly = (await browserHosts()).every(
+    // The CLI's printed fallback page needs a code typed into the CLI, which
+    // the app never relays, so the app offers no page of its own.
+    await expect(
+      page.getByRole("button", { name: "Open sign-in page" }),
+    ).toHaveCount(0);
+    await expect(page.locator("#claude-cancel-sign-in")).toBeVisible();
+    assert.deepEqual(await openedHosts(electron), []);
+    result.noAppSignInPage = true;
+    result.cliBrowserAnthropicOnly = (await browserHosts()).every(
       (host) => host === "claude.com",
     );
+    assert.equal(result.cliBrowserAnthropicOnly, true);
     await page.screenshot({ path: join(evidence, "claude-signing-in.png") });
     await hold("signing-in");
 
@@ -262,7 +270,7 @@ try {
       console.log(
         JSON.stringify({
           action:
-            "Open the private sign-in URL in a browser and complete Anthropic's sign-in.",
+            "Open the private sign-in URL in a browser inside this guest and complete Anthropic's sign-in.",
           privateUrlFile: privateUrl,
         }),
       );
