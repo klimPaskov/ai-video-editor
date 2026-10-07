@@ -66,6 +66,21 @@ interface Running {
   counters: CaptureCounters;
 }
 
+/**
+ * The capture's colour description, restated on every remux so the take
+ * stays self-describing even if a stream copy does not carry the tags.
+ */
+const captureColor = [
+  "-color_range",
+  "pc",
+  "-colorspace",
+  "rgb",
+  "-color_primaries",
+  "bt709",
+  "-color_trc",
+  "iec61966-2-1",
+];
+
 function run(executable: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
@@ -292,7 +307,14 @@ export class CaptureSession {
             "pcm_s16le",
           );
         }
-        args.push("-fflags", "+bitexact", "-f", "matroska", target);
+        args.push(
+          ...captureColor,
+          "-fflags",
+          "+bitexact",
+          "-f",
+          "matroska",
+          target,
+        );
         await run(this.options.ffmpeg, args);
         usable.push(segment);
         aligned.push(target);
@@ -321,6 +343,7 @@ export class CaptureSession {
           list,
           "-c",
           "copy",
+          ...captureColor,
           "-fflags",
           "+bitexact",
           "-f",

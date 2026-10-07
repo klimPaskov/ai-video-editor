@@ -250,7 +250,17 @@ test(
       // The take imports with an exact preview: B, G, R unchanged, opaque.
       const library = new MediaLibrary(join(directory, "library"));
       const media = await library.importFile(finished.path);
-      assert.equal(media.previewAvailable, true);
+      assert.equal(
+        media.previewAvailable,
+        true,
+        JSON.stringify(
+          Object.fromEntries(
+            Object.entries(video).filter(
+              ([key]) => key.startsWith("color") || key.includes("pix"),
+            ),
+          ),
+        ),
+      );
       const frame = await library.frame(media.id, 0);
       const bgr0 = (
         await runProcess({
