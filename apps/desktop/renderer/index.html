@@ -149,6 +149,30 @@
             ><button id="next" aria-label="Next frame">→</button>
           </div>
           <section id="auto-edit-actions" class="auto-edit-actions" hidden>
+            <div id="magic-edit" class="magic-edit">
+              <div class="magic-edit-controls">
+                <label for="magic-preset">Magic Edit</label>
+                <select id="magic-preset">
+                  <option value="gentle">Gentle</option>
+                  <option value="balanced" selected>Balanced</option>
+                  <option value="tight">Tight</option>
+                </select>
+                <button id="magic-start" class="primary" type="button">
+                  Run Magic Edit
+                </button>
+                <button id="magic-stop" type="button" hidden>Stop</button>
+              </div>
+              <p id="magic-note"></p>
+              <progress
+                id="magic-progress"
+                max="1000"
+                value="0"
+                aria-label="Magic Edit progress"
+                hidden
+              ></progress>
+              <p id="magic-status" role="status" hidden></p>
+              <p id="magic-error" role="alert" hidden></p>
+            </div>
             <div class="auto-edit-controls">
               <button id="transcribe-local" class="primary" type="button">
                 Transcribe locally

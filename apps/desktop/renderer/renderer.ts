@@ -2,6 +2,7 @@ import { setupCodexSettings } from "./codex-settings.ts";
 import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { setupExportPanel } from "./export-panel.ts";
 import { setupPlayback } from "./playback.ts";
+import { setupMagicPanel } from "./magic-panel.ts";
 import { reconcileProjectDraft } from "./project-draft.ts";
 import { pollTranscriptionView } from "./transcription-state.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
@@ -892,9 +893,11 @@ function syncTranscriptionPolling(): void {
     transcriptionPollTimer = undefined;
   }
 }
+const magicPanel = setupMagicPanel(() => void loadTranscription());
 function renderTranscriptionActions(): void {
   const project = activeProject;
   const visible = project?.stage === "auto_edit";
+  magicPanel.render(project, visible);
   const view =
     transcriptionView?.project_id === project?.id
       ? transcriptionView

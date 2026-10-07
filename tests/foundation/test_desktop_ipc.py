@@ -398,6 +398,25 @@ class DesktopIpcContractTests(unittest.TestCase):
         bad_checkpoint['response']['value']['structuralCheckpointRecorded'] = 'yes'
         self.invalid(bad_checkpoint)
 
+    def test_magic_wand_channels_carry_counts_only(self):
+        example = json.loads(
+            (ROOT / 'docs/examples/desktop_ipc_magic_wand.example.json').read_text(encoding='utf-8')
+        )
+        self.valid(example)
+        for key, value in [('ranges', [[0, 1]]), ('transcript', 'and so my fellow')]:
+            leaked = deepcopy(example)
+            leaked['response']['value'][key] = value
+            self.invalid(leaked)
+        raw = deepcopy(example)
+        raw['response']['value']['message'] = 'TypeError: cannot read'
+        self.invalid(raw)
+        self.valid({'channel': 'magic:start',
+                    'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'tight'},
+                    'response': {'ok': True, 'value': example['response']['value']}})
+        self.invalid({'channel': 'magic:start',
+                      'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'extreme'},
+                      'response': {'ok': True, 'value': example['response']['value']}})
+
     def test_export_channels_expose_file_names_only(self):
         example = json.loads(
             (ROOT / 'docs/examples/desktop_ipc_export.example.json').read_text(encoding='utf-8')

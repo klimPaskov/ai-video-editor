@@ -236,6 +236,10 @@
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
       "example": "docs/examples/desktop_ipc_export.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_magic_wand.example.json"
     }
   ]
 }

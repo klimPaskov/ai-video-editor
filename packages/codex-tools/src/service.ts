@@ -32,10 +32,12 @@ type DraftTransactions = {
   undoApiProvider?(value: unknown): Promise<DraftCommitResult>;
   applyClaude?(value: unknown): Promise<DraftCommitResult>;
   undoClaude?(value: unknown): Promise<DraftCommitResult>;
+  applyMagicWand?(value: unknown): Promise<DraftCommitResult>;
+  undoMagicWand?(value: unknown): Promise<DraftCommitResult>;
 };
 
 /** The assistant route that main attributes each guarded transaction to. */
-export type ToolEditOrigin = "codex" | "claude" | "api_provider";
+export type ToolEditOrigin = "codex" | "claude" | "api_provider" | "magic_wand";
 
 type TranscriptReader = (
   projectId: string,
@@ -279,6 +281,8 @@ export class CodexVideoEditToolService {
       return this.drafts.applyApiProvider?.bind(this.drafts);
     if (this.origin === "claude")
       return this.drafts.applyClaude?.bind(this.drafts);
+    if (this.origin === "magic_wand")
+      return this.drafts.applyMagicWand?.bind(this.drafts);
     return this.drafts.applyCodex.bind(this.drafts);
   }
 
@@ -288,6 +292,8 @@ export class CodexVideoEditToolService {
       return this.drafts.undoApiProvider?.bind(this.drafts);
     if (this.origin === "claude")
       return this.drafts.undoClaude?.bind(this.drafts);
+    if (this.origin === "magic_wand")
+      return this.drafts.undoMagicWand?.bind(this.drafts);
     return this.drafts.undoCodex.bind(this.drafts);
   }
 

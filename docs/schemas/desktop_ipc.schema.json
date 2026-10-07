@@ -15,6 +15,89 @@
       "properties": {
         "channel": {
           "enum": [
+            "magic:get",
+            "magic:stop"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/magicWandProjectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/magicWandView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "magic:start"
+        },
+        "payload": {
+          "$ref": "#/$defs/magicWandStartRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/magicWandView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "enum": [
             "export:get",
             "export:cancel",
             "export:reset"
@@ -1675,6 +1758,161 @@
     }
   ],
   "$defs": {
+    "magicWandProjectRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      }
+    },
+    "magicWandStartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "preset"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "preset": {
+          "enum": [
+            "gentle",
+            "balanced",
+            "tight"
+          ]
+        }
+      }
+    },
+    "magicWandView": {
+      "type": "object",
+      "description": "Magic Edit progress and change counts. Transcript text, ranges and draft identity stay in main.",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "projectId",
+        "preset",
+        "progress",
+        "summary",
+        "message"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "idle",
+            "transcribing",
+            "applying",
+            "completed",
+            "stopped",
+            "failed"
+          ]
+        },
+        "projectId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "preset": {
+          "enum": [
+            "gentle",
+            "balanced",
+            "tight",
+            null
+          ]
+        },
+        "progress": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "removedUs",
+                "cuts",
+                "pauses",
+                "fillers",
+                "repeatedTakes",
+                "leftForReview"
+              ],
+              "properties": {
+                "removedUs": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cuts": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "pauses": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "fillers": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "repeatedTakes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "leftForReview": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "message": {
+          "enum": [
+            null,
+            "Magic Edit is already running for this project.",
+            "Magic Edit needs a local transcript, and transcription did not finish. Try again from Auto Edit.",
+            "Magic Edit needs a video with spoken audio.",
+            "The draft changed while Magic Edit was running. Applied cuts are kept and can be undone.",
+            "Magic Edit could not finish. Applied cuts are kept and can be undone.",
+            "Magic Edit stopped. Applied cuts are kept and can be undone.",
+            "No safe cuts were found for this preset."
+          ]
+        }
+      }
+    },
     "exportProjectRequest": {
       "type": "object",
       "additionalProperties": false,

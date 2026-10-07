@@ -106,6 +106,12 @@ import {
   assertExportView,
 } from "../../../packages/domain/src/export-view.ts";
 import { DesktopExports } from "./export.ts";
+import { DesktopMagicWand } from "./magic-wand.ts";
+import {
+  assertMagicWandProjectRequest,
+  assertMagicWandStartRequest,
+  assertMagicWandView,
+} from "../../../packages/domain/src/magic-wand-view.ts";
 import {
   DesktopProjectRuntime,
   committedDraftView,
@@ -126,6 +132,7 @@ let claude: DesktopClaude | undefined;
 let claudeBroker: CodexMcpBroker | undefined;
 let transcription: DesktopTranscriptionManager | undefined;
 let exports: DesktopExports | undefined;
+let magicWandBusy: (projectId: string) => boolean = () => false;
 /** Resolves a playable source of the active project; set once services start. */
 let resolvePlaybackSource:
   | ((
@@ -509,6 +516,52 @@ async function start(): Promise<void> {
   );
   // Claude reaches the same guarded tool service through its own broker, so
   // every Claude transaction is attributed to the Claude origin.
+  // Magic Edit commits through the same guarded tools as the assistants,
+  // attributed to its own origin so its cuts share Undo/Redo.
+  const magicWand = new DesktopMagicWand(
+    transcription!,
+    async (projectId, name, input) => {
+      if (activeProjectId !== projectId)
+        throw new CodexVideoEditToolError("inactive_project");
+      return invokeWithProjectDraftRefresh({
+        toolName: name,
+        projectId,
+        activeProjectId: () => activeProjectId,
+        work: () =>
+          new CodexVideoEditToolService(
+            projectId,
+            drafts,
+            "magic_wand",
+            readTranscriptForTool,
+          ).invoke(name, input),
+        drafts,
+        notify: publishDraftNotice,
+      });
+    },
+  );
+  magicWandBusy = (projectId) => magicWand.busy(projectId);
+  register(channels.magicGet, async (request) => {
+    assertMagicWandProjectRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before using Magic Edit.");
+    const value = magicWand.get(request.project_id);
+    assertMagicWandView(value);
+    return value;
+  });
+  register(channels.magicStart, async (request) => {
+    assertMagicWandStartRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before using Magic Edit.");
+    const value = magicWand.start(request.project_id, request.preset);
+    assertMagicWandView(value);
+    return value;
+  });
+  register(channels.magicStop, async (request) => {
+    assertMagicWandProjectRequest(request);
+    const value = magicWand.stop(request.project_id);
+    assertMagicWandView(value);
+    return value;
+  });
   const invokeClaudeTool = async (name: unknown, input: unknown) => {
     if (!activeProjectId) throw new CodexVideoEditToolError("inactive_project");
     const projectId = activeProjectId;
@@ -675,6 +728,8 @@ async function start(): Promise<void> {
   // A project with running work cannot lose focus: its turn's tools would
   // otherwise resolve against another project's draft.
   const assertProjectIdle = async (projectId: string): Promise<void> => {
+    if (magicWandBusy(projectId))
+      throw new UserFacingError("Stop Magic Edit before leaving this project.");
     if (exports!.busy(projectId))
       throw new UserFacingError(
         "Wait for the export to finish or cancel it before leaving this project.",

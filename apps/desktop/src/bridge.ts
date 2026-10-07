@@ -11,6 +11,11 @@ import type {
 } from "../../../packages/domain/src/api-providers.ts";
 import type { Preferences } from "../../../packages/domain/src/preferences.ts";
 import type {
+  MagicWandProjectRequest,
+  MagicWandStartRequest,
+  MagicWandView,
+} from "../../../packages/domain/src/magic-wand-view.ts";
+import type {
   ExportProjectRequest,
   ExportStartRequest,
   ExportView,
@@ -131,6 +136,11 @@ export interface DesktopBridge {
   interruptCodexThread(
     request: CodexThreadProjectRequest,
   ): Promise<Reply<CodexThreadView>>;
+  getMagicWand(request: MagicWandProjectRequest): Promise<Reply<MagicWandView>>;
+  startMagicWand(request: MagicWandStartRequest): Promise<Reply<MagicWandView>>;
+  stopMagicWand(
+    request: MagicWandProjectRequest,
+  ): Promise<Reply<MagicWandView>>;
   getExport(request: ExportProjectRequest): Promise<Reply<ExportView>>;
   startExport(request: ExportStartRequest): Promise<Reply<ExportView>>;
   cancelExport(request: ExportProjectRequest): Promise<Reply<ExportView>>;
@@ -180,6 +190,9 @@ export interface DesktopBridge {
   cancelImport(): Promise<Reply<null>>;
 }
 export const channels = Object.freeze({
+  magicGet: "magic:get",
+  magicStart: "magic:start",
+  magicStop: "magic:stop",
   exportGet: "export:get",
   exportStart: "export:start",
   exportCancel: "export:cancel",

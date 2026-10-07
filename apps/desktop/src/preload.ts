@@ -29,6 +29,11 @@ import {
 } from "../../../packages/domain/src/transcription.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import {
+  assertMagicWandProjectRequest,
+  assertMagicWandStartRequest,
+  assertMagicWandView,
+} from "../../../packages/domain/src/magic-wand-view.ts";
+import {
   assertExportProjectRequest,
   assertExportStartRequest,
   assertExportView,
@@ -236,6 +241,18 @@ const bridge: DesktopBridge = {
       request,
       assertCodexThreadView,
     );
+  },
+  getMagicWand: (request) => {
+    assertMagicWandProjectRequest(request);
+    return invoke(channels.magicGet, request, assertMagicWandView);
+  },
+  startMagicWand: (request) => {
+    assertMagicWandStartRequest(request);
+    return invoke(channels.magicStart, request, assertMagicWandView);
+  },
+  stopMagicWand: (request) => {
+    assertMagicWandProjectRequest(request);
+    return invoke(channels.magicStop, request, assertMagicWandView);
   },
   getExport: (request) => {
     assertExportProjectRequest(request);
