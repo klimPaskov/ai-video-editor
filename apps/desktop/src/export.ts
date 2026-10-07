@@ -22,10 +22,17 @@ import {
 } from "../../../packages/domain/src/export-view.ts";
 import { MediaError } from "../../../packages/media-engine/src/process.ts";
 import { draftWindowClips } from "../../../packages/domain/src/short-clips.ts";
+import {
+  windowZoomIntervals,
+  zoomFilter,
+  zoomIntervals,
+  type ZoomInterval,
+} from "../../../packages/domain/src/zoom.ts";
 import { probePresentationTiming } from "../../../packages/media-engine/src/presentation-timing.ts";
 import {
   exportDraft,
   planExport,
+  type ExportComposition,
   type ExportEvidence,
   type ExportSource,
 } from "../../../packages/media-engine/src/render.ts";
@@ -66,6 +73,7 @@ interface Job {
   draftSequence: number;
   captions: { cues: CaptionCue[]; settings: CaptionSettings } | null;
   audio: AudioSettings;
+  zooms: ZoomInterval[];
 }
 
 const unsupportedSet = new Set<string>(exportUnsupported);
@@ -92,6 +100,8 @@ export async function planDraft(
 ): Promise<{
   plan: ReturnType<typeof planExport>;
   snapshot: DraftProjectReadResult;
+  /** The draft's zooms in the exported output's own time. */
+  zooms: ZoomInterval[];
 }> {
   const snapshot = await drafts.snapshotWithProject(projectId);
   const project = snapshot.project;
@@ -104,18 +114,19 @@ export async function planDraft(
   const ordered = [...snapshot.draft.timeline.clips]
     .filter((clip) => clip.enabled)
     .sort((a, b) => a.timeline_start_us - b.timeline_start_us);
+  const mapped = ordered.map((clip) => ({
+    sourceId: clip.source_id,
+    timelineStartUs: clip.timeline_start_us,
+    timelineEndUs: clip.timeline_end_us,
+    sourceStartUs: clip.source_start_us,
+    sourceEndUs: clip.source_end_us,
+  }));
+  const allZooms = zoomIntervals(snapshot.draft.timeline.zooms ?? [], mapped);
+  const zooms = window
+    ? windowZoomIntervals(allZooms, window.startUs, window.endUs)
+    : allZooms;
   const clips = window
-    ? draftWindowClips(
-        ordered.map((clip) => ({
-          sourceId: clip.source_id,
-          timelineStartUs: clip.timeline_start_us,
-          timelineEndUs: clip.timeline_end_us,
-          sourceStartUs: clip.source_start_us,
-          sourceEndUs: clip.source_end_us,
-        })),
-        window.startUs,
-        window.endUs,
-      )
+    ? draftWindowClips(mapped, window.startUs, window.endUs)
     : ordered.map((clip) => ({
         sourceId: clip.source_id,
         sourceStartUs: clip.source_start_us,
@@ -143,7 +154,31 @@ export async function planDraft(
       ),
     });
   }
-  return { plan: planExport(clips, exportSources), snapshot };
+  return { plan: planExport(clips, exportSources), snapshot, zooms };
+}
+
+/**
+ * Zooms and burned-in captions drawn into the frames at the draft's own size
+ * and pixel format. Frames neither touches stay bit-identical.
+ */
+function composition(
+  job: Job,
+  video: { width: number; height: number; pixelFormat: string },
+): { compose: ExportComposition } | Record<string, never> {
+  const filter = zoomFilter(job.zooms, video.width, video.height);
+  const ass = job.captions?.settings.burnIn
+    ? toAss(job.captions.cues, job.captions.settings, video.width, video.height)
+    : undefined;
+  if (filter === null && ass === undefined) return {};
+  return {
+    compose: {
+      filter: filter ?? "",
+      ...(ass !== undefined ? { ass } : {}),
+      width: video.width,
+      height: video.height,
+      pixelFormat: video.pixelFormat,
+    },
+  };
 }
 
 /**
@@ -199,7 +234,7 @@ export class DesktopExports {
       this.fail(projectId, profile, error);
       return this.get(projectId);
     }
-    const { plan, snapshot } = draft;
+    const { plan, snapshot, zooms } = draft;
     const project = snapshot.project;
     const extension = profile === "lossless_master" ? ".mkv" : ".mp4";
     const suffix = profile === "lossless_master" ? "master" : "share";
@@ -236,6 +271,7 @@ export class DesktopExports {
     const job: Job = {
       audio,
       captions: captions && captions.cues.length ? captions : null,
+      zooms,
       projectId,
       profile,
       controller,
@@ -274,16 +310,7 @@ export class DesktopExports {
         },
         signal: job.controller.signal,
         audioCleanup: job.audio,
-        ...(job.captions?.settings.burnIn
-          ? {
-              overlayAss: toAss(
-                job.captions.cues,
-                job.captions.settings,
-                plan.format.video.width,
-                plan.format.video.height,
-              ),
-            }
-          : {}),
+        ...composition(job, plan.format.video),
         onProgress: (progress) => {
           if (this.job !== job || this.view.status !== "running") return;
           this.set({

@@ -57,6 +57,8 @@ import {
   assertManualTrimRequest,
   assertManualSplitRequest,
   assertManualRangeCutRequest,
+  assertManualZoomRequest,
+  assertManualZoomRemoveRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualTranscriptCutRequest,
@@ -1438,6 +1440,122 @@ async function start(): Promise<void> {
                 end_us: request.endUs,
               },
             ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.projectManualZoom, async (request) => {
+    assertManualZoomRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    const { draft } = await drafts.snapshotWithProject(request.projectId);
+    if (
+      draft.draft_sequence !== request.expectedSequence ||
+      draft.timeline_sha256 !== request.expectedTimelineSha256
+    )
+      throw new UserFacingError(
+        "The draft changed. Check the zoom range and try again.",
+      );
+    // Map the output range to one source's time through the clip map. An
+    // existing zoom keeps its own source range, including parts under cuts.
+    const existing = request.zoomId
+      ? draft.timeline.zooms?.find((zoom) => zoom.zoom_id === request.zoomId)
+      : undefined;
+    if (request.zoomId && !existing)
+      throw new UserFacingError("That zoom was removed. Add it again.");
+    const clips = draft.timeline.clips;
+    const at = (us: number) =>
+      clips.find(
+        (clip) => us >= clip.timeline_start_us && us < clip.timeline_end_us,
+      );
+    const first = at(request.startUs);
+    const last = at(request.endUs - 1);
+    if (!existing && (!first || !last || first.source_id !== last.source_id))
+      throw new UserFacingError(
+        "A zoom must stay within footage from one recording.",
+      );
+    const sourceId = existing?.source_id ?? first!.source_id;
+    const sourceStartUs =
+      existing?.source_start_us ??
+      first!.source_start_us + (request.startUs - first!.timeline_start_us);
+    const sourceEndUs =
+      existing?.source_end_us ??
+      last!.source_start_us + (request.endUs - last!.timeline_start_us);
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "zoom.set",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "zoom" },
+            reason: request.zoomId ? "Manual zoom change." : "Manual zoom.",
+            operations: [
+              {
+                type: "set_zoom",
+                zoom: {
+                  zoom_id:
+                    request.zoomId ??
+                    `zoom-${randomUUID().replaceAll("-", "")}`,
+                  source_id: sourceId,
+                  source_start_us: sourceStartUs,
+                  source_end_us: sourceEndUs,
+                  center_x: request.centerX,
+                  center_y: request.centerY,
+                  scale: request.scale,
+                },
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(
+          error.code === "conflict"
+            ? "Zooms cannot overlap. Choose a range outside the other zoom."
+            : error.message,
+        );
+      throw error;
+    }
+  });
+  register(channels.projectManualZoomRemove, async (request) => {
+    assertManualZoomRemoveRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "zoom.remove",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "zoom" },
+            reason: "Remove zoom.",
+            operations: [{ type: "remove_zoom", zoom_id: request.zoomId }],
           }),
       });
       return committedDraftView(committed);

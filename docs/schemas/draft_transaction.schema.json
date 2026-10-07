@@ -60,7 +60,8 @@
           { "$ref": "#/$defs/ripple_delete_operation" },
           { "$ref": "#/$defs/restore_range_operation" },
           { "$ref": "#/$defs/transcript_cut_operation" },
-          { "$ref": "#/$defs/transcript_edit_operation" }
+          { "$ref": "#/$defs/transcript_edit_operation" },
+          { "$ref": "#/$defs/zoom_operation" }
         ]
       }
     },
@@ -104,6 +105,21 @@
         "properties": {
           "operations": {
             "contains": { "$ref": "#/$defs/transcript_cut_operation" }
+          }
+        },
+        "required": ["operations"]
+      },
+      "then": {
+        "properties": {
+          "operations": { "minItems": 1, "maxItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operations": {
+            "contains": { "$ref": "#/$defs/zoom_operation" }
           }
         },
         "required": ["operations"]
@@ -369,6 +385,59 @@
         }
       },
       "description": "One user-selected contiguous half-open source word range mapped to the current output timeline. It shares ripple-delete's reversible clip-map inverse and records its transcript and word identity."
+    },
+    "zoom_operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation_id",
+        "operation_type",
+        "action",
+        "zoom_id",
+        "zoom",
+        "before",
+        "after",
+        "inverse"
+      ],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "operation_id": { "$ref": "#/$defs/id" },
+        "operation_type": { "const": "zoom" },
+        "action": { "enum": ["set", "remove"] },
+        "zoom_id": { "$ref": "#/$defs/id" },
+        "zoom": {
+          "oneOf": [
+            { "$ref": "timeline.schema.json#/$defs/zoom_effect" },
+            { "type": "null" }
+          ]
+        },
+        "before": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "timeline.schema.json#/$defs/zoom_effect" }
+        },
+        "after": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "timeline.schema.json#/$defs/zoom_effect" }
+        },
+        "inverse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "zooms", "expected_after_sha256"],
+          "properties": {
+            "type": { "const": "restore_zooms" },
+            "zooms": {
+              "type": "array",
+              "maxItems": 256,
+              "items": { "$ref": "timeline.schema.json#/$defs/zoom_effect" }
+            },
+            "expected_after_sha256": { "$ref": "#/$defs/hash" }
+          }
+        }
+      },
+      "description": "Adds or replaces one zoom (set, with the zoom) or removes one (remove, zoom null). It is the only operation in its transaction and its inverse restores the previous zoom list; the clip map is unchanged."
     },
     "transcript_edit_operation": {
       "type": "object",

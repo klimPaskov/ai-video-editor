@@ -75,6 +75,7 @@ export function committedDraftView(result: DraftReadResult): ProjectDraftView {
       sourceEndUs: clip.source_end_us,
     })),
     transcriptEdits: structuredClone(draft.timeline.transcript_edits ?? []),
+    zooms: structuredClone(draft.timeline.zooms ?? []),
   };
   assertProjectDraftView(value);
   return value;
@@ -98,6 +99,8 @@ export async function invokeWithProjectDraftRefresh<T>(options: {
     options.toolName === "transcript.cut_words" ||
     options.toolName === "timeline.split" ||
     options.toolName === "timeline.ripple_delete" ||
+    options.toolName === "zoom.set" ||
+    options.toolName === "zoom.remove" ||
     options.toolName === "timeline.undo" ||
     options.toolName === "timeline.redo";
   try {
@@ -166,6 +169,7 @@ export class DesktopProjectRuntime {
       draft: draft.draft,
       source: summaries[0]!,
       transcriptEdits: draft.transcriptEdits ?? [],
+      zooms: draft.zooms ?? [],
       ...(snapshot.schema_version === "1.1" ? { sources: summaries } : {}),
       timeline: draft.timeline,
       clips: draft.clips!,

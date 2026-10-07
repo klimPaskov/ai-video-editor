@@ -14,6 +14,11 @@ import {
   reframeFilter,
   shortSize,
 } from "../../packages/domain/src/short-clips.ts";
+import {
+  windowZoomIntervals,
+  zoomFilter,
+  zoomIntervals,
+} from "../../packages/domain/src/zoom.ts";
 import { probePresentationTiming } from "../../packages/media-engine/src/presentation-timing.ts";
 import {
   exportDraft,
@@ -678,6 +683,116 @@ test(
       assert.equal(changed.at(-1), end - 1);
       assert.equal(changed.length, end - 15);
       assert.ok(original.length > 0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "zooms change only the frames they cover in a verified lossless master",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-zoom-"));
+    try {
+      const input = await source(directory, "screen.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=30:duration=3",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "rgb",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+      ]);
+      // Export output window [1 s, 3 s) of a draft whose zoom starts at
+      // 0.8 s, so the window opens part-way through the zoom's ease-in.
+      const zooms = windowZoomIntervals(
+        zoomIntervals(
+          [
+            {
+              zoom_id: "zoom-1",
+              source_id: input.sourceId,
+              source_start_us: 800_000,
+              source_end_us: 2_000_000,
+              center_x: 0.25,
+              center_y: 0.5,
+              scale: 2,
+            },
+          ],
+          [
+            {
+              sourceId: input.sourceId,
+              timelineStartUs: 0,
+              timelineEndUs: 3_000_000,
+              sourceStartUs: 0,
+              sourceEndUs: 3_000_000,
+            },
+          ],
+        ),
+        1_000_000,
+        3_000_000,
+      );
+      assert.equal(zooms[0]!.startUs, -200_000);
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 1_000_000,
+            sourceEndUs: 3_000_000,
+          },
+        ],
+        [input],
+      );
+      const output = join(directory, "zoomed master.mkv");
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: output,
+        replace: false,
+        compose: {
+          filter: zoomFilter(zooms, 160, 90)!,
+          width: 160,
+          height: 90,
+          pixelFormat: "bgra",
+        },
+      });
+      assert.equal(evidence.samplesEqual, true);
+      const frameBytes = rawFrameBytes("bgra", 160, 90);
+      const original = (await fullDecode(input, "bgra", null)).video.subarray(
+        30 * frameBytes,
+      );
+      const exported = await ffmpeg([
+        "-i",
+        output,
+        "-c:v",
+        "rawvideo",
+        "-pix_fmt",
+        "bgra",
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ]);
+      assert.equal(exported.length, original.length);
+      const changed: number[] = [];
+      for (let frame = 0; frame < plan.frameCount; frame++) {
+        const range = [frame * frameBytes, (frame + 1) * frameBytes] as const;
+        if (!exported.subarray(...range).equals(original.subarray(...range)))
+          changed.push(frame);
+      }
+      // Source 1.0–2.0 s is zoomed (output frames 0–29); the rest is exact.
+      assert.deepEqual(
+        changed,
+        Array.from({ length: 30 }, (_, index) => index),
+      );
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

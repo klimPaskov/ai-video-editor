@@ -53,7 +53,7 @@ P0 foundation scope and synchronization audit: [46_P0_FOUNDATION.md](46_P0_FOUND
 | Screen, audio, camera recording | 06 | P4 | virtual-device sync and recovery |
 | Magic Wand raw edit | 09 | P5 | meaning, undo, interruption, media QA |
 | Manual simple editor | 10 | P6 | pointer, keyboard, history, revision tests |
-| Automatic and manual zoom | 11 | P7 | target, edge, motion, adjustment tests |
+| Automatic and manual zoom | 11 | P7 | target, edge, motion, adjustment tests. Manual zoom (P7-02, partial): `tests/media/zoom.test.ts`, zoom cases in `tests/media/draft-transactions.test.ts`, `tests/media/export-render.test.ts` and `tests/media/project-view.test.ts`, and packaged `tests/native/zoom.test.ts`. Automatic zooms remain open |
 | Speed-ups and pitch | 12, 15 | P7 | boundary, duration, pitch, A/V tests |
 | Captions | 13 | P8 | timing, safe area, sidecar tests |
 | B-roll and layouts | 14 | P8 | provenance, crop, fallback, render tests |

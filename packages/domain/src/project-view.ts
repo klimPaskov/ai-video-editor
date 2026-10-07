@@ -1,3 +1,4 @@
+import { assertZoomEffect, zoomLimits, type ZoomEffect } from "./zoom.ts";
 import {
   assertMediaFrame,
   assertMediaSummary,
@@ -65,6 +66,8 @@ export interface ProjectDraftView {
   clips?: ProjectClipView[];
   /** Text-only corrections committed through the same reversible draft journal. */
   transcriptEdits?: TranscriptTextOverride[];
+  /** Zoom effects anchored to source time. */
+  zooms?: ZoomEffect[];
 }
 export interface ProjectDraftIntegrityView {
   draft: ProjectDraftView;
@@ -120,6 +123,35 @@ export interface ManualRangeCutRequest {
   expectedTimelineSha256: string;
   startUs: number;
   endUs: number;
+}
+/**
+ * Adds a zoom over output interval [startUs, endUs), which main maps to
+ * source time from the draft. With `zoomId`, the existing zoom keeps its
+ * source range (including parts hidden by cuts) and only its target and
+ * strength change; the interval is then one of its visible pieces.
+ */
+export interface ManualZoomRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  zoomId: string | null;
+  startUs: number;
+  endUs: number;
+  centerX: number;
+  centerY: number;
+  scale: number;
+}
+export interface ManualZoomRemoveRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  zoomId: string;
 }
 /** Exact source-time interval confirmed missing from the active draft. */
 export interface ManualRestoreRangeRequest {
@@ -314,6 +346,57 @@ export function assertManualRangeCutRequest(
   positive(value.endUs);
   if (value.startUs >= value.endUs) invalid();
 }
+export function assertManualZoomRequest(
+  value: unknown,
+): asserts value is ManualZoomRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "zoomId",
+    "startUs",
+    "endUs",
+    "centerX",
+    "centerY",
+    "scale",
+  ]);
+  assertManualHead(value);
+  if (value.zoomId !== null) opaqueId(value.zoomId);
+  integer(value.startUs);
+  positive(value.endUs);
+  if (value.endUs - value.startUs < zoomLimits.minDurationUs) invalid();
+  for (const key of ["centerX", "centerY"] as const)
+    if (
+      typeof value[key] !== "number" ||
+      !Number.isFinite(value[key]) ||
+      value[key] < 0 ||
+      value[key] > 1
+    )
+      invalid();
+  if (
+    typeof value.scale !== "number" ||
+    !(value.scale >= zoomLimits.minScale && value.scale <= zoomLimits.maxScale)
+  )
+    invalid();
+}
+export function assertManualZoomRemoveRequest(
+  value: unknown,
+): asserts value is ManualZoomRemoveRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "zoomId",
+  ]);
+  assertManualHead(value);
+  opaqueId(value.zoomId);
+}
 export function assertManualRestoreRangeRequest(
   value: unknown,
 ): asserts value is ManualRestoreRangeRequest {
@@ -462,12 +545,18 @@ export function assertProjectDraftView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "transcriptEdits");
+  const hasZooms =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "zooms");
   exact(value, [
     "projectId",
     "draft",
     "timeline",
     ...(hasClips ? ["clips"] : []),
     ...(hasTranscriptEdits ? ["transcriptEdits"] : []),
+    ...(hasZooms ? ["zooms"] : []),
   ]);
   id(value.projectId);
   exact(value.draft, [
@@ -553,6 +642,22 @@ export function assertProjectDraftView(
     if (position !== value.timeline.durationUs) invalid();
   }
   if (hasTranscriptEdits) assertTranscriptTextOverrides(value.transcriptEdits);
+  if (hasZooms) assertViewZooms(value.zooms);
+}
+function assertViewZooms(value: unknown): void {
+  if (!Array.isArray(value) || value.length > zoomLimits.maxZooms) invalid();
+  for (const zoom of value) assertZoomEffect(zoom);
+  const zooms = value as ZoomEffect[];
+  if (new Set(zooms.map((zoom) => zoom.zoom_id)).size !== zooms.length)
+    invalid();
+  for (const [index, zoom] of zooms.entries())
+    for (const other of zooms.slice(index + 1))
+      if (
+        other.source_id === zoom.source_id &&
+        zoom.source_start_us < other.source_end_us &&
+        other.source_start_us < zoom.source_end_us
+      )
+        invalid();
 }
 export function assertProjectDraftIntegrityView(
   value: unknown,
@@ -588,11 +693,17 @@ export function assertProjectView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "transcriptEdits");
+  const hasZooms =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "zooms");
   exact(value, [
     ...keys,
     ...(hasSources ? ["sources"] : []),
     ...(hasClips ? ["clips"] : []),
     ...(hasTranscriptEdits ? ["transcriptEdits"] : []),
+    ...(hasZooms ? ["zooms"] : []),
   ]);
   id(value.id);
   id(value.revisionId);
@@ -628,6 +739,7 @@ export function assertProjectView(
     timeline: value.timeline,
     ...(hasClips ? { clips: value.clips } : {}),
     ...(hasTranscriptEdits ? { transcriptEdits: value.transcriptEdits } : {}),
+    ...(hasZooms ? { zooms: value.zooms } : {}),
   };
   assertProjectDraftView(draftView);
   if (hasTranscriptEdits)

@@ -1,4 +1,5 @@
 import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
+import type { ZoomInterval } from "../../../packages/domain/src/zoom.ts";
 
 /**
  * Proportional view of the draft timeline: one block per visible clip, the
@@ -15,13 +16,18 @@ export function setupTimelineStrip(options: {
   seek: (us: number) => void;
   time: (us: number) => string;
 }): {
-  render(project: ProjectView | undefined, marks: TimelineMarks): void;
+  render(
+    project: ProjectView | undefined,
+    marks: TimelineMarks,
+    zooms?: readonly ZoomInterval[],
+  ): void;
   playhead(us: number): void;
 } {
   const { host } = options;
   const track = host.querySelector<HTMLElement>(".timeline-track")!;
   const clips = host.querySelector<HTMLElement>(".timeline-clips")!;
   const markLayer = host.querySelector<HTMLElement>(".timeline-marks")!;
+  const zoomLayer = host.querySelector<HTMLElement>(".timeline-zooms")!;
   const head = host.querySelector<HTMLElement>(".timeline-playhead")!;
   const summary = host.querySelector<HTMLElement>(".timeline-summary")!;
   let durationUs = 0;
@@ -58,6 +64,7 @@ export function setupTimelineStrip(options: {
   function render(
     project: ProjectView | undefined,
     marks: TimelineMarks,
+    zooms: readonly ZoomInterval[] = [],
   ): void {
     current = project;
     host.hidden = !project?.clips;
@@ -111,6 +118,16 @@ export function setupTimelineStrip(options: {
       if (outUs !== undefined) layers.push(box(outUs, outUs, "timeline-mark"));
     }
     markLayer.replaceChildren(...layers);
+    zoomLayer.replaceChildren(
+      ...zooms.map((zoom) => {
+        const bar = document.createElement("div");
+        bar.className = "timeline-zoom";
+        bar.style.left = `calc(4px + (100% - 8px) * ${zoom.startUs / Math.max(1, durationUs)})`;
+        bar.style.width = `calc((100% - 8px) * ${(zoom.endUs - zoom.startUs) / Math.max(1, durationUs)})`;
+        bar.textContent = `${Number(zoom.scale.toFixed(2))}×`;
+        return bar;
+      }),
+    );
   }
 
   return { render, playhead };

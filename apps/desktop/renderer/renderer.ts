@@ -4,6 +4,13 @@ import { setupTimelineStrip } from "./timeline-strip.ts";
 import { setupCaptions } from "./captions-panel.ts";
 import { setupShortsPanel } from "./shorts-panel.ts";
 import { setupAudioPanel } from "./audio-panel.ts";
+import { mediaRect, setupZoomPreview } from "./zoom-preview.ts";
+import {
+  zoomAt,
+  zoomLimits,
+  zoomWindow,
+  type ZoomInterval,
+} from "../../../packages/domain/src/zoom.ts";
 import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { setupExportPanel } from "./export-panel.ts";
 import { setupPlayback } from "./playback.ts";
@@ -83,7 +90,13 @@ const editActions = element("edit-actions"),
   restoreSourceStart = element<HTMLInputElement>("restore-source-start"),
   restoreSourceEnd = element<HTMLInputElement>("restore-source-end"),
   restoreSubmit = element<HTMLButtonElement>("restore-submit"),
-  restoreError = element("restore-error");
+  restoreError = element("restore-error"),
+  zoomAdd = element<HTMLButtonElement>("zoom-add"),
+  zoomControls = element("zoom-controls"),
+  zoomScale = element<HTMLSelectElement>("zoom-scale"),
+  zoomTarget = element<HTMLButtonElement>("zoom-target"),
+  zoomRemove = element<HTMLButtonElement>("zoom-remove"),
+  zoomHint = element("zoom-hint");
 const reviewActions = element("review-actions"),
   checkDraftIntegrityButton = element<HTMLButtonElement>(
     "check-draft-integrity",
@@ -147,6 +160,12 @@ let draftIntegrityIssue: string | null = null;
 let markHead: string | undefined;
 let markInUs: number | undefined;
 let markOutUs: number | undefined;
+/** Waiting for a click on the preview to choose a zoom's target. */
+let zoomPicking:
+  | { head: string; startUs: number; endUs: number; zoom?: ZoomInterval }
+  | undefined;
+/** Length of a zoom added without marks, starting at the playhead. */
+const defaultZoomUs = 2_000_000;
 let restoreSourceProjectId: string | undefined;
 let restoreHead: string | undefined;
 let restoreRangeOpen = false;
@@ -1238,8 +1257,16 @@ const timelineStrip = setupTimelineStrip({
   time,
 });
 const captions = setupCaptions({ preview: canvas.parentElement! });
+const zoomPreview = setupZoomPreview(canvas.parentElement!);
 const audioPanel = setupAudioPanel();
+function refreshZoom(us = Number(seek.value)): void {
+  zoomPreview.render(
+    selected?.previewAvailable ? activeProject : undefined,
+    us,
+  );
+}
 function refreshCaptions(): void {
+  refreshZoom();
   audioPanel.render(activeProject?.id);
   captions.render(
     selected?.previewAvailable ? activeProject : undefined,
@@ -1252,10 +1279,14 @@ function renderTimeline(): void {
   refreshCaptions();
   const project = selected?.previewAvailable ? activeProject : undefined;
   const currentMarks = !!project && markHead === currentHeadKey(project);
-  timelineStrip.render(project, {
-    inUs: currentMarks ? markInUs : undefined,
-    outUs: currentMarks ? markOutUs : undefined,
-  });
+  timelineStrip.render(
+    project,
+    {
+      inUs: currentMarks ? markInUs : undefined,
+      outUs: currentMarks ? markOutUs : undefined,
+    },
+    zoomPreview.intervals(),
+  );
   timelineStrip.playhead(Number(seek.value));
 }
 function renderEditTools(): void {
@@ -1272,6 +1303,7 @@ function renderEditTools(): void {
     editActions.hidden = true;
     restoreRangeOpen = false;
     restoreHead = undefined;
+    setZoomPicking(undefined);
     return;
   }
   populateRestoreSources(project);
@@ -1323,6 +1355,7 @@ function renderEditTools(): void {
   ]
     .filter(Boolean)
     .join(" · ");
+  renderZoomTools(project, inUs, outUs);
   restoreToggleButton.disabled = manualEditPending || navigating;
   restoreToggleButton.textContent = restoreRangeOpen
     ? "Cancel restore"
@@ -1867,6 +1900,7 @@ async function decodeFrames(): Promise<void> {
         ?.putImageData(new ImageData(bytes, frame.width, frame.height), 0, 0);
       element("time").textContent = time(requested);
       canvas.hidden = false;
+      refreshZoom(requested);
       canvas.parentElement!.classList.remove("loading");
       element("preview-message").hidden = true;
     }
@@ -2039,6 +2073,7 @@ const playback = setupPlayback({
     element("time").textContent = time(us);
     timelineStrip.playhead(us);
     captions.position(us);
+    refreshZoom(us);
     if (previewEndUs !== undefined && us >= previewEndUs) {
       previewEndUs = undefined;
       playback.stop();
@@ -2560,6 +2595,219 @@ clearMarksButton.addEventListener("click", () => {
   markInUs = undefined;
   markOutUs = undefined;
   renderEditTools();
+});
+/** Output range a new zoom covers: the marks, or two seconds from the playhead. */
+function newZoomRange(
+  project: ProjectView,
+  inUs: number | undefined,
+  outUs: number | undefined,
+): { startUs: number; endUs: number } | undefined {
+  if (inUs !== undefined && outUs !== undefined)
+    return outUs - inUs >= zoomLimits.minDurationUs &&
+      outUs <= project.timeline.durationUs
+      ? { startUs: inUs, endUs: outUs }
+      : undefined;
+  const clip = currentClip(),
+    startUs = Number(seek.value);
+  if (!clip) return undefined;
+  const endUs = Math.min(startUs + defaultZoomUs, clip.timelineEndUs);
+  return endUs - startUs >= zoomLimits.minDurationUs
+    ? { startUs, endUs }
+    : undefined;
+}
+function zoomUnderPlayhead(): ZoomInterval | undefined {
+  const us = Number(seek.value);
+  return zoomPreview
+    .intervals()
+    .find((interval) => us >= interval.startUs && us < interval.endUs);
+}
+function setZoomPicking(next: typeof zoomPicking): void {
+  zoomPicking = next;
+  const preview = canvas.parentElement!;
+  preview.classList.toggle("picking", next !== undefined);
+  zoomHint.hidden = next === undefined;
+}
+function renderZoomTools(
+  project: ProjectView,
+  inUs: number | undefined,
+  outUs: number | undefined,
+): void {
+  if (zoomPicking && zoomPicking.head !== currentHeadKey(project))
+    setZoomPicking(undefined);
+  const busy = manualEditPending || navigating;
+  const marked = inUs !== undefined && outUs !== undefined;
+  zoomAdd.disabled =
+    busy || zoomPicking !== undefined || !newZoomRange(project, inUs, outUs);
+  zoomAdd.setAttribute(
+    "aria-label",
+    marked ? "Zoom the marked range" : "Zoom two seconds from the playhead",
+  );
+  zoomAdd.title = marked
+    ? "Zoom the marked range"
+    : "Zoom two seconds from the playhead";
+  const zoom = zoomUnderPlayhead();
+  zoomControls.hidden = !zoom;
+  if (zoom) {
+    const value = String(zoom.scale);
+    if (![...zoomScale.options].some((option) => option.value === value))
+      zoomScale.add(new Option(`${zoom.scale}×`, value));
+    zoomScale.value = value;
+  }
+  zoomScale.disabled = busy || zoomPicking !== undefined;
+  zoomTarget.disabled = busy || zoomPicking !== undefined;
+  zoomRemove.disabled = busy || zoomPicking !== undefined;
+}
+function previewMedia(): HTMLCanvasElement | HTMLVideoElement {
+  return (
+    canvas.parentElement!.querySelector<HTMLVideoElement>(
+      "video:not([hidden])",
+    ) ?? canvas
+  );
+}
+/** Frame position under a click, as fractions of the full frame. */
+function framePoint(event: MouseEvent): { x: number; y: number } | undefined {
+  const media = previewMedia(),
+    box = canvas.parentElement!.getBoundingClientRect(),
+    rect = mediaRect(media);
+  // The element's own box is untransformed; offsets are within .preview.
+  const x =
+      (event.clientX - box.left - media.offsetLeft - rect.left) / rect.width,
+    y = (event.clientY - box.top - media.offsetTop - rect.top) / rect.height;
+  if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return undefined;
+  // Through an active zoom the picture shows only part of the frame.
+  const zoom = zoomAt(zoomPreview.intervals(), Number(seek.value));
+  const window = zoomWindow(zoom.scale, zoom.centerX, zoom.centerY);
+  const round = (value: number) =>
+    Math.round(Math.min(1, Math.max(0, value)) * 10_000) / 10_000;
+  return {
+    x: round(window.x + x * window.size),
+    y: round(window.y + y * window.size),
+  };
+}
+async function submitZoom(
+  zoom: ZoomInterval | undefined,
+  range: { startUs: number; endUs: number },
+  center: { x: number; y: number },
+  scale: number,
+): Promise<void> {
+  const project = activeProject,
+    generation = routeGeneration;
+  if (!project || project.stage !== "edit" || manualEditPending) return;
+  manualEditPending = true;
+  back.disabled = true;
+  renderEditTools();
+  clearError();
+  try {
+    const reply = await window.desktop.applyManualZoom({
+      schema_version: "1.0",
+      projectId: project.id,
+      draftId: project.draft.id,
+      baseRevisionId: project.draft.baseRevisionId,
+      expectedSequence: project.draft.sequence,
+      expectedTimelineSha256: project.draft.timelineSha256,
+      zoomId: zoom?.zoomId ?? null,
+      startUs: range.startUs,
+      endUs: range.endUs,
+      centerX: center.x,
+      centerY: center.y,
+      scale,
+    });
+    if (generation === routeGeneration && activeProject?.id === project.id) {
+      if (reply.ok && !zoom) {
+        markHead = undefined;
+        markInUs = undefined;
+        markOutUs = undefined;
+      }
+      applyProjectDraft(reply);
+    }
+  } catch {
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      showError("The zoom could not be saved. Try again.");
+  } finally {
+    manualEditPending = false;
+    back.disabled = false;
+    renderEditTools();
+  }
+}
+async function submitZoomRemove(zoom: ZoomInterval): Promise<void> {
+  const project = activeProject,
+    generation = routeGeneration;
+  if (!project || project.stage !== "edit" || manualEditPending) return;
+  manualEditPending = true;
+  back.disabled = true;
+  renderEditTools();
+  clearError();
+  try {
+    const reply = await window.desktop.removeManualZoom({
+      schema_version: "1.0",
+      projectId: project.id,
+      draftId: project.draft.id,
+      baseRevisionId: project.draft.baseRevisionId,
+      expectedSequence: project.draft.sequence,
+      expectedTimelineSha256: project.draft.timelineSha256,
+      zoomId: zoom.zoomId,
+    });
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      applyProjectDraft(reply);
+  } catch {
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      showError("The zoom could not be removed. Try again.");
+  } finally {
+    manualEditPending = false;
+    back.disabled = false;
+    renderEditTools();
+  }
+}
+zoomAdd.addEventListener("click", () => {
+  const project = activeProject;
+  if (!project || project.stage !== "edit" || manualEditPending) return;
+  const currentMarks = markHead === currentHeadKey(project),
+    range = newZoomRange(
+      project,
+      currentMarks ? markInUs : undefined,
+      currentMarks ? markOutUs : undefined,
+    );
+  if (!range) return;
+  playback.stop();
+  setZoomPicking({ head: currentHeadKey(project), ...range });
+  renderEditTools();
+});
+zoomTarget.addEventListener("click", () => {
+  const project = activeProject,
+    zoom = zoomUnderPlayhead();
+  if (!project || !zoom || manualEditPending) return;
+  playback.stop();
+  setZoomPicking({
+    head: currentHeadKey(project),
+    startUs: zoom.startUs,
+    endUs: zoom.endUs,
+    zoom,
+  });
+  renderEditTools();
+});
+zoomScale.addEventListener("change", () => {
+  const zoom = zoomUnderPlayhead(),
+    scale = Number(zoomScale.value);
+  if (!zoom || !Number.isFinite(scale) || scale === zoom.scale) return;
+  void submitZoom(zoom, zoom, { x: zoom.centerX, y: zoom.centerY }, scale);
+});
+zoomRemove.addEventListener("click", () => {
+  const zoom = zoomUnderPlayhead();
+  if (zoom) void submitZoomRemove(zoom);
+});
+canvas.parentElement!.addEventListener("click", (event) => {
+  const picking = zoomPicking,
+    project = activeProject;
+  if (!picking || !project) return;
+  if (picking.head !== currentHeadKey(project)) {
+    setZoomPicking(undefined);
+    renderEditTools();
+    return;
+  }
+  const point = framePoint(event);
+  if (!point) return;
+  setZoomPicking(undefined);
+  void submitZoom(picking.zoom, picking, point, picking.zoom?.scale ?? 2);
 });
 undoEdit.addEventListener("click", () => void submitManualUndo());
 redoEdit.addEventListener("click", () => void submitManualRedo());
@@ -3238,6 +3486,13 @@ document.addEventListener("keydown", (event) => {
   ) {
     event.preventDefault();
     playback.toggle();
+    return;
+  }
+  if (event.key === "Escape" && zoomPicking) {
+    event.preventDefault();
+    setZoomPicking(undefined);
+    renderEditTools();
+    zoomAdd.focus();
     return;
   }
   if ((event.ctrlKey || event.metaKey) && event.key === ",") {

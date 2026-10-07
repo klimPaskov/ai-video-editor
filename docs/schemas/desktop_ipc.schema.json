@@ -1627,6 +1627,38 @@
       "additionalProperties": false,
       "required": ["channel", "payload", "response"],
       "properties": {
+        "channel": { "const": "projects:manual-zoom" },
+        "payload": { "$ref": "#/$defs/manualZoomRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
+        "channel": { "const": "projects:manual-zoom-remove" },
+        "payload": { "$ref": "#/$defs/manualZoomRemoveRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
         "channel": { "const": "projects:manual-range-cut" },
         "payload": { "$ref": "#/$defs/manualRangeCutRequest" },
         "response": { "oneOf": [
@@ -1966,6 +1998,21 @@
     }
   ],
   "$defs": {
+    "zoomEffect": {
+      "description": "A zoom anchored to source time: it magnifies a point of the frame and follows cuts.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zoom_id", "source_id", "source_start_us", "source_end_us", "center_x", "center_y", "scale"],
+      "properties": {
+        "zoom_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_start_us": { "type": "integer", "minimum": 0 },
+        "source_end_us": { "type": "integer", "minimum": 1 },
+        "center_x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "center_y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "scale": { "type": "number", "minimum": 1.1, "maximum": 4 }
+      }
+    },
     "audioSettings": {
       "description": "Per-project audio cleanup applied when exporting; sources are never changed.",
       "type": "object",
@@ -2988,6 +3035,11 @@
           "items": { "$ref": "#/$defs/projectClipView" },
           "description": "Optional for older exchange fixtures. Runtime emits exact ordered committed clips and matches their source IDs to source or sources."
         },
+        "zooms": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/zoomEffect" }
+        },
         "transcriptEdits": {
           "type": "array",
           "maxItems": 100000,
@@ -3716,6 +3768,11 @@
           "type": "array", "minItems": 1, "maxItems": 4096,
           "items": { "$ref": "#/$defs/projectClipView" }
         },
+        "zooms": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/zoomEffect" }
+        },
         "transcriptEdits": {
           "type": "array",
           "maxItems": 100000,
@@ -3756,6 +3813,39 @@
         "timelinePositionUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
       },
       "description": "Renderer sends split intent and freshness. Main injects transaction, pass and operation IDs and manual origin."
+    },
+    "manualZoomRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "zoomId", "startUs", "endUs", "centerX", "centerY", "scale"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "zoomId": { "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }] },
+        "startUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "endUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "centerX": { "type": "number", "minimum": 0, "maximum": 1 },
+        "centerY": { "type": "number", "minimum": 0, "maximum": 1 },
+        "scale": { "type": "number", "minimum": 1.1, "maximum": 4 }
+      },
+      "description": "Adds a zoom over an output-timeline half-open range of at least 0.5 s within one source, or (with zoomId) changes an existing zoom's target and strength while it keeps its source range. Main maps output to source time and injects the zoom ID and manual authority."
+    },
+    "manualZoomRemoveRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "zoomId"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "zoomId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }
+      },
+      "description": "Removes one zoom from the committed draft head as an undoable edit."
     },
     "manualRangeCutRequest": {
       "type": "object", "additionalProperties": false,

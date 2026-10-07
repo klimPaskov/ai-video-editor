@@ -922,6 +922,53 @@ dd {
   inset: 0;
   pointer-events: none;
 }
+.timeline-zooms {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.timeline-zoom {
+  position: absolute;
+  top: 2px;
+  height: 12px;
+  padding: 0 4px;
+  overflow: hidden;
+  color: #1b1405;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 12px;
+  background: #f4b740;
+  border-radius: 3px;
+}
+.zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  background: rgb(244 183 64 / 12%);
+  border-radius: var(--radius-sm);
+}
+.zoom-controls select {
+  width: auto;
+  min-width: 76px;
+  min-height: 30px;
+}
+.preview.picking {
+  cursor: crosshair;
+}
+.zoom-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #1b1405;
+  background: #f4b740;
+  border-radius: 6px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
 .timeline-range {
   position: absolute;
   top: 0;

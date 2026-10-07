@@ -75,6 +75,9 @@
           <div class="preview">
             <canvas id="frame" aria-label="Source frame"></canvas>
             <p id="preview-message" hidden></p>
+            <p id="zoom-hint" class="zoom-hint" role="status" hidden>
+              Click the picture where the zoom should point. Esc cancels.
+            </p>
           </div>
           <aside id="inspector" aria-label="Source details" hidden>
             <div class="panel-header">
@@ -210,6 +213,7 @@
           <div id="timeline-strip" class="timeline-strip" hidden>
             <div class="timeline-track" aria-hidden="true">
               <div class="timeline-clips"></div>
+              <div class="timeline-zooms"></div>
               <div class="timeline-marks"></div>
               <div class="timeline-playhead"></div>
             </div>
@@ -415,6 +419,23 @@
                 <button id="clear-marks" class="tool" data-icon="clear">
                   Clear
                 </button>
+                <button id="zoom-add" class="tool" data-icon="zoom">
+                  Zoom
+                </button>
+                <span id="zoom-controls" class="zoom-controls" hidden>
+                  <select id="zoom-scale" aria-label="Zoom strength">
+                    <option value="1.5">1.5×</option>
+                    <option value="2">2×</option>
+                    <option value="2.5">2.5×</option>
+                    <option value="3">3×</option>
+                  </select>
+                  <button id="zoom-target" class="tool" data-icon="target">
+                    Move target
+                  </button>
+                  <button id="zoom-remove" class="tool" data-icon="clear">
+                    Remove zoom
+                  </button>
+                </span>
               </div>
               <div id="restore-actions" class="restore-actions">
                 <button

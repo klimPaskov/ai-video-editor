@@ -4,6 +4,11 @@ import type {
 } from "./project.ts";
 import { assertTranscriptTextOverrides } from "./transcription.ts";
 import type { TranscriptTextOverride } from "./transcription.ts";
+import {
+  assertZoomEffect,
+  assertZoomEffects,
+  type ZoomEffect,
+} from "./zoom.ts";
 type ProjectBaseline = InitialProjectSnapshot | TwoSourceInitialProjectSnapshot;
 import {
   canonicalSha256,
@@ -13,6 +18,8 @@ import {
 
 export type DraftTimeline = InitialProjectSnapshot["timeline"] & {
   transcript_edits?: TranscriptTextOverride[];
+  /** Zoom effects anchored to source time; absent means none. */
+  zooms?: ZoomEffect[];
 };
 export type DraftOrigin =
   "manual" | "codex" | "claude" | "api_provider" | "magic_wand";
@@ -80,7 +87,20 @@ export interface TranscriptCutIntent {
   end_us: number;
 }
 
+/** Adds a zoom, or replaces the zoom with the same id. */
+export interface SetZoomIntent {
+  type: "set_zoom";
+  zoom: ZoomEffect;
+}
+
+export interface RemoveZoomIntent {
+  type: "remove_zoom";
+  zoom_id: string;
+}
+
 export type DraftEditIntent =
+  | SetZoomIntent
+  | RemoveZoomIntent
   | TrimEdgeIntent
   | SplitClipIntent
   | RippleDeleteIntent
@@ -254,7 +274,25 @@ export interface TranscriptCutOperationRecord {
   };
 }
 
+export interface ZoomOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "zoom";
+  action: "set" | "remove";
+  zoom_id: string;
+  /** The zoom set, or null when removing. */
+  zoom: ZoomEffect | null;
+  before: ZoomEffect[];
+  after: ZoomEffect[];
+  inverse: {
+    type: "restore_zooms";
+    zooms: ZoomEffect[];
+    expected_after_sha256: string;
+  };
+}
+
 export type DraftOperationRecord =
+  | ZoomOperationRecord
   | TrimOperationRecord
   | SplitOperationRecord
   | RippleDeleteOperationRecord
@@ -476,8 +514,10 @@ export function assertDraftTimeline(
       "speed_ids",
       "created_at",
     ],
-    ["transcript_edits"],
+    ["transcript_edits", "zooms"],
   );
+  if (Object.hasOwn(value, "zooms"))
+    assertZoomEffects(value.zooms, baseline.clips);
   if (Object.hasOwn(value, "transcript_edits"))
     assertTranscriptTextOverrides(
       value.transcript_edits,
@@ -616,6 +656,18 @@ export function assertApplyDraftTransactionRequest(
   const clips = new Set<string>();
   let previousRangeStart: number | null = null;
   for (const operation of value.operations) {
+    if (operation?.type === "set_zoom") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "zoom"]);
+      assertZoomEffect(operation.zoom);
+      continue;
+    }
+    if (operation?.type === "remove_zoom") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "zoom_id"]);
+      id(operation.zoom_id);
+      continue;
+    }
     if (operation?.type === "transcript_cut") {
       if (value.operations.length !== 1) invalid();
       exact(operation, [

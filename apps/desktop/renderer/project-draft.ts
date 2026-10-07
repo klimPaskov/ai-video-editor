@@ -27,6 +27,7 @@ export function reconcileProjectDraft(
       : { status: "invalid" };
   const next = { ...current };
   delete next.clips;
+  delete next.zooms;
   return {
     status: "applied",
     value: {
@@ -36,6 +37,7 @@ export function reconcileProjectDraft(
       ...(changed.transcriptEdits
         ? { transcriptEdits: changed.transcriptEdits }
         : {}),
+      ...(changed.zooms ? { zooms: changed.zooms } : {}),
       ...(changed.clips ? { clips: changed.clips } : {}),
     },
   };

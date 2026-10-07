@@ -1,0 +1,60 @@
+{
+  "channel": "projects:manual-zoom",
+  "payload": {
+    "schema_version": "1.0",
+    "projectId": "ec68bd7a-79eb-4a96-9475-4db15df75d3a",
+    "draftId": "draft-bfddc982-903a-4570-8efc-27dc381b98b6",
+    "baseRevisionId": "a647be34-c87d-44eb-82fb-70d6afcbdc31",
+    "expectedSequence": 0,
+    "expectedTimelineSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "zoomId": null,
+    "startUs": 100000,
+    "endUs": 900000,
+    "centerX": 0.7,
+    "centerY": 0.3,
+    "scale": 2
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "projectId": "ec68bd7a-79eb-4a96-9475-4db15df75d3a",
+      "draft": {
+        "id": "draft-bfddc982-903a-4570-8efc-27dc381b98b6",
+        "baseRevisionId": "a647be34-c87d-44eb-82fb-70d6afcbdc31",
+        "sequence": 1,
+        "timelineSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "undoTransactionId": "manual-transaction-1",
+        "redoTransactionId": null
+      },
+      "timeline": {
+        "id": "d0d743dc-b2af-4a60-8dd9-3cb7644a7ba4",
+        "durationUs": 1000000,
+        "frameRate": {
+          "numerator": 60,
+          "denominator": 1
+        }
+      },
+      "clips": [
+        {
+          "id": "8ae27d25-c778-4d2c-9678-6be65c0ca717",
+          "sourceId": "d81632fb-4cde-4d40-a75d-679e22c15f2a",
+          "timelineStartUs": 0,
+          "timelineEndUs": 1000000,
+          "sourceStartUs": 0,
+          "sourceEndUs": 1000000
+        }
+      ],
+      "zooms": [
+        {
+          "zoom_id": "zoom-3f2a9c0b8e1d4f6a9b2c7d1e0f3a4b5c",
+          "source_id": "d81632fb-4cde-4d40-a75d-679e22c15f2a",
+          "source_start_us": 100000,
+          "source_end_us": 900000,
+          "center_x": 0.7,
+          "center_y": 0.3,
+          "scale": 2
+        }
+      ]
+    }
+  }
+}

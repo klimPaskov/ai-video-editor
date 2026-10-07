@@ -1796,3 +1796,105 @@ test("transcript cuts retain exact word evidence in the shared reversible journa
   assert.deepEqual(reopenedAfterRestore.draft, restoredAgain.draft);
   assert.deepEqual(await readFile(source), sourceBytes);
 });
+
+test("zooms are reversible draft edits that survive reopen", async () => {
+  const { projects, projectStore, baseline, source } = await fixture();
+  const sourceBytes = await readFile(source);
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  const zoom = {
+    zoom_id: "zoom-001",
+    source_id: baseline.source.source_id,
+    source_start_us: 100_000,
+    source_end_us: 700_000,
+    center_x: 0.25,
+    center_y: 0.75,
+    scale: 2,
+  };
+  const pass = { pass_group_id: "pass-zoom-001", kind: "zoom" as const };
+  const added = await store.applyManual(
+    trim(initial, {
+      request_id: "request-zoom-add-001",
+      pass_group: pass,
+      reason: "Zoom in on the settings button.",
+      operations: [{ type: "set_zoom", zoom }],
+    }),
+  );
+  assert.equal(added.transaction.operations[0]?.operation_type, "zoom");
+  assert.deepEqual(added.draft.timeline.zooms, [zoom]);
+  // A second zoom may not overlap the first in source time.
+  await assert.rejects(
+    store.applyManual(
+      trim(added.draft, {
+        request_id: "request-zoom-overlap-001",
+        pass_group: pass,
+        operations: [
+          {
+            type: "set_zoom",
+            zoom: {
+              ...zoom,
+              zoom_id: "zoom-002",
+              source_start_us: 400_000,
+              source_end_us: 950_000,
+            },
+          },
+        ],
+      }),
+    ),
+    code("conflict"),
+  );
+  const changed = await store.applyManual(
+    trim(added.draft, {
+      request_id: "request-zoom-change-001",
+      pass_group: pass,
+      reason: "Zoom in further.",
+      operations: [{ type: "set_zoom", zoom: { ...zoom, scale: 3 } }],
+    }),
+  );
+  assert.equal(changed.draft.timeline.zooms?.[0]?.scale, 3);
+  const removed = await store.applyManual(
+    trim(changed.draft, {
+      request_id: "request-zoom-remove-001",
+      pass_group: pass,
+      reason: "Remove the zoom.",
+      operations: [{ type: "remove_zoom", zoom_id: "zoom-001" }],
+    }),
+  );
+  assert.equal(removed.draft.timeline.zooms, undefined);
+  await assert.rejects(
+    store.applyManual(
+      trim(removed.draft, {
+        request_id: "request-zoom-remove-002",
+        pass_group: pass,
+        operations: [{ type: "remove_zoom", zoom_id: "zoom-001" }],
+      }),
+    ),
+    code("conflict"),
+  );
+  const undone = await store.undoManual(
+    undo(
+      removed.draft,
+      removed.transaction.transaction_id,
+      "request-zoom-undo-001",
+    ),
+  );
+  assert.equal(undone.draft.timeline.zooms?.[0]?.scale, 3);
+  const redone = await store.redoManual(
+    redo(
+      undone.draft,
+      undone.transaction.transaction_id,
+      "request-zoom-redo-001",
+    ),
+  );
+  assert.equal(redone.draft.timeline.zooms, undefined);
+  const reopened = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopened.draft, redone.draft);
+  assert.deepEqual(await readFile(source), sourceBytes);
+});

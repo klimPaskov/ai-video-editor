@@ -41,6 +41,7 @@ import {
   type TwoSourceInitialProjectSnapshot,
 } from "../../domain/src/project.ts";
 import { sameProjectStorePath, serializeProjectStore } from "./serialize.ts";
+import { assertZoomEffects } from "../../domain/src/zoom.ts";
 
 type ProjectBaseline = InitialProjectSnapshot | TwoSourceInitialProjectSnapshot;
 type ProjectReader = {
@@ -485,6 +486,47 @@ function prepareApply(
       operationId = authority.operation_ids[index]!;
     if (!validId(operationId) || timeline.operation_ids.includes(operationId))
       fail("conflict");
+    if (intent.type === "set_zoom" || intent.type === "remove_zoom") {
+      if (request.operations.length !== 1) fail("invalid");
+      const beforeZooms = structuredClone(timeline.zooms ?? []);
+      const zoomId =
+        intent.type === "set_zoom" ? intent.zoom.zoom_id : intent.zoom_id;
+      const exists = beforeZooms.some((zoom) => zoom.zoom_id === zoomId);
+      if (intent.type === "remove_zoom" && !exists) fail("conflict");
+      const afterZooms = beforeZooms.filter((zoom) => zoom.zoom_id !== zoomId);
+      if (intent.type === "set_zoom") {
+        afterZooms.push(structuredClone(intent.zoom));
+        afterZooms.sort(
+          (a, b) =>
+            a.source_id.localeCompare(b.source_id) ||
+            a.source_start_us - b.source_start_us,
+        );
+      }
+      try {
+        assertZoomEffects(afterZooms, baseline.timeline.clips);
+      } catch {
+        fail("conflict");
+      }
+      if (afterZooms.length) timeline.zooms = afterZooms;
+      else delete timeline.zooms;
+      timeline.operation_ids.push(operationId);
+      records.push({
+        schema_version: "1.0",
+        operation_id: operationId,
+        operation_type: "zoom",
+        action: intent.type === "set_zoom" ? "set" : "remove",
+        zoom_id: zoomId,
+        zoom: intent.type === "set_zoom" ? structuredClone(intent.zoom) : null,
+        before: beforeZooms,
+        after: structuredClone(afterZooms),
+        inverse: {
+          type: "restore_zooms",
+          zooms: beforeZooms,
+          expected_after_sha256: canonicalSha256(afterZooms),
+        },
+      });
+      continue;
+    }
     if (intent.type === "transcript_edit") {
       if (request.operations.length !== 1) fail("invalid");
       if (
@@ -1076,53 +1118,58 @@ export class DraftTransactionStore {
           pass_group: record.pass_group,
           reason: record.reason,
           operations: record.operations.map((operation) =>
-            operation.operation_type === "split"
-              ? {
-                  type: "split" as const,
-                  clip_id: operation.clip_id,
-                  timeline_position_us: operation.timeline_position_us,
-                }
-              : operation.operation_type === "ripple_delete"
+            operation.operation_type === "zoom"
+              ? operation.action === "set" && operation.zoom
+                ? { type: "set_zoom" as const, zoom: operation.zoom }
+                : { type: "remove_zoom" as const, zoom_id: operation.zoom_id }
+              : operation.operation_type === "split"
                 ? {
-                    type: "ripple_delete" as const,
-                    start_us: operation.start_us,
-                    end_us: operation.end_us,
+                    type: "split" as const,
+                    clip_id: operation.clip_id,
+                    timeline_position_us: operation.timeline_position_us,
                   }
-                : operation.operation_type === "restore"
+                : operation.operation_type === "ripple_delete"
                   ? {
-                      type: "restore_range" as const,
-                      source_id: operation.source_id,
-                      source_start_us: operation.source_start_us,
-                      source_end_us: operation.source_end_us,
+                      type: "ripple_delete" as const,
+                      start_us: operation.start_us,
+                      end_us: operation.end_us,
                     }
-                  : operation.operation_type === "transcript_cut"
+                  : operation.operation_type === "restore"
                     ? {
-                        type: "transcript_cut" as const,
+                        type: "restore_range" as const,
                         source_id: operation.source_id,
-                        transcript_id: operation.transcript_id,
-                        start_word_id: operation.start_word_id,
-                        end_word_id: operation.end_word_id,
                         source_start_us: operation.source_start_us,
                         source_end_us: operation.source_end_us,
-                        start_us: operation.start_us,
-                        end_us: operation.end_us,
                       }
-                    : operation.operation_type === "transcript_edit"
+                    : operation.operation_type === "transcript_cut"
                       ? {
-                          type: "transcript_edit" as const,
+                          type: "transcript_cut" as const,
                           source_id: operation.source_id,
                           transcript_id: operation.transcript_id,
-                          word_id: operation.word_id,
-                          original_text: operation.original_text,
-                          expected_text: operation.before_text,
-                          replacement_text: operation.after_text,
+                          start_word_id: operation.start_word_id,
+                          end_word_id: operation.end_word_id,
+                          source_start_us: operation.source_start_us,
+                          source_end_us: operation.source_end_us,
+                          start_us: operation.start_us,
+                          end_us: operation.end_us,
                         }
-                      : {
-                          type: "trim" as const,
-                          clip_id: operation.clip_id,
-                          edge: operation.edge,
-                          timeline_position_us: operation.timeline_position_us,
-                        },
+                      : operation.operation_type === "transcript_edit"
+                        ? {
+                            type: "transcript_edit" as const,
+                            source_id: operation.source_id,
+                            transcript_id: operation.transcript_id,
+                            word_id: operation.word_id,
+                            original_text: operation.original_text,
+                            expected_text: operation.before_text,
+                            replacement_text: operation.after_text,
+                          }
+                        : {
+                            type: "trim" as const,
+                            clip_id: operation.clip_id,
+                            edge: operation.edge,
+                            timeline_position_us:
+                              operation.timeline_position_us,
+                          },
           ),
         };
         assertApplyDraftTransactionRequest(request);

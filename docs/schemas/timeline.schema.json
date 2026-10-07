@@ -245,6 +245,12 @@
         "description": "Text-only correction metadata. It does not alter original speech. Runtime validates unique word identity, source membership, and different before/after text."
       }
     },
+    "zooms": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/zoom_effect" },
+      "description": "Draft zooms. Omitted when the draft has none."
+    },
     "caption_style_id": {
       "type": ["string", "null"],
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
@@ -255,6 +261,35 @@
     }
   },
   "$defs": {
+    "zoom_effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "zoom_id",
+        "source_id",
+        "source_start_us",
+        "source_end_us",
+        "center_x",
+        "center_y",
+        "scale"
+      ],
+      "properties": {
+        "zoom_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_start_us": { "type": "integer", "minimum": 0 },
+        "source_end_us": { "type": "integer", "minimum": 1 },
+        "center_x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "center_y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "scale": { "type": "number", "minimum": 1.1, "maximum": 4 }
+      },
+      "description": "A zoom anchored to source time. It magnifies the point (center_x, center_y) of the frame by scale, eases in and out over at most 0.4 s at its real edges, and follows cuts. Runtime requires at least 0.5 s, a range inside its source, unique IDs and no overlap with another zoom of the same source."
+    },
     "transcript_edit": {
       "type": "object",
       "additionalProperties": false,

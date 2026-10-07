@@ -23,6 +23,7 @@ import {
 } from "../../../packages/domain/src/short-clips-view.ts";
 import { exportDraft } from "../../../packages/media-engine/src/render.ts";
 import { planDraft } from "./export.ts";
+import { zoomFilter } from "../../../packages/domain/src/zoom.ts";
 import type { DraftProjectReadResult } from "../../../packages/project-store/src/transactions.ts";
 
 export class ShortClipError extends Error {}
@@ -204,7 +205,7 @@ export class DesktopShortClips {
     if (!chosen) return this.view(projectId);
     const outputPath =
       path.extname(chosen).toLowerCase() === ".mp4" ? chosen : `${chosen}.mp4`;
-    const { plan } = await planDraft(
+    const { plan, zooms } = await planDraft(
       this.options.drafts,
       this.options.ffprobe ?? "ffprobe",
       projectId,
@@ -252,11 +253,13 @@ export class DesktopShortClips {
       signal: controller.signal,
       audioCleanup: await this.options.audioSettings(projectId),
       compose: {
-        filter: reframeFilter(
-          request.format,
-          request.framing,
-          request.position,
-        ),
+        // Zooms apply to the full frame first, then the frame is reframed.
+        filter: [
+          zoomFilter(zooms, plan.format.video.width, plan.format.video.height),
+          reframeFilter(request.format, request.framing, request.position),
+        ]
+          .filter(Boolean)
+          .join(","),
         ...(ass !== undefined ? { ass } : {}),
         width,
         height,

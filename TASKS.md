@@ -145,7 +145,7 @@ Acceptance: a user can correct the Magic Wand draft without leaving the app.
 ## P7: zoom, cursor, speed, and reframe
 
 - [ ] P7-01 Generate purposeful automatic zooms from telemetry and visual evidence. Record precise target identity, source/layer and fixed/cursor mode; apply contextual scale/duration/rest preferences within authorized scope.
-- [ ] P7-02 Implement manual zoom creation and on-canvas target editing.
+- [ ] P7-02 Implement manual zoom creation and on-canvas target editing. Zooms over a marked range (or two seconds from the playhead) with an on-canvas click target, strength, retarget, removal, shared Undo, preview and export that leaves unzoomed frames bit-identical are implemented and natively tested (docs/11); edge dragging, target rectangles and follow-cursor remain.
 - [ ] P7-03 Implement smooth cursor, click highlight, cursor visibility, and per-range controls.
 - [ ] P7-04 Detect safe typing, loading, and waiting ranges for speed-up.
 - [ ] P7-05 Implement manual speed segments with pitch-safe audio choices.
