@@ -53,7 +53,7 @@ for (let frame = 0; frame < 3; frame++)
             256;
   }
 async function assertCanvasFrame(page: Page, frame: number): Promise<void> {
-  const actual = await page.locator("canvas").evaluate((node) => {
+  const actual = await page.locator("#frame").evaluate((node) => {
     const canvas = node as HTMLCanvasElement;
     return {
       width: canvas.width,
@@ -74,7 +74,12 @@ async function assertCanvasFrame(page: Page, frame: number): Promise<void> {
     expected[i] = expected[i + 2]!;
     expected[i + 2] = blue;
   }
-  assert.deepEqual(Buffer.from(actual.pixels), expected);
+  // Buffer.equals avoids assert's diff rendering, which takes tens of seconds
+  // for a mismatched frame and stalls polls that run during a live turn.
+  assert.ok(
+    Buffer.from(actual.pixels).equals(expected),
+    `Canvas does not show frame ${frame}`,
+  );
 }
 const audio = Buffer.alloc(72_000 * 2);
 for (let i = 0; i < 72_000; i++)
@@ -272,7 +277,7 @@ try {
       join(projectFolder, "project.json"),
     ),
     integrityButton = window.getByRole("button", {
-      name: "Check draft integrity",
+      name: "Verify draft",
       exact: true,
     }),
     managedSourcePath = baseline.source.managed_path,
@@ -373,7 +378,8 @@ try {
   await window
     .getByRole("button", { name: "Source details", exact: true })
     .click();
-  // Claude is the default assistant route; this guest has no Claude Code.
+  // Claude is the default assistant route. The guest has either no Claude
+  // Code or a signed-out one; either way the drawer must gate the turn.
   await window.getByRole("button", { name: "Claude", exact: true }).click();
   await expect(window.locator("#review-actions")).toBeHidden();
   await expect(window.locator("#inspector")).toBeHidden();
@@ -388,7 +394,7 @@ try {
     .getByRole("button", { name: "Open conversation", exact: true })
     .click();
   await expect(window.locator("#codex-thread-error")).toHaveText(
-    "Set up Claude in Settings to continue.",
+    /^(Set up|Sign in to) Claude in Settings to continue\.$/u,
     { timeout: 30_000 },
   );
   await expect(window.locator("#codex-thread-messages p")).toHaveCount(0);
@@ -611,7 +617,7 @@ try {
     .toBe(1.25);
   await expect(
     window.locator(`#projects [data-project-id="${project.id}"] small`),
-  ).toHaveText("0:01.000 · 1 source · Review");
+  ).toHaveText("0:01 · Review");
   await window.locator(`#projects [data-project-id="${project.id}"]`).click();
   await expect(window.locator("#frame")).toBeVisible();
   await expect(window.locator("#time")).toHaveText("0:00.000");

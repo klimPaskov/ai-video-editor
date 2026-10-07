@@ -10,12 +10,13 @@ import {
   encodeVerifiedMaster,
   sha256,
 } from "../../packages/media-engine/src/lossless.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux", "Run only in isolated guest");
 assert.ok(process.getuid);
 assert.equal(process.getuid(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 assert.ok(executablePath && isAbsolute(executablePath));
 await access(executablePath);

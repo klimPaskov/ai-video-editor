@@ -14,6 +14,8 @@ Also disable the pinned runtime's default-on `hooks`, shadow `skill_search`, and
 - Validate every IPC sender and payload.
 - Expose only narrow preload functions.
 - Never render arbitrary remote HTML inside a privileged view.
+- Screen capture never outlives the app: each FFmpeg capture runs under a supervisor that finishes it when the app's pipe closes or the app process goes away.
+- The recording area picker is a separate sandboxed window on packaged `region.html` whose preload can only send one rectangle (fractions of the display) or a cancellation; main accepts it only from that window's own page and refuses areas outside the display.
 
 ## Filesystem
 
@@ -30,6 +32,8 @@ Also disable the pinned runtime's default-on `hooks`, shadow `skill_search`, and
 - Never capture keystrokes.
 - Avoid notification and secret exposure in fixtures and documentation.
 
+Recording IPC (2026-10-07): `recording:*` channels carry only opaque display and microphone ids chosen from the last device listing; main maps them to FFmpeg inputs and rejects unknown ids. Device names for FFmpeg, screen coordinates, take paths and FFmpeg output never reach the renderer, and errors are fixed messages. Recording starts only from an explicit Start after a visible countdown, cannot be dismissed while running, and the take is written under the app's data folder before import.
+
 ## AI data boundary
 
 - Explain which selected provider receives text, metadata, frames and instructions before first use.
@@ -45,7 +49,7 @@ Also disable the pinned runtime's default-on `hooks`, shadow `skill_search`, and
 
 Codex receives guarded ai-video-editor tools, not unrestricted filesystem or shell control. Tool calls validate project, draft, range, asset, and transaction identity.
 
-Electron main owns the active project and the only draft writer. The packaged MCP child accepts only the nine reviewed P2 tools, including read-only bounded `transcript.get_range` and reversible `cut.split`, `cut.delete_range`, `cut.delete_ranges`, and exact `cut.restore_range`, and forwards bounded intent through a local broker authenticated by a random process-only credential. App-server startup verifies the exact server, tool names, and input schemas and refuses MCP project threads on mismatch. The child cannot choose a project root, construct transaction authority, approve export/deletion/cleanup, or access a generic main RPC.
+Electron main owns the active project and the only draft writer. The packaged MCP child accepts only the twelve reviewed tools (the 2026-10-07 additions are the draft-only `zoom.set`, `zoom.remove` and `speed.set`), including read-only bounded `transcript.get_range` and reversible `cut.split`, `cut.delete_range`, `cut.delete_ranges`, and exact `cut.restore_range`, and forwards bounded intent through a local broker authenticated by a random process-only credential. App-server startup verifies the exact server, tool names, and input schemas and refuses MCP project threads on mismatch. The child cannot choose a project root, construct transaction authority, approve export/deletion/cleanup, or access a generic main RPC.
 
 For each new dynamic-bound project thread, main binds every model-visible `project_id` tool property to the validated active project with a JSON Schema `const`. This avoids relying on generated identifier text for normal calls. It is not authorization: main still resolves the active project and rejects any call that does not match it. Stored tool definitions remain with their existing thread on resume.
 
@@ -102,4 +106,10 @@ Failed-turn projection uses only the pinned structured `codexErrorInfo` category
 
 ## Claude connection
 
-Claude runs through the user's installed, unmodified Claude Code CLI (ADR 0018, `docs/48_CLAUDE_CONNECTION.md`). The app never implements OAuth, never reads Claude Code's credential store, never writes to its sign-in code prompt and never seeds or copies Claude credentials into tests. Main resolves the executable; the renderer cannot choose it. Children use a dedicated configuration directory and empty working directory under app data, drop inherited Anthropic credential variables, and disable CLAUDE.md, auto memory, telemetry, error reporting and auto-update. Each turn allows only the nine guarded editor MCP tools through a Claude-only broker token, verifies the init tool inventory, and stops on any other tool use. The per-turn MCP config is mode 600 and deleted after the turn. The renderer receives only fixed status/issue text, model names without prices, and bounded conversation text; never paths, tokens, email, cost or raw CLI output. The fallback sign-in page opens only for an Anthropic HTTPS host printed by the CLI.
+Claude runs through the user's installed, unmodified Claude Code CLI (ADR 0018, `docs/48_CLAUDE_CONNECTION.md`). The app never implements OAuth, never reads Claude Code's credential store, never writes to its sign-in code prompt and never seeds or copies Claude credentials into tests. Main resolves the executable; the renderer cannot choose it. Children use a dedicated configuration directory and empty working directory under app data, drop inherited Anthropic credential variables, and disable CLAUDE.md, auto memory, telemetry, error reporting and auto-update. Each turn allows only the nine guarded editor MCP tools through a Claude-only broker token, verifies the init tool inventory, and stops on any other tool use. The per-turn MCP config is mode 600 and deleted after the turn. The renderer receives only fixed status/issue text, model names without prices, and bounded conversation text; never paths, tokens, email, cost or raw CLI output. The app opens no sign-in page itself and does not read the CLI's sign-in output; Claude Code opens Anthropic's page and receives the callback on its own loopback listener.
+
+## Preview media route (2026-10-07)
+
+The renderer plays sources through `ai-video-editor://app/media/<project>/<source>`. Main serves only managed sources of the currently active project, read-only with byte ranges and `Cache-Control: no-store`; any other path, project or source returns 404. The page CSP adds `media-src 'self'` and still has no `connect-src`, so renderer script cannot read media bytes with `fetch`.
+
+Playback copies (2026-10-07): `playback:get` reports only a status, a progress fraction and one fixed message. The media route still serves only the active project's sources, now through their playback copy when one is needed; copy paths stay in main.

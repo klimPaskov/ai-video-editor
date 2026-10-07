@@ -512,6 +512,78 @@ test("range-batch function is offered to API providers and routes unchanged to t
   }
 });
 
+test("zoom and speed functions are offered to API providers and route unchanged to the guard", async () => {
+  const head = {
+    schema_version: "1.0",
+    project_id: project,
+    draft_id: "draft-001",
+    base_revision_id: "revision-001",
+    expected_sequence: 0,
+    expected_timeline_sha256: "a".repeat(64),
+  };
+  const speed = {
+    ...head,
+    request_id: "api-speed-001",
+    pass_group_id: "speed-001",
+    reason: "Speed up the confirmed loading screen",
+    start_us: 100_000,
+    end_us: 900_000,
+    speed: 4,
+  };
+  const zoom = {
+    ...head,
+    request_id: "api-zoom-001",
+    expected_sequence: 1,
+    pass_group_id: "zoom-001",
+    reason: "Make the settings value readable",
+    start_us: 0,
+    end_us: 600_000,
+    center_x: 0.8,
+    center_y: 0.2,
+    scale: 2.5,
+  };
+  let round = 0;
+  const invoked: Array<[string, unknown]> = [];
+  const f = await fixture(
+    async (_provider, _key, request) => {
+      round++;
+      if (round === 1) {
+        assert.deepEqual(request.tools?.map((tool) => tool.name).slice(-3), [
+          "zoom_set",
+          "zoom_remove",
+          "speed_set",
+        ]);
+        const system = request.messages[0];
+        assert.equal(system?.role, "system");
+        for (const name of ["zoom_set", "zoom_remove", "speed_set"])
+          assert.ok(String(system?.content).includes(name));
+        return call("speed_set", speed);
+      }
+      if (round === 2) return call("zoom_set", zoom);
+      return stop("The speed-up and zoom were committed.");
+    },
+    async (_project, name, parsed) => {
+      invoked.push([name, parsed]);
+      return { status: "committed" };
+    },
+  );
+  try {
+    await f.threads.open(project, provider);
+    const view = await f.threads.send(
+      project,
+      provider,
+      "Speed up the loading part and zoom on the setting",
+    );
+    assert.equal(view.status, "ready");
+    assert.deepEqual(invoked, [
+      ["speed.set", speed],
+      ["zoom.set", zoom],
+    ]);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("tool chain stops at the round limit before an unanswerable edit", async () => {
   let invoked = 0;
   const f = await fixture(

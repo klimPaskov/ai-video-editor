@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   DraftTransactionError,
   type DraftCommitResult,
@@ -8,6 +9,12 @@ import {
   assertTranscriptionProjectView,
   type TranscriptionProjectView,
 } from "../../domain/src/transcription.ts";
+import { isClipSpeed } from "../../domain/src/speed.ts";
+import {
+  zoomIntervals,
+  zoomLimits,
+  zoomSourceRange,
+} from "../../domain/src/zoom.ts";
 
 export const codexVideoEditToolNames = [
   "project.get_summary",
@@ -19,6 +26,9 @@ export const codexVideoEditToolNames = [
   "cut.delete_ranges",
   "cut.restore_range",
   "transcript.get_range",
+  "zoom.set",
+  "zoom.remove",
+  "speed.set",
 ] as const;
 
 export type CodexVideoEditToolName = (typeof codexVideoEditToolNames)[number];
@@ -32,10 +42,12 @@ type DraftTransactions = {
   undoApiProvider?(value: unknown): Promise<DraftCommitResult>;
   applyClaude?(value: unknown): Promise<DraftCommitResult>;
   undoClaude?(value: unknown): Promise<DraftCommitResult>;
+  applyMagicWand?(value: unknown): Promise<DraftCommitResult>;
+  undoMagicWand?(value: unknown): Promise<DraftCommitResult>;
 };
 
 /** The assistant route that main attributes each guarded transaction to. */
-export type ToolEditOrigin = "codex" | "claude" | "api_provider";
+export type ToolEditOrigin = "codex" | "claude" | "api_provider" | "magic_wand";
 
 type TranscriptReader = (
   projectId: string,
@@ -75,17 +87,28 @@ const messages: Record<CodexVideoEditToolErrorCode, string> = {
     "The editing service is unavailable. Reopen the project and try again.",
 };
 
+const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
+
 export class CodexVideoEditToolError extends Error {
   readonly code: CodexVideoEditToolErrorCode;
 
-  constructor(code: CodexVideoEditToolErrorCode) {
-    super(messages[code]);
+  /**
+   * `activeProjectId` lets a refused cross-project call name the one project
+   * the caller may use, so a model that mistyped the ID can correct itself.
+   */
+  constructor(code: CodexVideoEditToolErrorCode, activeProjectId?: string) {
+    super(
+      code === "inactive_project" &&
+        activeProjectId !== undefined &&
+        idPattern.test(activeProjectId)
+        ? `${messages[code]} The active project_id is "${activeProjectId}".`
+        : messages[code],
+    );
     this.name = "CodexVideoEditToolError";
     this.code = code;
   }
 }
 
-const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
 const hashPattern = /^[a-f0-9]{64}$/u;
 
 function reject(code: CodexVideoEditToolErrorCode): never {
@@ -131,6 +154,20 @@ function integer(value: unknown, minimum = 0): asserts value is number {
     reject("invalid_request");
 }
 
+function fraction(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+): asserts value is number {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < minimum ||
+    value > maximum
+  )
+    reject("invalid_request");
+}
+
 function prose(value: unknown): asserts value is string {
   if (
     typeof value !== "string" ||
@@ -146,7 +183,8 @@ function assertActiveProject(
   activeProjectId: string,
 ): asserts value is Record<string, unknown> & { project_id: string } {
   id(value.project_id);
-  if (value.project_id !== activeProjectId) reject("inactive_project");
+  if (value.project_id !== activeProjectId)
+    throw new CodexVideoEditToolError("inactive_project", activeProjectId);
 }
 
 function readRequest(value: unknown, activeProjectId: string): string {
@@ -171,6 +209,18 @@ function freshness(
 }
 
 function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
+  const zooms = draft.timeline.zooms ?? [];
+  const visible = zoomIntervals(
+    zooms,
+    draft.timeline.clips.map((clip) => ({
+      sourceId: clip.source_id,
+      timelineStartUs: clip.timeline_start_us,
+      timelineEndUs: clip.timeline_end_us,
+      sourceStartUs: clip.source_start_us,
+      sourceEndUs: clip.source_end_us,
+      ...(clip.speed ? { speed: clip.speed } : {}),
+    })),
+  );
   return {
     schema_version: "1.0" as const,
     project_id: draft.project_id,
@@ -197,8 +247,22 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
       timeline_start_us: clip.timeline_start_us,
       timeline_end_us: clip.timeline_end_us,
       enabled: clip.enabled,
+      ...(clip.speed ? { speed: clip.speed } : {}),
     })),
     operation_ids: [...draft.timeline.operation_ids],
+    zooms: zooms.map((zoom) => ({
+      zoom_id: zoom.zoom_id,
+      source_id: zoom.source_id,
+      source_start_us: zoom.source_start_us,
+      source_end_us: zoom.source_end_us,
+      center_x: zoom.center_x,
+      center_y: zoom.center_y,
+      scale: zoom.scale,
+      // Output-time pieces still visible after cuts; empty when all cut.
+      timeline_ranges: visible
+        .filter((piece) => piece.zoomId === zoom.zoom_id)
+        .map((piece) => ({ start_us: piece.startUs, end_us: piece.endUs })),
+    })),
     zoom_ids: [...draft.timeline.zoom_ids],
     speed_ids: [...draft.timeline.speed_ids],
     undo_transaction_id: undoId,
@@ -267,6 +331,8 @@ export class CodexVideoEditToolService {
       return this.drafts.applyApiProvider?.bind(this.drafts);
     if (this.origin === "claude")
       return this.drafts.applyClaude?.bind(this.drafts);
+    if (this.origin === "magic_wand")
+      return this.drafts.applyMagicWand?.bind(this.drafts);
     return this.drafts.applyCodex.bind(this.drafts);
   }
 
@@ -276,6 +342,8 @@ export class CodexVideoEditToolService {
       return this.drafts.undoApiProvider?.bind(this.drafts);
     if (this.origin === "claude")
       return this.drafts.undoClaude?.bind(this.drafts);
+    if (this.origin === "magic_wand")
+      return this.drafts.undoMagicWand?.bind(this.drafts);
     return this.drafts.undoCodex.bind(this.drafts);
   }
 
@@ -299,6 +367,12 @@ export class CodexVideoEditToolService {
           return await this.deleteRanges(input);
         case "cut.restore_range":
           return await this.restoreRange(input);
+        case "zoom.set":
+          return await this.setZoom(input);
+        case "zoom.remove":
+          return await this.removeZoom(input);
+        case "speed.set":
+          return await this.setSpeed(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -701,6 +775,182 @@ export class CodexVideoEditToolService {
       ],
     });
     return safeMutation(result, "Source range restored to the active draft.");
+  }
+
+  /**
+   * Same semantics as the manual zoom: the output range maps to one source's
+   * time through the current clip map, and an existing zoom keeps its own
+   * source range (only its point and scale change).
+   */
+  private async setZoom(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      [
+        "schema_version",
+        "request_id",
+        "project_id",
+        "draft_id",
+        "base_revision_id",
+        "expected_sequence",
+        "expected_timeline_sha256",
+        "pass_group_id",
+        "reason",
+        "start_us",
+        "end_us",
+        "center_x",
+        "center_y",
+        "scale",
+      ],
+      ["zoom_id"],
+    );
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    let zoomId: string | null = null;
+    if (request.zoom_id !== undefined) {
+      id(request.zoom_id);
+      zoomId = request.zoom_id;
+    }
+    integer(request.start_us);
+    integer(request.end_us, 1);
+    if (request.end_us - request.start_us < zoomLimits.minDurationUs)
+      reject("invalid_request");
+    fraction(request.center_x, 0, 1);
+    fraction(request.center_y, 0, 1);
+    fraction(request.scale, zoomLimits.minScale, zoomLimits.maxScale);
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    // Map against the exact head the caller read; the commit re-checks it.
+    const { draft } = await this.drafts.snapshot(this.activeProjectId);
+    if (
+      draft.draft_id !== request.draft_id ||
+      draft.base_revision_id !== request.base_revision_id ||
+      draft.draft_sequence !== request.expected_sequence ||
+      draft.timeline_sha256 !== request.expected_timeline_sha256
+    )
+      reject("stale_draft");
+    const existing =
+      zoomId === null
+        ? undefined
+        : draft.timeline.zooms?.find((zoom) => zoom.zoom_id === zoomId);
+    if (zoomId !== null && !existing) reject("edit_conflict");
+    const range =
+      existing ??
+      zoomSourceRange(draft.timeline.clips, request.start_us, request.end_us);
+    if (!range) reject("invalid_request");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "zoom" },
+      reason: request.reason,
+      operations: [
+        {
+          type: "set_zoom",
+          zoom: {
+            zoom_id: zoomId ?? `zoom-${randomUUID().replaceAll("-", "")}`,
+            source_id: range.source_id,
+            source_start_us: range.source_start_us,
+            source_end_us: range.source_end_us,
+            center_x: request.center_x,
+            center_y: request.center_y,
+            scale: request.scale,
+          },
+        },
+      ],
+    });
+    return safeMutation(
+      result,
+      zoomId === null
+        ? "Zoom added to the active draft."
+        : "Zoom changed on the active draft.",
+    );
+  }
+
+  private async removeZoom(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "zoom_id",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    id(request.zoom_id);
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "zoom" },
+      reason: request.reason,
+      operations: [{ type: "remove_zoom", zoom_id: request.zoom_id }],
+    });
+    return safeMutation(result, "Zoom removed from the active draft.");
+  }
+
+  private async setSpeed(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "start_us",
+      "end_us",
+      "speed",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    integer(request.start_us);
+    integer(request.end_us, 1);
+    if (request.start_us >= request.end_us || !isClipSpeed(request.speed))
+      reject("invalid_request");
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "speed" },
+      reason: request.reason,
+      operations: [
+        {
+          type: "set_speed",
+          start_us: request.start_us,
+          end_us: request.end_us,
+          speed: request.speed,
+        },
+      ],
+    });
+    return safeMutation(
+      result,
+      request.speed === 1
+        ? "Normal speed restored on the active draft."
+        : `${request.speed}x speed applied to the active draft.`,
+    );
   }
 
   private async undo(input: unknown): Promise<unknown> {

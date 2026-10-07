@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { lstat, readdir, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, lstat, readdir, readFile } from "node:fs/promises";
 import { isIPv4 } from "node:net";
+import { resolve, sep } from "node:path";
 
-export type NativeTestEnvironment = "docker" | "wsl2";
+export type NativeTestEnvironment = "docker" | "wsl2" | "cloud";
 
 export interface NativeTestEnvironmentEvidence {
   platform: string;
@@ -19,6 +21,12 @@ export interface NativeTestEnvironmentEvidence {
   waylandDisplay: string | undefined;
   pulseServer: string | undefined;
   wslEnv: string | undefined;
+  /** Explicit opt-in for an ephemeral cloud agent VM. */
+  cloudTestMarker?: string | undefined;
+  /** The cloud VM's environment-runner installation is present. */
+  cloudRunner?: boolean | undefined;
+  /** Any hosting-session credential file is readable by the test process. */
+  hostingCredentialReadable?: boolean | undefined;
 }
 
 function hasHostMounts(mountTable: string): boolean {
@@ -174,6 +182,22 @@ export function validateNativeTestEnvironment(
     "Host-drive and WSL integration mounts are forbidden",
   );
   if (evidence.dockerMarker) return "docker";
+  if (evidence.cloudTestMarker !== undefined) {
+    // An ephemeral Firecracker agent VM, never the user's own machine. The
+    // hosting session's Claude credential must stay unreadable so that no
+    // test can run signed in with a credential the user did not create.
+    assert.equal(evidence.cloudTestMarker, "1");
+    assert.equal(evidence.cloudRunner, true);
+    assert.match(evidence.kernelRelease, /-fc-/u);
+    assert.doesNotMatch(evidence.kernelRelease, /microsoft/iu);
+    assert.equal(evidence.wslTestMarker, undefined);
+    assert.equal(
+      evidence.hostingCredentialReadable,
+      false,
+      "Hosting-session credentials must be unreadable",
+    );
+    return "cloud";
+  }
 
   assert.equal(evidence.wslTestMarker, "1");
   assert.match(evidence.wslDistroName ?? "", /-test-recovered$/u);
@@ -195,6 +219,37 @@ export function validateNativeTestEnvironment(
   return "wsl2";
 }
 
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    const value = await lstat(path);
+    return value.isDirectory() && !value.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/** Fixed location of the cloud host's own Claude session credentials. */
+const hostingCredentialDirectory = "/home/claude/.claude/remote";
+
+async function hostingCredentialReadable(): Promise<boolean> {
+  let names: string[];
+  try {
+    names = await readdir(hostingCredentialDirectory);
+  } catch (error) {
+    // Absent is unreadable; an unlistable directory is checked by name below.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    names = [".oauth_token", ".api_key", ".session_ingress_token"];
+  }
+  for (const name of names)
+    try {
+      await access(`${hostingCredentialDirectory}/${name}`, constants.R_OK);
+      return true;
+    } catch {
+      // Not readable by this process.
+    }
+  return false;
+}
+
 async function isFile(path: string): Promise<boolean> {
   try {
     const value = await lstat(path);
@@ -210,7 +265,11 @@ export async function assertNativeTestEnvironment(): Promise<NativeTestEnvironme
     readFile("/proc/sys/kernel/osrelease", "utf8"),
     readFile("/proc/mounts", "utf8"),
   ]);
-  const wslConfig = dockerMarker ? "" : await readFile("/etc/wsl.conf", "utf8");
+  const cloudTestMarker = process.env.AI_VIDEO_EDITOR_CLOUD_TEST;
+  const wslConfig =
+    dockerMarker || cloudTestMarker !== undefined
+      ? ""
+      : await readFile("/etc/wsl.conf", "utf8");
   const environment = validateNativeTestEnvironment({
     platform: process.platform,
     uid: process.getuid?.(),
@@ -226,9 +285,17 @@ export async function assertNativeTestEnvironment(): Promise<NativeTestEnvironme
     waylandDisplay: process.env.WAYLAND_DISPLAY,
     pulseServer: process.env.PULSE_SERVER,
     wslEnv: process.env.WSLENV,
+    cloudTestMarker,
+    cloudRunner: await isDirectory("/opt/env-runner"),
+    hostingCredentialReadable: await hostingCredentialReadable(),
   });
   if (environment === "wsl2") {
     await assertPrivateWslResolver();
   }
   return environment;
+}
+
+/** True when a path lies inside the guest's working copy (tests run from its root). */
+export function insideGuestWorkspace(path: string | undefined): path is string {
+  return !!path && resolve(path).startsWith(resolve(".") + sep);
 }

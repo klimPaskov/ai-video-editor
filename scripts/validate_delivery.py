@@ -25,9 +25,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check-integrity", action="store_true")
     args = parser.parse_args()
-    meta = load("PACKAGE_METADATA.json")
+    meta = load("docs/development/PACKAGE_METADATA.json")
     require(ROOT.name == "ai-video-editor", "Expected actual ai-video-editor working root")
-    goal = (ROOT / "GOAL_PROMPT.md").read_text(encoding="utf-8")
+    goal = (ROOT / "docs/development/GOAL_PROMPT.md").read_text(encoding="utf-8")
     require(len(goal) < 4000, "Goal exceeds the under-4000-character limit")
     require(len(goal) == meta["goal_prompt_characters"], "Goal length metadata is stale")
     refs = load("docs/references/manifest.json")["references"]

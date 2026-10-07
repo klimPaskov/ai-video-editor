@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import {
-  access,
   lstat,
   readFile,
   readdir,
@@ -19,10 +18,11 @@ import {
   buildThreadStartRequest,
   buildTurnStartRequest,
 } from "../../packages/codex-bridge/src/thread-protocol.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executable = resolve(process.argv[2]!);
 const root = resolve(process.argv[3]!);
 assert.ok(

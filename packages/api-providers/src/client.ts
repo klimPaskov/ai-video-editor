@@ -27,7 +27,10 @@ const toolNamePattern = /^[A-Za-z_][A-Za-z0-9_-]{0,127}$/;
 const maxRequestBytes = 256 * 1024;
 const maxResponseBytes = 2 * 1024 * 1024;
 const maxMessages = 64;
-const maxTools = 8;
+/** Tool calls in one assistant message. */
+const maxToolCalls = 8;
+/** Tool definitions offered in one request (the editor offers 12). */
+const maxToolDefinitions = 16;
 const maxThoughtSignatureBytes = 16 * 1024;
 const geminiClientHeader = "ai-video-editor/0.0.0";
 
@@ -111,7 +114,7 @@ function validateMessages(
       const calls = message.toolCalls;
       if (
         calls !== undefined &&
-        (!Array.isArray(calls) || calls.length > maxTools)
+        (!Array.isArray(calls) || calls.length > maxToolCalls)
       )
         throw new ApiProviderError("invalid_request");
       return {
@@ -155,7 +158,7 @@ function validateTools(
   tools: ApiToolDefinition[] | undefined,
 ): unknown[] | undefined {
   if (tools === undefined) return undefined;
-  if (!Array.isArray(tools) || tools.length > maxTools)
+  if (!Array.isArray(tools) || tools.length > maxToolDefinitions)
     throw new ApiProviderError("invalid_request");
   const names = new Set<string>();
   return tools.map((tool) => {
@@ -282,7 +285,7 @@ function decodeCompletion(
   const rawCalls = message.tool_calls;
   if (
     rawCalls !== undefined &&
-    (!Array.isArray(rawCalls) || rawCalls.length > maxTools)
+    (!Array.isArray(rawCalls) || rawCalls.length > maxToolCalls)
   )
     throw new ApiProviderError("invalid_response");
   const toolCalls: ApiToolCall[] = (rawCalls ?? []).map((rawCall: unknown) => {

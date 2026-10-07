@@ -2,7 +2,6 @@
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
 import {
-  access,
   chmod,
   lstat,
   mkdir,
@@ -15,18 +14,22 @@ import {
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
 import { appIdentity } from "../../packages/domain/src/app-identity.ts";
+import {
+  assertNativeTestEnvironment,
+  insideGuestWorkspace,
+} from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executable = process.argv[2];
 const configArgument = process.argv[3];
 assert.ok(executable && isAbsolute(executable));
 assert.ok(configArgument && isAbsolute(configArgument));
 const configRoot = await realpath(configArgument);
 assert.equal(configRoot, resolve(configArgument));
-assert.ok(configRoot.startsWith("/home/node/workspaces/"));
+assert.ok(insideGuestWorkspace(configRoot));
 assert.ok((await lstat(executable)).isFile());
 const userData = join(configRoot, appIdentity.legacyUserDataDirectory);
 const registryPath = join(

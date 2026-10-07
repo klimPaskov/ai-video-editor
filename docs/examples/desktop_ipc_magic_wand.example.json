@@ -1,0 +1,25 @@
+{
+  "channel": "magic:get",
+  "payload": {
+    "schema_version": "1.0",
+    "project_id": "8a3f6d6e-1c2b-4c55-9f0e-2d7a4b1c9e10"
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "status": "completed",
+      "projectId": "8a3f6d6e-1c2b-4c55-9f0e-2d7a4b1c9e10",
+      "preset": "balanced",
+      "progress": null,
+      "summary": {
+        "removedUs": 13062100,
+        "cuts": 1,
+        "pauses": 1,
+        "fillers": 0,
+        "repeatedTakes": 1,
+        "leftForReview": 0
+      },
+      "message": null
+    }
+  }
+}

@@ -1,0 +1,35 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Check release notes
+        run: test -f "docs/releases/${GITHUB_REF_NAME}.md"
+      - run: npm ci --ignore-scripts
+      - name: Build the Linux app
+        run: npm run desktop:build:local
+      - name: Package
+        run: |
+          app=$(ls -d test-results/desktop-build-*/packaged/ai-video-editor-linux-x64)
+          mkdir -p release
+          tar -C "$(dirname "$app")" -czf release/ai-video-editor-linux-x64.tar.gz ai-video-editor-linux-x64
+          (cd release && sha256sum ai-video-editor-linux-x64.tar.gz > SHA256SUMS)
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --title "AI Video Editor ${GITHUB_REF_NAME#v}" \
+            --notes-file "docs/releases/${GITHUB_REF_NAME}.md" \
+            --prerelease --verify-tag

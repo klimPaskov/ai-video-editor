@@ -18,7 +18,9 @@ import { resolve, join, relative, sep } from "node:path";
 import assert from "node:assert/strict";
 import { assertNativeTestEnvironment } from "./native-test-environment.ts";
 
-await assertNativeTestEnvironment();
+// Agents build only inside their isolated test environment. A person
+// building the app on their own computer passes --local.
+if (!process.argv.includes("--local")) await assertNativeTestEnvironment();
 const root = resolve(import.meta.dirname, "..");
 const evidence = join(root, "test-results");
 await mkdir(evidence, { recursive: true });
@@ -78,6 +80,16 @@ await writeFile(
   join(codexResources, "manifest.json"),
   JSON.stringify(codexManifest, null, 2),
 );
+const captureResources = join(output, "capture");
+await mkdir(captureResources);
+await build({
+  entryPoints: [join(root, "packages/recorder/src/capture-supervisor.ts")],
+  outfile: join(captureResources, "capture-supervisor.cjs"),
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node24",
+});
 const mcpResources = join(output, "mcp");
 await mkdir(mcpResources);
 const mcpScript = join(mcpResources, "ai-video-editor-mcp.cjs");
@@ -134,7 +146,23 @@ await build({
   platform: "browser",
   target: "chrome152",
 });
-for (const file of ["index.html", "style.css"])
+await build({
+  entryPoints: [join(root, "apps/desktop/src/region-preload.ts")],
+  outfile: join(staging, "region-preload.cjs"),
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node24",
+  external: ["electron"],
+});
+await build({
+  entryPoints: [join(root, "apps/desktop/renderer/region.ts")],
+  outfile: join(staging, "renderer/region.js"),
+  bundle: true,
+  platform: "browser",
+  target: "chrome152",
+});
+for (const file of ["index.html", "style.css", "region.html", "region.css"])
   await copyFile(
     join(root, "apps/desktop/renderer", file),
     join(staging, "renderer", file),
@@ -235,7 +263,7 @@ const packages = await packager({
   arch: "x64",
   electronVersion: "44.2.0",
   asar: { unpackDir: "node_modules" },
-  extraResource: [codexResources, mcpResources],
+  extraResource: [codexResources, mcpResources, captureResources],
   prune: false,
   overwrite: false,
 });

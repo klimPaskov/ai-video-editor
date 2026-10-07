@@ -30,9 +30,11 @@ Default preview uses source or lossless intermediate data. Lossless quality does
 
 For tagged 8-bit H.264 YUV 4:2:0, the current native-size still-frame preview decodes the immutable source and explicitly converts limited-range BT.709 to BGRA for display. That color and chroma conversion changes samples; it is not a lossless intermediate or a master input. The imported H.264/AAC file was already compressed, and this path does not recover discarded detail. The original bytes and metadata remain available for a future canonical render. Unknown tags, higher precision/HDR, display transforms, or non-square pixels remain preview unavailable rather than silently downconverted.
 
-Still-frame source seeking uses verified presentation PTS rather than an average-frame-rate guess. Packet PTS is sorted because B-frame packet order is decode order. The final packet's duration defines the exclusive presentation end, including when it exceeds the reported stream duration. The two-source draft maps adjacent output intervals into the corresponding immutable source for display; it rejects incompatible source metadata instead of converting it silently. The display-only seek index and BGRA canvas never feed canonical render or master encoding. Synchronized audio preview and a verified multi-source master remain unimplemented.
+Still-frame source seeking uses verified presentation PTS rather than an average-frame-rate guess. Packet PTS is sorted because B-frame packet order is decode order. The final packet's duration defines the exclusive presentation end, including when it exceeds the reported stream duration. The two-source draft maps adjacent output intervals into the corresponding immutable source for display; it rejects incompatible source metadata instead of converting it silently. The display-only seek index and BGRA canvas never feed canonical render or master encoding. Draft playback plays the immutable source through the app's range-capable media route in two alternating `<video>` elements, so audio and video come from Chromium's own decoder for display only; it never feeds export. Sources Chromium cannot decode (for example FFV1 or ProRes) keep frame preview only until an explicit labelled playback proxy exists. The draft master export is described in `docs/18_EXPORT_AND_DELIVERY.md`.
 
 Mono speech extraction, waveform reduction, and thumbnails are analysis-only derivatives. They may not become master audio or video inputs. If Electron cannot play the master codec, use a verified local decode/frame transport or ask for a clearly labelled playback proxy. Never silently substitute the proxy for the export source.
+
+Screen recordings (FFV1 `bgr0`, full range, sRGB) use the native RGB still-frame path: FFmpeg's explicit `scale,format=bgra` copies B, G and R unchanged and fills the unused byte with opaque alpha, which `tests/media/recorder.test.ts` and `tests/native/recording.test.ts` compare against an unconverted `bgr0` decode. Home card pictures are cosmetic 320 px decodes with default scaling and are never shown as review frames.
 
 ## Processing
 
@@ -67,3 +69,7 @@ Implement these checks in P0, P3, P4, P8, P9, and P10. Store actual evidence, no
 [L4] Apple, About Apple ProRes: https://support.apple.com/en-us/102207
 
 Checked 2026-09-05. The technical boundaries above are product requirements, not evidence of an implemented encoder.
+
+Burned-in captions (2026-10-07): the master's canonical render is the source frames with the caption overlay drawn by libass in the same pixel format; untouched frames are bit-identical to the source and the exported master decodes to exactly the composed frames. Without burn-in nothing changes.
+
+Audio cleanup (2026-10-07): when the user turns on noise reduction or volume evening, the canonical audio is the processed audio (exact sample count kept) and a master is verified against it. With both off, audio samples are the sources' samples exactly, as before.

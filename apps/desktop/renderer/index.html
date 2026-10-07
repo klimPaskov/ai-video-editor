@@ -8,34 +8,67 @@
   </head>
   <body>
     <header>
-      <span class="mark" aria-hidden="true"></span><span>AI Video Editor</span>
+      <span class="brand"
+        ><span class="mark" aria-hidden="true"></span
+        ><span class="brand-name">AI Video Editor</span></span
+      >
       <nav aria-label="Application">
-        <button id="back" hidden>Home</button
-        ><button id="settings">Settings</button>
+        <button id="back" class="ghost" data-icon="home" hidden>Home</button
+        ><button id="settings" class="ghost" data-icon="settings">
+          Settings
+        </button>
       </nav>
     </header>
     <main>
       <section id="home" aria-label="Home">
-        <div class="actions">
-          <button id="import" class="primary">Import video</button>
+        <div class="hero-actions">
+          <button id="record-new" class="action-tile" type="button" hidden>
+            <span class="tile-icon record" data-icon="record-large"></span>New
+            recording
+          </button>
+          <button id="import" class="action-tile">
+            <span class="tile-icon" data-icon="folder-large"></span>Import video
+          </button>
         </div>
+        <section
+          id="recovery"
+          class="recovery-notice"
+          aria-label="Interrupted recording"
+          hidden
+        >
+          <span class="tile-icon record" data-icon="record"></span>
+          <p id="recovery-text"></p>
+          <button type="button" id="recovery-discard">Discard</button
+          ><button type="button" id="recovery-recover" class="primary">
+            Recover
+          </button>
+        </section>
         <section id="projects-section" aria-label="Projects" hidden>
           <h2>Projects</h2>
-          <ul id="projects" aria-label="Projects"></ul>
+          <ul id="projects" class="card-grid" aria-label="Projects"></ul>
         </section>
         <section id="library-section" aria-label="Source library" hidden>
-          <h2>Source library</h2>
-          <ul id="library" aria-label="Imported videos"></ul>
+          <h2>Media</h2>
+          <ul id="library" class="media-list" aria-label="Imported videos"></ul>
         </section>
       </section>
       <section id="viewer" aria-label="Imported video" hidden>
         <div class="source-bar">
           <strong id="source-name"></strong
-          ><button id="add-footage" hidden>Add footage</button
+          ><button id="add-footage" class="ghost" data-icon="plus" hidden>
+            Add footage</button
           ><span id="append-progress" role="status" hidden
             >Importing footage…</span
+          ><span class="source-bar-spacer"></span>
+          <nav id="project-navigation" aria-label="Project stages" hidden>
+            <div id="stage-buttons" class="stepper"></div>
+            <select id="stage-select" aria-label="Project stage"></select>
+          </nav>
+          <span class="source-bar-spacer"></span
           ><button
             id="codex-drawer-button"
+            class="assistant-toggle"
+            data-icon="sparkle"
             aria-expanded="false"
             aria-controls="codex-drawer"
             hidden
@@ -43,34 +76,43 @@
             Claude</button
           ><button
             id="source-details"
+            class="icon-button"
+            data-icon="info"
+            title="Source details"
+            aria-label="Source details"
             aria-expanded="false"
             aria-controls="inspector"
-          >
-            Source details
-          </button>
+          ></button>
         </div>
-        <nav id="project-navigation" aria-label="Project stages" hidden>
-          <div id="stage-buttons"></div>
-          <select id="stage-select" aria-label="Project stage"></select>
-        </nav>
         <div class="workspace">
           <div class="preview">
             <canvas id="frame" aria-label="Source frame"></canvas>
             <p id="preview-message" hidden></p>
+            <p id="zoom-hint" class="zoom-hint" role="status" hidden>
+              Click the picture where the zoom should point. Esc cancels.
+            </p>
           </div>
           <aside id="inspector" aria-label="Source details" hidden>
             <div class="panel-header">
               <h2>Source</h2>
-              <button id="close-inspector" aria-label="Close source details">
-                ×
-              </button>
+              <button
+                id="close-inspector"
+                class="icon-button"
+                data-icon="close"
+                aria-label="Close source details"
+              ></button>
             </div>
             <dl id="source-properties"></dl>
           </aside>
           <aside id="codex-drawer" aria-label="Claude conversation" hidden>
             <div class="panel-header">
-              <h2>Assistant</h2>
-              <button id="close-codex" aria-label="Close Claude">×</button>
+              <h2><span data-icon="sparkle"></span>Assistant</h2>
+              <button
+                id="close-codex"
+                class="icon-button"
+                data-icon="close"
+                aria-label="Close Claude"
+              ></button>
             </div>
             <label for="assistant-provider">Provider</label>
             <select id="assistant-provider">
@@ -109,7 +151,9 @@
             </p>
             <button id="open-codex-thread">Open conversation</button>
             <form id="codex-thread-form" hidden>
-              <label for="codex-thread-input">Request an edit</label>
+              <label for="codex-thread-input" class="visually-hidden"
+                >Request an edit</label
+              >
               <textarea
                 id="codex-thread-input"
                 rows="3"
@@ -122,7 +166,12 @@
                 <button type="button" id="retry-codex-thread" hidden>
                   Retry request
                 </button>
-                <button type="submit" id="send-codex-thread" class="primary">
+                <button
+                  type="submit"
+                  id="send-codex-thread"
+                  class="primary"
+                  data-icon="send"
+                >
                   Send
                 </button>
               </div>
@@ -131,172 +180,466 @@
           </aside>
         </div>
         <div id="frame-controls">
-          <label id="preview-label" for="seek">Frame preview</label>
-          <div id="preview-time">
-            <output id="time" for="seek"></output><span id="duration"></span>
-          </div>
-          <input
-            id="seek"
-            type="range"
-            min="0"
-            max="0"
-            value="0"
-            aria-label="Source position"
-          />
-          <div class="transport">
-            <button id="previous" aria-label="Previous frame">←</button
-            ><button id="next" aria-label="Next frame">→</button>
-          </div>
-          <section id="auto-edit-actions" class="auto-edit-actions" hidden>
-            <div class="auto-edit-controls">
-              <button id="transcribe-local" class="primary" type="button">
-                Transcribe locally
-              </button>
-              <button id="stop-transcription" type="button" hidden>Stop</button>
+          <div class="player-bar">
+            <label id="preview-label" for="seek" class="visually-hidden"
+              >Frame preview</label
+            >
+            <div class="transport">
+              <button
+                id="previous"
+                class="icon-button"
+                data-icon="frame-back"
+                aria-label="Previous frame"
+              ></button
+              ><button
+                id="play"
+                class="play-button"
+                data-icon="play"
+                aria-label="Play"
+                hidden
+              ></button
+              ><button
+                id="next"
+                class="icon-button"
+                data-icon="frame-forward"
+                aria-label="Next frame"
+              ></button>
             </div>
-            <p id="transcription-disclosure">
-              First use downloads about 76 MiB of model weights from Hugging
-              Face. Source audio stays on this device.
-            </p>
-            <progress
-              id="transcription-progress"
-              max="100"
+            <input
+              id="seek"
+              type="range"
+              min="0"
+              max="0"
               value="0"
-              aria-label="Local transcription progress"
+              aria-label="Source position"
+            />
+            <span
+              id="playback-status"
+              class="playback-status"
+              role="status"
               hidden
-            ></progress>
-            <p id="transcription-status" role="status" hidden></p>
-            <p id="transcription-error" role="alert" hidden></p>
-            <details id="transcript-results" hidden>
-              <summary id="transcript-summary">Transcript</summary>
-              <p id="transcript-timing-note">
-                Word timings are local model estimates. Verify before editing.
-              </p>
-              <p id="transcript-language-note" hidden>
-                The local model did not identify a language.
-              </p>
-              <div id="transcript-content"></div>
-              <button id="review-speech-cues" type="button" hidden>
-                Review speech cues
-              </button>
-              <details id="speech-candidate-results" hidden>
-                <summary id="speech-candidate-summary">Speech cues</summary>
-                <p id="speech-candidate-note">
-                  Original local transcript cues. Preview selects a frame; no
-                  cut is applied.
-                </p>
-                <p id="speech-candidate-error" role="alert" hidden></p>
-                <div id="speech-candidate-content"></div>
-              </details>
-            </details>
-          </section>
-          <section
-            id="transcript-edit-panel"
-            class="transcript-edit-panel"
-            hidden
-          >
-            <details id="transcript-edit-details">
-              <summary>Transcript</summary>
-              <div class="transcript-edit-controls">
-                <label for="transcript-edit-source">Source</label>
-                <select id="transcript-edit-source"></select>
-                <label for="transcript-word-filter">Find a word</label>
-                <input
-                  id="transcript-word-filter"
-                  type="search"
-                  maxlength="80"
-                  autocomplete="off"
-                />
-                <label for="transcript-edit-word">Word</label>
-                <select id="transcript-edit-word"></select>
-                <label for="transcript-cut-start">Cut from word</label>
-                <select id="transcript-cut-start"></select>
-                <label for="transcript-cut-end">Through word</label>
-                <select id="transcript-cut-end"></select>
-                <button id="transcript-cut-submit" type="button">
-                  Cut selected words
-                </button>
-                <label for="transcript-correction-input">
-                  Correct transcript text
-                </label>
-                <input
-                  id="transcript-correction-input"
-                  type="text"
-                  maxlength="200"
-                  autocomplete="off"
-                />
-                <button id="save-transcript-correction" type="button">
-                  Save correction
-                </button>
-              </div>
-              <p id="transcript-edit-note">
-                Transcript text changes do not alter recorded audio. Undo shares
-                the edit history.
-              </p>
-              <p id="transcript-correction-status" role="status" hidden></p>
-              <p id="transcript-correction-error" role="alert" hidden></p>
-              <p id="transcript-cut-status" role="status" hidden></p>
-              <p id="transcript-cut-error" role="alert" hidden></p>
-            </details>
-          </section>
-          <div id="edit-actions" class="edit-actions" hidden>
-            <span id="edit-clip" hidden></span>
-            <button id="trim-start">Trim start</button>
-            <button id="trim-end">Trim end</button>
-            <button id="split-clip">Split</button>
-            <button id="undo-edit">Undo</button>
-            <button id="redo-edit">Redo</button>
-            <div class="range-actions">
-              <button id="mark-in">Mark in</button>
-              <button id="mark-out">Mark out</button>
-              <span id="cut-selection" hidden></span>
-              <button id="cut-range">Cut range</button>
-              <button id="clear-marks">Clear</button>
-            </div>
-            <div id="restore-actions" class="restore-actions">
-              <button id="restore-toggle" type="button" aria-expanded="false">
-                Restore source range
-              </button>
-              <div id="restore-form" class="restore-form" hidden>
-                <label class="restore-field" for="restore-source">
-                  Source
-                  <select id="restore-source"></select>
-                </label>
-                <label class="restore-field" for="restore-source-start">
-                  Source start (seconds)
-                  <input
-                    id="restore-source-start"
-                    type="text"
-                    inputmode="decimal"
-                    autocomplete="off"
-                    placeholder="0.000000"
-                    maxlength="24"
-                  />
-                </label>
-                <label class="restore-field" for="restore-source-end">
-                  Source end (seconds)
-                  <input
-                    id="restore-source-end"
-                    type="text"
-                    inputmode="decimal"
-                    autocomplete="off"
-                    placeholder="0.000000"
-                    maxlength="24"
-                  />
-                </label>
-                <button id="restore-submit" type="button" disabled>
-                  Restore range
-                </button>
-                <p id="restore-error" role="alert" hidden></p>
-              </div>
+            ></span>
+            <div id="preview-time">
+              <output id="time" for="seek"></output><span id="duration"></span>
             </div>
           </div>
-          <div id="review-actions" class="review-actions" hidden>
-            <button id="check-draft-integrity" class="primary">
-              Check draft integrity
-            </button>
-            <p id="draft-integrity-result" role="status" hidden></p>
-            <p id="draft-integrity-error" role="alert" hidden></p>
+          <div id="timeline-strip" class="timeline-strip" hidden>
+            <div class="timeline-track" aria-hidden="true">
+              <div class="timeline-clips"></div>
+              <div class="timeline-zooms"></div>
+              <div class="timeline-marks"></div>
+              <div class="timeline-playhead"></div>
+            </div>
+            <p class="timeline-summary"></p>
+          </div>
+          <div class="stage-panel">
+            <section id="auto-edit-actions" class="auto-edit-actions" hidden>
+              <div id="magic-edit" class="magic-edit">
+                <div class="magic-edit-controls">
+                  <span class="card-title" data-icon="wand"
+                    ><label for="magic-preset">Magic Edit</label></span
+                  >
+                  <select id="magic-preset">
+                    <option value="gentle">Gentle</option>
+                    <option value="balanced" selected>Balanced</option>
+                    <option value="tight">Tight</option>
+                  </select>
+                  <button
+                    id="magic-start"
+                    class="primary"
+                    type="button"
+                    data-icon="wand"
+                  >
+                    Run Magic Edit
+                  </button>
+                  <button id="magic-stop" type="button" hidden>Stop</button>
+                </div>
+                <p id="magic-note"></p>
+                <progress
+                  id="magic-progress"
+                  max="1000"
+                  value="0"
+                  aria-label="Magic Edit progress"
+                  hidden
+                ></progress>
+                <p id="magic-status" role="status" hidden></p>
+                <p id="magic-error" role="alert" hidden></p>
+              </div>
+              <div id="audio-card" class="captions-card">
+                <div class="captions-controls">
+                  <span class="card-title" data-icon="audio">Audio</span>
+                  <label class="switch" for="audio-normalize"
+                    ><input id="audio-normalize" type="checkbox" />Even out
+                    volume</label
+                  >
+                  <label class="switch" for="audio-denoise"
+                    ><input id="audio-denoise" type="checkbox" />Reduce
+                    background noise</label
+                  >
+                </div>
+                <p id="audio-note" class="muted">
+                  Applied when exporting. Your recording is not changed.
+                </p>
+              </div>
+              <div id="captions-card" class="captions-card">
+                <div class="captions-controls">
+                  <span class="card-title" data-icon="captions">Captions</span>
+                  <label class="switch" for="captions-enabled"
+                    ><input id="captions-enabled" type="checkbox" />Show
+                    captions</label
+                  >
+                  <select id="captions-style" aria-label="Caption style">
+                    <option value="plain">Plain</option>
+                    <option value="highlight">Highlight words</option>
+                    <option value="minimal">Minimal</option>
+                  </select>
+                  <select id="captions-size" aria-label="Caption size">
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                  <select id="captions-position" aria-label="Caption position">
+                    <option value="bottom">Bottom</option>
+                    <option value="top">Top</option>
+                  </select>
+                  <label class="switch" for="captions-burn-in"
+                    ><input id="captions-burn-in" type="checkbox" />Burn into
+                    export</label
+                  >
+                </div>
+                <p id="captions-note" class="muted"></p>
+              </div>
+              <div class="auto-edit-controls">
+                <span class="card-title" data-icon="transcript"
+                  >Transcript</span
+                >
+                <button id="transcribe-local" type="button">
+                  Transcribe locally
+                </button>
+                <button id="stop-transcription" type="button" hidden>
+                  Stop
+                </button>
+              </div>
+              <p id="transcription-disclosure">
+                First use downloads about 76 MiB of model weights from Hugging
+                Face. Source audio stays on this device.
+              </p>
+              <progress
+                id="transcription-progress"
+                max="100"
+                value="0"
+                aria-label="Local transcription progress"
+                hidden
+              ></progress>
+              <p id="transcription-status" role="status" hidden></p>
+              <p id="transcription-error" role="alert" hidden></p>
+              <details id="transcript-results" hidden>
+                <summary id="transcript-summary">Transcript</summary>
+                <p id="transcript-timing-note">
+                  Word timings are local model estimates. Verify before editing.
+                </p>
+                <p id="transcript-language-note" hidden>
+                  The local model did not identify a language.
+                </p>
+                <div id="transcript-content"></div>
+                <button id="review-speech-cues" type="button" hidden>
+                  Review speech cues
+                </button>
+                <details id="speech-candidate-results" hidden>
+                  <summary id="speech-candidate-summary">Speech cues</summary>
+                  <p id="speech-candidate-note">
+                    Original local transcript cues. Preview selects a frame; no
+                    cut is applied.
+                  </p>
+                  <p id="speech-candidate-error" role="alert" hidden></p>
+                  <div id="speech-candidate-content"></div>
+                </details>
+              </details>
+            </section>
+            <section
+              id="transcript-edit-panel"
+              class="transcript-edit-panel"
+              hidden
+            >
+              <details id="transcript-edit-details">
+                <summary>Transcript</summary>
+                <div class="transcript-edit-controls">
+                  <label for="transcript-edit-source">Source</label>
+                  <select id="transcript-edit-source"></select>
+                  <label for="transcript-word-filter">Find a word</label>
+                  <input
+                    id="transcript-word-filter"
+                    type="search"
+                    maxlength="80"
+                    autocomplete="off"
+                  />
+                  <label for="transcript-edit-word">Word</label>
+                  <select id="transcript-edit-word"></select>
+                  <label for="transcript-cut-start">Cut from word</label>
+                  <select id="transcript-cut-start"></select>
+                  <label for="transcript-cut-end">Through word</label>
+                  <select id="transcript-cut-end"></select>
+                  <button id="transcript-cut-submit" type="button">
+                    Cut selected words
+                  </button>
+                  <label for="transcript-correction-input">
+                    Correct transcript text
+                  </label>
+                  <input
+                    id="transcript-correction-input"
+                    type="text"
+                    maxlength="200"
+                    autocomplete="off"
+                  />
+                  <button id="save-transcript-correction" type="button">
+                    Save correction
+                  </button>
+                </div>
+                <p id="transcript-edit-note">
+                  Transcript text changes do not alter recorded audio. Undo
+                  shares the edit history.
+                </p>
+                <p id="transcript-correction-status" role="status" hidden></p>
+                <p id="transcript-correction-error" role="alert" hidden></p>
+                <p id="transcript-cut-status" role="status" hidden></p>
+                <p id="transcript-cut-error" role="alert" hidden></p>
+              </details>
+            </section>
+            <div id="edit-actions" class="edit-actions" hidden>
+              <span id="edit-clip" hidden></span>
+              <button id="trim-start" class="tool" data-icon="trim-start">
+                Trim start
+              </button>
+              <button id="trim-end" class="tool" data-icon="trim-end">
+                Trim end
+              </button>
+              <button
+                id="split-clip"
+                aria-keyshortcuts="S"
+                title="Split (S)"
+                class="tool"
+                data-icon="split"
+              >
+                Split
+              </button>
+              <button
+                id="undo-edit"
+                aria-keyshortcuts="Control+Z"
+                title="Undo (Ctrl+Z)"
+                class="tool"
+                data-icon="undo"
+              >
+                Undo
+              </button>
+              <button
+                id="redo-edit"
+                aria-keyshortcuts="Control+Shift+Z"
+                title="Redo (Ctrl+Shift+Z)"
+                class="tool"
+                data-icon="redo"
+              >
+                Redo
+              </button>
+              <div class="range-actions">
+                <button
+                  id="mark-in"
+                  aria-keyshortcuts="I"
+                  title="Mark in (I)"
+                  class="tool"
+                  data-icon="mark-in"
+                >
+                  Mark in
+                </button>
+                <button
+                  id="mark-out"
+                  aria-keyshortcuts="O"
+                  title="Mark out (O)"
+                  class="tool"
+                  data-icon="mark-out"
+                >
+                  Mark out
+                </button>
+                <span id="cut-selection" hidden></span>
+                <button id="cut-range" class="tool" data-icon="scissors">
+                  Cut range
+                </button>
+                <button id="clear-marks" class="tool" data-icon="clear">
+                  Clear
+                </button>
+                <button
+                  id="zoom-add"
+                  aria-keyshortcuts="Z"
+                  title="Zoom (Z)"
+                  class="tool"
+                  data-icon="zoom"
+                >
+                  Zoom
+                </button>
+                <label class="speed-control" data-icon="speed">
+                  <span class="visually-hidden">Speed</span>
+                  <select
+                    id="speed"
+                    aria-describedby="speed-scope"
+                    title="Speed of the marked range, or of the part under the playhead"
+                  >
+                    <option value="1">Normal speed</option>
+                    <option value="2">2× speed</option>
+                    <option value="3">3× speed</option>
+                    <option value="4">4× speed</option>
+                    <option value="8">8× speed</option>
+                  </select>
+                  <span id="speed-scope" class="visually-hidden"></span>
+                </label>
+                <span id="zoom-controls" class="zoom-controls" hidden>
+                  <select id="zoom-scale" aria-label="Zoom strength">
+                    <option value="1.5">1.5×</option>
+                    <option value="2">2×</option>
+                    <option value="2.5">2.5×</option>
+                    <option value="3">3×</option>
+                  </select>
+                  <button id="zoom-target" class="tool" data-icon="target">
+                    Move target
+                  </button>
+                  <button id="zoom-remove" class="tool" data-icon="clear">
+                    Remove zoom
+                  </button>
+                </span>
+              </div>
+              <div id="restore-actions" class="restore-actions">
+                <button
+                  id="restore-toggle"
+                  class="ghost"
+                  type="button"
+                  data-icon="restore"
+                  aria-expanded="false"
+                >
+                  Restore source range
+                </button>
+                <div id="restore-form" class="restore-form" hidden>
+                  <label class="restore-field" for="restore-source">
+                    Source
+                    <select id="restore-source"></select>
+                  </label>
+                  <label class="restore-field" for="restore-source-start">
+                    Source start (seconds)
+                    <input
+                      id="restore-source-start"
+                      type="text"
+                      inputmode="decimal"
+                      autocomplete="off"
+                      placeholder="0.000000"
+                      maxlength="24"
+                    />
+                  </label>
+                  <label class="restore-field" for="restore-source-end">
+                    Source end (seconds)
+                    <input
+                      id="restore-source-end"
+                      type="text"
+                      inputmode="decimal"
+                      autocomplete="off"
+                      placeholder="0.000000"
+                      maxlength="24"
+                    />
+                  </label>
+                  <button id="restore-submit" type="button" disabled>
+                    Restore range
+                  </button>
+                  <p id="restore-error" role="alert" hidden></p>
+                </div>
+              </div>
+            </div>
+            <div id="review-actions" class="review-actions" hidden>
+              <div id="review-summary" class="review-summary"></div>
+              <button id="check-draft-integrity" data-icon="shield">
+                Verify draft
+              </button>
+              <p id="draft-integrity-result" role="status" hidden></p>
+              <p id="draft-integrity-error" role="alert" hidden></p>
+            </div>
+            <section id="export-actions" class="export-actions" hidden>
+              <div id="export-setup" class="export-setup">
+                <label for="export-profile">Quality</label>
+                <select id="export-profile">
+                  <option value="lossless_master">Lossless master</option>
+                  <option value="smaller_mp4">Smaller file</option>
+                </select>
+                <button
+                  id="export-start"
+                  class="primary"
+                  type="button"
+                  data-icon="export"
+                >
+                  Export…
+                </button>
+                <p id="export-profile-note"></p>
+              </div>
+              <div id="export-running" class="export-running" hidden>
+                <progress
+                  id="export-progress"
+                  max="1000"
+                  value="0"
+                  aria-label="Export progress"
+                ></progress>
+                <span id="export-phase" role="status"></span>
+                <button id="export-cancel" type="button">Cancel</button>
+              </div>
+              <div id="export-done" class="export-done" hidden>
+                <p id="export-result" role="status"></p>
+                <button
+                  id="export-open"
+                  class="primary"
+                  type="button"
+                  data-icon="play"
+                >
+                  Open video
+                </button>
+                <button id="export-reveal" type="button" data-icon="folder">
+                  Show in folder
+                </button>
+                <button id="export-again" type="button">Export again</button>
+              </div>
+              <p id="export-error" role="alert" hidden></p>
+              <div id="shorts" class="shorts">
+                <div class="shorts-header">
+                  <span class="card-title" data-icon="clips">Short clips</span>
+                  <button id="shorts-find" type="button" data-icon="sparkle">
+                    Find clips
+                  </button>
+                </div>
+                <div class="shorts-options">
+                  <select id="shorts-format" aria-label="Clip format">
+                    <option value="vertical">Vertical 9:16</option>
+                    <option value="square">Square 1:1</option>
+                    <option value="landscape">Landscape 16:9</option>
+                  </select>
+                  <select id="shorts-framing" aria-label="Clip framing">
+                    <option value="fit">Fit with blurred background</option>
+                    <option value="fill">Fill the frame</option>
+                  </select>
+                  <input
+                    id="shorts-position"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="50"
+                    aria-label="Crop position"
+                    hidden
+                  />
+                  <label class="switch" for="shorts-captions"
+                    ><input id="shorts-captions" type="checkbox" checked />Burn
+                    in captions</label
+                  >
+                </div>
+                <p id="shorts-note" class="muted"></p>
+                <ul
+                  id="shorts-list"
+                  class="shorts-list"
+                  aria-label="Short clips"
+                ></ul>
+                <p id="shorts-error" role="alert" hidden></p>
+              </div>
+            </section>
           </div>
         </div>
       </section>
@@ -310,9 +653,13 @@
       <form id="settings-form">
         <div class="panel-header">
           <h2 id="settings-title">Settings</h2>
-          <button type="button" id="close-settings" aria-label="Close settings">
-            ×
-          </button>
+          <button
+            type="button"
+            id="close-settings"
+            class="icon-button"
+            data-icon="close"
+            aria-label="Close settings"
+          ></button>
         </div>
         <nav class="settings-sections" aria-label="Settings sections">
           <button type="button" id="settings-appearance" aria-pressed="true">
@@ -353,9 +700,6 @@
           <div class="codex-actions">
             <button type="button" id="claude-sign-in" hidden>
               Sign in with Claude
-            </button>
-            <button type="button" id="claude-open-sign-in" hidden>
-              Open sign-in page
             </button>
             <button type="button" id="claude-cancel-sign-in" hidden>
               Cancel sign-in
@@ -467,6 +811,88 @@
           </button>
         </div>
       </form>
+    </dialog>
+    <dialog id="record-dialog" aria-labelledby="record-title">
+      <div class="panel-header">
+        <h2 id="record-title">New recording</h2>
+        <button
+          type="button"
+          id="record-close"
+          class="icon-button"
+          data-icon="close"
+          aria-label="Close recording"
+        ></button>
+      </div>
+      <div id="record-setup" class="record-setup">
+        <p class="field-label" id="record-display-label">Screen</p>
+        <div
+          id="record-displays"
+          class="choice-grid"
+          role="radiogroup"
+          aria-labelledby="record-display-label"
+        ></div>
+        <p class="field-label" id="record-area-label">Area</p>
+        <div
+          class="area-choice"
+          role="radiogroup"
+          aria-labelledby="record-area-label"
+        >
+          <button
+            type="button"
+            role="radio"
+            id="record-area-whole"
+            aria-checked="true"
+          >
+            Whole screen</button
+          ><button
+            type="button"
+            role="radio"
+            id="record-area-part"
+            aria-checked="false"
+            tabindex="-1"
+          >
+            Part of the screen
+          </button>
+        </div>
+        <p id="record-area-size" class="muted" hidden></p>
+        <label for="record-microphone" class="field-label">Microphone</label>
+        <select id="record-microphone"></select>
+        <p id="record-note" class="muted">
+          Saved losslessly (FFV1 video, PCM audio) on this device.
+        </p>
+        <div class="dialog-actions">
+          <button type="button" id="record-cancel">Cancel</button
+          ><button
+            type="button"
+            id="record-start"
+            class="primary record-button"
+            data-icon="record"
+          >
+            Start recording
+          </button>
+        </div>
+      </div>
+      <div id="record-live" class="record-live" hidden>
+        <div id="record-countdown" class="record-countdown" hidden></div>
+        <div id="record-status" class="record-status">
+          <span class="record-dot" aria-hidden="true"></span>
+          <output id="record-elapsed">0:00</output>
+        </div>
+        <p id="record-health" class="muted" role="status"></p>
+        <div class="dialog-actions">
+          <button type="button" id="record-pause" data-icon="pause">
+            Pause</button
+          ><button
+            type="button"
+            id="record-stop"
+            class="primary"
+            data-icon="stop"
+          >
+            Stop
+          </button>
+        </div>
+      </div>
+      <p id="record-error" role="alert" hidden></p>
     </dialog>
     <div id="toast" role="status" hidden></div>
     <script src="renderer.js"></script>

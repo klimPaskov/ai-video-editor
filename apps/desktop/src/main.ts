@@ -57,6 +57,9 @@ import {
   assertManualTrimRequest,
   assertManualSplitRequest,
   assertManualRangeCutRequest,
+  assertManualZoomRequest,
+  assertManualZoomRemoveRequest,
+  assertManualSpeedRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualTranscriptCutRequest,
@@ -77,17 +80,21 @@ import {
   ipcMain,
   protocol,
   safeStorage,
+  screen,
   session,
   shell,
 } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
-import { existsSync, mkdirSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { createReadStream, existsSync, mkdirSync } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
+import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { channels, assertEmptyRequest } from "./bridge.ts";
 import {
   assertFrameRequest,
+  assertThumbnail,
+  assertThumbnailRequest,
   assertMediaFrame,
   assertMediaList,
   assertMediaSummary,
@@ -98,12 +105,62 @@ import {
   assertCodexThreadView,
 } from "../../../packages/domain/src/codex-thread-view.ts";
 import { MediaLibrary } from "../../../packages/media-engine/src/library.ts";
+import { MediaError } from "../../../packages/media-engine/src/process.ts";
+import {
+  assertExportProjectRequest,
+  assertExportStartRequest,
+  assertExportView,
+} from "../../../packages/domain/src/export-view.ts";
+import { DesktopExports } from "./export.ts";
+import { DesktopMagicWand } from "./magic-wand.ts";
+import { DesktopRecorder, RecordingError } from "./recording.ts";
+import { DesktopPlaybackProxies } from "./playback-proxies.ts";
+import { CaptionSettingsStore } from "./caption-settings.ts";
+import { ProjectSettingsStore } from "./project-settings.ts";
+import {
+  assertAudioSettings,
+  assertAudioSettingsRequest,
+  assertAudioSettingsUpdate,
+  defaultAudioSettings,
+} from "../../../packages/domain/src/audio-settings.ts";
+import { DesktopShortClips, ShortClipError } from "./short-clips.ts";
+import {
+  assertShortClipRequest,
+  assertShortClipsView,
+  assertShortExportRequest,
+  assertShortProjectRequest,
+} from "../../../packages/domain/src/short-clips-view.ts";
+import {
+  assertCaptionSettingsRequest,
+  assertCaptionSettingsUpdate,
+  buildCaptionCues,
+  captionSourceWords,
+  captionWordsForDraft,
+} from "../../../packages/domain/src/captions.ts";
+import {
+  assertPlaybackProjectRequest,
+  assertPlaybackView,
+} from "../../../packages/domain/src/playback-view.ts";
+import {
+  assertRecordingStartRequest,
+  assertRecordingRegionRequest,
+  assertInterruptedTakeRequest,
+  assertRecordingRegionResult,
+  assertRecordingView,
+} from "../../../packages/domain/src/recording-view.ts";
+import {
+  assertMagicWandProjectRequest,
+  assertMagicWandStartRequest,
+  assertMagicWandView,
+} from "../../../packages/domain/src/magic-wand-view.ts";
 import {
   DesktopProjectRuntime,
   committedDraftView,
   invokeWithProjectDraftRefresh,
 } from "./project-runtime.ts";
 import type { ProjectDraftNotice } from "./project-runtime.ts";
+import type { ClipSpeed } from "../../../packages/domain/src/speed.ts";
+import { zoomSourceRange } from "../../../packages/domain/src/zoom.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
 const page = `${origin}/index.html`;
@@ -117,12 +174,30 @@ let mcpBroker: CodexMcpBroker | undefined;
 let claude: DesktopClaude | undefined;
 let claudeBroker: CodexMcpBroker | undefined;
 let transcription: DesktopTranscriptionManager | undefined;
+let exports: DesktopExports | undefined;
+let magicWandBusy: (projectId: string) => boolean = () => false;
+/** Resolves a playable source of the active project; set once services start. */
+let resolvePlaybackSource:
+  | ((
+      projectId: string,
+      sourceId: string,
+    ) => Promise<{ path: string; mime: string } | null>)
+  | undefined;
 let servicesClosed = false;
+let recorder: DesktopRecorder | undefined;
+let playbackProxies: DesktopPlaybackProxies | undefined;
+let shortClips: DesktopShortClips | undefined;
 app.on("before-quit", (event) => {
   quitting = true;
   if (
     !servicesClosed &&
-    (codex || mcpBroker || claude || claudeBroker || transcription)
+    (codex ||
+      mcpBroker ||
+      claude ||
+      claudeBroker ||
+      transcription ||
+      exports ||
+      recorder)
   ) {
     event.preventDefault();
     void Promise.allSettled([
@@ -132,6 +207,10 @@ app.on("before-quit", (event) => {
         .then(() => claude?.close())
         .then(() => claudeBroker?.close()),
       Promise.resolve().then(() => transcription?.close()),
+      Promise.resolve().then(() => exports?.close()),
+      Promise.resolve().then(() => recorder?.cancel()),
+      Promise.resolve().then(() => playbackProxies?.close()),
+      Promise.resolve().then(() => shortClips?.close()),
     ]).then(() => {
       servicesClosed = true;
       app.quit();
@@ -155,7 +234,13 @@ app.enableSandbox();
 protocol.registerSchemesAsPrivileged([
   {
     scheme: appIdentity.urlScheme,
-    privileges: { standard: true, secure: true, supportFetchAPI: true },
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      // Range requests let the preview <video> seek inside a source.
+      stream: true,
+    },
   },
 ]);
 
@@ -189,11 +274,160 @@ function register(
   });
 }
 
+/**
+ * Streams an immutable source of the active project to the preview player,
+ * with byte ranges. Nothing outside the project's managed sources is served.
+ */
+async function servePlaybackSource(
+  projectId: string,
+  sourceId: string,
+  request: Request,
+): Promise<Response> {
+  const notFound = () => new Response("Not found", { status: 404 });
+  const resolved = await resolvePlaybackSource?.(projectId, sourceId).catch(
+    () => null,
+  );
+  if (!resolved) return notFound();
+  let size: number;
+  try {
+    const info = await stat(resolved.path);
+    if (!info.isFile()) return notFound();
+    size = info.size;
+  } catch {
+    return notFound();
+  }
+  const range = /^bytes=(\d*)-(\d*)$/u.exec(request.headers.get("range") ?? "");
+  let start = 0;
+  let end = size - 1;
+  if (range && (range[1] || range[2])) {
+    if (range[1]) {
+      start = Number(range[1]);
+      if (range[2]) end = Math.min(size - 1, Number(range[2]));
+    } else start = Math.max(0, size - Number(range[2]));
+    if (!Number.isSafeInteger(start) || start > end || start >= size)
+      return new Response(null, {
+        status: 416,
+        headers: { "Content-Range": `bytes */${size}` },
+      });
+  }
+  const stream = createReadStream(resolved.path, { start, end });
+  return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, {
+    status: range ? 206 : 200,
+    headers: {
+      "Content-Type": resolved.mime,
+      "Content-Length": String(end - start + 1),
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "no-store",
+      ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}),
+    },
+  });
+}
+
+/**
+ * Shows the area picker over one display and resolves to the dragged area
+ * as fractions of the display, or null. Only one picker is open at a time.
+ */
+let picking: Promise<{
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | null> | null = null;
+function pickArea(display: Electron.Display) {
+  if (picking) return picking;
+  const overlay = new BrowserWindow({
+    ...display.bounds,
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    hasShadow: false,
+    show: false,
+    title: "Choose an area",
+    webPreferences: {
+      preload: path.join(app.getAppPath(), "region-preload.cjs"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      webviewTag: false,
+    },
+  });
+  overlay.setAlwaysOnTop(true, "screen-saver");
+  overlay.removeMenu();
+  overlay.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  overlay.webContents.on("will-navigate", (event) => event.preventDefault());
+  const regionPage = `${origin}/region.html`;
+  picking = new Promise((resolve) => {
+    let settled = false;
+    const settle = (
+      value: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      } | null,
+    ) => {
+      if (settled) return;
+      settled = true;
+      ipcMain.removeListener("region:done", done);
+      picking = null;
+      if (!overlay.isDestroyed()) overlay.destroy();
+      resolve(value);
+    };
+    const done = (event: Electron.IpcMainEvent, value: unknown) => {
+      if (
+        event.sender !== overlay.webContents ||
+        event.senderFrame?.url !== regionPage
+      )
+        return;
+      const area = value as Record<string, unknown> | null;
+      const valid =
+        area !== null &&
+        typeof area === "object" &&
+        ["x", "y", "width", "height"].every(
+          (key) =>
+            typeof area[key] === "number" &&
+            Number.isFinite(area[key]) &&
+            (area[key] as number) >= 0 &&
+            (area[key] as number) <= 1,
+        );
+      settle(
+        valid
+          ? {
+              x: area.x as number,
+              y: area.y as number,
+              width: area.width as number,
+              height: area.height as number,
+            }
+          : null,
+      );
+    };
+    ipcMain.on("region:done", done);
+    overlay.on("closed", () => settle(null));
+    overlay.once("ready-to-show", () => {
+      overlay.show();
+      overlay.focus();
+    });
+    void overlay.loadURL(regionPage).catch(() => settle(null));
+  });
+  return picking;
+}
+
 async function start(): Promise<void> {
   const files = new Map([
     ["/index.html", ["index.html", "text/html; charset=utf-8"]],
     ["/renderer.js", ["renderer.js", "text/javascript; charset=utf-8"]],
     ["/style.css", ["style.css", "text/css; charset=utf-8"]],
+    ["/region.html", ["region.html", "text/html; charset=utf-8"]],
+    ["/region.js", ["region.js", "text/javascript; charset=utf-8"]],
+    ["/region.css", ["region.css", "text/css; charset=utf-8"]],
   ]);
   // Fail before opening a product window if any required packaged resource is absent.
   const preload = await readFile(path.join(app.getAppPath(), "preload.cjs"));
@@ -208,6 +442,12 @@ async function start(): Promise<void> {
   }
   protocol.handle(appIdentity.urlScheme, async (request) => {
     const url = new URL(request.url);
+    const media =
+      /^\/media\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})$/u.exec(
+        url.pathname,
+      );
+    if (media && url.host === "app" && !url.search && request.method === "GET")
+      return servePlaybackSource(media[1]!, media[2]!, request);
     const asset = assets.get(url.pathname);
     if (request.method !== "GET" || url.host !== "app" || url.search || !asset)
       return new Response("Not found", { status: 404 });
@@ -215,7 +455,7 @@ async function start(): Promise<void> {
       headers: {
         "Content-Type": asset.mime,
         "Content-Security-Policy":
-          "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'",
+          "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'",
       },
     });
   });
@@ -250,6 +490,371 @@ async function start(): Promise<void> {
   const projects = new ProjectStore(projectRoot, library);
   const drafts = new DraftTransactionStore(projectRoot, projects);
   const projectRuntime = new DesktopProjectRuntime(drafts, library);
+  const captionSettings = new CaptionSettingsStore(
+    path.join(userData, "caption-settings"),
+  );
+  const audioSettings = new ProjectSettingsStore(
+    path.join(userData, "audio-settings"),
+    assertAudioSettings,
+    defaultAudioSettings,
+  );
+  register(channels.audioGet, async (request) => {
+    assertAudioSettingsRequest(request);
+    return audioSettings.get(request.project_id);
+  });
+  register(channels.audioSet, async (request) => {
+    assertAudioSettingsUpdate(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before changing audio.");
+    return audioSettings.set(request.project_id, request.settings);
+  });
+  /** Captions for the current draft when they are on and a transcript exists. */
+  const draftCaptions = async (projectId: string) => {
+    const settings = await captionSettings.get(projectId);
+    if (!settings.enabled) return null;
+    const view = await transcription!.get({
+      schema_version: "1.0",
+      project_id: projectId,
+      job_id: null,
+    });
+    if (view.results.length === 0) return null;
+    const project = await projectRuntime.view(projectId);
+    const cues = buildCaptionCues(
+      captionWordsForDraft(
+        captionSourceWords(view.results, project.transcriptEdits ?? []),
+        project.clips ?? [],
+      ),
+    );
+    return cues.length ? { cues, settings } : null;
+  };
+  shortClips = new DesktopShortClips({
+    root: path.join(userData, "short-clips"),
+    drafts,
+    draftWords: async (projectId) => {
+      const project = await projectRuntime.view(projectId);
+      const view = await transcription!.get({
+        schema_version: "1.0",
+        project_id: projectId,
+        job_id: null,
+      });
+      return {
+        words:
+          view.results.length === 0
+            ? null
+            : captionWordsForDraft(
+                captionSourceWords(view.results, project.transcriptEdits ?? []),
+                project.clips ?? [],
+              ),
+        sequence: project.draft.sequence,
+        timelineSha256: project.draft.timelineSha256,
+      };
+    },
+    captionSettings: (projectId) => captionSettings.get(projectId),
+    audioSettings: (projectId) => audioSettings.get(projectId),
+    defaultDirectory: () => app.getPath("videos"),
+    chooseDestination: async (defaultPath) => {
+      if (!window) return null;
+      const chosen = await dialog.showSaveDialog(window, {
+        title: "Export short clip",
+        defaultPath,
+        filters: [{ name: "MP4 video", extensions: ["mp4"] }],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      });
+      return chosen.canceled || !chosen.filePath ? null : chosen.filePath;
+    },
+  });
+  const shorts = async (projectId: string, work: () => Promise<unknown>) => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before making clips.");
+    try {
+      const value = await work();
+      assertShortClipsView(value);
+      return value;
+    } catch (error) {
+      if (error instanceof ShortClipError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  };
+  register(channels.shortsGet, async (request) => {
+    assertShortProjectRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.view(request.project_id),
+    );
+  });
+  register(channels.shortsFind, async (request) => {
+    assertShortProjectRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.find(request.project_id),
+    );
+  });
+  register(channels.shortsDiscard, async (request) => {
+    assertShortClipRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.discard(request.project_id, request.clip_id),
+    );
+  });
+  register(channels.shortsExport, async (request) => {
+    assertShortExportRequest(request);
+    return shorts(request.project_id, () => shortClips!.export(request));
+  });
+  register(channels.shortsCancel, async (request) => {
+    assertShortProjectRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.cancel(request.project_id),
+    );
+  });
+  register(channels.captionsGet, async (request) => {
+    assertCaptionSettingsRequest(request);
+    return captionSettings.get(request.project_id);
+  });
+  register(channels.captionsSet, async (request) => {
+    assertCaptionSettingsUpdate(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before changing captions.");
+    return captionSettings.set(request.project_id, request.settings);
+  });
+  recorder = new DesktopRecorder({
+    root: path.join(userData, "recordings"),
+    platform: process.platform,
+    env: process.env,
+    importFile: (file) => library.importFile(file),
+    displays: () =>
+      screen.getAllDisplays().map((display, index) => {
+        // Capture uses physical pixels; Windows maps per-monitor DPI itself.
+        const bounds =
+          process.platform === "win32"
+            ? screen.dipToScreenRect(null, display.bounds)
+            : {
+                x: Math.round(display.bounds.x * display.scaleFactor),
+                y: Math.round(display.bounds.y * display.scaleFactor),
+                width: Math.round(display.bounds.width * display.scaleFactor),
+                height: Math.round(display.bounds.height * display.scaleFactor),
+              };
+        return {
+          id: `display-${index + 1}`,
+          label:
+            display.label && display.label.length <= 200
+              ? display.label
+              : `Display ${index + 1}`,
+          ...bounds,
+          primary: display.id === screen.getPrimaryDisplay().id,
+        };
+      }),
+    // Captures stop by themselves if this app quits or crashes.
+    supervisor: {
+      executable: process.execPath,
+      script: path.join(
+        process.resourcesPath,
+        "capture",
+        "capture-supervisor.cjs",
+      ),
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    },
+    pickArea: (displayId) => {
+      const displays = screen.getAllDisplays();
+      const index = /^display-(\d{1,2})$/u.exec(displayId);
+      // The synthetic test display is shown over the primary display.
+      const display = index
+        ? displays[Number(index[1]) - 1]
+        : screen.getPrimaryDisplay();
+      return display ? pickArea(display) : Promise.resolve(null);
+    },
+  });
+  const recording = async (work: () => Promise<unknown>) => {
+    try {
+      const value = await work();
+      assertRecordingView(value);
+      return value;
+    } catch (error) {
+      if (error instanceof RecordingError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  };
+  register(channels.recordingDevices, async (request) => {
+    assertEmptyRequest(request);
+    return recorder!.devices();
+  });
+  register(channels.recordingGet, async (request) => {
+    assertEmptyRequest(request);
+    return recording(async () => recorder!.get());
+  });
+  register(channels.recordingInterrupted, async (request) => {
+    assertEmptyRequest(request);
+    return recorder!.interrupted();
+  });
+  register(channels.recordingRecover, async (request) => {
+    assertInterruptedTakeRequest(request);
+    return recording(() => recorder!.recover(request.take_id));
+  });
+  register(channels.recordingDiscardInterrupted, async (request) => {
+    assertInterruptedTakeRequest(request);
+    return recorder!.discardInterrupted(request.take_id);
+  });
+  register(channels.recordingPickRegion, async (request) => {
+    assertRecordingRegionRequest(request);
+    try {
+      const value = { region: await recorder!.pickRegion(request.display_id) };
+      assertRecordingRegionResult(value);
+      return value;
+    } catch (error) {
+      if (error instanceof RecordingError)
+        throw new UserFacingError(error.message);
+      throw error;
+    } finally {
+      window?.focus();
+    }
+  });
+  register(channels.recordingStart, async (request) => {
+    assertRecordingStartRequest(request);
+    return recording(() => recorder!.start(request));
+  });
+  register(channels.recordingPause, async (request) => {
+    assertEmptyRequest(request);
+    return recording(() => recorder!.pause());
+  });
+  register(channels.recordingResume, async (request) => {
+    assertEmptyRequest(request);
+    return recording(() => recorder!.resume());
+  });
+  register(channels.recordingStop, async (request) => {
+    assertEmptyRequest(request);
+    return recording(() => recorder!.stop());
+  });
+  register(channels.recordingCancel, async (request) => {
+    assertEmptyRequest(request);
+    return recording(() => recorder!.cancel());
+  });
+  exports = new DesktopExports({
+    captions: draftCaptions,
+    audio: (projectId) => audioSettings.get(projectId),
+    drafts,
+    recordRoot: path.join(userData, "exports"),
+    defaultDirectory: () => app.getPath("videos"),
+    chooseDestination: async ({ defaultPath, profile }) => {
+      if (!window) return null;
+      const lossless = profile === "lossless_master";
+      const chosen = await dialog.showSaveDialog(window, {
+        title: lossless ? "Export lossless master" : "Export smaller file",
+        defaultPath,
+        filters: lossless
+          ? [{ name: "Matroska video (lossless)", extensions: ["mkv"] }]
+          : [{ name: "MP4 video", extensions: ["mp4"] }],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      });
+      return chosen.canceled || !chosen.filePath ? null : chosen.filePath;
+    },
+    showInFolder: (file) => shell.showItemInFolder(file),
+    openFile: async (file) => {
+      const failure = await shell.openPath(file);
+      if (failure) throw new UserFacingError("The video could not be opened.");
+    },
+  });
+  playbackProxies = new DesktopPlaybackProxies({
+    root: path.join(userData, "playback-proxies"),
+  });
+  const playbackSources = async (projectId: string) => {
+    const { project } = await drafts.snapshotWithProject(projectId);
+    const sources =
+      project.schema_version === "1.1" ? project.sources : [project.source];
+    const probes =
+      project.schema_version === "1.1"
+        ? project.source_probes
+        : [project.source_probe];
+    return sources.map((source, index) => ({
+      id: source.source_id,
+      sha256: source.sha256,
+      path: source.managed_path,
+      probe: probes[index] as unknown,
+    }));
+  };
+  register(channels.playbackGet, async (request) => {
+    assertPlaybackProjectRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before playing it.");
+    const value = await playbackProxies!.view(
+      await playbackSources(request.project_id),
+    );
+    assertPlaybackView(value);
+    return value;
+  });
+  resolvePlaybackSource = async (projectId, sourceId) => {
+    if (activeProjectId !== projectId) return null;
+    const { project } = await drafts.snapshotWithProject(projectId);
+    const sources =
+      project.schema_version === "1.1" ? project.sources : [project.source];
+    const probes =
+      project.schema_version === "1.1"
+        ? project.source_probes
+        : [project.source_probe];
+    const index = sources.findIndex((source) => source.source_id === sourceId);
+    if (index < 0) return null;
+    const format = (probes[index] as { format?: { format_name?: unknown } })
+      .format?.format_name;
+    const name = typeof format === "string" ? format : "";
+    const mime = name.includes("mp4")
+      ? "video/mp4"
+      : name.includes("webm")
+        ? "video/webm"
+        : name.includes("matroska")
+          ? "video/x-matroska"
+          : "application/octet-stream";
+    // Sources Chromium cannot decode are served through their playback copy.
+    return playbackProxies!.resolve(
+      {
+        sha256: sources[index]!.sha256,
+        path: sources[index]!.managed_path,
+        probe: probes[index] as unknown,
+      },
+      mime,
+    );
+  };
+  const activeExportProject = (projectId: string) => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before exporting.");
+  };
+  register(channels.exportGet, async (request) => {
+    assertExportProjectRequest(request);
+    activeExportProject(request.project_id);
+    const value = exports!.get(request.project_id);
+    assertExportView(value);
+    return value;
+  });
+  register(channels.exportStart, async (request) => {
+    assertExportStartRequest(request);
+    activeExportProject(request.project_id);
+    try {
+      const value = await exports!.start(request.project_id, request.profile);
+      assertExportView(value);
+      return value;
+    } catch (error) {
+      if (error instanceof MediaError) throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.exportCancel, async (request) => {
+    assertExportProjectRequest(request);
+    const value = exports!.cancel(request.project_id);
+    assertExportView(value);
+    return value;
+  });
+  register(channels.exportReset, async (request) => {
+    assertExportProjectRequest(request);
+    const value = exports!.reset(request.project_id);
+    assertExportView(value);
+    return value;
+  });
+  register(channels.exportReveal, async (request) => {
+    assertExportProjectRequest(request);
+    exports!.reveal(request.project_id);
+    return null;
+  });
+  register(channels.exportOpen, async (request) => {
+    assertExportProjectRequest(request);
+    await exports!.openResult(request.project_id);
+    return null;
+  });
   transcription = new DesktopTranscriptionManager({
     projects,
     library,
@@ -340,6 +945,52 @@ async function start(): Promise<void> {
   );
   // Claude reaches the same guarded tool service through its own broker, so
   // every Claude transaction is attributed to the Claude origin.
+  // Magic Edit commits through the same guarded tools as the assistants,
+  // attributed to its own origin so its cuts share Undo/Redo.
+  const magicWand = new DesktopMagicWand(
+    transcription!,
+    async (projectId, name, input) => {
+      if (activeProjectId !== projectId)
+        throw new CodexVideoEditToolError("inactive_project");
+      return invokeWithProjectDraftRefresh({
+        toolName: name,
+        projectId,
+        activeProjectId: () => activeProjectId,
+        work: () =>
+          new CodexVideoEditToolService(
+            projectId,
+            drafts,
+            "magic_wand",
+            readTranscriptForTool,
+          ).invoke(name, input),
+        drafts,
+        notify: publishDraftNotice,
+      });
+    },
+  );
+  magicWandBusy = (projectId) => magicWand.busy(projectId);
+  register(channels.magicGet, async (request) => {
+    assertMagicWandProjectRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before using Magic Edit.");
+    const value = magicWand.get(request.project_id);
+    assertMagicWandView(value);
+    return value;
+  });
+  register(channels.magicStart, async (request) => {
+    assertMagicWandStartRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before using Magic Edit.");
+    const value = magicWand.start(request.project_id, request.preset);
+    assertMagicWandView(value);
+    return value;
+  });
+  register(channels.magicStop, async (request) => {
+    assertMagicWandProjectRequest(request);
+    const value = magicWand.stop(request.project_id);
+    assertMagicWandView(value);
+    return value;
+  });
   const invokeClaudeTool = async (name: unknown, input: unknown) => {
     if (!activeProjectId) throw new CodexVideoEditToolError("inactive_project");
     const projectId = activeProjectId;
@@ -477,10 +1128,6 @@ async function start(): Promise<void> {
     assertEmptyRequest(request);
     return claudeView(() => claude!.signIn());
   });
-  register(channels.claudeOpenSignIn, async (request) => {
-    assertEmptyRequest(request);
-    return claudeView(() => claude!.openSignInPage());
-  });
   register(channels.claudeCancelSignIn, async (request) => {
     assertEmptyRequest(request);
     return claudeView(() => claude!.cancelSignIn());
@@ -507,8 +1154,50 @@ async function start(): Promise<void> {
     assertProjectList(value);
     return value;
   });
+  // A project with running work cannot lose focus: its turn's tools would
+  // otherwise resolve against another project's draft.
+  const assertProjectIdle = async (projectId: string): Promise<void> => {
+    if (magicWandBusy(projectId))
+      throw new UserFacingError("Stop Magic Edit before leaving this project.");
+    if (shortClips?.busy(projectId))
+      throw new UserFacingError(
+        "Wait for the clip to finish exporting or cancel it before leaving this project.",
+      );
+    if (exports!.busy(projectId))
+      throw new UserFacingError(
+        "Wait for the export to finish or cancel it before leaving this project.",
+      );
+    if (transcription!.isRunning(projectId))
+      throw new UserFacingError(
+        "Stop local transcription before closing this project.",
+      );
+    if (
+      ["opening", "starting", "running", "interrupting"].includes(
+        codex!.getThread(projectId).status,
+      )
+    )
+      throw new UserFacingError(
+        "Stop the running Codex turn before leaving this project.",
+      );
+    if (claude!.busy(projectId))
+      throw new UserFacingError(
+        "Stop the running Claude turn before leaving this project.",
+      );
+    for (const provider of apiProviderIds) {
+      const turn = await apiThreads.get(projectId, provider);
+      if (turn.status === "running" || turn.status === "interrupting")
+        throw new UserFacingError(
+          "Stop the running provider turn before leaving this project.",
+        );
+    }
+  };
+  const assertCanLeaveActive = async (nextId?: string): Promise<void> => {
+    if (activeProjectId !== undefined && activeProjectId !== nextId)
+      await assertProjectIdle(activeProjectId);
+  };
   register(channels.projectCreate, async (request) => {
     assertProjectRequest(request);
+    await assertCanLeaveActive();
     const created = await projects.createFromMedia(request.id),
       value = await projectRuntime.view(created.project.project_id);
     activeProjectId = value.id;
@@ -516,6 +1205,7 @@ async function start(): Promise<void> {
   });
   register(channels.projectCreateTwo, async (request) => {
     assertTwoSourceProjectRequest(request);
+    await assertCanLeaveActive();
     const created = await projects.createFromTwoMedia(
       request.firstId,
       request.secondId,
@@ -526,6 +1216,7 @@ async function start(): Promise<void> {
   });
   register(channels.projectOpen, async (request) => {
     assertProjectRequest(request);
+    await assertCanLeaveActive(request.id);
     await projects.open(request.id);
     const value = await projectRuntime.view(request.id);
     activeProjectId = value.id;
@@ -534,29 +1225,7 @@ async function start(): Promise<void> {
   register(channels.projectClose, async (request) => {
     assertProjectRequest(request);
     if (activeProjectId === request.id) {
-      if (transcription!.isRunning(request.id))
-        throw new UserFacingError(
-          "Stop local transcription before closing this project.",
-        );
-      if (
-        ["opening", "starting", "running", "interrupting"].includes(
-          codex!.getThread(request.id).status,
-        )
-      )
-        throw new UserFacingError(
-          "Stop the running Codex turn before leaving this project.",
-        );
-      if (claude!.busy(request.id))
-        throw new UserFacingError(
-          "Stop the running Claude turn before leaving this project.",
-        );
-      for (const provider of apiProviderIds) {
-        const turn = await apiThreads.get(request.id, provider);
-        if (turn.status === "running" || turn.status === "interrupting")
-          throw new UserFacingError(
-            "Stop the running provider turn before leaving this project.",
-          );
-      }
+      await assertProjectIdle(request.id);
       await codex!.closeThread(request.id);
       await claude!.closeThread(request.id);
       await Promise.all(
@@ -785,6 +1454,20 @@ async function start(): Promise<void> {
       frameRequests.delete(controller);
     }
   });
+  let thumbnailRequests = 0;
+  register(channels.thumbnail, async (request) => {
+    assertThumbnailRequest(request);
+    // Cards ask for one picture each; a small bound keeps FFmpeg use modest.
+    if (thumbnailRequests >= 4) throw new Error("Thumbnail queue is full");
+    thumbnailRequests++;
+    try {
+      const value = await library.thumbnail(request.id);
+      assertThumbnail(value);
+      return value;
+    } finally {
+      thumbnailRequests--;
+    }
+  });
   register(channels.projectFrame, async (request) => {
     assertProjectFrameRequest(request);
     if (activeProjectId !== request.projectId)
@@ -908,6 +1591,157 @@ async function start(): Promise<void> {
                 end_us: request.endUs,
               },
             ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.projectManualZoom, async (request) => {
+    assertManualZoomRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    const { draft } = await drafts.snapshotWithProject(request.projectId);
+    if (
+      draft.draft_sequence !== request.expectedSequence ||
+      draft.timeline_sha256 !== request.expectedTimelineSha256
+    )
+      throw new UserFacingError(
+        "The draft changed. Check the zoom range and try again.",
+      );
+    // Map the output range to one source's time through the clip map. An
+    // existing zoom keeps its own source range, including parts under cuts.
+    const existing = request.zoomId
+      ? draft.timeline.zooms?.find((zoom) => zoom.zoom_id === request.zoomId)
+      : undefined;
+    if (request.zoomId && !existing)
+      throw new UserFacingError("That zoom was removed. Add it again.");
+    const range =
+      existing ??
+      zoomSourceRange(draft.timeline.clips, request.startUs, request.endUs);
+    if (!range)
+      throw new UserFacingError(
+        "A zoom must stay within footage from one recording.",
+      );
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "zoom.set",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "zoom" },
+            reason: request.zoomId ? "Manual zoom change." : "Manual zoom.",
+            operations: [
+              {
+                type: "set_zoom",
+                zoom: {
+                  zoom_id:
+                    request.zoomId ??
+                    `zoom-${randomUUID().replaceAll("-", "")}`,
+                  source_id: range.source_id,
+                  source_start_us: range.source_start_us,
+                  source_end_us: range.source_end_us,
+                  center_x: request.centerX,
+                  center_y: request.centerY,
+                  scale: request.scale,
+                },
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(
+          error.code === "conflict"
+            ? "Zooms cannot overlap. Choose a range outside the other zoom."
+            : error.message,
+        );
+      throw error;
+    }
+  });
+  register(channels.projectManualSpeed, async (request) => {
+    assertManualSpeedRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "speed.set",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "speed" },
+            reason:
+              request.speed === 1
+                ? "Manual normal speed."
+                : `Manual ${request.speed}x speed.`,
+            operations: [
+              {
+                type: "set_speed",
+                start_us: request.startUs,
+                end_us: request.endUs,
+                speed: request.speed as ClipSpeed,
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(
+          error.code === "conflict"
+            ? "That part already plays at this speed."
+            : error.message,
+        );
+      throw error;
+    }
+  });
+  register(channels.projectManualZoomRemove, async (request) => {
+    assertManualZoomRemoveRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "zoom.remove",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "zoom" },
+            reason: "Remove zoom.",
+            operations: [{ type: "remove_zoom", zoom_id: request.zoomId }],
           }),
       });
       return committedDraftView(committed);
@@ -1122,6 +1956,10 @@ async function start(): Promise<void> {
     if (!clip)
       throw new UserFacingError(
         "The selected words are not one continuous visible source range. Choose a smaller range.",
+      );
+    if (clip.speed)
+      throw new UserFacingError(
+        "These words are in a sped-up part. Set it back to normal speed before cutting words.",
       );
     const startUs =
         clip.timeline_start_us + (firstWord.start_us - clip.source_start_us),

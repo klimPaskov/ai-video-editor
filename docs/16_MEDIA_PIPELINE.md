@@ -46,3 +46,17 @@ Keep concise structured diagnostics and the last failed staging artifact when it
 - No silent fallback to a low-precision compositor or encoded proxy
 
 See `docs/44_LOSSLESS_MEDIA_POLICY.md` for the capture-to-master fidelity boundary and exact decoded comparison tests.
+
+## Draft playback (2026-10-07)
+
+`apps/desktop/renderer/playback.ts` plays the committed draft. Main serves an active project's managed source at `ai-video-editor://app/media/<project>/<source>` with byte ranges; nothing else is served and the renderer's CSP allows media from the app only, with no `connect-src`. Two `<video>` elements alternate: one plays the current clip while the other waits at the next clip's first frame, and a frame callback swaps them at the clip's last frame. Joins can be one frame early or late in preview; export is exact. Play/Pause sits between the frame-step controls, Space toggles it when focus is on the preview or position control, and stopping returns to the exact still frame. Any draft change, stage change, seek or leaving the project stops playback. A source Chromium cannot decode shows a fixed message and keeps frame preview.
+
+Evidence: `tests/native/playback.test.ts` cuts the second of a red/green/blue/yellow source in the packaged app and plays across the cut: the visible frames were red, blue, yellow and never green, audio bytes were decoded, playback stopped at the end on the still frame, Pause kept the position and Space toggled; the media route returned 206 for the project's source and 404 for other paths. Not covered: audio listening, playback proxies for undecodable sources, sustained 4K throughput.
+
+## Card pictures (2026-10-07)
+
+`MediaLibrary.thumbnail` decodes one frame about a tenth of the way in (at most 1 s), scales it to at most 320 px wide with FFmpeg defaults, forces opaque alpha and caches it per source hash. Main allows four requests at a time and the renderer asks one at a time. The result is decorative and is never used for review, analysis or rendering.
+
+## Playback copies (2026-10-07)
+
+Sources Chromium cannot decode (any video codec other than H.264, VP8, VP9 or AV1, or audio other than AAC, Opus, Vorbis, MP3 or FLAC, which includes lossless FFV1/PCM recordings) play through a display-only copy. Main makes it in the background, one source at a time, keyed by source hash under the app's data folder: H.264 without B-frames, a key frame every second, BT.709 limited range, and AAC in MP4, or VP9 and Opus in WebM when libx264 is missing. Frames are passed through at their source times, so preview positions map one to one; `tests/media/playback-proxy.test.ts` compares every frame time against the source. The copy is written to a `.partial` file and renamed when complete, so the media route never serves part of one. While it is being made, the player bar shows "Preparing playback N%" and Play waits; still frames remain exact. The copy is never used for still frames, analysis or export. Copies are not yet removed when their sources are no longer used.

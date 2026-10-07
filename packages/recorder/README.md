@@ -1,5 +1,7 @@
-# packages/recorder
+# Recorder
 
-Implementation location: Native source capture and synchronization.
+Lossless screen and microphone capture through FFmpeg.
 
-Create the actual code and tests here during the mapped phase. No application implementation is supplied in this directory yet. Read the root AGENTS.md and TASKS.md before adding code.
+- `capture.ts`: command lines per platform (x11grab, gdigrab, avfoundation) and parsers for progress, devices and input start times.
+- `session.ts`: one take. Pause and resume start new segments; Stop aligns each segment's audio to its first video frame with exact samples and joins them without re-encoding. A `take.json` progress record makes interrupted takes recoverable.
+- `capture-supervisor.ts`: runs each capture so that FFmpeg finishes when the app quits or crashes.

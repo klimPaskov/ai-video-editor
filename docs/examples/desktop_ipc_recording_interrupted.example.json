@@ -1,0 +1,15 @@
+{
+  "channel": "recording:interrupted",
+  "payload": null,
+  "response": {
+    "ok": true,
+    "value": {
+      "takes": [
+        {
+          "id": "83266eb4-c1d8-461b-ac27-401914fad302",
+          "createdAt": "2026-10-07T17:16:02.311Z"
+        }
+      ]
+    }
+  }
+}

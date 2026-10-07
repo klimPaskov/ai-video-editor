@@ -41,6 +41,22 @@ import {
   type TwoSourceInitialProjectSnapshot,
 } from "../../domain/src/project.ts";
 import { sameProjectStorePath, serializeProjectStore } from "./serialize.ts";
+import { assertZoomEffects } from "../../domain/src/zoom.ts";
+import { clipSpeed, sourceAt, speedLength } from "../../domain/src/speed.ts";
+
+/** Lay clips end to end; each lasts its source length at its speed. */
+function layoutClips(clips: DraftState["timeline"]["clips"]): number {
+  let position = 0;
+  for (const candidate of clips) {
+    candidate.timeline_start_us = position;
+    position += speedLength(
+      candidate.source_end_us - candidate.source_start_us,
+      clipSpeed(candidate),
+    );
+    candidate.timeline_end_us = position;
+  }
+  return position;
+}
 
 type ProjectBaseline = InitialProjectSnapshot | TwoSourceInitialProjectSnapshot;
 type ProjectReader = {
@@ -485,6 +501,118 @@ function prepareApply(
       operationId = authority.operation_ids[index]!;
     if (!validId(operationId) || timeline.operation_ids.includes(operationId))
       fail("conflict");
+    if (intent.type === "set_speed") {
+      if (
+        request.operations.length !== 1 ||
+        intent.end_us > timeline.duration_us
+      )
+        fail(request.operations.length !== 1 ? "invalid" : "conflict");
+      const priorClips = structuredClone(timeline.clips);
+      const next: typeof timeline.clips = [];
+      const derived = (clipId: string, part: string) =>
+        `clip-${canonicalSha256({ operation_id: operationId, clip_id: clipId, part }).slice(0, 32)}`;
+      for (const current of timeline.clips) {
+        const from = Math.max(intent.start_us, current.timeline_start_us);
+        const to = Math.min(intent.end_us, current.timeline_end_us);
+        // Parts already at this speed stay as they are.
+        if (to <= from || clipSpeed(current) === intent.speed) {
+          next.push(current);
+          continue;
+        }
+        const cutFrom = sourceAt(current, from);
+        const cutTo =
+          to === current.timeline_end_us
+            ? current.source_end_us
+            : sourceAt(current, to);
+        const hasLeft = from > current.timeline_start_us;
+        if (hasLeft) next.push({ ...current, source_end_us: cutFrom });
+        const middle: (typeof timeline.clips)[number] = {
+          ...current,
+          clip_id: hasLeft
+            ? derived(current.clip_id, "speed")
+            : current.clip_id,
+          source_start_us: cutFrom,
+          source_end_us: cutTo,
+        };
+        if (intent.speed === 1) delete middle.speed;
+        else middle.speed = intent.speed;
+        next.push(middle);
+        if (cutTo < current.source_end_us)
+          next.push({
+            ...current,
+            clip_id: derived(current.clip_id, "after"),
+            source_start_us: cutTo,
+          });
+      }
+      const ids = new Set(next.map((candidate) => candidate.clip_id));
+      // A range already at this speed is not an edit.
+      if (
+        ids.size !== next.length ||
+        next.length > 4096 ||
+        canonicalSha256(next) === canonicalSha256(priorClips)
+      )
+        fail("conflict");
+      timeline.clips = structuredClone(next);
+      timeline.duration_us = layoutClips(timeline.clips);
+      timeline.operation_ids.push(operationId);
+      records.push({
+        schema_version: "1.0",
+        operation_id: operationId,
+        operation_type: "speed",
+        start_us: intent.start_us,
+        end_us: intent.end_us,
+        speed: intent.speed,
+        before: priorClips,
+        after: structuredClone(timeline.clips),
+        inverse: {
+          type: "restore_timeline_clips",
+          clips: priorClips,
+          expected_after_sha256: canonicalSha256(timeline.clips),
+        },
+      });
+      continue;
+    }
+    if (intent.type === "set_zoom" || intent.type === "remove_zoom") {
+      if (request.operations.length !== 1) fail("invalid");
+      const beforeZooms = structuredClone(timeline.zooms ?? []);
+      const zoomId =
+        intent.type === "set_zoom" ? intent.zoom.zoom_id : intent.zoom_id;
+      const exists = beforeZooms.some((zoom) => zoom.zoom_id === zoomId);
+      if (intent.type === "remove_zoom" && !exists) fail("conflict");
+      const afterZooms = beforeZooms.filter((zoom) => zoom.zoom_id !== zoomId);
+      if (intent.type === "set_zoom") {
+        afterZooms.push(structuredClone(intent.zoom));
+        afterZooms.sort(
+          (a, b) =>
+            a.source_id.localeCompare(b.source_id) ||
+            a.source_start_us - b.source_start_us,
+        );
+      }
+      try {
+        assertZoomEffects(afterZooms, baseline.timeline.clips);
+      } catch {
+        fail("conflict");
+      }
+      if (afterZooms.length) timeline.zooms = afterZooms;
+      else delete timeline.zooms;
+      timeline.operation_ids.push(operationId);
+      records.push({
+        schema_version: "1.0",
+        operation_id: operationId,
+        operation_type: "zoom",
+        action: intent.type === "set_zoom" ? "set" : "remove",
+        zoom_id: zoomId,
+        zoom: intent.type === "set_zoom" ? structuredClone(intent.zoom) : null,
+        before: beforeZooms,
+        after: structuredClone(afterZooms),
+        inverse: {
+          type: "restore_zooms",
+          zooms: beforeZooms,
+          expected_after_sha256: canonicalSha256(afterZooms),
+        },
+      });
+      continue;
+    }
     if (intent.type === "transcript_edit") {
       if (request.operations.length !== 1) fail("invalid");
       if (
@@ -597,12 +725,7 @@ function prepareApply(
           enabled: true,
         },
       );
-      let position = 0;
-      for (const candidate of timeline.clips) {
-        candidate.timeline_start_us = position;
-        position += candidate.source_end_us - candidate.source_start_us;
-        candidate.timeline_end_us = position;
-      }
+      const position = layoutClips(timeline.clips);
       if (!Number.isSafeInteger(position) || position < 1) fail("conflict");
       timeline.duration_us = position;
       records.push({
@@ -633,6 +756,8 @@ function prepareApply(
         );
         if (
           !clip ||
+          // Word times map exactly only at normal speed.
+          clipSpeed(clip) !== 1 ||
           clip.timeline_start_us +
             (intent.source_start_us - clip.source_start_us) !==
             intent.start_us ||
@@ -663,7 +788,10 @@ function prepareApply(
         if (leftLength > 0) {
           survivors.push({
             ...current,
-            source_end_us: current.source_start_us + leftLength,
+            source_end_us: sourceAt(
+              current,
+              current.timeline_start_us + leftLength,
+            ),
           });
         }
         if (rightLength > 0) {
@@ -680,18 +808,16 @@ function prepareApply(
           survivors.push({
             ...current,
             clip_id: rightId,
-            source_start_us: current.source_end_us - rightLength,
+            source_start_us: sourceAt(
+              current,
+              current.timeline_end_us - rightLength,
+            ),
           });
         }
       }
       if (survivors.length < 1 || survivors.length > 4096) fail("conflict");
       timeline.clips = survivors;
-      let position = 0;
-      for (const candidate of timeline.clips) {
-        candidate.timeline_start_us = position;
-        position += candidate.source_end_us - candidate.source_start_us;
-        candidate.timeline_end_us = position;
-      }
+      const position = layoutClips(timeline.clips);
       if (!Number.isSafeInteger(position) || position < 1) fail("conflict");
       timeline.duration_us = position;
       const afterClips = structuredClone(timeline.clips);
@@ -744,9 +870,7 @@ function prepareApply(
       fail("conflict");
     if (intent.type === "split") {
       if (timeline.clips.length >= 4096) fail("conflict");
-      const splitSourceUs =
-        current.source_start_us +
-        (intent.timeline_position_us - current.timeline_start_us);
+      const splitSourceUs = sourceAt(current, intent.timeline_position_us);
       const left = {
         ...current,
         source_end_us: splitSourceUs,
@@ -779,14 +903,9 @@ function prepareApply(
       });
     } else {
       const next = structuredClone(current);
-      if (intent.edge === "start") {
-        const removed = intent.timeline_position_us - current.timeline_start_us;
-        next.source_start_us += removed;
-      } else {
-        next.source_end_us =
-          current.source_start_us +
-          (intent.timeline_position_us - current.timeline_start_us);
-      }
+      if (intent.edge === "start")
+        next.source_start_us = sourceAt(current, intent.timeline_position_us);
+      else next.source_end_us = sourceAt(current, intent.timeline_position_us);
       timeline.clips[clipIndex] = next;
       records.push({
         schema_version: "1.0",
@@ -804,13 +923,7 @@ function prepareApply(
         },
       });
     }
-    let position = 0;
-    for (const candidate of timeline.clips) {
-      candidate.timeline_start_us = position;
-      position += candidate.source_end_us - candidate.source_start_us;
-      candidate.timeline_end_us = position;
-    }
-    timeline.duration_us = position;
+    timeline.duration_us = layoutClips(timeline.clips);
     timeline.operation_ids.push(operationId);
   }
   const after = nextState(before, timeline);
@@ -1076,53 +1189,65 @@ export class DraftTransactionStore {
           pass_group: record.pass_group,
           reason: record.reason,
           operations: record.operations.map((operation) =>
-            operation.operation_type === "split"
+            operation.operation_type === "speed"
               ? {
-                  type: "split" as const,
-                  clip_id: operation.clip_id,
-                  timeline_position_us: operation.timeline_position_us,
+                  type: "set_speed" as const,
+                  start_us: operation.start_us,
+                  end_us: operation.end_us,
+                  speed: operation.speed,
                 }
-              : operation.operation_type === "ripple_delete"
-                ? {
-                    type: "ripple_delete" as const,
-                    start_us: operation.start_us,
-                    end_us: operation.end_us,
-                  }
-                : operation.operation_type === "restore"
+              : operation.operation_type === "zoom"
+                ? operation.action === "set" && operation.zoom
+                  ? { type: "set_zoom" as const, zoom: operation.zoom }
+                  : { type: "remove_zoom" as const, zoom_id: operation.zoom_id }
+                : operation.operation_type === "split"
                   ? {
-                      type: "restore_range" as const,
-                      source_id: operation.source_id,
-                      source_start_us: operation.source_start_us,
-                      source_end_us: operation.source_end_us,
+                      type: "split" as const,
+                      clip_id: operation.clip_id,
+                      timeline_position_us: operation.timeline_position_us,
                     }
-                  : operation.operation_type === "transcript_cut"
+                  : operation.operation_type === "ripple_delete"
                     ? {
-                        type: "transcript_cut" as const,
-                        source_id: operation.source_id,
-                        transcript_id: operation.transcript_id,
-                        start_word_id: operation.start_word_id,
-                        end_word_id: operation.end_word_id,
-                        source_start_us: operation.source_start_us,
-                        source_end_us: operation.source_end_us,
+                        type: "ripple_delete" as const,
                         start_us: operation.start_us,
                         end_us: operation.end_us,
                       }
-                    : operation.operation_type === "transcript_edit"
+                    : operation.operation_type === "restore"
                       ? {
-                          type: "transcript_edit" as const,
+                          type: "restore_range" as const,
                           source_id: operation.source_id,
-                          transcript_id: operation.transcript_id,
-                          word_id: operation.word_id,
-                          original_text: operation.original_text,
-                          expected_text: operation.before_text,
-                          replacement_text: operation.after_text,
+                          source_start_us: operation.source_start_us,
+                          source_end_us: operation.source_end_us,
                         }
-                      : {
-                          type: "trim" as const,
-                          clip_id: operation.clip_id,
-                          edge: operation.edge,
-                          timeline_position_us: operation.timeline_position_us,
-                        },
+                      : operation.operation_type === "transcript_cut"
+                        ? {
+                            type: "transcript_cut" as const,
+                            source_id: operation.source_id,
+                            transcript_id: operation.transcript_id,
+                            start_word_id: operation.start_word_id,
+                            end_word_id: operation.end_word_id,
+                            source_start_us: operation.source_start_us,
+                            source_end_us: operation.source_end_us,
+                            start_us: operation.start_us,
+                            end_us: operation.end_us,
+                          }
+                        : operation.operation_type === "transcript_edit"
+                          ? {
+                              type: "transcript_edit" as const,
+                              source_id: operation.source_id,
+                              transcript_id: operation.transcript_id,
+                              word_id: operation.word_id,
+                              original_text: operation.original_text,
+                              expected_text: operation.before_text,
+                              replacement_text: operation.after_text,
+                            }
+                          : {
+                              type: "trim" as const,
+                              clip_id: operation.clip_id,
+                              edge: operation.edge,
+                              timeline_position_us:
+                                operation.timeline_position_us,
+                            },
           ),
         };
         assertApplyDraftTransactionRequest(request);

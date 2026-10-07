@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Choose an area</title>
+    <link rel="stylesheet" href="region.css" />
+    <script type="module" src="region.js"></script>
+  </head>
+  <body>
+    <p id="hint" role="status">
+      Drag to choose the area to record. Enter records it, Esc cancels.
+    </p>
+    <div id="selection" hidden>
+      <span id="size"></span>
+    </div>
+    <div id="actions" hidden>
+      <button type="button" id="cancel">Cancel</button>
+      <button type="button" id="confirm" class="primary">
+        Record this area
+      </button>
+    </div>
+  </body>
+</html>

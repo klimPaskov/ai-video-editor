@@ -16,7 +16,7 @@ The partial P3 two-source extension adds a versioned initial baseline with two o
 
 P2 adds the common draft transaction core needed for authenticated edits: sequence validation, durable journal, atomic persistence, inverse/undo and committed-transaction recovery. This core is shared by manual, Magic Wand, Codex and API-provider actions. It must not become a second AI-only state store. P3/P6 still complete their full project, playback, editor, history and recovery requirements; implementing prerequisites earlier does not waive their acceptance.
 
-The partial native Edit controls send only a strict draft head and bounded trim, interior split or half-open output-time range intent through typed IPC. `projects:manual-range-cut` carries the two marked microsecond boundaries; it cannot carry a trusted origin or source path. Main binds each request to the active project, assigns the manual origin and generated operation identity, commits through the same journal as assistant tools, and returns a path-free committed head with fragment boundaries. The range reducer rejects empty, reversed, out-of-bounds and whole-draft cuts, preserves surviving source spans, reflows the output timeline and stores an exact inverse. Undo targets the current newest transaction. Neither renderer nor model input can supply a trusted origin, a new fragment ID, or write project files directly.
+The partial native Edit controls send only a strict draft head and bounded trim, interior split or half-open output-time range intent through typed IPC. `projects:manual-range-cut` carries the two marked microsecond boundaries; it cannot carry a trusted origin or source path. Main binds each request to the active project, assigns the manual origin and generated operation identity, commits through the same journal as assistant tools, and returns a path-free committed head with fragment boundaries. The range reducer rejects empty, reversed, out-of-bounds and whole-draft cuts, preserves surviving source spans, reflows the output timeline and stores an exact inverse. Undo targets the current newest transaction. Neither renderer nor model input can supply a trusted origin, a new fragment ID, or write project files directly. `projects:manual-zoom` and `projects:manual-zoom-remove` follow the same pattern: the renderer sends an output range, a frame point and a strength (or a zoom ID); main maps the range to one source's time, generates the zoom ID and commits one undoable `zoom` operation. `projects:manual-speed` carries an output range and a whole-number speed and commits one undoable `speed` operation.
 
 ### Electron main process
 
@@ -74,22 +74,21 @@ Expose only validated AI Video Editor project operations. Runtime Codex does not
 
 ADR 0017 sets the visible product name to AI Video Editor and the package/executable/local URL-scheme slug to `ai-video-editor`. Main chooses a prior per-user data directory when it exists, and otherwise creates the new-slug directory before readiness. It does not copy, merge or delete private projects during startup. The owned MCP server and dynamic-tool wire identities stay stable so stored Codex threads can reopen. The packaged native identity fixture is designed to check import and restart in both new and existing stores, with exact synthetic preview pixels and unchanged source/baseline data. That fixture has not yet been run for the identity slice.
 
-## Suggested repository layout
+## Repository layout
 
 ```text
-apps/desktop/              Electron main, preload, renderer
-packages/domain/           project and timeline models
-packages/project-store/    autosave, revisions, migrations
-packages/media-engine/     FFmpeg and transcription adapters
-packages/recorder/         capture and synchronization
-packages/codex-bridge/     app-server client and MCP tools
-packages/editor/           operations, history, snapping
-packages/ui/               design system and screens
-packages/test-fixtures/    deterministic media and fake devices
-docs/schemas/                   versioned contracts
-.agents/skills/                    Codex and implementation skills
-.codex/agents/                 bounded agent prompts
-docs/                      product and engineering specs
+apps/desktop/              Electron main, preload and renderer
+packages/domain/           project, timeline, edit and view contracts
+packages/project-store/    projects, drafts and the transaction journal
+packages/media-engine/     FFmpeg, playback copies, export and transcription
+packages/recorder/         screen and microphone capture
+packages/codex-tools/      guarded editor tools and the MCP server
+packages/codex-bridge/     Codex app-server client
+packages/claude-bridge/    Claude Code CLI turns and catalog
+packages/api-providers/    OpenAI, Gemini and DeepSeek clients
+tests/                     foundation, media and native tests
+docs/                      user guide, specifications and decisions
+.agents/skills/            implementation skills
 ```
 
 ## P1 project shell implementation

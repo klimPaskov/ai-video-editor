@@ -148,6 +148,16 @@ test("library preserves source, reopens, and transports exact native BGRA sample
   );
   for (const time of [-1, NaN, Infinity, 1_000_000])
     await assert.rejects(library.frame(summary.id, time));
+  // Card thumbnails are small, opaque RGBA and never touch the source.
+  const picture = await library.thumbnail(summary.id);
+  assert.equal(picture.width, 16);
+  assert.equal(picture.height, 16);
+  const pixels = Buffer.from(picture.rgbaBase64, "base64");
+  assert.equal(pixels.length, 16 * 16 * 4);
+  for (let i = 3; i < pixels.length; i += 4) assert.equal(pixels[i], 255);
+  assert.deepEqual(await new MediaLibrary(root).thumbnail(summary.id), picture);
+  await assert.rejects(library.thumbnail("not-an-id"));
+  assert.deepEqual(await readFile(source), original);
   await writeFile(join(root, "assets", `${summary.id}.media`), "tampered");
   await assert.rejects(library.frame(summary.id, 0), /changed/u);
 });

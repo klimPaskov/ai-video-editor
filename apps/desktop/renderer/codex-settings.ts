@@ -83,7 +83,7 @@ export function setupCodexSettings(dialog: HTMLDialogElement): () => void {
     setText(
       "codex-account",
       view.account === "signed_in"
-        ? `ChatGPT · ${view.plan ?? "Signed in"}`
+        ? `ChatGPT · ${view.plan ? view.plan.charAt(0).toUpperCase() + view.plan.slice(1) : "Signed in"}`
         : view.account === "signing_in"
           ? deviceCode
             ? "Finish sign-in using the code"

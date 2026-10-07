@@ -1,9 +1,35 @@
 # Contributing
 
-Read AGENTS.md, the active task, and relevant specifications before editing. Keep changes small and testable. Update affected contracts and reusable guidance in the same change. Never replace an implemented feature with a mock or remove a requirement without a documented decision.
+Thanks for your interest in improving AI Video Editor.
 
-Install the development dependencies using `npm ci --ignore-scripts` and `python -m pip install -r requirements-validation.txt`, then run `npm run check` with FFmpeg and ffprobe on PATH. This runs foundation and media tests without launching a desktop window. Inspect the native app in an isolated desktop for UI and media acceptance; headless checks do not replace that review. Record what was actually tested and what remains unverified.
+## Set up
 
-Run `npm run check:publication` against the staged Git snapshot and inspect the entire staged diff before committing. The automatic audit rejects known private paths, common credentials, runtime/media binaries, and unexpected symlinks. It cannot certify arbitrary data as public. Generated media and acceptance evidence stay ignored.
+You need Node.js 24, Python 3.9 or later, and FFmpeg with `ffprobe` on your `PATH`.
 
-Use feature branches and focused pull requests. Keep recordings, authentication, private projects, and private evidence out of commits. Public fixtures must be synthetic or cleared for redistribution. Follow docs/45_OPEN_SOURCE_DEVELOPMENT.md.
+```bash
+npm ci --ignore-scripts
+python -m pip install -r requirements-validation.txt
+npm run check
+```
+
+`npm run check` runs type checking, linting, formatting checks, the Python foundation tests, the media test suite (real FFmpeg encodes and decodes) and the schema and contract validators. It does not open a window or use capture devices.
+
+## Desktop and native tests
+
+`npm run desktop:build:local` builds the app on your computer. Native UI tests in `tests/native/` drive the packaged app with Playwright and are run inside an isolated desktop environment (see [tests/desktop](tests/desktop/README.md)), using synthetic media and labelled fake capture devices.
+
+## Making a change
+
+- Keep changes small and focused, and add or update tests with them.
+- Every edit to a draft goes through the shared transaction engine so Undo keeps working; never modify source media.
+- When behaviour changes, update the matching specification in `docs/`, the schemas in `docs/schemas/` and the user guide in `docs/guide/`.
+- Run `npm run check` and `npm run check:publication` before opening a pull request. The publication audit rejects credentials, private paths and media binaries in staged files.
+- Use the pull request template and say which checks you ran.
+
+Never commit recordings, projects, transcripts, credentials or model weights. Test fixtures must be synthetic or cleared for redistribution.
+
+## Where things are
+
+- [Documentation index](docs/README.md): specifications, design decisions and contracts.
+- [Task list](docs/development/TASKS.md): planned and in-progress work.
+- `AGENTS.md` and `CLAUDE.md`: instructions for AI coding agents working on this repository.

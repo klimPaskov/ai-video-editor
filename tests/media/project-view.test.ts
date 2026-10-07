@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   assertProjectDraftIntegrityView,
@@ -9,6 +10,9 @@ import {
   assertManualTrimRequest,
   assertManualSplitRequest,
   assertManualRangeCutRequest,
+  assertManualZoomRequest,
+  assertManualZoomRemoveRequest,
+  assertManualSpeedRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualUndoRequest,
@@ -583,4 +587,89 @@ test("runtime rejects shared role identities and duplicate project IDs even if v
       timeline: view().timeline,
     }),
   );
+});
+
+test("zoom requests are path-free, bounded and tied to a draft head", () => {
+  const example = (name: string) =>
+    JSON.parse(
+      readFileSync(
+        new URL(`../../docs/examples/${name}.example.json`, import.meta.url),
+        "utf8",
+      ),
+    ) as { payload: Record<string, unknown>; response: { value: unknown } };
+  const set = example("desktop_ipc_manual_zoom");
+  const remove = example("desktop_ipc_manual_zoom_remove");
+  assertManualZoomRequest(set.payload);
+  assertManualZoomRequest({ ...set.payload, zoomId: "zoom-existing" });
+  assertManualZoomRemoveRequest(remove.payload);
+  assertProjectDraftView(set.response.value);
+  assertProjectDraftView(remove.response.value);
+  for (const bad of [
+    { ...set.payload, path: "/private/source.mp4" },
+    { ...set.payload, zoomId: "../private" },
+    { ...set.payload, endUs: 500_000 },
+    { ...set.payload, centerX: 1.5 },
+    { ...set.payload, centerY: -0.1 },
+    { ...set.payload, scale: 1 },
+    { ...set.payload, scale: 8 },
+    { ...set.payload, scale: Number.NaN },
+    { ...set.payload, expectedTimelineSha256: "bad" },
+  ])
+    assert.throws(() => assertManualZoomRequest(bad));
+  for (const bad of [
+    { ...remove.payload, zoomId: null },
+    { ...remove.payload, zoomId: "../private" },
+    { ...remove.payload, extra: true },
+  ])
+    assert.throws(() => assertManualZoomRemoveRequest(bad));
+  const value = set.response.value as unknown as {
+    zooms: Record<string, unknown>[];
+  };
+  for (const zooms of [
+    [{ ...value.zooms[0], scale: 9 }],
+    [{ ...value.zooms[0], source_start_us: 900_000 }],
+    [value.zooms[0], value.zooms[0]],
+  ])
+    assert.throws(() => assertProjectDraftView({ ...value, zooms }));
+});
+
+test("speed requests and sped-up clip views are exact", () => {
+  const example = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../docs/examples/desktop_ipc_manual_speed.example.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ) as { payload: Record<string, unknown>; response: { value: unknown } };
+  assertManualSpeedRequest(example.payload);
+  assertManualSpeedRequest({ ...example.payload, speed: 1 });
+  for (const speed of [0, 1.5, 5, 16, "2", null])
+    assert.throws(() =>
+      assertManualSpeedRequest({ ...example.payload, speed }),
+    );
+  assert.throws(() =>
+    assertManualSpeedRequest({ ...example.payload, endUs: 200_000 }),
+  );
+  assert.throws(() =>
+    assertManualSpeedRequest({ ...example.payload, path: "/private" }),
+  );
+  assertProjectDraftView(example.response.value);
+  const value = example.response.value as unknown as {
+    clips: Record<string, unknown>[];
+  };
+  const withClip = (index: number, change: Record<string, unknown>) => ({
+    ...value,
+    clips: value.clips.map((clip, at) =>
+      at === index ? { ...clip, ...change } : clip,
+    ),
+  });
+  for (const bad of [
+    withClip(1, { speed: 1 }),
+    withClip(1, { speed: 5 }),
+    withClip(1, { speed: 3 }),
+    withClip(0, { speed: 2 }),
+  ])
+    assert.throws(() => assertProjectDraftView(bad));
 });

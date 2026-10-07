@@ -43,6 +43,26 @@
     },
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_manual_zoom.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_manual_speed.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_recording_region.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_recording_interrupted.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_manual_zoom_remove.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
       "example": "docs/examples/desktop_ipc_manual_restore_range.example.json"
     },
     {
@@ -68,6 +88,14 @@
     {
       "schema": "docs/schemas/draft_transaction.schema.json",
       "example": "docs/examples/draft_transaction_transcript_cut.example.json"
+    },
+    {
+      "schema": "docs/schemas/draft_transaction.schema.json",
+      "example": "docs/examples/draft_transaction_zoom.example.json"
+    },
+    {
+      "schema": "docs/schemas/draft_transaction.schema.json",
+      "example": "docs/examples/draft_transaction_speed.example.json"
     },
     {
       "schema": "docs/schemas/pass_checkpoint.schema.json",
@@ -232,6 +260,14 @@
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
       "example": "docs/examples/desktop_ipc_claude.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_export.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_magic_wand.example.json"
     }
   ]
 }

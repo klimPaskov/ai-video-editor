@@ -26,7 +26,7 @@ function outputText(response: DynamicToolCallResponse): string {
   return item.text;
 }
 
-test("host-defined namespace exposes exactly the reviewed nine guarded schemas", () => {
+test("host-defined namespace exposes exactly the reviewed twelve guarded schemas", () => {
   const projectId = "project-1";
   const specs = buildCodexVideoEditDynamicTools(projectId);
   assert.equal(specs.length, 1);
@@ -46,6 +46,9 @@ test("host-defined namespace exposes exactly the reviewed nine guarded schemas",
       "cut_delete_ranges",
       "cut_restore_range",
       "transcript_get_range",
+      "zoom_set",
+      "zoom_remove",
+      "speed_set",
     ],
   );
   for (const [index, tool] of namespace.tools.entries()) {
@@ -131,4 +134,27 @@ test("owned responses are bounded and only safe application errors reach the mod
   }));
   assert.equal(oversized.success, false);
   assert.match(outputText(oversized), /outcome_unknown/u);
+  const mistyped = await invokeOwnedDynamicTool(call, async () => {
+    throw new CodexVideoEditToolError("inactive_project", "project-1");
+  });
+  assert.equal(mistyped.success, false);
+  assert.deepEqual(JSON.parse(outputText(mistyped)), {
+    error: {
+      code: "inactive_project",
+      message:
+        'That project is not the active project. The active project_id is "project-1".',
+    },
+  });
+});
+
+test("only a valid active project ID is added to the refusal", () => {
+  for (const unsafe of ["", "../x", 'a"b', "x".repeat(200)])
+    assert.equal(
+      new CodexVideoEditToolError("inactive_project", unsafe).message,
+      "That project is not the active project.",
+    );
+  assert.equal(
+    new CodexVideoEditToolError("stale_draft", "project-1").message,
+    "The draft changed before this edit could be applied. Refresh and try again.",
+  );
 });

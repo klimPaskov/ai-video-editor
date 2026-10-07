@@ -73,8 +73,10 @@ class PublicationTests(unittest.TestCase):
 
     def test_reference_binary_allowance_stays_in_moved_reference_tree(self):
         audit_blob('docs/references/screenshots/current/example.png', b'\x89PNG\x00', '100644')
+        audit_blob('docs/images/edit.png', b'\x89PNG\x00', '100644')
         for path in ('references/screenshots/current/example.png', 'docs/private/example.png',
-                     'docs/references/example.png', '.codex/agents/example.md'):
+                     'docs/references/example.png', '.codex/agents/example.md',
+                     'docs/images/clip.jpg', 'docs/images/nested/../edit.bin'):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 audit_blob(path, b'\x89PNG\x00', '100644')
 
@@ -124,7 +126,8 @@ class PhaseResultTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         (self.root / 'docs/schemas').mkdir(parents=True)
         (self.root / 'docs/schemas/phase_result.schema.json').write_bytes((ROOT / 'docs/schemas/phase_result.schema.json').read_bytes())
-        (self.root / 'TASKS.md').write_text('- [ ] P0-01 Test\n- [ ] P1-01 Native\n')
+        (self.root / 'docs/development').mkdir(parents=True, exist_ok=True)
+        (self.root / 'docs/development/TASKS.md').write_text('- [ ] P0-01 Test\n- [ ] P1-01 Native\n')
         (self.root / 'evidence.txt').write_text('synthetic test evidence')
         self.result = {
             'schema_version': '1.0', 'phase_id': 'P0', 'status': 'complete',

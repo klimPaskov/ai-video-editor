@@ -34,3 +34,12 @@ Measure decode, channel layout, sample rate, duration, A/V drift, integrated lou
 ## Lossless master boundary
 
 Default capture and master audio are PCM matching the source or canonical mix representation. FLAC is allowed only for compatible integer PCM. Noise cleanup, normalization, resampling, and gain are explicit reversible operations, not mandatory export processing. Preserve original sample rate, channel layout, and precision unless the edit intentionally changes them. See `docs/44_LOSSLESS_MEDIA_POLICY.md` for exact comparison requirements.
+
+## Audio cleanup (2026-10-07)
+
+The Audio card in Auto Edit offers two per-project choices, stored with `audio:get`/`audio:set` and applied only when exporting (main export and short clips); sources are never changed and preview playback is not processed.
+
+- **Reduce background noise** runs FFmpeg's spectral denoiser (`afftdn`, 12 dB reduction, noise floor tracking) for steady hiss and hum.
+- **Even out volume** measures the whole draft with `loudnorm` and then applies the measured correction (linear where the true-peak ceiling allows) to -16 LUFS integrated with a -1.5 dBTP ceiling, a common level for spoken online video.
+
+Cleanup runs on the assembled canonical audio before encoding, is resampled to the working rate and cut or padded to exactly the planned sample count, so sync with the frames is unchanged. The processed audio becomes the canonical audio, so a lossless master still decodes to exactly what was rendered. The export result says "audio cleaned". `tests/media/export-render.test.ts` measures a cleaned export at -16 ± 1.5 LUFS with an exact sample count and a speech-to-hiss gap at least 3 dB wider than the plain export; the native captions test exports with volume evening on. Not yet: music, ducking, fades, gain per clip and a processed preview.

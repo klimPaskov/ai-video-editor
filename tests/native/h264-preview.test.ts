@@ -7,6 +7,7 @@ import type { Page } from "playwright/test";
 import { assertInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(
   process.platform,
@@ -15,7 +16,7 @@ assert.equal(
 );
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 assert.ok(executablePath, "Packaged executable path is required");
 const evidenceRoot = resolve("test-results");
@@ -73,7 +74,7 @@ let electron = await _electron.launch({
   timeout: 30_000,
 });
 async function canvasBytes(page: Page): Promise<Buffer> {
-  const result = await page.locator("canvas").evaluate((node) => {
+  const result = await page.locator("#frame").evaluate((node) => {
     const canvas = node as HTMLCanvasElement;
     return {
       width: canvas.width,

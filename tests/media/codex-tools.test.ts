@@ -779,6 +779,13 @@ test("inactive, stale, excess, path, source-mutation, and arbitrary tools fail c
     service.invoke("project.get_summary", readInput(other.project.project_id)),
     expectCode("inactive_project"),
   );
+  // A model that mistyped the ID is told the one project it may use.
+  await assert.rejects(
+    service.invoke("project.get_summary", readInput(other.project.project_id)),
+    (error: Error) =>
+      error.message ===
+      `That project is not the active project. The active project_id is "${active.project.project_id}".`,
+  );
   await assert.rejects(
     service.invoke("cut.trim_edge", trimInput(otherInitial.draft)),
     expectCode("inactive_project"),
@@ -1112,4 +1119,431 @@ test("Claude-origin split and undo are attributed in the shared journal", async 
     ),
   );
   assert.deepEqual(origins, ["claude", "claude"]);
+});
+
+type Snapshot = Awaited<ReturnType<DraftTransactionStore["snapshot"]>>;
+type ToolDraft = {
+  draft_sequence: number;
+  duration_us: number;
+  clips: Array<{
+    source_start_us: number;
+    source_end_us: number;
+    timeline_start_us: number;
+    timeline_end_us: number;
+    speed?: number;
+  }>;
+  zooms: Array<{
+    zoom_id: string;
+    source_id: string;
+    source_start_us: number;
+    source_end_us: number;
+    center_x: number;
+    center_y: number;
+    scale: number;
+    timeline_ranges: Array<{ start_us: number; end_us: number }>;
+  }>;
+};
+type ToolCommit = { transaction_id: string; draft: ToolDraft };
+
+function head(snapshot: Snapshot, requestId: string) {
+  return {
+    schema_version: "1.0",
+    request_id: requestId,
+    project_id: snapshot.draft.project_id,
+    draft_id: snapshot.draft.draft_id,
+    base_revision_id: snapshot.draft.base_revision_id,
+    expected_sequence: snapshot.draft.draft_sequence,
+    expected_timeline_sha256: snapshot.draft.timeline_sha256,
+    reason: "Apply the edit the user asked for.",
+  };
+}
+
+function zoomInput(snapshot: Snapshot, requestId: string) {
+  return {
+    ...head(snapshot, requestId),
+    pass_group_id: "assistant-zoom-001",
+    start_us: 100_000,
+    end_us: 700_000,
+    center_x: 0.25,
+    center_y: 0.75,
+    scale: 2,
+  };
+}
+
+function speedInput(snapshot: Snapshot, requestId: string, speed: number) {
+  return {
+    ...head(snapshot, requestId),
+    pass_group_id: "assistant-speed-001",
+    start_us: 0,
+    end_us: snapshot.draft.timeline.duration_us,
+    speed,
+  };
+}
+
+async function journalRecords(root: string, projectId: string) {
+  const journal = join(root, "projects", projectId, "draft", "journal");
+  return Promise.all(
+    (await readdir(journal)).sort().map(
+      async (name) =>
+        JSON.parse(await readFile(join(journal, name), "utf8")) as {
+          origin: string;
+          kind: string;
+          pass_group: { kind: string } | null;
+          operations: Array<{ operation_type: string }>;
+        },
+    ),
+  );
+}
+
+function journalSummary(
+  record: Awaited<ReturnType<typeof journalRecords>>[number],
+) {
+  return [
+    record.origin,
+    record.kind,
+    record.pass_group?.kind ?? null,
+    record.operations[0]?.operation_type ?? null,
+  ];
+}
+
+test("zoom.set maps output time to one source, keeps a changed zoom's range, and shares Undo", async () => {
+  const { root, source, active, drafts, service } = await fixture();
+  const projectId = active.project.project_id;
+  const sourceBefore = await readFile(source);
+  const managedBefore = await readFile(active.source.managed_path);
+  const claude = new CodexVideoEditToolService(projectId, drafts, "claude");
+  const added = (await service.invoke(
+    "zoom.set",
+    zoomInput(await drafts.snapshot(projectId), "zoom-add-001"),
+  )) as ToolCommit;
+  assert.equal(added.draft.draft_sequence, 1);
+  assert.equal(added.draft.duration_us, 1_000_000);
+  assert.equal(added.draft.zooms.length, 1);
+  const zoom = added.draft.zooms[0]!;
+  assert.match(zoom.zoom_id, /^zoom-[a-f0-9]{32}$/u);
+  assert.deepEqual(
+    { ...zoom, zoom_id: "" },
+    {
+      zoom_id: "",
+      source_id: active.source.source_id,
+      source_start_us: 100_000,
+      source_end_us: 700_000,
+      center_x: 0.25,
+      center_y: 0.75,
+      scale: 2,
+      timeline_ranges: [{ start_us: 100_000, end_us: 700_000 }],
+    },
+  );
+  // Changing a zoom keeps its source range; the given times are not used.
+  const changed = (await claude.invoke("zoom.set", {
+    ...zoomInput(await drafts.snapshot(projectId), "zoom-change-001"),
+    zoom_id: zoom.zoom_id,
+    start_us: 0,
+    end_us: 900_000,
+    center_x: 0.5,
+    scale: 3,
+  })) as ToolCommit;
+  assert.deepEqual(changed.draft.zooms, [{ ...zoom, center_x: 0.5, scale: 3 }]);
+  const undone = (await claude.invoke("timeline.undo", {
+    ...head(await drafts.snapshot(projectId), "zoom-undo-001"),
+    target_transaction_id: changed.transaction_id,
+  })) as ToolCommit;
+  assert.deepEqual(undone.draft.zooms, [zoom]);
+  const removed = (await claude.invoke("zoom.remove", {
+    ...head(await drafts.snapshot(projectId), "zoom-remove-001"),
+    pass_group_id: "assistant-zoom-002",
+    zoom_id: zoom.zoom_id,
+  })) as ToolCommit;
+  assert.deepEqual(removed.draft.zooms, []);
+  const restored = (await service.invoke("timeline.undo", {
+    ...head(await drafts.snapshot(projectId), "zoom-undo-002"),
+    target_transaction_id: removed.transaction_id,
+  })) as ToolCommit;
+  assert.deepEqual(restored.draft.zooms, [zoom]);
+  const records = await journalRecords(root, projectId);
+  assert.deepEqual(records.map(journalSummary), [
+    ["codex", "apply", "zoom", "zoom"],
+    ["claude", "apply", "zoom", "zoom"],
+    ["claude", "undo", null, null],
+    ["claude", "apply", "zoom", "zoom"],
+    ["codex", "undo", null, null],
+  ]);
+  assert.deepEqual(await readFile(source), sourceBefore);
+  assert.deepEqual(await readFile(active.source.managed_path), managedBefore);
+});
+
+test("speed.set commits a shared speed edit, restores normal speed and zooms map through it", async () => {
+  const { root, active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const provider = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "api_provider",
+  );
+  // Output [0, 0.5 s) is source [0, 0.5 s); at 2x it plays in 0.25 s.
+  const doubled = (await provider.invoke("speed.set", {
+    ...speedInput(await drafts.snapshot(projectId), "speed-set-001", 2),
+    end_us: 500_000,
+  })) as ToolCommit;
+  assert.equal(doubled.draft.duration_us, 750_000);
+  assert.deepEqual(
+    doubled.draft.clips.map((clip) => [
+      clip.source_start_us,
+      clip.source_end_us,
+      clip.timeline_start_us,
+      clip.timeline_end_us,
+      clip.speed,
+    ]),
+    [
+      [0, 500_000, 0, 250_000, 2],
+      [500_000, 1_000_000, 250_000, 750_000, undefined],
+    ],
+  );
+  // The same speed again is not an edit.
+  await assert.rejects(
+    provider.invoke("speed.set", {
+      ...speedInput(await drafts.snapshot(projectId), "speed-set-002", 2),
+      end_us: 250_000,
+    }),
+    expectCode("edit_conflict"),
+  );
+  // A zoom across the speed boundary maps each end through its own clip.
+  const zoomed = (await provider.invoke("zoom.set", {
+    ...zoomInput(await drafts.snapshot(projectId), "speed-zoom-001"),
+    start_us: 100_000,
+    end_us: 600_000,
+  })) as ToolCommit;
+  assert.deepEqual(
+    zoomed.draft.zooms.map((zoom) => [
+      zoom.source_start_us,
+      zoom.source_end_us,
+      zoom.timeline_ranges,
+    ]),
+    [
+      [
+        200_000,
+        850_000,
+        [
+          { start_us: 100_000, end_us: 250_000 },
+          { start_us: 250_000, end_us: 600_000 },
+        ],
+      ],
+    ],
+  );
+  const normal = (await provider.invoke("speed.set", {
+    ...speedInput(await drafts.snapshot(projectId), "speed-set-003", 1),
+    end_us: 250_000,
+  })) as ToolCommit;
+  assert.equal(normal.draft.duration_us, 1_000_000);
+  assert.ok(normal.draft.clips.every((clip) => clip.speed === undefined));
+  const ranges = normal.draft.zooms[0]!.timeline_ranges;
+  assert.equal(ranges.at(0)?.start_us, 200_000);
+  assert.equal(ranges.at(-1)?.end_us, 850_000);
+  const undone = (await provider.invoke("timeline.undo", {
+    ...head(await drafts.snapshot(projectId), "speed-undo-001"),
+    target_transaction_id: normal.transaction_id,
+  })) as ToolCommit;
+  assert.equal(undone.draft.duration_us, 750_000);
+  assert.equal(undone.draft.clips[0]!.speed, 2);
+  const records = await journalRecords(root, projectId);
+  assert.deepEqual(records.map(journalSummary), [
+    ["api_provider", "apply", "speed", "speed"],
+    ["api_provider", "apply", "zoom", "zoom"],
+    ["api_provider", "apply", "speed", "speed"],
+    ["api_provider", "undo", null, null],
+  ]);
+});
+
+test("zoom and speed tools reject stale heads, other projects and invalid input", async () => {
+  const { active, other, drafts, service } = await fixture();
+  const projectId = active.project.project_id;
+  const initial = await drafts.snapshot(projectId);
+  const zoom = zoomInput(initial, "zoom-invalid-001");
+  for (const invalid of [
+    { end_us: 599_999 },
+    { start_us: 700_000, end_us: 100_000 },
+    { start_us: -1 },
+    { end_us: 700_000.5 },
+    { center_x: 1.01 },
+    { center_y: -0.01 },
+    { center_x: "0.5" },
+    { center_y: Number.POSITIVE_INFINITY },
+    { scale: 1 },
+    { scale: 4.01 },
+    { zoom_id: "../zoom" },
+    { zoom_id: null },
+    { source_id: initial.draft.timeline.clips[0]!.source_id },
+    { origin: "manual" },
+    // Past the end of the draft: no footage under the range.
+    { start_us: 800_000, end_us: 1_400_000 },
+  ])
+    await assert.rejects(
+      service.invoke("zoom.set", { ...zoom, ...invalid }),
+      expectCode("invalid_request"),
+    );
+  const withoutPass: Record<string, unknown> = { ...zoom };
+  delete withoutPass.pass_group_id;
+  await assert.rejects(
+    service.invoke("zoom.set", withoutPass),
+    expectCode("invalid_request"),
+  );
+  await assert.rejects(
+    service.invoke("zoom.set", { ...zoom, zoom_id: "zoom-missing-001" }),
+    expectCode("edit_conflict"),
+  );
+  const speed = speedInput(initial, "speed-invalid-001", 2);
+  for (const invalid of [
+    { speed: 0 },
+    { speed: 5 },
+    { speed: 1.5 },
+    { speed: "2" },
+    { start_us: 500_000, end_us: 500_000 },
+    { end_us: 0 },
+    { origin: "codex" },
+  ])
+    await assert.rejects(
+      service.invoke("speed.set", { ...speed, ...invalid }),
+      expectCode("invalid_request"),
+    );
+  await assert.rejects(
+    service.invoke("speed.set", { ...speed, end_us: 1_000_001 }),
+    expectCode("edit_conflict"),
+  );
+  const remove = {
+    ...head(initial, "zoom-remove-invalid-001"),
+    pass_group_id: "assistant-zoom-001",
+    zoom_id: "zoom-missing-001",
+  };
+  await assert.rejects(
+    service.invoke("zoom.remove", { ...remove, zoom_id: "" }),
+    expectCode("invalid_request"),
+  );
+  await assert.rejects(
+    service.invoke("zoom.remove", remove),
+    expectCode("edit_conflict"),
+  );
+  const otherHead = await drafts.snapshot(other.project.project_id);
+  await assert.rejects(
+    service.invoke("zoom.set", zoomInput(otherHead, "zoom-other-001")),
+    expectCode("inactive_project"),
+  );
+  await assert.rejects(
+    service.invoke("speed.set", speedInput(otherHead, "speed-other-001", 2)),
+    expectCode("inactive_project"),
+  );
+  assert.equal((await drafts.snapshot(projectId)).draft.draft_sequence, 0);
+  // After one commit, every tool refuses the old head.
+  const added = (await service.invoke("zoom.set", {
+    ...zoom,
+    request_id: "zoom-valid-001",
+  })) as ToolCommit;
+  await assert.rejects(
+    service.invoke("zoom.set", { ...zoom, request_id: "zoom-stale-001" }),
+    expectCode("stale_draft"),
+  );
+  await assert.rejects(
+    service.invoke("zoom.remove", {
+      ...remove,
+      request_id: "zoom-stale-002",
+      zoom_id: added.draft.zooms[0]!.zoom_id,
+    }),
+    expectCode("stale_draft"),
+  );
+  await assert.rejects(
+    service.invoke("speed.set", { ...speed, request_id: "speed-stale-001" }),
+    expectCode("stale_draft"),
+  );
+  // Zooms of one recording cannot overlap.
+  await assert.rejects(
+    service.invoke(
+      "zoom.set",
+      zoomInput(await drafts.snapshot(projectId), "zoom-overlap-001"),
+    ),
+    expectCode("edit_conflict"),
+  );
+  const current = await drafts.snapshot(projectId);
+  assert.equal(current.draft.draft_sequence, 1);
+  assert.equal(current.draft.timeline.zooms?.length, 1);
+  assert.equal(
+    (await drafts.snapshot(other.project.project_id)).draft.draft_sequence,
+    0,
+  );
+});
+
+test("zoom.set refuses a range that spans footage from two recordings", async () => {
+  const sha = "a".repeat(64);
+  let applied = 0;
+  const clip = (id: string, sourceId: string, start: number, end: number) => ({
+    clip_id: id,
+    track_id: "track-video-001",
+    source_id: sourceId,
+    source_start_us: 0,
+    source_end_us: end - start,
+    timeline_start_us: start,
+    timeline_end_us: end,
+    enabled: true,
+  });
+  const snapshot = {
+    draft: {
+      project_id: "project-two-001",
+      draft_id: "draft-two-001",
+      base_revision_id: "revision-two-001",
+      draft_sequence: 3,
+      timeline_sha256: sha,
+      timeline: {
+        clips: [
+          clip("clip-a-001", "source-a-001", 0, 1_000_000),
+          clip("clip-b-001", "source-b-001", 1_000_000, 2_000_000),
+        ],
+      },
+    },
+  };
+  const service = new CodexVideoEditToolService("project-two-001", {
+    snapshot: async () => snapshot as never,
+    snapshotWithProject: async () => {
+      throw new Error("unused");
+    },
+    applyCodex: async () => {
+      applied++;
+      throw new Error("unused");
+    },
+    undoCodex: async () => {
+      throw new Error("unused");
+    },
+  });
+  const input = {
+    schema_version: "1.0",
+    request_id: "zoom-two-001",
+    project_id: "project-two-001",
+    draft_id: "draft-two-001",
+    base_revision_id: "revision-two-001",
+    expected_sequence: 3,
+    expected_timeline_sha256: sha,
+    pass_group_id: "assistant-zoom-001",
+    reason: "Make the code readable.",
+    start_us: 800_000,
+    end_us: 1_400_000,
+    center_x: 0.5,
+    center_y: 0.5,
+    scale: 2,
+  };
+  await assert.rejects(
+    service.invoke("zoom.set", input),
+    expectCode("invalid_request"),
+  );
+  // A head that differs from the snapshot is stale before any mapping.
+  await assert.rejects(
+    service.invoke("zoom.set", { ...input, expected_sequence: 2 }),
+    expectCode("stale_draft"),
+  );
+  // Within one recording the same draft maps and reaches the commit.
+  await assert.rejects(
+    service.invoke("zoom.set", {
+      ...input,
+      start_us: 400_000,
+      end_us: 1_000_000,
+    }),
+    expectCode("service_unavailable"),
+  );
+  assert.equal(applied, 1);
 });

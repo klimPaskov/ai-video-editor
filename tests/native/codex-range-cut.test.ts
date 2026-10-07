@@ -29,11 +29,12 @@ import {
 } from "../../packages/codex-bridge/src/transport.ts";
 import { buildCodexAppServerArguments } from "../../packages/codex-bridge/src/client.ts";
 import { buildExperimentalInitialize } from "../../packages/codex-bridge/src/thread-protocol.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux", "Requires isolated Linux guest");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 const configArgument = process.argv[3];
 assert.ok(executablePath && isAbsolute(executablePath));
@@ -382,7 +383,7 @@ let electron = await launch();
 let page: Page | undefined;
 let readBeforeEditEvidence: ReadBeforeEditEvidence | undefined;
 async function canvasHash(active: Page): Promise<string | null> {
-  return active.locator("canvas").evaluate(async (node) => {
+  return active.locator("#frame").evaluate(async (node) => {
     const canvas = node as HTMLCanvasElement;
     if (!canvas.width || !canvas.height) return null;
     const pixels = canvas

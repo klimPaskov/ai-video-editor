@@ -129,8 +129,26 @@ test("packaged MCP protocol lists only reviewed tools and forwards a bounded cal
         "cut.delete_ranges",
         "cut.restore_range",
         "transcript.get_range",
+        "zoom.set",
+        "zoom.remove",
+        "speed.set",
       ],
     );
+    const zoom = tools.find((tool) => tool.name === "zoom.set");
+    assert.ok(zoom);
+    assert.equal(zoom.inputSchema.additionalProperties, false);
+    for (const field of ["start_us", "end_us", "center_x", "center_y", "scale"])
+      assert.ok(zoom.inputSchema.required.includes(field));
+    assert.ok(!zoom.inputSchema.required.includes("zoom_id"));
+    assert.ok(Object.hasOwn(zoom.inputSchema.properties, "zoom_id"));
+    const speed = tools.find((tool) => tool.name === "speed.set");
+    assert.ok(speed);
+    for (const field of ["start_us", "end_us", "speed"])
+      assert.ok(speed.inputSchema.required.includes(field));
+    const unzoom = tools.find((tool) => tool.name === "zoom.remove");
+    assert.ok(unzoom?.inputSchema.required.includes("zoom_id"));
+    for (const tool of [zoom, speed, unzoom!])
+      assert.ok(!Object.hasOwn(tool.inputSchema.properties, "origin"));
     const transcript = tools.find(
       (tool) => tool.name === "transcript.get_range",
     );

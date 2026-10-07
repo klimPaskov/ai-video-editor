@@ -1,3 +1,4 @@
+import { claudeAccountText } from "../../apps/desktop/renderer/claude-settings.ts";
 import assert from "node:assert/strict";
 import {
   mkdtemp,
@@ -24,7 +25,6 @@ import {
   parseAuthStatus,
   parseCatalogResponse,
   parseClaudeVersion,
-  parseSignInUrl,
   restrictedSessionArguments,
   type ClaudeRuntime,
 } from "../../packages/claude-bridge/src/cli.ts";
@@ -190,24 +190,6 @@ test("catalog parsing keeps model names and drops API list prices", () => {
   assert.throws(() => parseCatalogResponse(null));
 });
 
-test("only Anthropic HTTPS sign-in pages are offered", () => {
-  assert.equal(
-    parseSignInUrl(
-      "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true\n",
-    ),
-    "https://claude.com/cai/oauth/authorize?code=true",
-  );
-  for (const output of [
-    "visit: http://claude.com/x",
-    "visit: https://claude.com.evil.test/x",
-    "visit: https://evil.test/claude.com",
-    "visit: https://user@claude.com/x",
-    "visit: https://claude.com:8443/x",
-    "no url here",
-  ])
-    assert.equal(parseSignInUrl(output), null, output);
-});
-
 test("turn arguments disable built-in tools, settings and prompts", () => {
   const args = claudeTurnArguments({
     mcpConfigPath: "/private/mcp.json",
@@ -234,7 +216,9 @@ test("turn arguments disable built-in tools, settings and prompts", () => {
   assert.equal(value("--session-id"), "11111111-2222-4333-8444-555555555555");
   assert.equal(value("--effort"), "high");
   assert.ok(!args.includes("--resume"));
-  assert.equal(claudeEditorTools.length, 9);
+  assert.equal(claudeEditorTools.length, 12);
+  for (const name of ["zoom_set", "zoom_remove", "speed_set"])
+    assert.ok(claudeEditorTools.includes(`mcp__ai_video_editor__${name}`));
   for (const name of claudeEditorTools)
     assert.match(name, /^mcp__ai_video_editor__[a-z_]+$/u);
 });
@@ -336,6 +320,35 @@ test("projection streams text, tracks activity and completes", () => {
     kind: "completed",
     text: "Reading\n\nDone.",
   });
+});
+
+test("zoom and speed tools pass the inventory and count as pending edits", () => {
+  const turn = projection();
+  assert.equal(turn.handle(init()), true);
+  assert.equal(
+    turn.handle({
+      type: "assistant",
+      parent_tool_use_id: null,
+      message: {
+        content: ["zoom_set", "zoom_remove", "speed_set"].map((name, i) => ({
+          type: "tool_use",
+          id: `toolu_${i + 1}`,
+          name: `mcp__${claudeEditorServer}__${name}`,
+        })),
+      },
+    }),
+    true,
+  );
+  assert.equal(turn.violation, false);
+  assert.deepEqual(
+    turn.activities.map((item) => [item.label, item.mutating]),
+    [
+      ["Setting a zoom", true],
+      ["Removing a zoom", true],
+      ["Changing playback speed", true],
+    ],
+  );
+  assert.equal(turn.pendingMutation, true);
 });
 
 test("projection maps documented failures to fixed issues", () => {
@@ -645,8 +658,8 @@ test("cancelled sign-in returns to signed out without an error", async () => {
     await claude.signIn();
     await waitFor(
       () => claude.get(),
-      (value) => value.signInPageAvailable,
-      "sign-in page",
+      (value) => value.status === "signing_in",
+      "signing in",
     );
     const view = await claude.cancelSignIn();
     assert.equal(view.status, "signed_out");
@@ -682,12 +695,25 @@ test("IPC schema enumerations match the Claude domain constants", async () => {
   ]);
 });
 
+test("account text names the plan once", () => {
+  const view = (plan: string | null): ClaudeView => ({
+    status: "signed_in",
+    version: "2.1.292",
+    account: { billing: "subscription", plan },
+    models: [{ value: "default", label: "Default", detail: "", efforts: [] }],
+    selection: { model: "default", effort: null },
+    message: null,
+  });
+  assert.equal(claudeAccountText(view("max")), "Claude · Max");
+  assert.equal(claudeAccountText(view("Claude Max")), "Claude Max");
+  assert.equal(claudeAccountText(view(null)), "Claude · Signed in");
+});
+
 test("domain assertions reject leaked or inconsistent Claude state", () => {
   const signedOut: ClaudeView = {
     status: "signed_out",
     version: "2.1.285",
     account: null,
-    signInPageAvailable: false,
     models: [],
     selection: null,
     message: null,
@@ -695,7 +721,8 @@ test("domain assertions reject leaked or inconsistent Claude state", () => {
   assertClaudeView(signedOut);
   for (const bad of [
     { ...signedOut, token: "secret" },
-    { ...signedOut, signInPageAvailable: true },
+    // The removed fallback page must not reappear as an unchecked field.
+    { ...signedOut, signInPageAvailable: false },
     { ...signedOut, selection: { model: "default", effort: null } },
     { ...signedOut, message: "Not logged in · Please run /login" },
     { ...signedOut, status: "signed_in" },

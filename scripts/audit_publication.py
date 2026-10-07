@@ -43,7 +43,12 @@ def audit_blob(path: str, data: bytes, mode: str):
         raise ValueError('Large file requires separate review: ' + path)
     if any(pattern.search(data) for pattern in SECRET_PATTERNS):
         raise ValueError('Potential credential in staged content: ' + path)
-    if b'\x00' in data and not (policy_path.startswith('docs/references/screenshots/') and parsed.suffix == '.png'):
+    # Reviewed PNGs only: UI references, and documentation screenshots that
+    # scripts/capture_screenshots.ts renders from synthetic media.
+    if b'\x00' in data and not (
+        policy_path.startswith(('docs/references/screenshots/', 'docs/images/'))
+        and parsed.suffix == '.png'
+    ):
         raise ValueError('Unreviewed binary: ' + path)
 
 

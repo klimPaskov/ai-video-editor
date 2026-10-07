@@ -17,7 +17,12 @@ export function claudeAccountText(view: ClaudeView): string {
     if (view.account.billing === "api")
       return "Claude · Anthropic Console (API billing)";
     if (view.account.billing === "subscription")
-      return plan ? `Claude · ${plan}` : "Claude · Signed in";
+      // Claude Code may report the plan with its product name ("Claude Max").
+      return plan
+        ? /^claude\b/iu.test(plan)
+          ? plan
+          : `Claude · ${plan}`
+        : "Claude · Signed in";
     return "Claude · Signed in";
   }
   return {
@@ -84,7 +89,6 @@ export function setupClaudeSettings(
       element(id).hidden = !visible;
     };
     show("claude-sign-in", view.status === "signed_out");
-    show("claude-open-sign-in", view.signInPageAvailable);
     show("claude-cancel-sign-in", view.status === "signing_in");
     show("claude-sign-out", view.status === "signed_in");
     show("claude-install", view.status === "unavailable");
@@ -198,7 +202,6 @@ export function setupClaudeSettings(
   }
   for (const [id, work] of [
     ["claude-sign-in", () => window.desktop.signInClaude()],
-    ["claude-open-sign-in", () => window.desktop.openClaudeSignInPage()],
     ["claude-cancel-sign-in", () => window.desktop.cancelClaudeSignIn()],
     ["claude-sign-out", () => window.desktop.signOutClaude()],
     ["claude-check", () => window.desktop.checkClaude()],

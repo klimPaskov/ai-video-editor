@@ -44,6 +44,86 @@ class DesktopIpcContractTests(unittest.TestCase):
                 exchange['payload'] = self.frame['payload']
             self.valid(exchange)
 
+    def test_thumbnail_is_small_and_requested_by_id_only(self):
+        payload = {'id': self.frame['payload']['id']}
+        picture = {'width': 2, 'height': 2, 'rgbaBase64': 'AAAAAAAAAAAAAAAAAAAAAA=='}
+        self.valid({'channel': 'library:thumbnail', 'payload': payload, 'response': {'ok': True, 'value': picture}})
+        self.valid({'channel': 'library:thumbnail', 'payload': payload, 'response': {'ok': False, 'message': 'No picture.'}})
+        for wrong in [{}, {'id': '../x'}, dict(payload, timeUs=0), dict(payload, path='/private/video.mkv')]:
+            self.invalid({'channel': 'library:thumbnail', 'payload': wrong, 'response': {'ok': True, 'value': picture}})
+        for size in [{'width': 321}, {'height': 1281}]:
+            self.invalid({'channel': 'library:thumbnail', 'payload': payload, 'response': {'ok': True, 'value': dict(picture, **size)}})
+
+    def test_caption_settings_hold_only_style_choices(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        settings = {'enabled': True, 'style': 'highlight', 'size': 'large', 'position': 'top', 'burnIn': True}
+        self.valid({'channel': 'captions:get', 'payload': request, 'response': {'ok': True, 'value': settings}})
+        self.valid({'channel': 'captions:set', 'payload': dict(request, settings=settings), 'response': {'ok': True, 'value': settings}})
+        for wrong in [dict(settings, style='karaoke'), dict(settings, cues=[]), dict(settings, enabled='yes')]:
+            self.invalid({'channel': 'captions:set', 'payload': dict(request, settings=wrong), 'response': {'ok': True, 'value': settings}})
+        self.invalid({'channel': 'captions:get', 'payload': dict(request, path='/x.srt'), 'response': {'ok': True, 'value': settings}})
+
+    def test_short_clips_are_path_free_with_fixed_messages(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        clip = {'id': 'clip-1000000-31000000', 'title': 'Why do demos feel slow?', 'startUs': 1000000, 'endUs': 31000000,
+                'score': 0.82, 'reasons': ['Opens with a question'], 'excerpt': 'Why do demos feel slow? Because...'}
+        job = {'status': 'completed', 'clipId': clip['id'], 'fraction': None, 'fileName': 'Why do demos feel slow.mp4', 'message': None}
+        view = {'status': 'ready', 'candidates': [clip], 'job': job, 'message': None}
+        for channel in ['get', 'find', 'cancel']:
+            self.valid({'channel': 'shorts:' + channel, 'payload': request, 'response': {'ok': True, 'value': view}})
+        self.valid({'channel': 'shorts:discard', 'payload': dict(request, clip_id=clip['id']), 'response': {'ok': True, 'value': view}})
+        export = dict(request, clip_id=clip['id'], format='vertical', framing='fill', position=0.3, captions=True)
+        self.valid({'channel': 'shorts:export', 'payload': export, 'response': {'ok': False, 'message': 'A clip is already exporting.'}})
+        for wrong in [dict(export, format='9:16'), dict(export, position=2), dict(export, clip_id='../x'), dict(export, path='/tmp/x.mp4')]:
+            self.invalid({'channel': 'shorts:export', 'payload': wrong, 'response': {'ok': True, 'value': view}})
+        for bad in [dict(view, job=dict(job, fileName='/home/user/x.mp4')), dict(view, message='ffmpeg failed'),
+                    dict(view, candidates=[dict(clip, path='/x')])]:
+            self.invalid({'channel': 'shorts:get', 'payload': request, 'response': {'ok': True, 'value': bad}})
+
+    def test_audio_settings_are_two_choices(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        settings = {'normalize': True, 'denoise': False}
+        self.valid({'channel': 'audio:get', 'payload': request, 'response': {'ok': True, 'value': settings}})
+        self.valid({'channel': 'audio:set', 'payload': dict(request, settings=settings), 'response': {'ok': True, 'value': settings}})
+        for wrong in [dict(settings, gainDb=6), {'normalize': 'yes', 'denoise': False}, {'normalize': True}]:
+            self.invalid({'channel': 'audio:set', 'payload': dict(request, settings=wrong), 'response': {'ok': True, 'value': settings}})
+
+    def test_playback_view_is_path_free(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        for value in [{'status': 'ready', 'progress': None, 'message': None},
+                      {'status': 'preparing', 'progress': 0.4, 'message': None},
+                      {'status': 'failed', 'progress': None, 'message': 'Playback could not be prepared for this video. Frame preview and export still work.'}]:
+            self.valid({'channel': 'playback:get', 'payload': request, 'response': {'ok': True, 'value': value}})
+        for wrong in [{'status': 'ready', 'progress': 1, 'message': None},
+                      {'status': 'preparing', 'progress': 1.5, 'message': None},
+                      {'status': 'failed', 'progress': None, 'message': 'ffmpeg: libx264 missing'},
+                      {'status': 'ready', 'progress': None, 'message': None, 'path': '/home/user/proxy.mp4'}]:
+            self.invalid({'channel': 'playback:get', 'payload': request, 'response': {'ok': True, 'value': wrong}})
+        self.invalid({'channel': 'playback:get', 'payload': {'project_id': 'project-1'}, 'response': {'ok': False, 'message': 'x'}})
+
+    def test_recording_channels_use_opaque_ids_and_fixed_messages(self):
+        devices = {'displays': [{'id': 'display-1', 'label': 'Built-in display', 'width': 2560, 'height': 1600, 'primary': True}],
+                   'microphones': [{'id': 'pulse-1', 'label': 'USB microphone'}], 'message': None}
+        self.valid({'channel': 'recording:devices', 'response': {'ok': True, 'value': devices}})
+        for wrong in [dict(devices, displays=[dict(devices['displays'][0], x=0)]),
+                      dict(devices, microphones=[{'id': 'pulse-1', 'label': 'Mic', 'device': 'alsa_input.usb'}]),
+                      dict(devices, message='ffmpeg: x11grab failed')]:
+            self.invalid({'channel': 'recording:devices', 'response': {'ok': True, 'value': wrong}})
+        self.invalid({'channel': 'recording:devices', 'payload': {}, 'response': {'ok': True, 'value': devices}})
+        recording = {'status': 'recording', 'elapsedUs': 1000000, 'missedFrames': 0, 'media': None, 'message': None}
+        finished = dict(recording, status='finished', media=self.summary)
+        for channel in ['get', 'pause', 'resume', 'stop', 'cancel']:
+            self.valid({'channel': 'recording:' + channel, 'response': {'ok': True, 'value': recording}})
+        self.valid({'channel': 'recording:stop', 'response': {'ok': True, 'value': finished}})
+        self.invalid({'channel': 'recording:stop', 'response': {'ok': True, 'value': dict(finished, media=None)}})
+        self.invalid({'channel': 'recording:get', 'response': {'ok': True, 'value': dict(recording, media=self.summary)}})
+        self.invalid({'channel': 'recording:get', 'response': {'ok': True, 'value': dict(recording, path='/home/user/take.mkv')}})
+        start = {'schema_version': '1.0', 'display_id': 'display-1', 'microphone_id': None}
+        self.valid({'channel': 'recording:start', 'payload': start, 'response': {'ok': True, 'value': recording}})
+        self.valid({'channel': 'recording:start', 'payload': dict(start, microphone_id='pulse-1'), 'response': {'ok': False, 'message': 'A recording is already in progress.'}})
+        for wrong in [dict(start, display_id=':0.0+0,0 -i /etc/passwd'), dict(start, microphone_id='alsa input'), {'display_id': 'display-1'}]:
+            self.invalid({'channel': 'recording:start', 'payload': wrong, 'response': {'ok': True, 'value': recording}})
+
     def test_undefined_requests_are_absent_not_null_or_paths(self):
         for channel in ['list', 'import', 'cancel']:
             for payload in [None, {}, {'path': '/private/video.mkv'}]:
@@ -398,6 +478,58 @@ class DesktopIpcContractTests(unittest.TestCase):
         bad_checkpoint['response']['value']['structuralCheckpointRecorded'] = 'yes'
         self.invalid(bad_checkpoint)
 
+    def test_magic_wand_channels_carry_counts_only(self):
+        example = json.loads(
+            (ROOT / 'docs/examples/desktop_ipc_magic_wand.example.json').read_text(encoding='utf-8')
+        )
+        self.valid(example)
+        for key, value in [('ranges', [[0, 1]]), ('transcript', 'and so my fellow')]:
+            leaked = deepcopy(example)
+            leaked['response']['value'][key] = value
+            self.invalid(leaked)
+        raw = deepcopy(example)
+        raw['response']['value']['message'] = 'TypeError: cannot read'
+        self.invalid(raw)
+        self.valid({'channel': 'magic:start',
+                    'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'tight'},
+                    'response': {'ok': True, 'value': example['response']['value']}})
+        self.invalid({'channel': 'magic:start',
+                      'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'extreme'},
+                      'response': {'ok': True, 'value': example['response']['value']}})
+
+    def test_export_channels_expose_file_names_only(self):
+        example = json.loads(
+            (ROOT / 'docs/examples/desktop_ipc_export.example.json').read_text(encoding='utf-8')
+        )
+        self.valid(example)
+        for name in ['/home/user/Talk.mkv', 'C:\\Videos\\Talk.mkv', 'Talk.mov']:
+            leaked = deepcopy(example)
+            leaked['response']['value']['result']['fileName'] = name
+            self.invalid(leaked)
+        extra = deepcopy(example)
+        extra['response']['value']['outputPath'] = '/home/user/Talk.mkv'
+        self.invalid(extra)
+        raw = deepcopy(example)
+        raw['response']['value']['message'] = 'ffmpeg exited with code 1'
+        self.invalid(raw)
+        running = deepcopy(example)
+        running['response']['value'].update(status='running', phase='rendering', fraction=0.25, result=None)
+        self.valid(running)
+        running['response']['value']['fraction'] = 1.5
+        self.invalid(running)
+        self.valid({'channel': 'export:start',
+                    'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'profile': 'smaller_mp4'},
+                    'response': {'ok': True, 'value': running['response']['value'] | {'fraction': 0.0}}})
+        self.invalid({'channel': 'export:start',
+                      'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'profile': 'prores'},
+                      'response': {'ok': True, 'value': example['response']['value']}})
+        self.invalid({'channel': 'export:start',
+                      'payload': {'schema_version': '1.0', 'project_id': 'project-1',
+                                  'profile': 'lossless_master', 'path': '/tmp/out.mkv'},
+                      'response': {'ok': True, 'value': example['response']['value']}})
+        self.valid({'channel': 'export:reveal', 'payload': {'schema_version': '1.0', 'project_id': 'project-1'},
+                    'response': {'ok': True, 'value': None}})
+
     def test_claude_channels_expose_no_credentials_paths_or_prices(self):
         thread = json.loads(
             (ROOT / 'docs/examples/desktop_ipc_claude.example.json').read_text(encoding='utf-8')
@@ -420,7 +552,6 @@ class DesktopIpcContractTests(unittest.TestCase):
             'status': 'signed_in',
             'version': '2.1.285',
             'account': {'billing': 'subscription', 'plan': 'max'},
-            'signInPageAvailable': False,
             'models': [{'value': 'default', 'label': 'Default (recommended)', 'detail': 'Opus 5.5', 'efforts': ['high']}],
             'selection': {'model': 'default', 'effort': None},
             'message': None,

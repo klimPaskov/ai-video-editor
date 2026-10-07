@@ -3,6 +3,7 @@ import test from "node:test";
 import { ApiProviderClient } from "../../packages/api-providers/src/client.ts";
 import { ApiProviderError } from "../../packages/api-providers/src/types.ts";
 import type { ProviderId } from "../../packages/api-providers/src/types.ts";
+import { codexVideoEditMcpTools } from "../../packages/codex-tools/src/mcp-tools.ts";
 
 const key = "test-provider-key-12345";
 const completion = {
@@ -422,7 +423,7 @@ test("request bounds prevent unbounded content or tools before network access", 
     {
       model: "test-model",
       messages: [{ role: "user", content: "hello" }],
-      tools: Array.from({ length: 9 }, (_, i) => ({
+      tools: Array.from({ length: 17 }, (_, i) => ({
         name: `tool_${i}`,
         description: "test",
         parameters: { type: "object" },
@@ -439,6 +440,34 @@ test("request bounds prevent unbounded content or tools before network access", 
     );
   }
   assert.equal(calls, 0);
+});
+
+test("every guarded editor tool definition reaches each provider request", async () => {
+  const bodies: Array<{ tools: Array<{ function: { name: string } }> }> = [];
+  const client = new ApiProviderClient({
+    fetchImpl: async (_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return json(completion);
+    },
+  });
+  const tools = codexVideoEditMcpTools.map((tool) => ({
+    name: tool.name.replaceAll(".", "_"),
+    description: tool.description,
+    parameters: tool.inputSchema as unknown as Record<string, unknown>,
+  }));
+  assert.equal(tools.length, 12);
+  for (const provider of ["openai", "deepseek", "gemini"] as const)
+    await client.complete(provider, key, {
+      model: "test-model",
+      messages: [{ role: "user", content: "hello" }],
+      tools,
+    });
+  assert.equal(bodies.length, 3);
+  for (const body of bodies)
+    assert.deepEqual(
+      body.tools.map((tool) => tool.function.name),
+      tools.map((tool) => tool.name),
+    );
 });
 
 test("caller cancellation aborts a pending request and returns a fixed error", async () => {

@@ -11,6 +11,45 @@ import type {
 } from "../../../packages/domain/src/api-providers.ts";
 import type { Preferences } from "../../../packages/domain/src/preferences.ts";
 import type {
+  MagicWandProjectRequest,
+  MagicWandStartRequest,
+  MagicWandView,
+} from "../../../packages/domain/src/magic-wand-view.ts";
+import type {
+  CaptionSettings,
+  CaptionSettingsRequest,
+  CaptionSettingsUpdate,
+} from "../../../packages/domain/src/captions.ts";
+import type {
+  AudioSettings,
+  AudioSettingsRequest,
+  AudioSettingsUpdate,
+} from "../../../packages/domain/src/audio-settings.ts";
+import type {
+  ShortClipRequest,
+  ShortClipsView,
+  ShortExportRequest,
+  ShortProjectRequest,
+} from "../../../packages/domain/src/short-clips-view.ts";
+import type {
+  PlaybackProjectRequest,
+  PlaybackView,
+} from "../../../packages/domain/src/playback-view.ts";
+import type {
+  RecordingDevices,
+  RecordingStartRequest,
+  RecordingRegionRequest,
+  InterruptedTakes,
+  InterruptedTakeRequest,
+  RecordingRegionResult,
+  RecordingView,
+} from "../../../packages/domain/src/recording-view.ts";
+import type {
+  ExportProjectRequest,
+  ExportStartRequest,
+  ExportView,
+} from "../../../packages/domain/src/export-view.ts";
+import type {
   ProjectDraftView,
   ProjectDraftIntegrityView,
   ProjectFrameRequest,
@@ -22,6 +61,9 @@ import type {
   ManualTrimRequest,
   ManualSplitRequest,
   ManualRangeCutRequest,
+  ManualZoomRequest,
+  ManualZoomRemoveRequest,
+  ManualSpeedRequest,
   ManualRestoreRangeRequest,
   ManualTranscriptCorrectionRequest,
   ManualTranscriptCutRequest,
@@ -30,6 +72,7 @@ import type {
 } from "../../../packages/domain/src/project-view.ts";
 import type {
   FrameRequest,
+  ThumbnailRequest,
   MediaFrame,
   MediaSummary,
 } from "../../../packages/domain/src/library.ts";
@@ -63,7 +106,6 @@ export interface DesktopBridge {
   getClaude(): Promise<Reply<ClaudeView>>;
   checkClaude(): Promise<Reply<ClaudeView>>;
   signInClaude(): Promise<Reply<ClaudeView>>;
-  openClaudeSignInPage(): Promise<Reply<ClaudeView>>;
   cancelClaudeSignIn(): Promise<Reply<ClaudeView>>;
   signOutClaude(): Promise<Reply<ClaudeView>>;
   selectClaudeModel(value: ClaudeSelection): Promise<Reply<ClaudeView>>;
@@ -127,6 +169,57 @@ export interface DesktopBridge {
   interruptCodexThread(
     request: CodexThreadProjectRequest,
   ): Promise<Reply<CodexThreadView>>;
+  getPlayback(request: PlaybackProjectRequest): Promise<Reply<PlaybackView>>;
+  applyManualZoom(request: ManualZoomRequest): Promise<Reply<ProjectDraftView>>;
+  applyManualSpeed(
+    request: ManualSpeedRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  removeManualZoom(
+    request: ManualZoomRemoveRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  getAudioSettings(
+    request: AudioSettingsRequest,
+  ): Promise<Reply<AudioSettings>>;
+  setAudioSettings(request: AudioSettingsUpdate): Promise<Reply<AudioSettings>>;
+  getShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
+  findShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
+  discardShortClip(request: ShortClipRequest): Promise<Reply<ShortClipsView>>;
+  exportShortClip(request: ShortExportRequest): Promise<Reply<ShortClipsView>>;
+  cancelShortClip(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
+  getCaptionSettings(
+    request: CaptionSettingsRequest,
+  ): Promise<Reply<CaptionSettings>>;
+  setCaptionSettings(
+    request: CaptionSettingsUpdate,
+  ): Promise<Reply<CaptionSettings>>;
+  getRecordingDevices(): Promise<Reply<RecordingDevices>>;
+  getRecording(): Promise<Reply<RecordingView>>;
+  startRecording(request: RecordingStartRequest): Promise<Reply<RecordingView>>;
+  pickRecordingRegion(
+    request: RecordingRegionRequest,
+  ): Promise<Reply<RecordingRegionResult>>;
+  getInterruptedRecordings(): Promise<Reply<InterruptedTakes>>;
+  recoverRecording(
+    request: InterruptedTakeRequest,
+  ): Promise<Reply<RecordingView>>;
+  discardInterruptedRecording(
+    request: InterruptedTakeRequest,
+  ): Promise<Reply<InterruptedTakes>>;
+  pauseRecording(): Promise<Reply<RecordingView>>;
+  resumeRecording(): Promise<Reply<RecordingView>>;
+  stopRecording(): Promise<Reply<RecordingView>>;
+  cancelRecording(): Promise<Reply<RecordingView>>;
+  getMagicWand(request: MagicWandProjectRequest): Promise<Reply<MagicWandView>>;
+  startMagicWand(request: MagicWandStartRequest): Promise<Reply<MagicWandView>>;
+  stopMagicWand(
+    request: MagicWandProjectRequest,
+  ): Promise<Reply<MagicWandView>>;
+  getExport(request: ExportProjectRequest): Promise<Reply<ExportView>>;
+  startExport(request: ExportStartRequest): Promise<Reply<ExportView>>;
+  cancelExport(request: ExportProjectRequest): Promise<Reply<ExportView>>;
+  resetExport(request: ExportProjectRequest): Promise<Reply<ExportView>>;
+  revealExport(request: ExportProjectRequest): Promise<Reply<null>>;
+  openExport(request: ExportProjectRequest): Promise<Reply<null>>;
   listProjects(): Promise<Reply<ProjectView[]>>;
   createProject(request: ProjectRequest): Promise<Reply<ProjectView>>;
   createTwoSourceProject(
@@ -167,13 +260,46 @@ export interface DesktopBridge {
   listMedia(): Promise<Reply<MediaSummary[]>>;
   importVideo(): Promise<Reply<MediaSummary | null>>;
   readFrame(request: FrameRequest): Promise<Reply<MediaFrame>>;
+  readThumbnail(request: ThumbnailRequest): Promise<Reply<MediaFrame>>;
   cancelImport(): Promise<Reply<null>>;
 }
 export const channels = Object.freeze({
+  playbackGet: "playback:get",
+  projectManualZoom: "projects:manual-zoom",
+  projectManualZoomRemove: "projects:manual-zoom-remove",
+  projectManualSpeed: "projects:manual-speed",
+  audioGet: "audio:get",
+  audioSet: "audio:set",
+  shortsGet: "shorts:get",
+  shortsFind: "shorts:find",
+  shortsDiscard: "shorts:discard",
+  shortsExport: "shorts:export",
+  shortsCancel: "shorts:cancel",
+  captionsGet: "captions:get",
+  captionsSet: "captions:set",
+  recordingDevices: "recording:devices",
+  recordingGet: "recording:get",
+  recordingStart: "recording:start",
+  recordingPickRegion: "recording:pick-region",
+  recordingInterrupted: "recording:interrupted",
+  recordingRecover: "recording:recover",
+  recordingDiscardInterrupted: "recording:discard-interrupted",
+  recordingPause: "recording:pause",
+  recordingResume: "recording:resume",
+  recordingStop: "recording:stop",
+  recordingCancel: "recording:cancel",
+  magicGet: "magic:get",
+  magicStart: "magic:start",
+  magicStop: "magic:stop",
+  exportGet: "export:get",
+  exportStart: "export:start",
+  exportCancel: "export:cancel",
+  exportReset: "export:reset",
+  exportReveal: "export:reveal",
+  exportOpen: "export:open",
   claudeGet: "claude:get",
   claudeCheck: "claude:check",
   claudeSignIn: "claude:sign-in",
-  claudeOpenSignIn: "claude:open-sign-in",
   claudeCancelSignIn: "claude:cancel-sign-in",
   claudeSignOut: "claude:sign-out",
   claudeSelect: "claude:select",
@@ -227,6 +353,7 @@ export const channels = Object.freeze({
   list: "library:list",
   import: "library:import",
   frame: "library:frame",
+  thumbnail: "library:thumbnail",
   cancel: "library:cancel",
 });
 export function assertEmptyRequest(value: unknown): void {

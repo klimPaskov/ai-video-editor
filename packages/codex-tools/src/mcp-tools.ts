@@ -255,4 +255,88 @@ export const codexVideoEditMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: codexVideoEditToolNames[9],
+    description:
+      "Zoom into one point of the frame for a half-open output-time range of at least 0.5 s within one recording's footage, as one undoable transaction. Use it briefly (typically a few seconds at scale 1.5–2), only to make a small on-screen detail readable. center_x and center_y are frame fractions (0–1); scale is 1.1–4. Zooms of the same recording cannot overlap. With zoom_id, the existing zoom keeps its range and only its point and scale change.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "start_us",
+        "end_us",
+        "center_x",
+        "center_y",
+        "scale",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        zoom_id: id,
+        start_us: { type: "integer", minimum: 0 },
+        end_us: { type: "integer", minimum: 1 },
+        center_x: { type: "number", minimum: 0, maximum: 1 },
+        center_y: { type: "number", minimum: 0, maximum: 1 },
+        scale: { type: "number", minimum: 1.1, maximum: 4 },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[10],
+    description:
+      "Remove one zoom from the active draft by zoom_id as one undoable transaction.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "zoom_id"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        zoom_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[11],
+    description:
+      "Play a half-open output-time range at speed 1, 2, 3, 4 or 8 (1 restores normal speed; audio keeps its pitch), as one undoable transaction. Speed up only typing, loading or waiting with no important speech.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "start_us",
+        "end_us",
+        "speed",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        start_us: { type: "integer", minimum: 0 },
+        end_us: { type: "integer", minimum: 1 },
+        speed: { type: "integer", minimum: 1, maximum: 8 },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ] as const;

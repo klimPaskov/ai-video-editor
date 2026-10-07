@@ -1,5 +1,21 @@
 import { setupCodexSettings } from "./codex-settings.ts";
+import { iconElement, setupIcons } from "./icons.ts";
+import { setupTimelineStrip } from "./timeline-strip.ts";
+import { setupCaptions } from "./captions-panel.ts";
+import { setupShortsPanel } from "./shorts-panel.ts";
+import { setupAudioPanel } from "./audio-panel.ts";
+import { mediaRect, setupZoomPreview } from "./zoom-preview.ts";
+import {
+  zoomAt,
+  zoomLimits,
+  zoomWindow,
+  type ZoomInterval,
+} from "../../../packages/domain/src/zoom.ts";
 import { draftIntegrityFreshness } from "./draft-integrity.ts";
+import { setupExportPanel } from "./export-panel.ts";
+import { setupPlayback } from "./playback.ts";
+import { setupMagicPanel } from "./magic-panel.ts";
+import { setupRecordPanel } from "./record-panel.ts";
 import { reconcileProjectDraft } from "./project-draft.ts";
 import { pollTranscriptionView } from "./transcription-state.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
@@ -43,6 +59,7 @@ function element<T extends HTMLElement>(id: string): T {
   if (!value) throw new Error("Missing control");
   return value as T;
 }
+setupIcons();
 const home = element("home"),
   viewer = element("viewer"),
   back = element<HTMLButtonElement>("back");
@@ -73,7 +90,15 @@ const editActions = element("edit-actions"),
   restoreSourceStart = element<HTMLInputElement>("restore-source-start"),
   restoreSourceEnd = element<HTMLInputElement>("restore-source-end"),
   restoreSubmit = element<HTMLButtonElement>("restore-submit"),
-  restoreError = element("restore-error");
+  restoreError = element("restore-error"),
+  zoomAdd = element<HTMLButtonElement>("zoom-add"),
+  zoomControls = element("zoom-controls"),
+  zoomScale = element<HTMLSelectElement>("zoom-scale"),
+  zoomTarget = element<HTMLButtonElement>("zoom-target"),
+  zoomRemove = element<HTMLButtonElement>("zoom-remove"),
+  zoomHint = element("zoom-hint"),
+  speedSelect = element<HTMLSelectElement>("speed"),
+  speedScope = element("speed-scope");
 const reviewActions = element("review-actions"),
   checkDraftIntegrityButton = element<HTMLButtonElement>(
     "check-draft-integrity",
@@ -137,6 +162,12 @@ let draftIntegrityIssue: string | null = null;
 let markHead: string | undefined;
 let markInUs: number | undefined;
 let markOutUs: number | undefined;
+/** Waiting for a click on the preview to choose a zoom's target. */
+let zoomPicking:
+  | { head: string; startUs: number; endUs: number; zoom?: ZoomInterval }
+  | undefined;
+/** Length of a zoom added without marks, starting at the playhead. */
+const defaultZoomUs = 2_000_000;
 let restoreSourceProjectId: string | undefined;
 let restoreHead: string | undefined;
 let restoreRangeOpen = false;
@@ -249,7 +280,27 @@ function clearDraftIntegrityResult(): void {
   draftIntegrityMessage = null;
   draftIntegrityIssue = null;
 }
+const exportPanel = setupExportPanel();
+/** End of a short clip being previewed; playback stops there. */
+let previewEndUs: number | undefined;
+const shortsPanel = setupShortsPanel({
+  preview: (startUs, endUs) => {
+    playback.stop();
+    requestFrame(startUs);
+    previewEndUs = endUs;
+    // Play once the start frame is requested; playback reads the position.
+    setTimeout(() => {
+      if (!playback.playing()) playback.toggle();
+    }, 50);
+  },
+});
 function renderDraftIntegrityAction(): void {
+  const exportVisible =
+    activeProject?.stage === "export" &&
+    element("inspector").hidden === true &&
+    element("codex-drawer").hidden === true;
+  exportPanel.render(activeProject, exportVisible);
+  shortsPanel.render(activeProject, exportVisible);
   const project = activeProject,
     visible =
       project?.stage === "review" &&
@@ -263,16 +314,58 @@ function renderDraftIntegrityAction(): void {
   )
     clearDraftIntegrityResult();
   reviewActions.hidden = !visible;
+  renderReviewSummary(visible ? project : undefined);
   reviewActions.setAttribute("aria-busy", String(draftIntegrityPending));
   checkDraftIntegrityButton.disabled =
     !visible || navigating || draftIntegrityPending;
   checkDraftIntegrityButton.textContent = draftIntegrityPending
     ? "Checking…"
-    : "Check draft integrity";
+    : "Verify draft";
   draftIntegrityResult.textContent = draftIntegrityMessage ?? "";
   draftIntegrityResult.hidden = !visible || !draftIntegrityMessage;
   draftIntegrityError.textContent = draftIntegrityIssue ?? "";
   draftIntegrityError.hidden = !visible || !draftIntegrityIssue;
+}
+function renderReviewSummary(project: ProjectView | undefined): void {
+  const summary = element("review-summary");
+  if (!project?.clips) {
+    summary.replaceChildren();
+    return;
+  }
+  const originalUs = restoreSources(project).reduce(
+    (sum, source) => sum + source.durationUs,
+    0,
+  );
+  const editedUs = project.timeline.durationUs;
+  const stat = (label: string, value: string, name = "stat") => {
+    const item = document.createElement("div");
+    item.className = name;
+    const term = document.createElement("span");
+    term.textContent = label;
+    const amount = document.createElement("strong");
+    amount.textContent = value;
+    item.append(term, amount);
+    return item;
+  };
+  // Tenths keep Original - Edited consistent with Removed.
+  const tenths = (us: number) => {
+    const total = Math.round(us / 100_000);
+    return `${Math.floor(total / 600)}:${String(Math.floor((total % 600) / 10)).padStart(2, "0")}.${total % 10}`;
+  };
+  const items = [
+    stat("Original", tenths(originalUs)),
+    stat("Edited", tenths(editedUs)),
+    stat("Clips", String(project.clips.length)),
+  ];
+  if (originalUs > editedUs)
+    items.push(
+      stat(
+        "Removed",
+        `${((originalUs - editedUs) / 1_000_000).toFixed(1)} s`,
+        "stat saved",
+      ),
+    );
+  summary.replaceChildren(...items);
 }
 function transcriptionRunning(
   view: TranscriptionProjectView | undefined,
@@ -753,7 +846,8 @@ function transcriptCutRange(
       item.sourceStartUs <= first.start_us &&
       item.sourceEndUs >= last.end_us,
   );
-  if (!clip) return undefined;
+  // Word cuts map exactly only at normal speed.
+  if (!clip || clip.speed) return undefined;
   const startUs = clip.timelineStartUs + (first.start_us - clip.sourceStartUs);
   const endUs = clip.timelineStartUs + (last.end_us - clip.sourceStartUs);
   if (
@@ -883,9 +977,12 @@ function syncTranscriptionPolling(): void {
     transcriptionPollTimer = undefined;
   }
 }
+const magicPanel = setupMagicPanel(() => void loadTranscription());
 function renderTranscriptionActions(): void {
+  refreshCaptions();
   const project = activeProject;
   const visible = project?.stage === "auto_edit";
+  magicPanel.render(project, visible);
   const view =
     transcriptionView?.project_id === project?.id
       ? transcriptionView
@@ -1154,7 +1251,49 @@ async function cutSelectedTranscriptWords(): Promise<void> {
     renderStage();
   }
 }
+const timelineStrip = setupTimelineStrip({
+  host: element("timeline-strip"),
+  seek: (us) => {
+    playback.stop();
+    requestFrame(us);
+  },
+  time,
+});
+const captions = setupCaptions({ preview: canvas.parentElement! });
+const zoomPreview = setupZoomPreview(canvas.parentElement!);
+const audioPanel = setupAudioPanel();
+function refreshZoom(us = Number(seek.value)): void {
+  zoomPreview.render(
+    selected?.previewAvailable ? activeProject : undefined,
+    us,
+  );
+}
+function refreshCaptions(): void {
+  refreshZoom();
+  audioPanel.render(activeProject?.id);
+  captions.render(
+    selected?.previewAvailable ? activeProject : undefined,
+    transcriptionView,
+    Number(seek.value),
+  );
+}
+window.addEventListener("resize", () => captions.position(Number(seek.value)));
+function renderTimeline(): void {
+  refreshCaptions();
+  const project = selected?.previewAvailable ? activeProject : undefined;
+  const currentMarks = !!project && markHead === currentHeadKey(project);
+  timelineStrip.render(
+    project,
+    {
+      inUs: currentMarks ? markInUs : undefined,
+      outUs: currentMarks ? markOutUs : undefined,
+    },
+    zoomPreview.intervals(),
+  );
+  timelineStrip.playhead(Number(seek.value));
+}
 function renderEditTools(): void {
+  renderTimeline();
   const project = activeProject;
   if (project && restoreHead && restoreHead !== currentHeadKey(project)) {
     restoreHead = undefined;
@@ -1167,6 +1306,7 @@ function renderEditTools(): void {
     editActions.hidden = true;
     restoreRangeOpen = false;
     restoreHead = undefined;
+    setZoomPicking(undefined);
     return;
   }
   populateRestoreSources(project);
@@ -1218,6 +1358,8 @@ function renderEditTools(): void {
   ]
     .filter(Boolean)
     .join(" · ");
+  renderZoomTools(project, inUs, outUs);
+  renderSpeedTools(project, inUs, outUs);
   restoreToggleButton.disabled = manualEditPending || navigating;
   restoreToggleButton.textContent = restoreRangeOpen
     ? "Cancel restore"
@@ -1280,6 +1422,7 @@ function renderEditTools(): void {
   restoreError.hidden = !restoreRangeOpen || !restoreError.textContent;
 }
 async function navigate(stage: ProjectStage): Promise<void> {
+  playback.stop();
   if (
     !activeProject ||
     navigating ||
@@ -1385,6 +1528,50 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
   renderStage();
   if (project.stage === "auto_edit" || project.stage === "edit")
     void loadTranscription();
+  void watchPlayback(project.id);
+}
+let playbackWatch = 0;
+/**
+ * Sources Chromium cannot decode play through a playback copy that main
+ * prepares in the background; Play waits for it. Frame preview is exact
+ * throughout.
+ */
+async function watchPlayback(projectId: string): Promise<void> {
+  const watch = ++playbackWatch;
+  const status = element("playback-status");
+  const showStatus = (text: string | null, title = "") => {
+    status.textContent = text ?? "";
+    status.hidden = !text;
+    playButton.title = title;
+  };
+  showStatus(null);
+  playButton.disabled = false;
+  while (watch === playbackWatch && activeProject?.id === projectId) {
+    const reply = await window.desktop
+      .getPlayback({ schema_version: "1.0", project_id: projectId })
+      .catch(() => null);
+    if (watch !== playbackWatch || activeProject?.id !== projectId) return;
+    if (!reply?.ok) {
+      showStatus(null);
+      return;
+    }
+    const view = reply.value;
+    if (view.status === "ready") {
+      playButton.disabled = false;
+      showStatus(null);
+      return;
+    }
+    playButton.disabled = true;
+    if (view.status === "failed") {
+      showStatus("Playback unavailable", view.message ?? "");
+      return;
+    }
+    showStatus(
+      `Preparing playback ${Math.round((view.progress ?? 0) * 100)}%`,
+      "Preparing playback",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
 }
 async function createProject(
   media: MediaSummary,
@@ -1422,6 +1609,58 @@ function clearError(): void {
   error.hidden = true;
   error.textContent = "";
 }
+/** Whole-second duration for cards and summaries, e.g. 1:05 or 1:02:05. */
+function cardTime(value: number): string {
+  const total = Math.round(value / 1_000_000),
+    hours = Math.floor(total / 3600),
+    minutes = Math.floor((total % 3600) / 60),
+    seconds = String(total % 60).padStart(2, "0");
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}`
+    : `${minutes}:${seconds}`;
+}
+const thumbnails = new Map<string, Promise<MediaFrame | null>>();
+let thumbnailQueue: Promise<unknown> = Promise.resolve();
+/** Cosmetic card picture; failures leave the placeholder in place. */
+function thumbnail(mediaId: string, name: string): HTMLElement {
+  const box = document.createElement("span");
+  box.className = "thumb";
+  box.append(iconElement("film"));
+  let pending = thumbnails.get(mediaId);
+  if (!pending) {
+    pending = thumbnailQueue.then(async () => {
+      try {
+        const reply = await window.desktop.readThumbnail({ id: mediaId });
+        return reply.ok ? reply.value : null;
+      } catch {
+        return null;
+      }
+    });
+    thumbnailQueue = pending;
+    thumbnails.set(mediaId, pending);
+  }
+  void pending.then((frame) => {
+    if (!frame) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = frame.width;
+    canvas.height = frame.height;
+    canvas.setAttribute("aria-hidden", "true");
+    canvas.dataset.thumbnailFor = name;
+    canvas.getContext("2d")?.putImageData(
+      new ImageData(
+        Uint8ClampedArray.from(atob(frame.rgbaBase64), (character) =>
+          character.charCodeAt(0),
+        ),
+        frame.width,
+        frame.height,
+      ),
+      0,
+      0,
+    );
+    box.prepend(canvas);
+  });
+  return box;
+}
 function time(value: number): string {
   const seconds = value / 1_000_000;
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(3).padStart(6, "0")}`;
@@ -1441,11 +1680,20 @@ async function loadLibrary(): Promise<void> {
     for (const project of projects.value) {
       const row = document.createElement("li"),
         button = document.createElement("button"),
+        body = document.createElement("span"),
         name = document.createElement("span"),
         detail = document.createElement("small");
       name.textContent = project.name;
-      detail.textContent = `${time(project.timeline.durationUs)} · ${project.sources?.length ?? 1} source${project.sources ? "s" : ""} · ${stageLabels[project.stage]}`;
-      button.append(name, detail);
+      detail.textContent = [
+        cardTime(project.timeline.durationUs),
+        project.sources ? `${project.sources.length} sources` : undefined,
+        stageLabels[project.stage],
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      body.className = "card-body";
+      body.append(name, detail);
+      button.append(thumbnail(project.source.id, project.name), body);
       button.dataset.projectId = project.id;
       button.addEventListener("click", () => {
         void openProject(project.id, button);
@@ -1464,11 +1712,14 @@ async function loadLibrary(): Promise<void> {
   for (const media of reply.value) {
     const row = document.createElement("li"),
       button = document.createElement("button");
-    const name = document.createElement("span"),
+    const body = document.createElement("span"),
+      name = document.createElement("span"),
       detail = document.createElement("small");
     name.textContent = media.name;
-    detail.textContent = `${media.width} × ${media.height} · ${time(media.durationUs)}`;
-    button.append(name, detail);
+    detail.textContent = `${media.width}×${media.height} · ${cardTime(media.durationUs)}`;
+    body.className = "card-body";
+    body.append(name, detail);
+    button.append(thumbnail(media.id, media.name), body);
     button.dataset.mediaId = media.id;
     button.addEventListener("click", async () => {
       const previousProject = activeProject?.id;
@@ -1492,7 +1743,8 @@ async function loadLibrary(): Promise<void> {
       button.disabled = false;
     });
     const create = document.createElement("button");
-    create.className = "create-project";
+    create.className = "create-project ghost";
+    create.dataset.icon = "plus";
     create.textContent = "Create project";
     create.setAttribute("aria-label", `Create project from ${media.name}`);
     create.addEventListener("click", () => {
@@ -1503,6 +1755,7 @@ async function loadLibrary(): Promise<void> {
   }
 }
 function select(media: MediaSummary): void {
+  playback.stop();
   selected = media;
   selectedButton =
     document.querySelector<HTMLButtonElement>(
@@ -1516,6 +1769,7 @@ function select(media: MediaSummary): void {
   clearError();
   canvas.width = 0;
   canvas.height = 0;
+  canvas.parentElement!.classList.remove("loading");
   element("time").textContent = time(0);
   home.hidden = true;
   viewer.hidden = false;
@@ -1550,6 +1804,7 @@ function select(media: MediaSummary): void {
   message.textContent =
     "This video's format does not have a verified preview yet. Its original file has been preserved.";
   element("frame-controls").hidden = !media.previewAvailable;
+  playButton.hidden = !activeProject || !media.previewAvailable;
   if (media.previewAvailable) requestFrame(0);
   back.focus();
 }
@@ -1561,11 +1816,21 @@ function requestFrame(value: number): void {
   const message = element("preview-message");
   message.textContent = "Reading frame…";
   message.hidden = false;
-  canvas.hidden = true;
+  // Keep the last decoded frame on screen; the reading notice only appears
+  // as an overlay if the new frame is slow.
+  const showing = canvas.width > 0 && !canvas.hidden;
+  canvas.parentElement!.classList.toggle("loading", showing);
+  if (!showing) canvas.hidden = true;
   previous.disabled = requestedTime === 0;
   next.disabled = requestedTime >= Number(seek.max);
   renderEditTools();
   if (!decoding) void decodeFrames();
+}
+function previewFailed(): void {
+  canvas.hidden = true;
+  canvas.parentElement!.classList.remove("loading");
+  element("preview-message").textContent =
+    "Move the position control to retry this frame.";
 }
 async function decodeFrames(): Promise<void> {
   decoding = true;
@@ -1594,8 +1859,7 @@ async function decodeFrames(): Promise<void> {
           continue;
         if (!reply.ok) {
           showError(reply.message);
-          element("preview-message").textContent =
-            "Move the position control to retry this frame.";
+          previewFailed();
           continue;
         }
         if (reply.value.status === "stale") {
@@ -1624,8 +1888,7 @@ async function decodeFrames(): Promise<void> {
           continue;
         if (!reply.ok) {
           showError(reply.message);
-          element("preview-message").textContent =
-            "Move the position control to retry this frame.";
+          previewFailed();
           continue;
         }
         frame = reply.value;
@@ -1641,6 +1904,8 @@ async function decodeFrames(): Promise<void> {
         ?.putImageData(new ImageData(bytes, frame.width, frame.height), 0, 0);
       element("time").textContent = time(requested);
       canvas.hidden = false;
+      refreshZoom(requested);
+      canvas.parentElement!.classList.remove("loading");
       element("preview-message").hidden = true;
     }
   } catch {
@@ -1720,11 +1985,18 @@ addFootageButton.addEventListener("click", async () => {
     renderStage();
   }
 });
+setupRecordPanel({
+  finished: async (media) => {
+    routeGeneration++;
+    await createProject(media);
+  },
+});
 element("cancel").addEventListener("click", () => {
   void window.desktop.cancelImport();
 });
 back.addEventListener("click", async () => {
   if (manualEditPending) return;
+  playback.stop();
   const previousProject = activeProject?.id;
   back.disabled = true;
   if (previousProject) {
@@ -1737,6 +2009,7 @@ back.addEventListener("click", async () => {
   }
   routeGeneration++;
   activeProject = undefined;
+  playbackWatch++;
   navigating = false;
   renderStage();
   selected = undefined;
@@ -1778,13 +2051,49 @@ back.addEventListener("click", async () => {
       showError("Home could not be refreshed. Try reopening the application."),
     );
 });
-seek.addEventListener("input", () => requestFrame(Number(seek.value)));
+seek.addEventListener("input", () => {
+  const value = Number(seek.value);
+  playback.stop();
+  requestFrame(value);
+});
 previous.addEventListener("click", () => {
-  if (selected) requestFrame(Number(seek.value) - frameInterval());
+  const value = Number(seek.value);
+  playback.stop();
+  if (selected) requestFrame(value - frameInterval());
 });
 next.addEventListener("click", () => {
-  if (selected) requestFrame(Number(seek.value) + frameInterval());
+  const value = Number(seek.value);
+  playback.stop();
+  if (selected) requestFrame(value + frameInterval());
 });
+const playButton = element<HTMLButtonElement>("play");
+const playback = setupPlayback({
+  container: canvas.parentElement!,
+  canvas,
+  project: () => activeProject,
+  position: () => Number(seek.value),
+  show: (us) => {
+    seek.value = String(Math.min(Number(seek.max), Math.max(0, us)));
+    element("time").textContent = time(us);
+    timelineStrip.playhead(us);
+    captions.position(us);
+    refreshZoom(us);
+    if (previewEndUs !== undefined && us >= previewEndUs) {
+      previewEndUs = undefined;
+      playback.stop();
+    }
+    previous.disabled = us <= 0;
+    next.disabled = us >= Number(seek.max);
+  },
+  stopped: (us) => requestFrame(us),
+  changed: (playing) => {
+    playButton.dataset.icon = playing ? "pause" : "play";
+    playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
+    playButton.setAttribute("aria-pressed", String(playing));
+  },
+  failed: (message) => showError(message),
+});
+playButton.addEventListener("click", () => playback.toggle());
 function frameInterval(): number {
   return activeProject
     ? (1_000_000 * activeProject.timeline.frameRate.denominator) /
@@ -1796,6 +2105,11 @@ function applyProjectDraft(
   preferredPositionUs = Number(seek.value),
 ): void {
   if (!activeProject) return;
+  // A changed draft invalidates the clip list being played.
+  if (playback.playing()) {
+    preferredPositionUs = Number(seek.value);
+    playback.stop();
+  }
   if (!reply.ok) {
     showError(reply.message);
     return;
@@ -2285,6 +2599,319 @@ clearMarksButton.addEventListener("click", () => {
   markInUs = undefined;
   markOutUs = undefined;
   renderEditTools();
+});
+/** The marked range, or the part under the playhead, that Speed changes. */
+function speedRange(
+  project: ProjectView,
+  inUs: number | undefined,
+  outUs: number | undefined,
+): { startUs: number; endUs: number; marked: boolean } | undefined {
+  if (inUs !== undefined && outUs !== undefined)
+    return inUs < outUs && outUs <= project.timeline.durationUs
+      ? { startUs: inUs, endUs: outUs, marked: true }
+      : undefined;
+  const clip = currentClip();
+  return clip
+    ? {
+        startUs: clip.timelineStartUs,
+        endUs: clip.timelineEndUs,
+        marked: false,
+      }
+    : undefined;
+}
+function renderSpeedTools(
+  project: ProjectView,
+  inUs: number | undefined,
+  outUs: number | undefined,
+): void {
+  const range = speedRange(project, inUs, outUs);
+  const speeds = new Set(
+    (project.clips ?? [])
+      .filter(
+        (clip) =>
+          range &&
+          clip.timelineStartUs < range.endUs &&
+          clip.timelineEndUs > range.startUs,
+      )
+      .map((clip) => String(clip.speed ?? 1)),
+  );
+  let mixed = speedSelect.querySelector<HTMLOptionElement>(
+    'option[value="mixed"]',
+  );
+  if (speeds.size > 1 && !mixed) {
+    mixed = new Option("Mixed speeds", "mixed");
+    mixed.disabled = true;
+    speedSelect.prepend(mixed);
+  }
+  if (speeds.size <= 1) mixed?.remove();
+  speedSelect.value = speeds.size === 1 ? [...speeds][0]! : "mixed";
+  speedSelect.disabled = !range || manualEditPending || navigating;
+  speedScope.textContent = range?.marked
+    ? "Applies to the marked range."
+    : "Applies to the part under the playhead.";
+}
+async function submitSpeed(speed: number): Promise<void> {
+  const project = activeProject,
+    generation = routeGeneration;
+  if (!project || project.stage !== "edit" || manualEditPending) return;
+  const currentMarks = markHead === currentHeadKey(project),
+    range = speedRange(
+      project,
+      currentMarks ? markInUs : undefined,
+      currentMarks ? markOutUs : undefined,
+    );
+  if (!range) return;
+  playback.stop();
+  manualEditPending = true;
+  back.disabled = true;
+  renderEditTools();
+  clearError();
+  try {
+    const reply = await window.desktop.applyManualSpeed({
+      schema_version: "1.0",
+      projectId: project.id,
+      draftId: project.draft.id,
+      baseRevisionId: project.draft.baseRevisionId,
+      expectedSequence: project.draft.sequence,
+      expectedTimelineSha256: project.draft.timelineSha256,
+      startUs: range.startUs,
+      endUs: range.endUs,
+      speed,
+    });
+    if (generation === routeGeneration && activeProject?.id === project.id) {
+      if (reply.ok && range.marked) {
+        markHead = undefined;
+        markInUs = undefined;
+        markOutUs = undefined;
+      }
+      applyProjectDraft(reply);
+      if (reply.ok) requestFrame(range.startUs);
+    }
+  } catch {
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      showError("The speed could not be saved. Try again.");
+  } finally {
+    manualEditPending = false;
+    back.disabled = false;
+    renderEditTools();
+  }
+}
+speedSelect.addEventListener("change", () => {
+  const speed = Number(speedSelect.value);
+  if (Number.isInteger(speed)) void submitSpeed(speed);
+});
+/** Output range a new zoom covers: the marks, or two seconds from the playhead. */
+function newZoomRange(
+  project: ProjectView,
+  inUs: number | undefined,
+  outUs: number | undefined,
+): { startUs: number; endUs: number } | undefined {
+  if (inUs !== undefined && outUs !== undefined)
+    return outUs - inUs >= zoomLimits.minDurationUs &&
+      outUs <= project.timeline.durationUs
+      ? { startUs: inUs, endUs: outUs }
+      : undefined;
+  const clip = currentClip(),
+    startUs = Number(seek.value);
+  if (!clip) return undefined;
+  const endUs = Math.min(startUs + defaultZoomUs, clip.timelineEndUs);
+  return endUs - startUs >= zoomLimits.minDurationUs
+    ? { startUs, endUs }
+    : undefined;
+}
+function zoomUnderPlayhead(): ZoomInterval | undefined {
+  const us = Number(seek.value);
+  return zoomPreview
+    .intervals()
+    .find((interval) => us >= interval.startUs && us < interval.endUs);
+}
+function setZoomPicking(next: typeof zoomPicking): void {
+  zoomPicking = next;
+  const preview = canvas.parentElement!;
+  preview.classList.toggle("picking", next !== undefined);
+  zoomHint.hidden = next === undefined;
+}
+function renderZoomTools(
+  project: ProjectView,
+  inUs: number | undefined,
+  outUs: number | undefined,
+): void {
+  if (zoomPicking && zoomPicking.head !== currentHeadKey(project))
+    setZoomPicking(undefined);
+  const busy = manualEditPending || navigating;
+  const marked = inUs !== undefined && outUs !== undefined;
+  zoomAdd.disabled =
+    busy || zoomPicking !== undefined || !newZoomRange(project, inUs, outUs);
+  zoomAdd.setAttribute(
+    "aria-label",
+    marked ? "Zoom the marked range" : "Zoom two seconds from the playhead",
+  );
+  zoomAdd.title = marked
+    ? "Zoom the marked range (Z)"
+    : "Zoom two seconds from the playhead (Z)";
+  const zoom = zoomUnderPlayhead();
+  zoomControls.hidden = !zoom;
+  if (zoom) {
+    const value = String(zoom.scale);
+    if (![...zoomScale.options].some((option) => option.value === value))
+      zoomScale.add(new Option(`${zoom.scale}×`, value));
+    zoomScale.value = value;
+  }
+  zoomScale.disabled = busy || zoomPicking !== undefined;
+  zoomTarget.disabled = busy || zoomPicking !== undefined;
+  zoomRemove.disabled = busy || zoomPicking !== undefined;
+}
+function previewMedia(): HTMLCanvasElement | HTMLVideoElement {
+  return (
+    canvas.parentElement!.querySelector<HTMLVideoElement>(
+      "video:not([hidden])",
+    ) ?? canvas
+  );
+}
+/** Frame position under a click, as fractions of the full frame. */
+function framePoint(event: MouseEvent): { x: number; y: number } | undefined {
+  const media = previewMedia(),
+    box = canvas.parentElement!.getBoundingClientRect(),
+    rect = mediaRect(media);
+  // The element's own box is untransformed; offsets are within .preview.
+  const x =
+      (event.clientX - box.left - media.offsetLeft - rect.left) / rect.width,
+    y = (event.clientY - box.top - media.offsetTop - rect.top) / rect.height;
+  if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return undefined;
+  // Through an active zoom the picture shows only part of the frame.
+  const zoom = zoomAt(zoomPreview.intervals(), Number(seek.value));
+  const window = zoomWindow(zoom.scale, zoom.centerX, zoom.centerY);
+  const round = (value: number) =>
+    Math.round(Math.min(1, Math.max(0, value)) * 10_000) / 10_000;
+  return {
+    x: round(window.x + x * window.size),
+    y: round(window.y + y * window.size),
+  };
+}
+async function submitZoom(
+  zoom: ZoomInterval | undefined,
+  range: { startUs: number; endUs: number },
+  center: { x: number; y: number },
+  scale: number,
+): Promise<void> {
+  const project = activeProject,
+    generation = routeGeneration;
+  if (!project || project.stage !== "edit" || manualEditPending) return;
+  manualEditPending = true;
+  back.disabled = true;
+  renderEditTools();
+  clearError();
+  try {
+    const reply = await window.desktop.applyManualZoom({
+      schema_version: "1.0",
+      projectId: project.id,
+      draftId: project.draft.id,
+      baseRevisionId: project.draft.baseRevisionId,
+      expectedSequence: project.draft.sequence,
+      expectedTimelineSha256: project.draft.timelineSha256,
+      zoomId: zoom?.zoomId ?? null,
+      startUs: range.startUs,
+      endUs: range.endUs,
+      centerX: center.x,
+      centerY: center.y,
+      scale,
+    });
+    if (generation === routeGeneration && activeProject?.id === project.id) {
+      if (reply.ok && !zoom) {
+        markHead = undefined;
+        markInUs = undefined;
+        markOutUs = undefined;
+      }
+      applyProjectDraft(reply);
+    }
+  } catch {
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      showError("The zoom could not be saved. Try again.");
+  } finally {
+    manualEditPending = false;
+    back.disabled = false;
+    renderEditTools();
+  }
+}
+async function submitZoomRemove(zoom: ZoomInterval): Promise<void> {
+  const project = activeProject,
+    generation = routeGeneration;
+  if (!project || project.stage !== "edit" || manualEditPending) return;
+  manualEditPending = true;
+  back.disabled = true;
+  renderEditTools();
+  clearError();
+  try {
+    const reply = await window.desktop.removeManualZoom({
+      schema_version: "1.0",
+      projectId: project.id,
+      draftId: project.draft.id,
+      baseRevisionId: project.draft.baseRevisionId,
+      expectedSequence: project.draft.sequence,
+      expectedTimelineSha256: project.draft.timelineSha256,
+      zoomId: zoom.zoomId,
+    });
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      applyProjectDraft(reply);
+  } catch {
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      showError("The zoom could not be removed. Try again.");
+  } finally {
+    manualEditPending = false;
+    back.disabled = false;
+    renderEditTools();
+  }
+}
+zoomAdd.addEventListener("click", () => {
+  const project = activeProject;
+  if (!project || project.stage !== "edit" || manualEditPending) return;
+  const currentMarks = markHead === currentHeadKey(project),
+    range = newZoomRange(
+      project,
+      currentMarks ? markInUs : undefined,
+      currentMarks ? markOutUs : undefined,
+    );
+  if (!range) return;
+  playback.stop();
+  setZoomPicking({ head: currentHeadKey(project), ...range });
+  renderEditTools();
+});
+zoomTarget.addEventListener("click", () => {
+  const project = activeProject,
+    zoom = zoomUnderPlayhead();
+  if (!project || !zoom || manualEditPending) return;
+  playback.stop();
+  setZoomPicking({
+    head: currentHeadKey(project),
+    startUs: zoom.startUs,
+    endUs: zoom.endUs,
+    zoom,
+  });
+  renderEditTools();
+});
+zoomScale.addEventListener("change", () => {
+  const zoom = zoomUnderPlayhead(),
+    scale = Number(zoomScale.value);
+  if (!zoom || !Number.isFinite(scale) || scale === zoom.scale) return;
+  void submitZoom(zoom, zoom, { x: zoom.centerX, y: zoom.centerY }, scale);
+});
+zoomRemove.addEventListener("click", () => {
+  const zoom = zoomUnderPlayhead();
+  if (zoom) void submitZoomRemove(zoom);
+});
+canvas.parentElement!.addEventListener("click", (event) => {
+  const picking = zoomPicking,
+    project = activeProject;
+  if (!picking || !project) return;
+  if (picking.head !== currentHeadKey(project)) {
+    setZoomPicking(undefined);
+    renderEditTools();
+    return;
+  }
+  const point = framePoint(event);
+  if (!point) return;
+  setZoomPicking(undefined);
+  void submitZoom(picking.zoom, picking, point, picking.zoom?.scale ?? 2);
 });
 undoEdit.addEventListener("click", () => void submitManualUndo());
 redoEdit.addEventListener("click", () => void submitManualRedo());
@@ -2953,7 +3580,75 @@ async function savePreferences(): Promise<void> {
     });
   }
 }
+/** Edit-step shortcuts act through their buttons, so the same guards apply. */
+function editShortcut(event: KeyboardEvent): boolean {
+  const target = event.target as HTMLElement | null;
+  if (
+    activeProject?.stage !== "edit" ||
+    settingsDialog.open ||
+    event.altKey ||
+    (target &&
+      (target.isContentEditable ||
+        ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) &&
+      target !== seek)
+  )
+    return false;
+  const command = event.ctrlKey || event.metaKey;
+  const key = event.key.toLowerCase();
+  const button = command
+    ? key === "z" && !event.shiftKey
+      ? undoEdit
+      : (key === "z" && event.shiftKey) || key === "y"
+        ? redoEdit
+        : undefined
+    : event.shiftKey
+      ? undefined
+      : (
+          {
+            i: markInButton,
+            o: markOutButton,
+            s: splitClip,
+            z: zoomAdd,
+          } as const
+        )[key];
+  if (!button) return false;
+  event.preventDefault();
+  if (!button.disabled && !editActions.hidden) button.click();
+  return true;
+}
 document.addEventListener("keydown", (event) => {
+  const target = event.target as HTMLElement | null;
+  if (
+    event.key === " " &&
+    !playButton.hidden &&
+    !settingsDialog.open &&
+    (target === document.body || target === canvas || target === seek)
+  ) {
+    event.preventDefault();
+    playback.toggle();
+    return;
+  }
+  if (event.key === "Escape" && zoomPicking) {
+    event.preventDefault();
+    setZoomPicking(undefined);
+    renderEditTools();
+    zoomAdd.focus();
+    return;
+  }
+  if (editShortcut(event)) return;
+  if (
+    (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !settingsDialog.open &&
+    (target === document.body || target === canvas)
+  ) {
+    const button = event.key === "ArrowLeft" ? previous : next;
+    event.preventDefault();
+    if (!button.disabled && !button.hidden) button.click();
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && event.key === ",") {
     event.preventDefault();
     void openSettings();

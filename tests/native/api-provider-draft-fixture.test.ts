@@ -19,11 +19,12 @@ import {
 } from "../../packages/media-engine/src/lossless.ts";
 import { assertInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import type { DraftTransactionRecord } from "../../packages/domain/src/draft-transaction.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 if (!executablePath?.startsWith("/home/node/"))
   throw new Error("Packaged executable must stay inside the guest");
@@ -127,7 +128,7 @@ await writeFile(
 );
 
 async function assertFrame(page: Page, frame: number): Promise<void> {
-  const actual = await page.locator("canvas").evaluate((node) => {
+  const actual = await page.locator("#frame").evaluate((node) => {
     const canvas = node as HTMLCanvasElement;
     return {
       width: canvas.width,
@@ -556,7 +557,7 @@ try {
   step = "trim-running";
   assert.equal((await thread()).status, "running");
   step = "trim-native-preview";
-  await page.locator("canvas").scrollIntoViewIfNeeded();
+  await page.locator("#frame").scrollIntoViewIfNeeded();
   const previewDeadline = Date.now() + 60000;
   let livePreviewObserved = false;
   do {

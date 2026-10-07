@@ -13,16 +13,20 @@ import {
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron, expect } from "playwright/test";
+import {
+  assertNativeTestEnvironment,
+  insideGuestWorkspace,
+} from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux", "Requires isolated Linux guest");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 const configArgument = process.argv[3];
 assert.ok(executablePath && configArgument);
 assert.ok(isAbsolute(executablePath) && isAbsolute(configArgument));
-assert.ok(executablePath.startsWith("/home/node/workspaces/"));
+assert.ok(insideGuestWorkspace(executablePath));
 const configRoot = await realpath(configArgument);
 assert.equal(configRoot, resolve(configArgument));
 const resultRoot = resolve("test-results");
@@ -98,7 +102,7 @@ try {
     await expect(page.locator("#codex-login")).toBeHidden();
     await expect(page.locator("#codex-logout")).toBeVisible();
     await expect(page.locator("#codex-account")).toHaveText(
-      `ChatGPT · ${state.plan ?? "Signed in"}`,
+      `ChatGPT · ${state.plan ? state.plan.charAt(0).toUpperCase() + state.plan.slice(1) : "Signed in"}`,
     );
     await expect(page.locator("#codex-model-settings")).toBeVisible();
     assert.ok(state.selection, "No runtime-validated model selection");

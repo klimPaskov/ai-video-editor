@@ -29,7 +29,7 @@ def validate_record(result, root: Path):
     if datetime.fromisoformat(result['ended_at'].replace('Z', '+00:00')) < datetime.fromisoformat(result['started_at'].replace('Z', '+00:00')):
         raise ValueError('Phase end precedes start')
     phase = result['phase_id']
-    expected = set(re.findall(r'\b' + phase + r'-\d{2}\b', (root / 'TASKS.md').read_text(encoding='utf-8')))
+    expected = set(re.findall(r'\b' + phase + r'-\d{2}\b', (root / 'docs/development/TASKS.md').read_text(encoding='utf-8')))
     if not expected or set(result['task_ids']) != expected:
         raise ValueError('Result must cover exactly all phase task IDs')
     if not result.get('spec_sync'):

@@ -29,6 +29,45 @@ import {
 } from "../../../packages/domain/src/transcription.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import {
+  assertMagicWandProjectRequest,
+  assertMagicWandStartRequest,
+  assertMagicWandView,
+} from "../../../packages/domain/src/magic-wand-view.ts";
+import {
+  assertCaptionSettings,
+  assertCaptionSettingsRequest,
+  assertCaptionSettingsUpdate,
+} from "../../../packages/domain/src/captions.ts";
+import {
+  assertAudioSettings,
+  assertAudioSettingsRequest,
+  assertAudioSettingsUpdate,
+} from "../../../packages/domain/src/audio-settings.ts";
+import {
+  assertShortClipRequest,
+  assertShortClipsView,
+  assertShortExportRequest,
+  assertShortProjectRequest,
+} from "../../../packages/domain/src/short-clips-view.ts";
+import {
+  assertPlaybackProjectRequest,
+  assertPlaybackView,
+} from "../../../packages/domain/src/playback-view.ts";
+import {
+  assertRecordingDevices,
+  assertRecordingStartRequest,
+  assertRecordingRegionRequest,
+  assertInterruptedTakes,
+  assertInterruptedTakeRequest,
+  assertRecordingRegionResult,
+  assertRecordingView,
+} from "../../../packages/domain/src/recording-view.ts";
+import {
+  assertExportProjectRequest,
+  assertExportStartRequest,
+  assertExportView,
+} from "../../../packages/domain/src/export-view.ts";
+import {
   assertProjectDraftView,
   assertProjectDraftIntegrityView,
   assertProjectFrameRequest,
@@ -36,6 +75,9 @@ import {
   assertManualTrimRequest,
   assertManualSplitRequest,
   assertManualRangeCutRequest,
+  assertManualZoomRequest,
+  assertManualZoomRemoveRequest,
+  assertManualSpeedRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualTranscriptCutRequest,
@@ -52,6 +94,8 @@ import { channels } from "./bridge.ts";
 import type { DesktopBridge, Reply } from "./bridge.ts";
 import {
   assertFrameRequest,
+  assertThumbnail,
+  assertThumbnailRequest,
   assertMediaFrame,
   assertMediaList,
   assertMediaSummary,
@@ -162,8 +206,6 @@ const bridge: DesktopBridge = {
   checkClaude: () => invoke(channels.claudeCheck, undefined, assertClaudeView),
   signInClaude: () =>
     invoke(channels.claudeSignIn, undefined, assertClaudeView),
-  openClaudeSignInPage: () =>
-    invoke(channels.claudeOpenSignIn, undefined, assertClaudeView),
   cancelClaudeSignIn: () =>
     invoke(channels.claudeCancelSignIn, undefined, assertClaudeView),
   signOutClaude: () =>
@@ -233,6 +275,140 @@ const bridge: DesktopBridge = {
       request,
       assertCodexThreadView,
     );
+  },
+  getPlayback: (request) => {
+    assertPlaybackProjectRequest(request);
+    return invoke(channels.playbackGet, request, assertPlaybackView);
+  },
+  applyManualSpeed: (request) => {
+    assertManualSpeedRequest(request);
+    return invoke(channels.projectManualSpeed, request, assertProjectDraftView);
+  },
+  applyManualZoom: (request) => {
+    assertManualZoomRequest(request);
+    return invoke(channels.projectManualZoom, request, assertProjectDraftView);
+  },
+  removeManualZoom: (request) => {
+    assertManualZoomRemoveRequest(request);
+    return invoke(
+      channels.projectManualZoomRemove,
+      request,
+      assertProjectDraftView,
+    );
+  },
+  getAudioSettings: (request) => {
+    assertAudioSettingsRequest(request);
+    return invoke(channels.audioGet, request, assertAudioSettings);
+  },
+  setAudioSettings: (request) => {
+    assertAudioSettingsUpdate(request);
+    return invoke(channels.audioSet, request, assertAudioSettings);
+  },
+  getShortClips: (request) => {
+    assertShortProjectRequest(request);
+    return invoke(channels.shortsGet, request, assertShortClipsView);
+  },
+  findShortClips: (request) => {
+    assertShortProjectRequest(request);
+    return invoke(channels.shortsFind, request, assertShortClipsView);
+  },
+  discardShortClip: (request) => {
+    assertShortClipRequest(request);
+    return invoke(channels.shortsDiscard, request, assertShortClipsView);
+  },
+  exportShortClip: (request) => {
+    assertShortExportRequest(request);
+    return invoke(channels.shortsExport, request, assertShortClipsView);
+  },
+  cancelShortClip: (request) => {
+    assertShortProjectRequest(request);
+    return invoke(channels.shortsCancel, request, assertShortClipsView);
+  },
+  getCaptionSettings: (request) => {
+    assertCaptionSettingsRequest(request);
+    return invoke(channels.captionsGet, request, assertCaptionSettings);
+  },
+  setCaptionSettings: (request) => {
+    assertCaptionSettingsUpdate(request);
+    return invoke(channels.captionsSet, request, assertCaptionSettings);
+  },
+  getRecordingDevices: () =>
+    invoke(channels.recordingDevices, undefined, assertRecordingDevices),
+  getRecording: () =>
+    invoke(channels.recordingGet, undefined, assertRecordingView),
+  getInterruptedRecordings: () =>
+    invoke(channels.recordingInterrupted, undefined, assertInterruptedTakes),
+  recoverRecording: (request) => {
+    assertInterruptedTakeRequest(request);
+    return invoke(channels.recordingRecover, request, assertRecordingView);
+  },
+  discardInterruptedRecording: (request) => {
+    assertInterruptedTakeRequest(request);
+    return invoke(
+      channels.recordingDiscardInterrupted,
+      request,
+      assertInterruptedTakes,
+    );
+  },
+  pickRecordingRegion: (request) => {
+    assertRecordingRegionRequest(request);
+    return invoke(
+      channels.recordingPickRegion,
+      request,
+      assertRecordingRegionResult,
+    );
+  },
+  startRecording: (request) => {
+    assertRecordingStartRequest(request);
+    return invoke(channels.recordingStart, request, assertRecordingView);
+  },
+  pauseRecording: () =>
+    invoke(channels.recordingPause, undefined, assertRecordingView),
+  resumeRecording: () =>
+    invoke(channels.recordingResume, undefined, assertRecordingView),
+  stopRecording: () =>
+    invoke(channels.recordingStop, undefined, assertRecordingView),
+  cancelRecording: () =>
+    invoke(channels.recordingCancel, undefined, assertRecordingView),
+  getMagicWand: (request) => {
+    assertMagicWandProjectRequest(request);
+    return invoke(channels.magicGet, request, assertMagicWandView);
+  },
+  startMagicWand: (request) => {
+    assertMagicWandStartRequest(request);
+    return invoke(channels.magicStart, request, assertMagicWandView);
+  },
+  stopMagicWand: (request) => {
+    assertMagicWandProjectRequest(request);
+    return invoke(channels.magicStop, request, assertMagicWandView);
+  },
+  getExport: (request) => {
+    assertExportProjectRequest(request);
+    return invoke(channels.exportGet, request, assertExportView);
+  },
+  startExport: (request) => {
+    assertExportStartRequest(request);
+    return invoke(channels.exportStart, request, assertExportView);
+  },
+  cancelExport: (request) => {
+    assertExportProjectRequest(request);
+    return invoke(channels.exportCancel, request, assertExportView);
+  },
+  resetExport: (request) => {
+    assertExportProjectRequest(request);
+    return invoke(channels.exportReset, request, assertExportView);
+  },
+  revealExport: (request) => {
+    assertExportProjectRequest(request);
+    return invoke(channels.exportReveal, request, (value) => {
+      if (value !== null) throw new Error("Invalid export response");
+    });
+  },
+  openExport: (request) => {
+    assertExportProjectRequest(request);
+    return invoke(channels.exportOpen, request, (value) => {
+      if (value !== null) throw new Error("Invalid export response");
+    });
   },
   listProjects: () =>
     invoke(channels.projectList, undefined, assertProjectList),
@@ -342,6 +518,10 @@ const bridge: DesktopBridge = {
   readFrame: (request) => {
     assertFrameRequest(request);
     return invoke(channels.frame, request, assertMediaFrame);
+  },
+  readThumbnail: (request) => {
+    assertThumbnailRequest(request);
+    return invoke(channels.thumbnail, request, assertThumbnail);
   },
   cancelImport: () =>
     invoke(channels.cancel, undefined, (value) => {

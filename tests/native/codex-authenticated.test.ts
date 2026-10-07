@@ -23,11 +23,12 @@ import {
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { ProjectStore } from "../../packages/project-store/src/store.ts";
 import { DraftTransactionStore } from "../../packages/project-store/src/transactions.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux", "Requires isolated Linux guest");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 
 async function appServerChildren(parentPid: number, appExecutable: string) {
   const runtimeExecutable = await realpath(
@@ -134,7 +135,7 @@ for (let frame = 0; frame < 3; frame++)
             256;
   }
 async function assertCanvasFrame(page: Page, frame: number): Promise<void> {
-  const actual = await page.locator("canvas").evaluate((node) => {
+  const actual = await page.locator("#frame").evaluate((node) => {
     const canvas = node as HTMLCanvasElement;
     return {
       width: canvas.width,
@@ -155,7 +156,12 @@ async function assertCanvasFrame(page: Page, frame: number): Promise<void> {
     expected[i] = expected[i + 2]!;
     expected[i + 2] = blue;
   }
-  assert.deepEqual(Buffer.from(actual.pixels), expected);
+  // Buffer.equals avoids assert's diff rendering, which takes tens of seconds
+  // for a mismatched frame and stalls polls that run during a live turn.
+  assert.ok(
+    Buffer.from(actual.pixels).equals(expected),
+    `Canvas does not show frame ${frame}`,
+  );
 }
 const audio = Buffer.alloc(72_000 * 2);
 for (let i = 0; i < 72_000; i++)
@@ -702,6 +708,32 @@ try {
       intervals: [100],
     })
     .toBe("running");
+  mark("read-only-turn-blocks-project-switch");
+  // While a turn runs, its project must keep focus: creating another project
+  // would otherwise redirect the turn's tools to a different draft.
+  const projectsBeforeSwitch = await page.evaluate(() =>
+    window.desktop.listProjects(),
+  );
+  const media = await page.evaluate(() => window.desktop.listMedia());
+  assert.ok(projectsBeforeSwitch.ok && media.ok && media.value.length > 0);
+  const switched = await page.evaluate(
+    (id) => window.desktop.createProject({ id }),
+    media.value[0]!.id,
+  );
+  assert.equal(switched.ok, false);
+  if (!switched.ok)
+    assert.equal(
+      switched.message,
+      "Stop the running Codex turn before leaving this project.",
+    );
+  const projectsAfterSwitch = await page.evaluate(() =>
+    window.desktop.listProjects(),
+  );
+  assert.ok(projectsAfterSwitch.ok);
+  assert.equal(
+    projectsAfterSwitch.value.length,
+    projectsBeforeSwitch.value.length,
+  );
   mark("read-only-turn-stop");
   await page.locator("#interrupt-codex-thread").click();
   await expect

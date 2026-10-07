@@ -32,6 +32,8 @@ Prefer click and pointer telemetry. Use scene markers and visible UI changes nex
 - pitch-safe audio mode
 - direct block and multiplier editing
 
+Assistants can already apply user-directed zooms and speed-ups through the guarded `zoom.set`, `zoom.remove` and `speed.set` tools (docs/30). They reuse the manual semantics; automatic target and range detection is still unimplemented, and any detector must commit through those same transactions.
+
 ## QA
 
 Render proof frames and short previews. Check purpose, target, edges, text readability, motion, range, frequency, duration, A/V sync, and speech continuity.

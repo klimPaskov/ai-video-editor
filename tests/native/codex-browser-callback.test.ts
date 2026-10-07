@@ -12,13 +12,17 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron, expect } from "playwright/test";
+import {
+  assertNativeTestEnvironment,
+  insideGuestWorkspace,
+} from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux", "Requires isolated Linux guest");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await readFile("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
-if (!executablePath?.startsWith("/home/node/workspaces/"))
+if (!insideGuestWorkspace(executablePath))
   throw new Error("Packaged executable must be inside the isolated guest");
 const evidenceRoot = resolve("test-results");
 await mkdir(evidenceRoot, { recursive: true });
