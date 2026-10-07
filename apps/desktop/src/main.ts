@@ -81,8 +81,9 @@ import {
   shell,
 } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
-import { existsSync, mkdirSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { createReadStream, existsSync, mkdirSync } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
+import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { channels, assertEmptyRequest } from "./bridge.ts";
@@ -125,6 +126,13 @@ let claude: DesktopClaude | undefined;
 let claudeBroker: CodexMcpBroker | undefined;
 let transcription: DesktopTranscriptionManager | undefined;
 let exports: DesktopExports | undefined;
+/** Resolves a playable source of the active project; set once services start. */
+let resolvePlaybackSource:
+  | ((
+      projectId: string,
+      sourceId: string,
+    ) => Promise<{ path: string; mime: string } | null>)
+  | undefined;
 let servicesClosed = false;
 app.on("before-quit", (event) => {
   quitting = true;
@@ -164,7 +172,13 @@ app.enableSandbox();
 protocol.registerSchemesAsPrivileged([
   {
     scheme: appIdentity.urlScheme,
-    privileges: { standard: true, secure: true, supportFetchAPI: true },
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      // Range requests let the preview <video> seek inside a source.
+      stream: true,
+    },
   },
 ]);
 
@@ -198,6 +212,55 @@ function register(
   });
 }
 
+/**
+ * Streams an immutable source of the active project to the preview player,
+ * with byte ranges. Nothing outside the project's managed sources is served.
+ */
+async function servePlaybackSource(
+  projectId: string,
+  sourceId: string,
+  request: Request,
+): Promise<Response> {
+  const notFound = () => new Response("Not found", { status: 404 });
+  const resolved = await resolvePlaybackSource?.(projectId, sourceId).catch(
+    () => null,
+  );
+  if (!resolved) return notFound();
+  let size: number;
+  try {
+    const info = await stat(resolved.path);
+    if (!info.isFile()) return notFound();
+    size = info.size;
+  } catch {
+    return notFound();
+  }
+  const range = /^bytes=(\d*)-(\d*)$/u.exec(request.headers.get("range") ?? "");
+  let start = 0;
+  let end = size - 1;
+  if (range && (range[1] || range[2])) {
+    if (range[1]) {
+      start = Number(range[1]);
+      if (range[2]) end = Math.min(size - 1, Number(range[2]));
+    } else start = Math.max(0, size - Number(range[2]));
+    if (!Number.isSafeInteger(start) || start > end || start >= size)
+      return new Response(null, {
+        status: 416,
+        headers: { "Content-Range": `bytes */${size}` },
+      });
+  }
+  const stream = createReadStream(resolved.path, { start, end });
+  return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, {
+    status: range ? 206 : 200,
+    headers: {
+      "Content-Type": resolved.mime,
+      "Content-Length": String(end - start + 1),
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "no-store",
+      ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}),
+    },
+  });
+}
+
 async function start(): Promise<void> {
   const files = new Map([
     ["/index.html", ["index.html", "text/html; charset=utf-8"]],
@@ -217,6 +280,12 @@ async function start(): Promise<void> {
   }
   protocol.handle(appIdentity.urlScheme, async (request) => {
     const url = new URL(request.url);
+    const media =
+      /^\/media\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})$/u.exec(
+        url.pathname,
+      );
+    if (media && url.host === "app" && !url.search && request.method === "GET")
+      return servePlaybackSource(media[1]!, media[2]!, request);
     const asset = assets.get(url.pathname);
     if (request.method !== "GET" || url.host !== "app" || url.search || !asset)
       return new Response("Not found", { status: 404 });
@@ -224,7 +293,7 @@ async function start(): Promise<void> {
       headers: {
         "Content-Type": asset.mime,
         "Content-Security-Policy":
-          "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'",
+          "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'",
       },
     });
   });
@@ -282,6 +351,29 @@ async function start(): Promise<void> {
       if (failure) throw new UserFacingError("The video could not be opened.");
     },
   });
+  resolvePlaybackSource = async (projectId, sourceId) => {
+    if (activeProjectId !== projectId) return null;
+    const { project } = await drafts.snapshotWithProject(projectId);
+    const sources =
+      project.schema_version === "1.1" ? project.sources : [project.source];
+    const probes =
+      project.schema_version === "1.1"
+        ? project.source_probes
+        : [project.source_probe];
+    const index = sources.findIndex((source) => source.source_id === sourceId);
+    if (index < 0) return null;
+    const format = (probes[index] as { format?: { format_name?: unknown } })
+      .format?.format_name;
+    const name = typeof format === "string" ? format : "";
+    const mime = name.includes("mp4")
+      ? "video/mp4"
+      : name.includes("webm")
+        ? "video/webm"
+        : name.includes("matroska")
+          ? "video/x-matroska"
+          : "application/octet-stream";
+    return { path: sources[index]!.managed_path, mime };
+  };
   const activeExportProject = (projectId: string) => {
     if (activeProjectId !== projectId)
       throw new UserFacingError("Open this project before exporting.");

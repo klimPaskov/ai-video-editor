@@ -46,3 +46,9 @@ Keep concise structured diagnostics and the last failed staging artifact when it
 - No silent fallback to a low-precision compositor or encoded proxy
 
 See `docs/44_LOSSLESS_MEDIA_POLICY.md` for the capture-to-master fidelity boundary and exact decoded comparison tests.
+
+## Draft playback (2026-10-07)
+
+`apps/desktop/renderer/playback.ts` plays the committed draft. Main serves an active project's managed source at `ai-video-editor://app/media/<project>/<source>` with byte ranges; nothing else is served and the renderer's CSP allows media from the app only, with no `connect-src`. Two `<video>` elements alternate: one plays the current clip while the other waits at the next clip's first frame, and a frame callback swaps them at the clip's last frame. Joins can be one frame early or late in preview; export is exact. Play/Pause sits between the frame-step controls, Space toggles it when focus is on the preview or position control, and stopping returns to the exact still frame. Any draft change, stage change, seek or leaving the project stops playback. A source Chromium cannot decode shows a fixed message and keeps frame preview.
+
+Evidence: `tests/native/playback.test.ts` cuts the second of a red/green/blue/yellow source in the packaged app and plays across the cut: the visible frames were red, blue, yellow and never green, audio bytes were decoded, playback stopped at the end on the still frame, Pause kept the position and Space toggled; the media route returned 206 for the project's source and 404 for other paths. Not covered: audio listening, playback proxies for undecodable sources, sustained 4K throughput.

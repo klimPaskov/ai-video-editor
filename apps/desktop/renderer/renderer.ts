@@ -1,6 +1,7 @@
 import { setupCodexSettings } from "./codex-settings.ts";
 import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { setupExportPanel } from "./export-panel.ts";
+import { setupPlayback } from "./playback.ts";
 import { reconcileProjectDraft } from "./project-draft.ts";
 import { pollTranscriptionView } from "./transcription-state.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
@@ -1288,6 +1289,7 @@ function renderEditTools(): void {
   restoreError.hidden = !restoreRangeOpen || !restoreError.textContent;
 }
 async function navigate(stage: ProjectStage): Promise<void> {
+  playback.stop();
   if (
     !activeProject ||
     navigating ||
@@ -1511,6 +1513,7 @@ async function loadLibrary(): Promise<void> {
   }
 }
 function select(media: MediaSummary): void {
+  playback.stop();
   selected = media;
   selectedButton =
     document.querySelector<HTMLButtonElement>(
@@ -1558,6 +1561,7 @@ function select(media: MediaSummary): void {
   message.textContent =
     "This video's format does not have a verified preview yet. Its original file has been preserved.";
   element("frame-controls").hidden = !media.previewAvailable;
+  playButton.hidden = !activeProject || !media.previewAvailable;
   if (media.previewAvailable) requestFrame(0);
   back.focus();
 }
@@ -1733,6 +1737,7 @@ element("cancel").addEventListener("click", () => {
 });
 back.addEventListener("click", async () => {
   if (manualEditPending) return;
+  playback.stop();
   const previousProject = activeProject?.id;
   back.disabled = true;
   if (previousProject) {
@@ -1786,13 +1791,42 @@ back.addEventListener("click", async () => {
       showError("Home could not be refreshed. Try reopening the application."),
     );
 });
-seek.addEventListener("input", () => requestFrame(Number(seek.value)));
+seek.addEventListener("input", () => {
+  const value = Number(seek.value);
+  playback.stop();
+  requestFrame(value);
+});
 previous.addEventListener("click", () => {
-  if (selected) requestFrame(Number(seek.value) - frameInterval());
+  const value = Number(seek.value);
+  playback.stop();
+  if (selected) requestFrame(value - frameInterval());
 });
 next.addEventListener("click", () => {
-  if (selected) requestFrame(Number(seek.value) + frameInterval());
+  const value = Number(seek.value);
+  playback.stop();
+  if (selected) requestFrame(value + frameInterval());
 });
+const playButton = element<HTMLButtonElement>("play");
+const playback = setupPlayback({
+  container: canvas.parentElement!,
+  canvas,
+  project: () => activeProject,
+  position: () => Number(seek.value),
+  show: (us) => {
+    seek.value = String(Math.min(Number(seek.max), Math.max(0, us)));
+    element("time").textContent = time(us);
+    previous.disabled = us <= 0;
+    next.disabled = us >= Number(seek.max);
+  },
+  stopped: (us) => requestFrame(us),
+  changed: (playing) => {
+    playButton.textContent = playing ? "❚❚" : "▶";
+    playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
+    playButton.setAttribute("aria-pressed", String(playing));
+  },
+  failed: (message) => showError(message),
+});
+playButton.addEventListener("click", () => playback.toggle());
 function frameInterval(): number {
   return activeProject
     ? (1_000_000 * activeProject.timeline.frameRate.denominator) /
@@ -1804,6 +1838,11 @@ function applyProjectDraft(
   preferredPositionUs = Number(seek.value),
 ): void {
   if (!activeProject) return;
+  // A changed draft invalidates the clip list being played.
+  if (playback.playing()) {
+    preferredPositionUs = Number(seek.value);
+    playback.stop();
+  }
   if (!reply.ok) {
     showError(reply.message);
     return;
@@ -2962,6 +3001,17 @@ async function savePreferences(): Promise<void> {
   }
 }
 document.addEventListener("keydown", (event) => {
+  const target = event.target as HTMLElement | null;
+  if (
+    event.key === " " &&
+    !playButton.hidden &&
+    !settingsDialog.open &&
+    (target === document.body || target === canvas || target === seek)
+  ) {
+    event.preventDefault();
+    playback.toggle();
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && event.key === ",") {
     event.preventDefault();
     void openSettings();
