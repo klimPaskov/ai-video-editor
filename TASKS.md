@@ -171,8 +171,8 @@ Acceptance: a composed segment renders with licensed local assets and clear spee
 - [ ] P9-01 Implement review flags, compare, revision history, and final watch-through state.
 - [ ] P9-02 Run complete media, timing, audio, caption, asset, zoom, speed, and visual QA. Include whole-video analysis scans, precise A/V checks, protected-range preservation and actual measured editorial counts/checkpoint status.
   Partial Review evidence: a packaged native Review action provides a structural draft/source integrity check bound to the returned committed head and records a separate evidence-backed structural checkpoint for an eligible current manual group. It has fixed failure and recovery when a managed-source hash is invalid. It does not perform whole-video scans, playback, semantic speech checks, audio review, or final QA.
-- [ ] P9-03 Implement the default FFV1/PCM lossless master, exact decoded-sample validation, caption sidecars, and an explicitly chosen smaller MP4 export.
-- [ ] P9-04 Verify output hash and full decode before success.
+- [ ] P9-03 Implement the default FFV1/PCM lossless master, exact decoded-sample validation, caption sidecars, and an explicitly chosen smaller MP4 export. Implemented except caption sidecars (docs/18): verified FFV1/PCM master and explicit MP4 through the Export step, unit and packaged native tests passing.
+- [x] P9-04 Verify output hash and full decode before success. Every export is probed and fully decoded in staging; a master must reproduce the rendered frame and sample hashes, and the output hash is recorded before the file is published (docs/18, `tests/media/export-render.test.ts`, `tests/native/export.test.ts`).
 - [ ] P9-05 Build a Windows installer, clean uninstall, and update plan.
 - [ ] P9-06 Run security, privacy, accessibility, recovery, and performance checks.
 

@@ -1,0 +1,27 @@
+{
+  "channel": "export:get",
+  "payload": {
+    "schema_version": "1.0",
+    "project_id": "8a3f6d6e-1c2b-4c55-9f0e-2d7a4b1c9e10"
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "status": "completed",
+      "projectId": "8a3f6d6e-1c2b-4c55-9f0e-2d7a4b1c9e10",
+      "profile": "lossless_master",
+      "phase": null,
+      "fraction": null,
+      "result": {
+        "fileName": "Talk master.mkv",
+        "profile": "lossless_master",
+        "durationUs": 4466666,
+        "frameCount": 134,
+        "outputBytes": 3250112,
+        "samplesEqual": true,
+        "draftSequence": 1
+      },
+      "message": null
+    }
+  }
+}

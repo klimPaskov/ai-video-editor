@@ -398,6 +398,39 @@ class DesktopIpcContractTests(unittest.TestCase):
         bad_checkpoint['response']['value']['structuralCheckpointRecorded'] = 'yes'
         self.invalid(bad_checkpoint)
 
+    def test_export_channels_expose_file_names_only(self):
+        example = json.loads(
+            (ROOT / 'docs/examples/desktop_ipc_export.example.json').read_text(encoding='utf-8')
+        )
+        self.valid(example)
+        for name in ['/home/user/Talk.mkv', 'C:\\Videos\\Talk.mkv', 'Talk.mov']:
+            leaked = deepcopy(example)
+            leaked['response']['value']['result']['fileName'] = name
+            self.invalid(leaked)
+        extra = deepcopy(example)
+        extra['response']['value']['outputPath'] = '/home/user/Talk.mkv'
+        self.invalid(extra)
+        raw = deepcopy(example)
+        raw['response']['value']['message'] = 'ffmpeg exited with code 1'
+        self.invalid(raw)
+        running = deepcopy(example)
+        running['response']['value'].update(status='running', phase='rendering', fraction=0.25, result=None)
+        self.valid(running)
+        running['response']['value']['fraction'] = 1.5
+        self.invalid(running)
+        self.valid({'channel': 'export:start',
+                    'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'profile': 'smaller_mp4'},
+                    'response': {'ok': True, 'value': running['response']['value'] | {'fraction': 0.0}}})
+        self.invalid({'channel': 'export:start',
+                      'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'profile': 'prores'},
+                      'response': {'ok': True, 'value': example['response']['value']}})
+        self.invalid({'channel': 'export:start',
+                      'payload': {'schema_version': '1.0', 'project_id': 'project-1',
+                                  'profile': 'lossless_master', 'path': '/tmp/out.mkv'},
+                      'response': {'ok': True, 'value': example['response']['value']}})
+        self.valid({'channel': 'export:reveal', 'payload': {'schema_version': '1.0', 'project_id': 'project-1'},
+                    'response': {'ok': True, 'value': None}})
+
     def test_claude_channels_expose_no_credentials_paths_or_prices(self):
         thread = json.loads(
             (ROOT / 'docs/examples/desktop_ipc_claude.example.json').read_text(encoding='utf-8')

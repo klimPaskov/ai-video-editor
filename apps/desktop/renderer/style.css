@@ -948,3 +948,51 @@ select:focus-visible {
 #api-provider-error {
   color: #ffb4b4;
 }
+#export-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+}
+#export-actions[hidden],
+#export-actions [hidden] {
+  display: none;
+}
+.export-setup,
+.export-running,
+.export-done {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+#export-profile-note,
+#export-result,
+#export-phase {
+  flex-basis: 100%;
+  margin: 0;
+  color: #b6bac8;
+  font-size: 13px;
+  text-align: center;
+}
+#export-progress {
+  flex: 1 1 320px;
+  max-width: 480px;
+}
+#export-error {
+  max-width: 680px;
+  margin: 0;
+  color: #ed9b9b;
+  font-size: 13px;
+  text-align: center;
+}
+#export-profile {
+  width: auto;
+  min-width: 180px;
+}

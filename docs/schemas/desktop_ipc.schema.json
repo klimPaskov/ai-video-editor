@@ -9,6 +9,133 @@
       "additionalProperties": false,
       "required": [
         "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "enum": [
+            "export:get",
+            "export:cancel",
+            "export:reset"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/exportProjectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/exportView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "export:start"
+        },
+        "payload": {
+          "$ref": "#/$defs/exportStartRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/exportView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "enum": [
+            "export:reveal",
+            "export:open"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/exportProjectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "type": "null"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
         "response"
       ],
       "properties": {
@@ -1548,6 +1675,191 @@
     }
   ],
   "$defs": {
+    "exportProjectRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      }
+    },
+    "exportStartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "profile"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "profile": {
+          "enum": [
+            "lossless_master",
+            "smaller_mp4"
+          ]
+        }
+      }
+    },
+    "exportView": {
+      "type": "object",
+      "description": "Path-free export state. Main owns the destination; the renderer sees only the file name and verified result.",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "projectId",
+        "profile",
+        "phase",
+        "fraction",
+        "result",
+        "message"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "idle",
+            "running",
+            "cancelling",
+            "completed",
+            "failed"
+          ]
+        },
+        "projectId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile": {
+          "enum": [
+            "lossless_master",
+            "smaller_mp4",
+            null
+          ]
+        },
+        "phase": {
+          "enum": [
+            "rendering",
+            "verifying",
+            null
+          ]
+        },
+        "fraction": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "fileName",
+                "profile",
+                "durationUs",
+                "frameCount",
+                "outputBytes",
+                "samplesEqual",
+                "draftSequence"
+              ],
+              "properties": {
+                "fileName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[^\\\\/:\\u0000-\\u001f\\u007f]+\\.(mkv|mp4|MKV|MP4)$"
+                },
+                "profile": {
+                  "enum": [
+                    "lossless_master",
+                    "smaller_mp4"
+                  ]
+                },
+                "durationUs": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "frameCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "outputBytes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "samplesEqual": {
+                  "type": "boolean"
+                },
+                "draftSequence": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "message": {
+          "enum": [
+            null,
+            "Another export is running. Wait for it or cancel it first.",
+            "Open this project before exporting.",
+            "The export could not be completed. Your project is unchanged.",
+            "The exported file did not match the edited draft, so it was not saved.",
+            "Export cancelled. No file was saved.",
+            "The export finished but its record could not be saved. The file is in place.",
+            "FFmpeg is needed to export. Install FFmpeg and try again.",
+            "This video's pixel format cannot be exported losslessly yet.",
+            "This video's dimensions cannot be exported.",
+            "Non-square pixels cannot be exported yet.",
+            "Interlaced video cannot be exported yet.",
+            "Rotated video cannot be exported yet.",
+            "Variable frame rate video cannot be exported yet.",
+            "This video's frame timing cannot be verified.",
+            "This audio format cannot be exported losslessly yet.",
+            "Audio that starts after the video cannot be exported yet.",
+            "This audio channel layout cannot be exported yet.",
+            "These sources use different video or audio formats. Exporting them together needs a conversion that is not available yet.",
+            "This draft has no exportable clips.",
+            "This draft has no exportable frames.",
+            "A clip has an invalid source range.",
+            "A clip refers to an unknown source.",
+            "This source has no video stream.",
+            "This source cannot be read."
+          ]
+        }
+      }
+    },
     "summary": {
       "type": "object",
       "additionalProperties": false,

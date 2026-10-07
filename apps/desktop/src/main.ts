@@ -98,6 +98,13 @@ import {
   assertCodexThreadView,
 } from "../../../packages/domain/src/codex-thread-view.ts";
 import { MediaLibrary } from "../../../packages/media-engine/src/library.ts";
+import { MediaError } from "../../../packages/media-engine/src/process.ts";
+import {
+  assertExportProjectRequest,
+  assertExportStartRequest,
+  assertExportView,
+} from "../../../packages/domain/src/export-view.ts";
+import { DesktopExports } from "./export.ts";
 import {
   DesktopProjectRuntime,
   committedDraftView,
@@ -117,12 +124,13 @@ let mcpBroker: CodexMcpBroker | undefined;
 let claude: DesktopClaude | undefined;
 let claudeBroker: CodexMcpBroker | undefined;
 let transcription: DesktopTranscriptionManager | undefined;
+let exports: DesktopExports | undefined;
 let servicesClosed = false;
 app.on("before-quit", (event) => {
   quitting = true;
   if (
     !servicesClosed &&
-    (codex || mcpBroker || claude || claudeBroker || transcription)
+    (codex || mcpBroker || claude || claudeBroker || transcription || exports)
   ) {
     event.preventDefault();
     void Promise.allSettled([
@@ -132,6 +140,7 @@ app.on("before-quit", (event) => {
         .then(() => claude?.close())
         .then(() => claudeBroker?.close()),
       Promise.resolve().then(() => transcription?.close()),
+      Promise.resolve().then(() => exports?.close()),
     ]).then(() => {
       servicesClosed = true;
       app.quit();
@@ -250,6 +259,74 @@ async function start(): Promise<void> {
   const projects = new ProjectStore(projectRoot, library);
   const drafts = new DraftTransactionStore(projectRoot, projects);
   const projectRuntime = new DesktopProjectRuntime(drafts, library);
+  exports = new DesktopExports({
+    drafts,
+    recordRoot: path.join(userData, "exports"),
+    defaultDirectory: () => app.getPath("videos"),
+    chooseDestination: async ({ defaultPath, profile }) => {
+      if (!window) return null;
+      const lossless = profile === "lossless_master";
+      const chosen = await dialog.showSaveDialog(window, {
+        title: lossless ? "Export lossless master" : "Export smaller file",
+        defaultPath,
+        filters: lossless
+          ? [{ name: "Matroska video (lossless)", extensions: ["mkv"] }]
+          : [{ name: "MP4 video", extensions: ["mp4"] }],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      });
+      return chosen.canceled || !chosen.filePath ? null : chosen.filePath;
+    },
+    showInFolder: (file) => shell.showItemInFolder(file),
+    openFile: async (file) => {
+      const failure = await shell.openPath(file);
+      if (failure) throw new UserFacingError("The video could not be opened.");
+    },
+  });
+  const activeExportProject = (projectId: string) => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before exporting.");
+  };
+  register(channels.exportGet, async (request) => {
+    assertExportProjectRequest(request);
+    activeExportProject(request.project_id);
+    const value = exports!.get(request.project_id);
+    assertExportView(value);
+    return value;
+  });
+  register(channels.exportStart, async (request) => {
+    assertExportStartRequest(request);
+    activeExportProject(request.project_id);
+    try {
+      const value = await exports!.start(request.project_id, request.profile);
+      assertExportView(value);
+      return value;
+    } catch (error) {
+      if (error instanceof MediaError) throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.exportCancel, async (request) => {
+    assertExportProjectRequest(request);
+    const value = exports!.cancel(request.project_id);
+    assertExportView(value);
+    return value;
+  });
+  register(channels.exportReset, async (request) => {
+    assertExportProjectRequest(request);
+    const value = exports!.reset(request.project_id);
+    assertExportView(value);
+    return value;
+  });
+  register(channels.exportReveal, async (request) => {
+    assertExportProjectRequest(request);
+    exports!.reveal(request.project_id);
+    return null;
+  });
+  register(channels.exportOpen, async (request) => {
+    assertExportProjectRequest(request);
+    await exports!.openResult(request.project_id);
+    return null;
+  });
   transcription = new DesktopTranscriptionManager({
     projects,
     library,
@@ -506,6 +583,10 @@ async function start(): Promise<void> {
   // A project with running work cannot lose focus: its turn's tools would
   // otherwise resolve against another project's draft.
   const assertProjectIdle = async (projectId: string): Promise<void> => {
+    if (exports!.busy(projectId))
+      throw new UserFacingError(
+        "Wait for the export to finish or cancel it before leaving this project.",
+      );
     if (transcription!.isRunning(projectId))
       throw new UserFacingError(
         "Stop local transcription before closing this project.",

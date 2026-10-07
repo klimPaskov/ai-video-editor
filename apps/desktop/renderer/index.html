@@ -298,6 +298,38 @@
             <p id="draft-integrity-result" role="status" hidden></p>
             <p id="draft-integrity-error" role="alert" hidden></p>
           </div>
+          <section id="export-actions" class="export-actions" hidden>
+            <div id="export-setup" class="export-setup">
+              <label for="export-profile">Quality</label>
+              <select id="export-profile">
+                <option value="lossless_master">Lossless master</option>
+                <option value="smaller_mp4">Smaller file</option>
+              </select>
+              <button id="export-start" class="primary" type="button">
+                Export…
+              </button>
+              <p id="export-profile-note"></p>
+            </div>
+            <div id="export-running" class="export-running" hidden>
+              <progress
+                id="export-progress"
+                max="1000"
+                value="0"
+                aria-label="Export progress"
+              ></progress>
+              <span id="export-phase" role="status"></span>
+              <button id="export-cancel" type="button">Cancel</button>
+            </div>
+            <div id="export-done" class="export-done" hidden>
+              <p id="export-result" role="status"></p>
+              <button id="export-open" class="primary" type="button">
+                Open video
+              </button>
+              <button id="export-reveal" type="button">Show in folder</button>
+              <button id="export-again" type="button">Export again</button>
+            </div>
+            <p id="export-error" role="alert" hidden></p>
+          </section>
         </div>
       </section>
       <div id="progress" role="status" hidden>

@@ -166,6 +166,8 @@ Visible:
 
 Advanced codec settings are collapsed.
 
+Implemented (2026-10-07): the Export step shows Quality (Lossless master by default, Smaller file), a one-line note about the choice and Export…; the file name and destination come from the system save dialog. While exporting it shows only progress, Rendering/Verifying and Cancel. Caption sidecars are not available yet.
+
 ## S12: export complete
 
 Visible:
@@ -173,6 +175,8 @@ Visible:
 - final thumbnail
 - filename and Open folder action, with path and technical verification under Details
 - Open video
+
+Implemented (2026-10-07): file name, duration, size and "verified lossless" for a master, with Open video, Show in folder and Export again. The final thumbnail and Details are not shown yet.
 - Open folder
 - Return to project
 

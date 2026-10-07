@@ -11,6 +11,11 @@ import type {
 } from "../../../packages/domain/src/api-providers.ts";
 import type { Preferences } from "../../../packages/domain/src/preferences.ts";
 import type {
+  ExportProjectRequest,
+  ExportStartRequest,
+  ExportView,
+} from "../../../packages/domain/src/export-view.ts";
+import type {
   ProjectDraftView,
   ProjectDraftIntegrityView,
   ProjectFrameRequest,
@@ -126,6 +131,12 @@ export interface DesktopBridge {
   interruptCodexThread(
     request: CodexThreadProjectRequest,
   ): Promise<Reply<CodexThreadView>>;
+  getExport(request: ExportProjectRequest): Promise<Reply<ExportView>>;
+  startExport(request: ExportStartRequest): Promise<Reply<ExportView>>;
+  cancelExport(request: ExportProjectRequest): Promise<Reply<ExportView>>;
+  resetExport(request: ExportProjectRequest): Promise<Reply<ExportView>>;
+  revealExport(request: ExportProjectRequest): Promise<Reply<null>>;
+  openExport(request: ExportProjectRequest): Promise<Reply<null>>;
   listProjects(): Promise<Reply<ProjectView[]>>;
   createProject(request: ProjectRequest): Promise<Reply<ProjectView>>;
   createTwoSourceProject(
@@ -169,6 +180,12 @@ export interface DesktopBridge {
   cancelImport(): Promise<Reply<null>>;
 }
 export const channels = Object.freeze({
+  exportGet: "export:get",
+  exportStart: "export:start",
+  exportCancel: "export:cancel",
+  exportReset: "export:reset",
+  exportReveal: "export:reveal",
+  exportOpen: "export:open",
   claudeGet: "claude:get",
   claudeCheck: "claude:check",
   claudeSignIn: "claude:sign-in",

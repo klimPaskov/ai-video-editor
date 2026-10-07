@@ -29,6 +29,11 @@ import {
 } from "../../../packages/domain/src/transcription.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import {
+  assertExportProjectRequest,
+  assertExportStartRequest,
+  assertExportView,
+} from "../../../packages/domain/src/export-view.ts";
+import {
   assertProjectDraftView,
   assertProjectDraftIntegrityView,
   assertProjectFrameRequest,
@@ -231,6 +236,34 @@ const bridge: DesktopBridge = {
       request,
       assertCodexThreadView,
     );
+  },
+  getExport: (request) => {
+    assertExportProjectRequest(request);
+    return invoke(channels.exportGet, request, assertExportView);
+  },
+  startExport: (request) => {
+    assertExportStartRequest(request);
+    return invoke(channels.exportStart, request, assertExportView);
+  },
+  cancelExport: (request) => {
+    assertExportProjectRequest(request);
+    return invoke(channels.exportCancel, request, assertExportView);
+  },
+  resetExport: (request) => {
+    assertExportProjectRequest(request);
+    return invoke(channels.exportReset, request, assertExportView);
+  },
+  revealExport: (request) => {
+    assertExportProjectRequest(request);
+    return invoke(channels.exportReveal, request, (value) => {
+      if (value !== null) throw new Error("Invalid export response");
+    });
+  },
+  openExport: (request) => {
+    assertExportProjectRequest(request);
+    return invoke(channels.exportOpen, request, (value) => {
+      if (value !== null) throw new Error("Invalid export response");
+    });
   },
   listProjects: () =>
     invoke(channels.projectList, undefined, assertProjectList),

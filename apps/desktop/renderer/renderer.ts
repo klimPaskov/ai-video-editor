@@ -1,5 +1,6 @@
 import { setupCodexSettings } from "./codex-settings.ts";
 import { draftIntegrityFreshness } from "./draft-integrity.ts";
+import { setupExportPanel } from "./export-panel.ts";
 import { reconcileProjectDraft } from "./project-draft.ts";
 import { pollTranscriptionView } from "./transcription-state.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
@@ -249,7 +250,14 @@ function clearDraftIntegrityResult(): void {
   draftIntegrityMessage = null;
   draftIntegrityIssue = null;
 }
+const exportPanel = setupExportPanel();
 function renderDraftIntegrityAction(): void {
+  exportPanel.render(
+    activeProject,
+    activeProject?.stage === "export" &&
+      element("inspector").hidden === true &&
+      element("codex-drawer").hidden === true,
+  );
   const project = activeProject,
     visible =
       project?.stage === "review" &&
