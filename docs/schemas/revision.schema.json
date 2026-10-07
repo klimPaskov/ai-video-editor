@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.codex-video-edit.invalid/revision.schema.json",
+  "$id": "https://schemas.ai-video-editor.invalid/revision.schema.json",
   "title": "Immutable saved revision",
   "type": "object",
   "additionalProperties": false,

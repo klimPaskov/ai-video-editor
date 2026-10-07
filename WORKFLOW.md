@@ -2,7 +2,7 @@
 
 ## 0. Onboarding
 
-The app checks its local dependencies and offers ChatGPT-managed Codex sign-in plus separate optional OpenAI API and DeepSeek key connections. It reads supported live model catalogs and explains which selected provider receives project context. API billing is separate from the ChatGPT subscription; a paid turn starts only when the user explicitly invokes it. Technical details remain collapsed.
+Required onboarding offers Claude account sign-in as the default AI connection, with retained ChatGPT-managed Codex sign-in and separate optional OpenAI API, DeepSeek and Gemini key connections. Claude integration is pending; its supported authentication/runtime design must be established before presenting a working control. It reads supported live model catalogs and explains which selected provider receives project context. API billing is separate from the ChatGPT subscription; a paid turn starts only when the user explicitly invokes it. Technical details remain collapsed.
 
 ## 1. Home
 
@@ -70,7 +70,7 @@ A project reopens at the last saved draft or revision. Autosave recovers interru
 
 ## Development loop
 
-Create the public `codex-video-edit` repository in P0 after authentication and privacy checks. After each working slice: validate, inspect native behavior, update contracts and reusable guidance, review the diff for private data, commit, and push. Keep incomplete milestones visibly incomplete. Publish release binaries only after installer and media acceptance.
+Create the public `ai-video-editor` repository in P0 after authentication and privacy checks. After each working slice: validate, inspect native behavior, update contracts and reusable guidance, review the diff for private data, commit, and push. Keep incomplete milestones visibly incomplete. Publish release binaries only after installer and media acceptance.
 
 ## Editorial first-cut policy
 

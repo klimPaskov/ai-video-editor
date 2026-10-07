@@ -20,8 +20,8 @@ def validate_runtime():
         raise RuntimeError('Guest input requires Docker or verified WSL2, Linux UID 1000, and display :99')
     if Path('/.dockerenv').is_file():
         return
-    if (os.environ.get('CODEX_VIDEO_EDIT_WSL_TEST') != '1'
-            or not os.environ.get('WSL_DISTRO_NAME', '').startswith('codex-video-edit-test')
+    if (os.environ.get('AI_VIDEO_EDITOR_WSL_TEST') != '1'
+            or not os.environ.get('WSL_DISTRO_NAME', '').endswith('-test-recovered')
             or any(os.environ.get(key) for key in
                    ('WSL_INTEROP', 'WSL2_GUI_APPS_ENABLED', 'WSLENV',
                     'WAYLAND_DISPLAY', 'PULSE_SERVER'))):

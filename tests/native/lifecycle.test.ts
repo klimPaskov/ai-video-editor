@@ -208,7 +208,7 @@ async function launch(): Promise<ElectronApplication> {
     )
     .toBe(true);
   assert.equal(await instance.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   return instance;
 }
 async function closeWindow(instance: ElectronApplication): Promise<void> {
@@ -513,7 +513,7 @@ try {
       timeout: 30_000,
     });
     application = broken;
-    await nativeDialog("Could not open codex-video-edit", broken);
+    await nativeDialog("Could not open AI Video Editor", broken);
     assert.equal(
       await broken.evaluate(
         ({ BrowserWindow }) => BrowserWindow.getAllWindows().length,

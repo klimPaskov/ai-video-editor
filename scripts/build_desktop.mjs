@@ -80,7 +80,7 @@ await writeFile(
 );
 const mcpResources = join(output, "mcp");
 await mkdir(mcpResources);
-const mcpScript = join(mcpResources, "codex-video-edit-mcp.cjs");
+const mcpScript = join(mcpResources, "ai-video-editor-mcp.cjs");
 await build({
   entryPoints: [join(root, "packages/codex-tools/src/mcp-server.ts")],
   outfile: mcpScript,
@@ -91,7 +91,7 @@ await build({
 });
 const mcpManifest = {
   schemaVersion: 1,
-  executable: "codex-video-edit-mcp.cjs",
+  executable: "ai-video-editor-mcp.cjs",
   size: (await lstat(mcpScript)).size,
   sha256: await sha256(mcpScript),
 };
@@ -161,7 +161,7 @@ const installedPackages = execFileSync(
 const stagedModules = join(staging, "node_modules");
 await mkdir(stagedModules, { recursive: true });
 const thirdPartyNotices = [
-  "Third-party packages bundled with codex-video-edit.",
+  "Third-party packages bundled with ai-video-editor.",
   "Each dependency retains its package license file under licenses/.",
   "",
 ];
@@ -219,8 +219,8 @@ await writeFile(
 await writeFile(
   join(staging, "package.json"),
   JSON.stringify({
-    name: "codex-video-edit",
-    productName: "codex-video-edit",
+    name: "ai-video-editor",
+    productName: "AI Video Editor",
     version: "0.0.1",
     main: "main.cjs",
     license: "MIT",
@@ -229,8 +229,8 @@ await writeFile(
 const packages = await packager({
   dir: staging,
   out: join(output, "packaged"),
-  name: "codex-video-edit",
-  executableName: "codex-video-edit",
+  name: "ai-video-editor",
+  executableName: "ai-video-editor",
   platform: "linux",
   arch: "x64",
   electronVersion: "44.2.0",
@@ -263,5 +263,5 @@ await writeFile(
   ),
 );
 console.log(
-  JSON.stringify({ output, executable: join(packages[0], "codex-video-edit") }),
+  JSON.stringify({ output, executable: join(packages[0], "ai-video-editor") }),
 );

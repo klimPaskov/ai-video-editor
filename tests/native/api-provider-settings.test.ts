@@ -44,7 +44,7 @@ try {
   });
   const page = await electron.firstWindow();
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   step = "provider-settings";
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page

@@ -23,7 +23,7 @@ with tarfile.open(fileobj=bundle, mode='w') as archive:
         entry = tarfile.TarInfo(relative)
         entry.mode, entry.size = 0o644, len(data)
         archive.addfile(entry, io.BytesIO(data))
-destination = '/home/node/workspaces/' + str(uuid.uuid4()) + '/codex-video-edit'
+destination = '/home/node/workspaces/' + str(uuid.uuid4()) + '/ai-video-editor'
 subprocess.run(['docker', 'exec', NAME, 'mkdir', '-p', destination], check=True)
 subprocess.run(['docker', 'exec', '-i', NAME, 'tar', '-x', '--no-same-owner', '-C', destination],
                input=bundle.getvalue(), check=True)

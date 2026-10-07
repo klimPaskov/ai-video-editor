@@ -1,11 +1,16 @@
 #!/bin/sh
 set -eu
 
-if [ "$(id -u)" -ne 0 ] || [ "${WSL_DISTRO_NAME:-}" != "codex-video-edit-test-recovered" ]; then
+guest_distro_name=${WSL_DISTRO_NAME:-}
+case "$guest_distro_name" in
+  *-test-recovered) ;;
+  *) echo "Guest input requires the recovered WSL2 test distro." >&2; exit 2 ;;
+esac
+if [ "$(id -u)" -ne 0 ]; then
   echo "Guest input requires the recovered WSL2 test distro." >&2
   exit 2
 fi
-pid_file=/home/ubuntu/.local/run/codex-video-edit-wsl-mountns.pid
+pid_file=/home/ubuntu/.local/run/ai-video-editor-wsl-mountns.pid
 if [ ! -f "$pid_file" ]; then
   echo "The isolated native-test mount namespace is not active." >&2
   exit 2
@@ -33,7 +38,7 @@ exec nsenter --target "$mount_namespace_pid" --mount -- \
     LANG=C.UTF-8 \
     TMPDIR=/tmp \
     XDG_RUNTIME_DIR=/home/ubuntu/.local/run \
-    WSL_DISTRO_NAME=codex-video-edit-test-recovered \
-    CODEX_VIDEO_EDIT_WSL_TEST=1 \
+    WSL_DISTRO_NAME="$guest_distro_name" \
+    AI_VIDEO_EDITOR_WSL_TEST=1 \
     LIBGL_ALWAYS_SOFTWARE=1 \
-    /usr/bin/python3 /home/node/workspaces/codex-video-edit-wsl/tests/desktop/guest-input.py "$@"
+    /usr/bin/python3 /home/node/workspaces/ai-video-editor-wsl/tests/desktop/guest-input.py "$@"

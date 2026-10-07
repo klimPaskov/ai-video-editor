@@ -43,7 +43,7 @@ Also disable the pinned runtime's default-on `hooks`, shadow `skill_search`, and
 
 ## Runtime tools
 
-Codex receives guarded codex-video-edit tools, not unrestricted filesystem or shell control. Tool calls validate project, draft, range, asset, and transaction identity.
+Codex receives guarded ai-video-editor tools, not unrestricted filesystem or shell control. Tool calls validate project, draft, range, asset, and transaction identity.
 
 Electron main owns the active project and the only draft writer. The packaged MCP child accepts only the nine reviewed P2 tools, including read-only bounded `transcript.get_range` and reversible `cut.split`, `cut.delete_range`, `cut.delete_ranges`, and exact `cut.restore_range`, and forwards bounded intent through a local broker authenticated by a random process-only credential. App-server startup verifies the exact server, tool names, and input schemas and refuses MCP project threads on mismatch. The child cannot choose a project root, construct transaction authority, approve export/deletion/cleanup, or access a generic main RPC.
 

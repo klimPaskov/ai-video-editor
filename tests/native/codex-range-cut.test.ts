@@ -413,7 +413,7 @@ async function seek(active: Page, timeUs: number): Promise<void> {
 try {
   page = await electron.firstWindow();
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   assert.ok(
     !electron
       .process()
@@ -495,7 +495,7 @@ try {
   const userData = await electron.evaluate(({ app }) =>
     app.getPath("userData"),
   );
-  assert.equal(await realpath(userData), join(configRoot, "codex-video-edit"));
+  assert.equal(await realpath(userData), join(configRoot, "ai-video-editor"));
   const projectFolder = join(userData, "project-store", combined.id);
   const baselinePath = join(projectFolder, "baseline.json");
   const baselineBytes = await readFile(baselinePath);
@@ -542,7 +542,7 @@ try {
     electron = await launch();
     page = await electron.firstWindow();
     assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-    assert.equal(page.url(), "codex-video-edit://app/index.html");
+    assert.equal(page.url(), "ai-video-editor://app/index.html");
   }
   const beforeCodexDurationUs = restore ? totalUs - 500_000 : totalUs;
   const cutStartUs = restore

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://codex-video-edit.local/schemas/desktop_ipc.schema.json",
+  "$id": "https://ai-video-editor.local/schemas/desktop_ipc.schema.json",
   "title": "Desktop library, project, preferences, Codex and API provider IPC exchange",
   "description": "Contract documentation envelope for a native IPC request and response. Electron channel and request are separate arguments at runtime; absent payload represents undefined, never null. No source filesystem path crosses this boundary. Runtime also validates trusted main-frame sender and source-specific seek bounds.",
   "oneOf": [

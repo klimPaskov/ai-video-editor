@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.codex-video-edit.invalid/draft_transaction.schema.json",
+  "$id": "https://schemas.ai-video-editor.invalid/draft_transaction.schema.json",
   "title": "Committed draft transaction",
   "type": "object",
   "additionalProperties": false,

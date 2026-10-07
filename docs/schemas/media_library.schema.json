@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://codex-video-edit.local/schemas/media_library.schema.json",
+  "$id": "https://ai-video-editor.local/schemas/media_library.schema.json",
   "title": "Private append-only media library entry (not a project)",
   "type": "object",
   "additionalProperties": false,

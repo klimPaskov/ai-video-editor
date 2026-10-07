@@ -18,6 +18,7 @@ import {
   codexClientInternals,
 } from "../../packages/codex-bridge/src/client.ts";
 import { CodexTransportError } from "../../packages/codex-bridge/src/transport.ts";
+import { appIdentity } from "../../packages/domain/src/app-identity.ts";
 
 type RpcHarness = {
   child: ChildProcessWithoutNullStreams;
@@ -33,8 +34,8 @@ async function childFor(
 ): Promise<RpcHarness> {
   const child = spawn(runtime.command, [runtime.script], {
     env: {
-      CODEX_VIDEO_EDIT_MCP_ENDPOINT: runtime.endpoint,
-      CODEX_VIDEO_EDIT_MCP_TOKEN: token,
+      AI_VIDEO_EDITOR_MCP_ENDPOINT: runtime.endpoint,
+      AI_VIDEO_EDITOR_MCP_TOKEN: token,
       NODE_NO_WARNINGS: "1",
     },
     stdio: ["pipe", "pipe", "pipe"],
@@ -298,14 +299,14 @@ test("packaged MCP resolver rejects a changed child script", async () => {
   const root = await mkdtemp(join(parent, "fixture-"));
   const directory = join(root, "mcp");
   await mkdir(directory);
-  const script = join(directory, "codex-video-edit-mcp.cjs");
+  const script = join(directory, "ai-video-editor-mcp.cjs");
   const bytes = Buffer.from("process.exit(0);\n");
   await writeFile(script, bytes);
   await writeFile(
     join(directory, "manifest.json"),
     JSON.stringify({
       schemaVersion: 1,
-      executable: "codex-video-edit-mcp.cjs",
+      executable: "ai-video-editor-mcp.cjs",
       size: bytes.length,
       sha256: createHash("sha256").update(bytes).digest("hex"),
     }),
@@ -322,7 +323,7 @@ test("packaged MCP resolver rejects a changed child script", async () => {
 test("App Server receives the owned MCP allowlist without command-line secrets", () => {
   const runtime = {
     command: resolve("runtime", "electron"),
-    script: resolve("runtime", "codex-video-edit-mcp.cjs"),
+    script: resolve("runtime", "ai-video-editor-mcp.cjs"),
     endpoint: "private-endpoint",
     token: "b".repeat(64),
   };
@@ -337,7 +338,9 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
       "mcp_servers.untrusted_test.enabled=false",
     ),
     ownedServerIndex = args.findIndex((argument) =>
-      argument.startsWith("mcp_servers.codex-video-edit.command="),
+      argument.startsWith(
+        `mcp_servers.${appIdentity.stableMcpServerId}.command=`,
+      ),
     );
   assert.ok(resetIndex >= 0 && resetIndex < disabledServerIndex);
   assert.ok(disabledServerIndex < ownedServerIndex);
@@ -351,7 +354,9 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
       );
     else if (index > 0 && args[index - 1] === "-c")
       assert.match(value, /^[A-Za-z0-9_.-]+=/u);
-  assert.match(serialized, /mcp_servers\.codex-video-edit\.command/u);
+  assert.ok(
+    serialized.includes(`mcp_servers.${appIdentity.stableMcpServerId}.command`),
+  );
   assert.match(serialized, /enabled_tools/u);
   assert.match(serialized, /default_tools_approval_mode/u);
   assert.ok(args.includes("features.multi_agent=false"));
@@ -446,7 +451,9 @@ test("App Server receives the owned MCP allowlist without command-line secrets",
     1,
   );
   assert.ok(
-    !dynamicArgs.some((arg) => arg.startsWith("mcp_servers.codex-video-edit.")),
+    !dynamicArgs.some((arg) =>
+      arg.startsWith(`mcp_servers.${appIdentity.stableMcpServerId}.`),
+    ),
   );
   assert.ok(dynamicArgs.includes("features.multi_agent=true"));
   assert.ok(dynamicArgs.includes("features.multi_agent_v2=true"));
@@ -695,8 +702,11 @@ test("App Server startup accepts only the reviewed owned MCP schemas", () => {
   const status = {
     data: [
       {
-        name: "codex-video-edit",
-        serverInfo: { name: "codex-video-edit", version: "0.0.1" },
+        name: appIdentity.stableMcpServerId,
+        serverInfo: {
+          name: appIdentity.stableMcpServerId,
+          version: "0.0.1",
+        },
         tools: Object.fromEntries(
           codexVideoEditMcpTools.map((tool) => [tool.name, tool]),
         ),

@@ -19,3 +19,5 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0014: explicit OpenAI API and DeepSeek API-key providers alongside Codex (supersedes 0002's exclusivity)
 - 0015: fixed Gemini API-key provider
 - 0016: Luna/high Codex subscription default and current official runtime
+- 0017: AI Video Editor product and repository identity
+- 0018: Claude account sign-in as the default AI connection; implementation decisions open

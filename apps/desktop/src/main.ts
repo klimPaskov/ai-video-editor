@@ -3,6 +3,7 @@ import { DesktopApiProviders } from "./api-providers.ts";
 import { ApiProviderThreads } from "./api-thread.ts";
 import { ProviderKeyStore } from "./provider-keys.ts";
 import { ApiProviderClient } from "../../../packages/api-providers/src/client.ts";
+import { appIdentity } from "../../../packages/domain/src/app-identity.ts";
 import {
   assertApiProviderConnectRequest,
   assertApiProviderModelRequest,
@@ -73,6 +74,7 @@ import {
   shell,
 } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
+import { existsSync, mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -96,7 +98,7 @@ import {
 } from "./project-runtime.ts";
 import type { ProjectDraftNotice } from "./project-runtime.ts";
 
-const origin = "codex-video-edit://app";
+const origin = `${appIdentity.urlScheme}://app`;
 const page = `${origin}/index.html`;
 class UserFacingError extends Error {}
 let window: BrowserWindow | undefined;
@@ -121,11 +123,23 @@ app.on("before-quit", (event) => {
     });
   }
 });
-app.setName("codex-video-edit");
+app.setName(appIdentity.slug);
+// Reopen prior installs from their existing data directory; new installs use
+// the new product slug. This avoids moving or duplicating private project data.
+const appDataPath = app.getPath("appData");
+const legacyUserDataPath = path.join(
+  appDataPath,
+  appIdentity.legacyUserDataDirectory,
+);
+const userDataPath = existsSync(legacyUserDataPath)
+  ? legacyUserDataPath
+  : path.join(appDataPath, appIdentity.slug);
+mkdirSync(userDataPath, { recursive: true });
+app.setPath("userData", userDataPath);
 app.enableSandbox();
 protocol.registerSchemesAsPrivileged([
   {
-    scheme: "codex-video-edit",
+    scheme: appIdentity.urlScheme,
     privileges: { standard: true, secure: true, supportFetchAPI: true },
   },
 ]);
@@ -177,7 +191,7 @@ async function start(): Promise<void> {
     if (!bytes.length) throw new Error("Required renderer resource is empty");
     assets.set(route, { bytes, mime: mime! });
   }
-  protocol.handle("codex-video-edit", async (request) => {
+  protocol.handle(appIdentity.urlScheme, async (request) => {
     const url = new URL(request.url);
     const asset = assets.get(url.pathname);
     if (request.method !== "GET" || url.host !== "app" || url.search || !asset)
@@ -1103,7 +1117,7 @@ async function start(): Promise<void> {
     minWidth: 760,
     minHeight: 560,
     show: false,
-    title: "codex-video-edit",
+    title: appIdentity.displayName,
     backgroundColor: "#11131a",
     webPreferences: {
       preload: path.join(app.getAppPath(), "preload.cjs"),
@@ -1216,11 +1230,11 @@ async function showStartupFailure(): Promise<void> {
   const message =
     "The local application files could not be loaded. Reinstall the application and try again.";
   // Generic diagnostics contain no source paths, credentials or project details.
-  console.error(`codex-video-edit: ${message}`);
+  console.error(`ai-video-editor: ${message}`);
   try {
     await dialog.showMessageBox({
       type: "error",
-      title: "Could not open codex-video-edit",
+      title: `Could not open ${appIdentity.displayName}`,
       message,
       buttons: ["Close app"],
       defaultId: 0,

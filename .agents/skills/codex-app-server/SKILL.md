@@ -26,7 +26,7 @@ Changing AI login, model selection, skills, threads, streaming, interruption, ap
 - Close must settle startup and process shutdown before reconnecting against the same account directory. Never replay requests whose outcome became uncertain after timeout or disconnection.
 - Exercise controller recovery in packaged Electron: identify the exact pinned App Server executable whose parent is the test Electron main, stop only that child, reconnect through Settings, and reopen the same main-owned project thread. Compare thread identity/history and the committed journal, source, and baseline for both idle child loss and loss after a guarded edit commits during a running turn. Require one committed operation and shared Undo after recovery. This does not prove behavior if process loss occurs during transaction persistence; never generalize beyond the observed state.
 - Explicit skill input items when a known skill is used.
-- Guarded codex-video-edit MCP tools with validated transactions.
+- Guarded ai-video-editor MCP tools with validated transactions.
 
 Generate the thread/turn/MCP-status closure with the pinned binary's `--experimental`
 flag when those methods are consumed. Bind request objects to the generated input types

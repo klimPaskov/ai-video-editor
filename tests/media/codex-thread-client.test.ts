@@ -13,6 +13,7 @@ import type {
 } from "../../packages/codex-bridge/src/thread-stream.ts";
 import { CodexTransportError } from "../../packages/codex-bridge/src/transport.ts";
 import type { CodexVideoEditToolName } from "../../packages/codex-tools/src/service.ts";
+import { appIdentity } from "../../packages/domain/src/app-identity.ts";
 
 const policy = {
   cwd: resolve("test-results", "codex-thread-context"),
@@ -52,7 +53,7 @@ async function fixture(
     projectId: "project-1",
     policy,
     registry,
-    allowedMcpServer: "codex-video-edit",
+    allowedMcpServer: appIdentity.stableMcpServerId,
     allowedMcpTools: new Set(["cut.trim_edge", "timeline.undo"]),
     ...(dynamicToolInvoker ? { dynamicToolInvoker } : {}),
     onEvent: (event) => {
@@ -122,7 +123,7 @@ test("typed client creates then resumes the one registry-owned project thread", 
       projectId: "project-1",
       policy,
       registry: first.registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["cut.trim_edge"]),
     });
     await resumed.open();
@@ -159,7 +160,7 @@ test("legacy MCP bindings cannot be silently routed through host tools", async (
       projectId: "project-1",
       policy,
       registry: first.registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["project.get_summary"]),
       dynamicToolInvoker: async () => {
         invoked++;
@@ -219,7 +220,7 @@ test("a dynamic binding resumes only with its host-tool boundary", async () => {
       projectId: "project-1",
       policy,
       registry: first.registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["project.get_summary"]),
       dynamicToolInvoker: async () => {
         invoked++;
@@ -250,7 +251,7 @@ test("a dynamic binding resumes only with its host-tool boundary", async () => {
       projectId: "project-1",
       policy,
       registry: first.registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["project.get_summary"]),
     });
     await assert.rejects(incompatible.open(), CodexThreadProtocolError);
@@ -648,7 +649,7 @@ test("resume uses one bounded history fallback and emits only a safe projection"
       projectId: "project-1",
       policy,
       registry: first.registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["cut.trim_edge"]),
       onHistory: (history) => histories.push(history),
     });
@@ -734,7 +735,7 @@ test("resumed active history remains interruptible before buffered events flush"
       projectId: "project-1",
       policy,
       registry: first.registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["cut.trim_edge"]),
     });
     notifyDuringResume = () =>
@@ -792,7 +793,7 @@ test("resume rejects contradictory thread and history activity", async () => {
       projectId: "project-1",
       policy,
       registry: first.registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["cut.trim_edge"]),
       onPolicyViolation: () => quarantines++,
     });
@@ -850,7 +851,7 @@ test("fallback history is authoritative when an active turn finishes between req
       projectId: "project-1",
       policy,
       registry: first.registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["cut.trim_edge"]),
     });
     completeDuringFallback = () =>
@@ -889,7 +890,7 @@ test("failed history fallback cannot leave a partially opened conversation", asy
       projectId: "project-1",
       policy,
       registry: first.registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["cut.trim_edge"]),
       onPolicyViolation: () => quarantines++,
     });
@@ -945,7 +946,7 @@ test("invalid resumed history quarantines the unopened client", async () => {
       projectId: "project-1",
       policy,
       registry: first.registry,
-      allowedMcpServer: "codex-video-edit",
+      allowedMcpServer: appIdentity.stableMcpServerId,
       allowedMcpTools: new Set(["cut.trim_edge"]),
       onPolicyViolation: () => quarantines++,
     });
@@ -1225,7 +1226,7 @@ test("approval and elicitation requests always decline or cancel then quarantine
           ? {
               threadId: "thread-1",
               turnId: "turn-policy",
-              serverName: "codex-video-edit",
+              serverName: appIdentity.stableMcpServerId,
             }
           : {
               threadId: "thread-1",

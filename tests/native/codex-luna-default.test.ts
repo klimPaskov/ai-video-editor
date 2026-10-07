@@ -28,7 +28,7 @@ const existingConfig = await realpath(accountArgument);
 assert.equal(existingConfig, resolve(accountArgument));
 const credential = join(
   existingConfig,
-  "codex-video-edit/codex/account/auth.json",
+  "ai-video-editor/codex/account/auth.json",
 );
 const credentialInfo = await stat(credential);
 assert.ok(credentialInfo.isFile());
@@ -37,9 +37,9 @@ assert.equal(credentialInfo.mode & 0o077, 0);
 await mkdir(resolve("test-results"), { recursive: true });
 const evidence = await mkdtemp(resolve("test-results/native-codex-luna-"));
 await chmod(evidence, 0o700);
-const freshConfig = await mkdtemp("/tmp/codex-video-edit-luna-");
+const freshConfig = await mkdtemp("/tmp/ai-video-editor-luna-");
 await chmod(freshConfig, 0o700);
-const account = join(freshConfig, "codex-video-edit/codex/account");
+const account = join(freshConfig, "ai-video-editor/codex/account");
 await mkdir(account, { recursive: true, mode: 0o700 });
 await copyFile(credential, join(account, "auth.json"));
 await chmod(join(account, "auth.json"), 0o600);
@@ -67,7 +67,7 @@ try {
     try {
       const page = await electron.firstWindow();
       assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-      assert.equal(page.url(), "codex-video-edit://app/index.html");
+      assert.equal(page.url(), "ai-video-editor://app/index.html");
       step = `catalog-${launchNumber}`;
       await expect
         .poll(

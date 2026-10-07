@@ -359,7 +359,7 @@ try {
   if (forced)
     await app.evaluate(({ app }) => app.setAccessibilitySupportEnabled(true));
   const page = await app.firstWindow();
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   await app.evaluate(({ BrowserWindow }) => {
     BrowserWindow.getAllWindows()[0]!.focus();
   });
@@ -402,7 +402,7 @@ try {
             typeof event.role === "string" &&
             /^(push button|button|combo box)$/.test(event.role) &&
             typeof event.application === "string" &&
-            /codex-video-edit/i.test(event.application),
+            /ai-video-editor/i.test(event.application),
         );
       return braille.length > 0 && events.length > 0;
     }, `No matching real Orca braille and app AT-SPI focus for ${name}`);
@@ -490,7 +490,7 @@ try {
   );
   const projectStore = join(
     env.XDG_CONFIG_HOME!,
-    "codex-video-edit",
+    "ai-video-editor",
     "project-store",
   );
   const projectIds = await readdir(projectStore);

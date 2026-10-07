@@ -35,7 +35,8 @@ def load_json(path: Path) -> object:
 
 
 required_paths = [
-    'GOAL_PROMPT.md', 'AGENTS.md', 'AUTHORITATIVE_ORDER.md', 'PLANNING_PACKAGE.md',
+    'GOAL_PROMPT.md', 'AGENTS.md', 'CLAUDE.md', 'HANDOFF_PROMPT.md', '.claude/settings.json',
+    'AUTHORITATIVE_ORDER.md', 'PLANNING_PACKAGE.md',
     'WORKFLOW.md', 'TASKS.md', 'SUBAGENT_ROUTING.md', 'CHANGE_CONTROL.md',
     'docs/workflow/active-phase.md', 'docs/00_SOURCE_BRIEF.md', 'docs/03_NATIVE_APP_ARCHITECTURE.md',
     'docs/08_CODEX_INTEGRATION.md', 'docs/09_MAGIC_WAND_AND_AUTOMATIONS.md',

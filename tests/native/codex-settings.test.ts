@@ -40,10 +40,10 @@ await writeFile(
     2,
   ),
 );
-const configRoot = await mkdtemp("/tmp/codex-video-edit-account-");
+const configRoot = await mkdtemp("/tmp/ai-video-editor-account-");
 const env = { ...process.env, XDG_CONFIG_HOME: configRoot };
 const mcpMarker = join(configRoot, "untrusted-mcp-command-ran");
-const codexHome = join(configRoot, "codex-video-edit", "codex", "account");
+const codexHome = join(configRoot, "ai-video-editor", "codex", "account");
 await mkdir(codexHome, { recursive: true, mode: 0o700 });
 await writeFile(
   join(codexHome, "config.toml"),
@@ -64,7 +64,7 @@ let step = "initial-window";
 try {
   let page = await electron.firstWindow();
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   // Keep OAuth URLs in main memory and suppress only the external browser launch.
   // Login start/cancel still go through the packaged main and actual official server.
   await electron.evaluate(({ shell }) => {

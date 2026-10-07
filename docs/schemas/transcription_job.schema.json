@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://codex-video-edit.local/schemas/transcription_job.schema.json",
+  "$id": "https://ai-video-editor.local/schemas/transcription_job.schema.json",
   "title": "Local transcription job status",
   "description": "Path-free progress for a user-started, local-only transcription job.",
   "type": "object",

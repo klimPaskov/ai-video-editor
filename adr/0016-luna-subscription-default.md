@@ -17,3 +17,7 @@ No GPT-6 Astra implementation subagents or native Codex child tests are authoriz
 ## Evidence and limits
 
 Official release: https://github.com/openai/codex/releases/tag/rust-v0.155.1 . The runtime catalog and packaged Settings observations are private isolated test evidence. No credential, source recording, account path or native screenshot is published with this decision.
+
+## Later provider-default requirement
+
+ADR 0018 makes Claude account sign-in the application default. This ADR remains specific to model selection within the retained Codex subscription connection and does not select the Claude implementation model.

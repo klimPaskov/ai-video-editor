@@ -9,7 +9,7 @@ Status: implementation specifications and references. The application has not be
 - Separate current and previous sets, with no contact sheets or image collages included
 - Gallery paths and reference membership
 - Ten negative export-contract cases, including false lossless codec labels, missing compressed-export consent, proxy misuse, and failed sample equality
-- Required open-source and fidelity guidance included in the actual `codex-video-edit` root
+- Required open-source and fidelity guidance included in the actual `ai-video-editor` root
 - Full SHA-256 manifest and ZIP CRC checks before delivery
 
 ## Not claimed

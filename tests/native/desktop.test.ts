@@ -10,6 +10,7 @@ import {
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
 import type { Page } from "playwright/test";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { assertInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import { projectStages } from "../../packages/domain/src/project-view.ts";
 import {
@@ -28,7 +29,7 @@ assert.equal(
 assert.ok(process.getuid);
 assert.equal(process.getuid(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 assert.ok(executablePath, "Packaged executable path is required");
 const evidenceRoot = resolve("test-results");
@@ -121,7 +122,8 @@ try {
   await expect(
     window.getByRole("button", { name: "Import video", exact: true }),
   ).toBeVisible();
-  assert.equal(window.url(), "codex-video-edit://app/index.html");
+  assert.equal(await window.title(), "AI Video Editor");
+  assert.equal(window.url(), "ai-video-editor://app/index.html");
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   // Electron's sandboxed metric is macOS/Windows-only. Verify Linux kernel state.
   const renderers = await electron.evaluate(({ app }) =>
@@ -511,7 +513,7 @@ try {
   assert.equal(
     await electron.evaluate(
       async ({ net }) =>
-        (await net.fetch("codex-video-edit://app/main.cjs")).status,
+        (await net.fetch("ai-video-editor://app/main.cjs")).status,
     ),
     404,
   );
@@ -526,7 +528,7 @@ try {
           nodeIntegration: false,
         },
       });
-      await foreign.loadURL("codex-video-edit://app/index.html");
+      await foreign.loadURL("ai-video-editor://app/index.html");
       try {
         await foreign.webContents.executeJavaScript(
           "window.desktop.listMedia()",

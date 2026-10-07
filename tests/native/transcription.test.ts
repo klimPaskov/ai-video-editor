@@ -143,7 +143,7 @@ const electron = await _electron.launch({
 });
 try {
   const page = await electron.firstWindow();
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   assert.ok(
     !electron
@@ -538,7 +538,7 @@ try {
         status: "pass",
         packaged: true,
         nativeWindow: true,
-        urlScheme: "codex-video-edit",
+        urlScheme: "ai-video-editor",
         hostInput: false,
         sourceSha256,
         sampleSha256,

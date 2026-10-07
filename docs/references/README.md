@@ -2,7 +2,7 @@
 
 This folder contains **20 original individual native-app screenshots**, not contact sheets.
 
-- `screenshots/current/`: ten `codex-video-edit` references
+- `screenshots/current/`: ten current native-app references
 - `screenshots/previous/`: ten earlier desktop-app references
 - `index.html`: offline viewer showing one full-size image at a time
 - `manifest.json`: screen mappings, provenance, and file hashes

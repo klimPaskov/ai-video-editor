@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://codex-video-edit.local/schemas/desktop_preferences.schema.json",
+  "$id": "https://ai-video-editor.local/schemas/desktop_preferences.schema.json",
   "title": "Local desktop preferences",
   "description": "Stored atomically in the main-owned userData/preferences/preferences.json. Missing file defaults to 100%; malformed settings are reported and retained. No project or media data is stored here.",
   "type": "object",

@@ -1,10 +1,14 @@
-# P2: real Codex runtime and explicit API providers
+# P2: AI account integration and provider safety
+
+## Latest user requirement, 2026-10-04
+
+ADR 0018 adds supported Claude account sign-in as the default AI connection. This is unimplemented and expands the open P2 scope. The next Claude implementer independently selects a supported authentication/runtime/model and integration strategy; prior Codex-specific designs below apply to the retained Codex route, not automatically to Claude. Update the detailed contracts/tests with the chosen implementation and preserve existing user data/provider behavior.
 
 Pinned 0.155.1 process and thread policy also disables default-on browser/CDP, computer-use, shell-snapshot, interactive unified-exec TTY, workspace-dependency, guardian-approval, in-app utility, fast-mode, image-budget, mention, and personality capabilities when the product does not use them. Verify exact names against the packaged runtime inventory. The inventory currently reports `unified_exec` true despite an explicit false override; do not count that backend as disabled. This is defense-in-depth only; complete effective tool confinement remains a separate acceptance requirement.
 
 Cross-check every process feature override and thread start/resume feature name against the pinned `features list`; remove unknown keys instead of relying on permissive protocol config maps. External apps are disabled with the supported Apps switch, and configured MCP servers are disabled per server.
 
-Task IDs: `P2-01` through `P2-10`
+Task IDs: `P2-01` through `P2-11`
 
 Use `codex-app-server`, `security-privacy`, `native-app-testing`, and `spec-sync`. Integrate the official Codex app-server as a long-running child process over stdio JSONL. Generate or validate protocol types against the installed binary. Implement ChatGPT-managed sign-in, account state, rate limits, runtime model discovery, skill discovery, durable project threads, streamed events, interruption, restart recovery, and server approval requests.
 

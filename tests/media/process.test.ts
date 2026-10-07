@@ -24,7 +24,7 @@ test("process arguments remain literal and failures do not expose private diagno
   );
   await assert.rejects(
     runProcess({
-      executable: "codex-video-edit-nonexistent-executable",
+      executable: "ai-video-editor-nonexistent-executable",
       args: [],
     }),
     { code: "PROCESS_UNAVAILABLE" },

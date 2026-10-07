@@ -75,7 +75,7 @@ export async function resolveCodexMcpScript(
       !record(parsed) ||
       Object.keys(parsed).length !== 4 ||
       parsed.schemaVersion !== 1 ||
-      parsed.executable !== "codex-video-edit-mcp.cjs" ||
+      parsed.executable !== "ai-video-editor-mcp.cjs" ||
       !Number.isSafeInteger(parsed.size) ||
       (parsed.size as number) <= 0 ||
       typeof parsed.sha256 !== "string" ||
@@ -137,7 +137,7 @@ export class CodexMcpBroker {
     const candidate = join(root, `mcp-${socketId}.sock`);
     const endpoint =
       process.platform === "win32"
-        ? `\\\\.\\pipe\\codex-video-edit-${randomUUID()}`
+        ? `\\\\.\\pipe\\ai-video-editor-${randomUUID()}`
         : Buffer.byteLength(candidate) < 100
           ? candidate
           : join(

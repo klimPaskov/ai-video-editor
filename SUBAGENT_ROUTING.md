@@ -18,6 +18,10 @@ The main agent owns phase selection, integration, final judgment, and evidence. 
 | Installer and release | `release-engineer` | `release-packaging` |
 | Cross-file updates and traceability | `spec-maintainer` | `spec-sync` |
 
+## Claude continuation
+
+Native Claude role definitions live in `.claude/agents/`, with canonical skill adapters in `.claude/skills/`. The main Claude implementer chooses useful delegation and engineering decisions; the role table is guidance, not a required team. `ai-provider-engineer` covers the new Claude-default requirement and retained provider paths. Earlier `.codex/agents/` role notes remain reference material.
+
 ## Routing rules
 
 For the ADR 0013 project shell, keep domain/store/complete-probe verification, main/preload IPC, renderer interaction, and spec/native evidence ownership bounded by explicit files. Renderer work consumes only the path-free committed `ProjectView`; it must not create its own persistence model or fake project/revision identities. The main agent verifies pure postcommit mapping, save-failure preservation, and native five-stage interaction before integration. Project/source/timeline/revision schema shapes remain authoritative; extended IPC, examples and tests must stay synchronized. P2 shared transactions remain a separate prerequisite and must serve manual and Codex edits alike.
@@ -39,7 +43,7 @@ Native Codex children are separate from implementation subagents. The current 0.
 - Research agents do not decide architecture alone.
 - Visual agents do not weaken product, privacy, accessibility, or testing requirements.
 - QA agents must reproduce claims from the current build.
-- When a task changes a workflow contract, always route a final pass to `spec-maintainer`.
+- When a task changes a workflow contract, complete a final spec-sync review; the main implementer chooses whether direct review or delegation is appropriate.
 
 ## Fidelity, reference, and publishing ownership
 

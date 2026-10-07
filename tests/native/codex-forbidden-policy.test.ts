@@ -224,7 +224,7 @@ let failureSnapshot: () => Promise<unknown> = async () => ({
 try {
   const page = await electron.firstWindow();
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   assert.ok(
     !electron
       .process()
@@ -324,7 +324,7 @@ try {
   const userData = await electron.evaluate(({ app }) =>
     app.getPath("userData"),
   );
-  assert.equal(await realpath(userData), join(configRoot, "codex-video-edit"));
+  assert.equal(await realpath(userData), join(configRoot, "ai-video-editor"));
   const projectFolder = join(userData, "project-store", project.id);
   const baselinePath = join(projectFolder, "baseline.json");
   const baselineBytes = await readFile(baselinePath);

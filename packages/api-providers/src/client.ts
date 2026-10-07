@@ -29,7 +29,7 @@ const maxResponseBytes = 2 * 1024 * 1024;
 const maxMessages = 64;
 const maxTools = 8;
 const maxThoughtSignatureBytes = 16 * 1024;
-const geminiClientHeader = "codex-video-edit/0.0.0";
+const geminiClientHeader = "ai-video-editor/0.0.0";
 
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))

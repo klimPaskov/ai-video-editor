@@ -8,12 +8,13 @@ The subsequent P1 project prerequisite now adds actual project create/open/reope
 
 Before ordinary screens, missing required packaged files show a native error with reinstall guidance and Close app. An unexpected renderer failure offers one Reopen window or Close app choice; another failure requires closing. Reopen means loading persisted work, not guaranteeing recovery of unsaved changes. Unreadable interface settings retain their bytes, use 100% presentation and report the failure. These native failure paths are part of P1 lifecycle acceptance and do not expose technical diagnostics in the renderer.
 
-Purpose: establish local readiness and real Codex sign-in.
+Purpose: establish local readiness and supported Claude account sign-in as the default, with retained Codex and API alternatives. The Claude control is a pending requirement under ADR 0018, not current native acceptance.
 
 Visible:
 
 - product mark
-- Sign in with ChatGPT
+- Sign in with Claude (default requirement; expose only after supported implementation)
+- Sign in with ChatGPT (retained alternative)
 - setup action only if a required dependency is missing
 - short context disclosure: Codex may receive prompts, project metadata, requested preview frames and bounded local transcript text during a user-started turn; transcript pages may remain in thread history and be included in later turns, while source audio/video stay local
 - Continue

@@ -78,6 +78,32 @@ class PublicationTests(unittest.TestCase):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 audit_blob(path, b'\x89PNG\x00', '100644')
 
+    def test_claude_guidance_is_scanned_without_account_or_local_runtime_data(self):
+        public = ('CLAUDE.md', '.claude/README.md', '.claude/settings.json',
+                  '.claude/agents/native-qa.md', '.claude/rules/agent-source.md',
+                  '.claude/skills/native-electron/SKILL.md')
+        private = ('CLAUDE.local.md', 'apps/CLAUDE.local.md', '.claude/auth.json',
+                   '.claude/.credentials.json', '.claude/settings.local.json',
+                   '.claude/sessions/turn.json', '.claude/worktrees/project/code.ts',
+                   '.claude/agents/credentials.json', '.claude/agents/nested/prompt.md',
+                   '.claude/skills/native-electron/account.json',
+                   '.claude/skills/native-electron/references/private.md',
+                   'other/.claude/agents/native-qa.md')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for path in public + private:
+                target = root / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text('safe source')
+            self.assertEqual({p.relative_to(root).as_posix() for p in source_files(root)}, set(public))
+        for path in public:
+            audit_blob(path, b'safe source', '100644')
+        for path in private:
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                audit_blob(path, b'safe source', '100644')
+        with self.assertRaisesRegex(ValueError, 'credential'):
+            audit_blob('.claude/settings.json', ('sk-ant-' + 'a' * 40).encode(), '100644')
+
     def test_source_integrity_is_portable_but_binary_bytes_remain_exact(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'source.txt'

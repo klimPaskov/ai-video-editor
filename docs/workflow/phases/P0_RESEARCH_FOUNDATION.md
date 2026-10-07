@@ -18,4 +18,4 @@ Acceptance:
 - current dependency and protocol versions are recorded
 - `docs/workflow/results/P0.json` validates
 
-Also read `docs/44_LOSSLESS_MEDIA_POLICY.md` and `docs/45_OPEN_SOURCE_DEVELOPMENT.md`. Create or verify the public `codex-video-edit` repository and publish the reviewed foundation. Record the exact remote commit or the real access blocker. Establish lossless round-trip fixtures and a capture-fidelity boundary before building media-dependent features.
+Also read `docs/44_LOSSLESS_MEDIA_POLICY.md` and `docs/45_OPEN_SOURCE_DEVELOPMENT.md`. Create or verify the public `ai-video-editor` repository and publish the reviewed foundation. Record the exact remote commit or the real access blocker. Establish lossless round-trip fixtures and a capture-fidelity boundary before building media-dependent features.

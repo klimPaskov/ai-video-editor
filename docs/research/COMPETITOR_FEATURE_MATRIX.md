@@ -2,7 +2,7 @@
 
 This is a planning aid, not a claim of exact parity.
 
-| Pattern | Borumi | Other observed tools | codex-video-edit target |
+| Pattern | Borumi | Other observed tools | ai-video-editor target |
 | --- | --- | --- | --- |
 | Scene planning and script | Yes | Mixed | Required |
 | Screen, camera, microphone | Yes | Common | Required |

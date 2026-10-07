@@ -8,7 +8,7 @@ The user's latest requirements override image artifacts. Implement their dark pa
 
 ## Mandatory corrections
 
-1. Use `codex-video-edit` for the product, executable identity, GitHub repository, and working root. Ignore old names in previous reference images.
+1. Use **AI Video Editor** for visible product branding and `ai-video-editor` for executable identity, GitHub repository, and working root. Ignore old names in previous reference images.
 2. No persistent Ready, All systems operational, Local Project Files, or status footer in the final app. No hidden terminal presented as the main editor.
 3. Remove large repeated headings and explanatory subtitles. In particular, do not reproduce Edit Video / Visuals / Add captions, B-roll, camera layout, and cursor emphasis. Keep real control labels, file names, actionable warnings, and recording indicators.
 4. Show only the active step and selected inspector. The Codex drawer is collapsible. The references show it open to explain its content, not to require it open on every screen. Do not open inspector, transcript, chat, and full navigation simultaneously by default.
@@ -38,3 +38,5 @@ The partial Edit surface places playhead-based Trim start, Trim end, Split, Mark
 The next partial Split action belongs with those compact Edit controls. It targets the current committed fragment at an interior playhead position and preserves the total duration; after split, the UI must show the new fragment boundary from committed state. The reference images do not prove this behavior and do not justify a full decorative track interface before its controls work.
 
 The partial range-cut control adds Mark in, Mark out, Cut range and Clear alongside the compact Edit actions. Marks are output-time positions tied to the current committed draft head; an edit or project change invalidates them. Cut range removes only a valid nonempty, non-whole-draft half-open interval, may cross a source join, and ripples the surviving fragments. The Source inspector continues to list every imported immutable source even when one has no visible interval. Show the result from the committed preview map and let newest Undo restore it. Keep Cut range visible in the default native Edit viewport; the first inspection found it below the fold until the preview reserved vertical space, and the corrected packaged window was inspected again at default and 200% scale. These working controls do not authorize adding a decorative track view or implying synchronized audio playback, Magic Wand editing, review or export.
+
+ADR 0018 adds Claude account sign-in as the default connection requirement. The existing reference images do not depict or prove it. Decide its supported onboarding design from current contracts and expose only implemented, tested controls; retain provider-specific disclosure and one selected drawer.

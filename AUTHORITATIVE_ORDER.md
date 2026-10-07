@@ -17,6 +17,6 @@ A screenshot may refine visual treatment. It may not remove required behavior, p
 
 ## Current requirement resolution
 
-The current name is `codex-video-edit`. Lossless-first behavior is defined in `docs/44_LOSSLESS_MEDIA_POLICY.md`. Public development is defined in `docs/45_OPEN_SOURCE_DEVELOPMENT.md`. Screenshot exceptions are defined in `docs/references/IMPLEMENTATION_NOTES.md`.
+The current name is `ai-video-editor`. ADR 0018 records the latest user requirement: Claude account sign-in is the default AI connection; implementation is pending. The next Claude implementer owns implementation decisions and may revise prior assistant-selected designs with evidence. Lossless-first behavior is defined in `docs/44_LOSSLESS_MEDIA_POLICY.md`. Public development is defined in `docs/45_OPEN_SOURCE_DEVELOPMENT.md`. Screenshot exceptions are defined in `docs/references/IMPLEMENTATION_NOTES.md`.
 
 Current native screenshots guide visual treatment. Previous native screenshots preserve useful earlier states. Neither set overrides current simple-UI, live-Codex, immutable-source, or lossless requirements. No browser-application references or contact sheets belong in the implementation reference set.

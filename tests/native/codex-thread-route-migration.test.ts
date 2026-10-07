@@ -14,6 +14,7 @@ import {
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import { appIdentity } from "../../packages/domain/src/app-identity.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
@@ -27,7 +28,7 @@ const configRoot = await realpath(configArgument);
 assert.equal(configRoot, resolve(configArgument));
 assert.ok(configRoot.startsWith("/home/node/workspaces/"));
 assert.ok((await lstat(executable)).isFile());
-const userData = join(configRoot, "codex-video-edit");
+const userData = join(configRoot, appIdentity.legacyUserDataDirectory);
 const registryPath = join(
   userData,
   "codex/context/threads/project-threads.json",
@@ -75,7 +76,12 @@ const electron = await _electron.launch({
 try {
   const page = await electron.firstWindow();
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
-  assert.equal(page.url(), "codex-video-edit://app/index.html");
+  assert.equal(
+    await electron.evaluate(({ app }) => app.getPath("userData")),
+    userData,
+    "An existing per-user store survives the product rename",
+  );
+  assert.equal(page.url(), "ai-video-editor://app/index.html");
   await electron.evaluate(({ shell }) => {
     shell.openExternal = async () => {
       throw new Error("External launch disabled in isolated test");

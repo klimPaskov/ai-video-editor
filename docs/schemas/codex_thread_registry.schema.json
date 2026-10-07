@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.codex-video-edit.invalid/codex_thread_registry.schema.json",
+  "$id": "https://schemas.ai-video-editor.invalid/codex_thread_registry.schema.json",
   "title": "Main-owned Codex project thread bindings",
   "description": "Version 1 entries without a route are read as MCP and rewritten only on a later binding write. Duplicate project and thread IDs are rejected by the registry decoder.",
   "type": "object",

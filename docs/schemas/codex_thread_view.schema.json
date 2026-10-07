@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.codex-video-edit.invalid/codex_thread_view.schema.json",
+  "$id": "https://schemas.ai-video-editor.invalid/codex_thread_view.schema.json",
   "title": "Renderer-safe Codex project conversation",
   "type": "object",
   "additionalProperties": false,

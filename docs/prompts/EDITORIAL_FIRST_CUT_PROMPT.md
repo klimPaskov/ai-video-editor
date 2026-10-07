@@ -1,6 +1,6 @@
 # Codex editorial first-cut prompt
 
-Use with the real Codex integration in codex-video-edit when the required editing capabilities are implemented. This original adaptation follows `docs/47_EDITORIAL_FIRST_CUT.md`. It is not evidence that the current app can run every step.
+Use with the real Codex integration in ai-video-editor when the required editing capabilities are implemented. This original adaptation follows `docs/47_EDITORIAL_FIRST_CUT.md`. It is not evidence that the current app can run every step.
 
 ## Preferences
 
@@ -14,7 +14,7 @@ Edit the active project into a coherent first cut using the app's actual tools. 
 
 ### 1. Read the current project
 
-Discover the connected app's guidance/capability catalog once for this connection, then consult relevant project, transcript, cut/restore, layout, zoom and QA guidance. Use only exposed codex-video-edit contracts, never an invented external-editor API. Confirm project, revision, current draft sequence/hash, scenes, source roles, canvas and timeline.
+Discover the connected app's guidance/capability catalog once for this connection, then consult relevant project, transcript, cut/restore, layout, zoom and QA guidance. Use only exposed ai-video-editor contracts, never an invented external-editor API. Confirm project, revision, current draft sequence/hash, scenes, source roles, canvas and timeline.
 
 If transcription is running, poll that real job. If absent, request it once and retain/poll its handle. Do not restart on an observation timeout. When a required runtime, project, source or capability is missing, explain the exact blocker and preserve the draft.
 

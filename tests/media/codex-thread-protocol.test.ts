@@ -156,7 +156,7 @@ test("experimental initialization and no-environment requests are exact", () => 
   assert.deepEqual(buildExperimentalInitialize("0.0.0"), {
     clientInfo: {
       name: "codex_video_edit",
-      title: "codex-video-edit",
+      title: "AI Video Editor",
       version: "0.0.0",
     },
     capabilities: {

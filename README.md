@@ -1,4 +1,4 @@
-# codex-video-edit
+# AI Video Editor
 
 A standalone desktop recorder and video editor with live Codex editing, a simple timeline, optional camera, captions, B-roll, automatic zooms, and lossless-first media handling.
 
@@ -6,9 +6,11 @@ A standalone desktop recorder and video editor with live Codex editing, a simple
 
 ## Start
 
-Open this `codex-video-edit` folder as your working repository and give the implementation agent `GOAL_PROMPT.md`. Do not move the files into another planning folder.
+Open this `ai-video-editor` folder as your working repository and give the implementation agent `GOAL_PROMPT.md`.
 
-The agent starts with `AGENTS.md` and `TASKS.md`, builds the native app, and tests it inside its own isolated desktop environment. The public repository is [klimPaskov/codex-video-edit](https://github.com/klimPaskov/codex-video-edit). Source publication and native acceptance are tracked separately; see [P0 foundation](docs/46_P0_FOUNDATION.md).
+For continuation in Claude, use [the handoff prompt](HANDOFF_PROMPT.md) and [Claude project instructions](CLAUDE.md). `.claude/` contains project skill and native-agent entry points. Claude account sign-in is the new default-provider requirement; it is not implemented yet. Private machine context stays in ignored local data.
+
+The agent starts with `AGENTS.md` and `TASKS.md`, builds the native app, and tests it inside its own isolated desktop environment. The public repository is [klimPaskov/ai-video-editor](https://github.com/klimPaskov/ai-video-editor). Source publication and native acceptance are tracked separately; see [P0 foundation](docs/46_P0_FOUNDATION.md).
 
 ## Included
 

@@ -44,3 +44,14 @@ fixtures/user-example/*
 *.s32le
 *.tmp
 .cache/
+
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/auth.json
+.claude/credentials.json
+.claude/.credentials.json
+.claude/projects/
+.claude/sessions/
+.claude/worktrees/
+.claude/cache/
+.claude/tasks/

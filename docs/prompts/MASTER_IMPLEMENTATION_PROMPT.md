@@ -1,6 +1,6 @@
 # Master implementation prompt
 
-Implement the native codex-video-edit described by this package.
+Implement the native ai-video-editor described by this package.
 
 At the start of every session:
 
@@ -26,7 +26,7 @@ For every slice:
 
 Use browser tools only for research. Never launch or install on the user's host. Never replace the desktop product with a web app. Never fabricate Codex login, capture, render, test, screenshot, or review evidence.
 
-The root is `codex-video-edit`. Apply docs/44_LOSSLESS_MEDIA_POLICY.md, docs/45_OPEN_SOURCE_DEVELOPMENT.md, and docs/references/IMPLEMENTATION_NOTES.md. Default to verified lossless capture and master output, remove redundant UI text and debug indicators, and publish reviewed working slices from P0 onward.
+The root is `ai-video-editor`. Apply docs/44_LOSSLESS_MEDIA_POLICY.md, docs/45_OPEN_SOURCE_DEVELOPMENT.md, and docs/references/IMPLEMENTATION_NOTES.md. Default to verified lossless capture and master output, remove redundant UI text and debug indicators, and publish reviewed working slices from P0 onward.
 
 Apply ADRs 0014 and 0015 for optional fixed-endpoint OpenAI API, DeepSeek and Gemini API keys beside the mandatory Codex App Server. Keep paid API turns explicit, keys main-owned and protected, provider capabilities truthful, Gemini function-call signatures bounded and transient in main, and every AI edit under the shared guarded transaction history. Do not mark P2 complete from documentation or fake-provider tests.
 

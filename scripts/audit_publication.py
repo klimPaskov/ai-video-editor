@@ -7,7 +7,7 @@ from workspace_files import is_agent_source
 ROOT = Path(__file__).resolve().parents[1]
 PRIVATE_PARTS = frozenset({
     'node_modules', 'private', 'projects', 'recordings', 'exports', 'models',
-    'checkpoints', 'credentials', '.codex', '.venv', '__pycache__',
+    'checkpoints', 'credentials', '.codex', '.claude', '.venv', '__pycache__',
     'test-results', 'local-data',
 })
 MEDIA_SUFFIXES = frozenset({
@@ -27,6 +27,8 @@ def audit_blob(path: str, data: bytes, mode: str):
     parsed = PurePosixPath(policy_path)
     if mode not in {'100644', '100755'}:
         raise ValueError('Symlink/submodule or unsupported Git mode: ' + path)
+    if parsed.name == 'claude.local.md':
+        raise ValueError('Private Claude project context staged: ' + path)
     if any(part in PRIVATE_PARTS for part in parsed.parts) and not is_agent_source(policy_path):
         raise ValueError('Private/generated path staged: ' + path)
     if policy_path.startswith(('test-results/', 'local-data/')):
