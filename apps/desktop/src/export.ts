@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { access, mkdir, open, rename, rm } from "node:fs/promises";
+import { access, mkdir, open, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   assertExportView,
@@ -39,6 +39,8 @@ export interface DesktopExportOptions {
   openFile: (file: string) => Promise<void>;
   ffmpeg?: string;
   ffprobe?: string;
+  /** SubRip captions for the project's current draft, or null when off. */
+  captions?: (projectId: string) => Promise<string | null>;
 }
 
 interface Job {
@@ -235,6 +237,19 @@ export class DesktopExports {
     } catch {
       message = exportIssues.storage;
     }
+    // Captions are a sidecar beside the video; a failure never loses the
+    // verified video, and an unrelated existing file is not replaced.
+    let captionsFileName: string | null = null;
+    try {
+      const text = await this.options.captions?.(job.projectId);
+      if (text) {
+        const file = job.outputPath.replace(/\.[^.\\/]+$/u, "") + ".srt";
+        await writeFile(file, text, { flag: replace ? "w" : "wx" });
+        captionsFileName = path.basename(file);
+      }
+    } catch {
+      captionsFileName = null;
+    }
     if (this.job !== job) return;
     this.job = null;
     this.lastOutput = job.outputPath;
@@ -252,6 +267,7 @@ export class DesktopExports {
         outputBytes: evidence.outputBytes,
         samplesEqual: evidence.samplesEqual,
         draftSequence: job.draftSequence,
+        captionsFileName,
       },
       message,
     });

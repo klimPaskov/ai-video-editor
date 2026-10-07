@@ -81,7 +81,7 @@ export function setupExportPanel(): ExportPanel {
       const exported = view.result;
       result.textContent = `${exported.fileName} · ${clock(exported.durationUs)} · ${size(exported.outputBytes)}${
         exported.profile === "lossless_master" ? " · verified lossless" : ""
-      }`;
+      }${exported.captionsFileName ? ` · captions in ${exported.captionsFileName}` : ""}`;
     }
     const message =
       localError ??

@@ -38,4 +38,4 @@ Evidence: `tests/media/export-render.test.ts` compares the master of a cut, reor
 
 Constant-rate sources whose container rounds timestamps (Matroska stores milliseconds, so 30 fps has 33/34 ms steps) are accepted when every frame lies within one tick (at least 1 ms) of `index / rate`; frame and sample positions then come from the exact nominal rate (`tests/media/export-render.test.ts`).
 
-Not yet implemented: caption sidecars, mixed-format working-format conversion, truly variable frame rate, HDR transforms, export of zoom/speed/layout/caption effects, and a final thumbnail on the result.
+Captions: when captions are on, export writes an .srt beside the video after verification (docs/13); a failure there never removes the video, and an existing .srt is replaced only when the save dialog confirmed replacing the video. Not yet implemented: burned-in captions, mixed-format working-format conversion, truly variable frame rate, HDR transforms, export of zoom/speed/layout/caption effects, and a final thumbnail on the result.

@@ -34,6 +34,11 @@ import {
   assertMagicWandView,
 } from "../../../packages/domain/src/magic-wand-view.ts";
 import {
+  assertCaptionSettings,
+  assertCaptionSettingsRequest,
+  assertCaptionSettingsUpdate,
+} from "../../../packages/domain/src/captions.ts";
+import {
   assertPlaybackProjectRequest,
   assertPlaybackView,
 } from "../../../packages/domain/src/playback-view.ts";
@@ -256,6 +261,14 @@ const bridge: DesktopBridge = {
   getPlayback: (request) => {
     assertPlaybackProjectRequest(request);
     return invoke(channels.playbackGet, request, assertPlaybackView);
+  },
+  getCaptionSettings: (request) => {
+    assertCaptionSettingsRequest(request);
+    return invoke(channels.captionsGet, request, assertCaptionSettings);
+  },
+  setCaptionSettings: (request) => {
+    assertCaptionSettingsUpdate(request);
+    return invoke(channels.captionsSet, request, assertCaptionSettings);
   },
   getRecordingDevices: () =>
     invoke(channels.recordingDevices, undefined, assertRecordingDevices),

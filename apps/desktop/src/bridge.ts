@@ -16,6 +16,11 @@ import type {
   MagicWandView,
 } from "../../../packages/domain/src/magic-wand-view.ts";
 import type {
+  CaptionSettings,
+  CaptionSettingsRequest,
+  CaptionSettingsUpdate,
+} from "../../../packages/domain/src/captions.ts";
+import type {
   PlaybackProjectRequest,
   PlaybackView,
 } from "../../../packages/domain/src/playback-view.ts";
@@ -147,6 +152,12 @@ export interface DesktopBridge {
     request: CodexThreadProjectRequest,
   ): Promise<Reply<CodexThreadView>>;
   getPlayback(request: PlaybackProjectRequest): Promise<Reply<PlaybackView>>;
+  getCaptionSettings(
+    request: CaptionSettingsRequest,
+  ): Promise<Reply<CaptionSettings>>;
+  setCaptionSettings(
+    request: CaptionSettingsUpdate,
+  ): Promise<Reply<CaptionSettings>>;
   getRecordingDevices(): Promise<Reply<RecordingDevices>>;
   getRecording(): Promise<Reply<RecordingView>>;
   startRecording(request: RecordingStartRequest): Promise<Reply<RecordingView>>;
@@ -210,6 +221,8 @@ export interface DesktopBridge {
 }
 export const channels = Object.freeze({
   playbackGet: "playback:get",
+  captionsGet: "captions:get",
+  captionsSet: "captions:set",
   recordingDevices: "recording:devices",
   recordingGet: "recording:get",
   recordingStart: "recording:start",

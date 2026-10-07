@@ -50,6 +50,8 @@ export interface ExportResultView {
   /** Decoded output equals the canonical render (master only). */
   samplesEqual: boolean;
   draftSequence: number;
+  /** SubRip captions written beside the video, if any. */
+  captionsFileName: string | null;
 }
 
 export interface ExportView {
@@ -202,7 +204,15 @@ export function assertExportView(value: unknown): asserts value is ExportView {
       "outputBytes",
       "samplesEqual",
       "draftSequence",
+      "captionsFileName",
     ]);
+    if (
+      result.captionsFileName !== null &&
+      (typeof result.captionsFileName !== "string" ||
+        result.captionsFileName.length > 255 ||
+        !/^[^\\/:\u0000-\u001f\u007f]+\.srt$/u.test(result.captionsFileName))
+    )
+      invalid();
     fileName(result.fileName);
     profile(result.profile);
     nonNegative(result.durationUs);

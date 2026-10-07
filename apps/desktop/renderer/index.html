@@ -248,6 +248,30 @@
                 <p id="magic-status" role="status" hidden></p>
                 <p id="magic-error" role="alert" hidden></p>
               </div>
+              <div id="captions-card" class="captions-card">
+                <div class="captions-controls">
+                  <span class="card-title" data-icon="captions">Captions</span>
+                  <label class="switch" for="captions-enabled"
+                    ><input id="captions-enabled" type="checkbox" />Show
+                    captions</label
+                  >
+                  <select id="captions-style" aria-label="Caption style">
+                    <option value="plain">Plain</option>
+                    <option value="highlight">Highlight words</option>
+                    <option value="minimal">Minimal</option>
+                  </select>
+                  <select id="captions-size" aria-label="Caption size">
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                  <select id="captions-position" aria-label="Caption position">
+                    <option value="bottom">Bottom</option>
+                    <option value="top">Top</option>
+                  </select>
+                </div>
+                <p id="captions-note" class="muted"></p>
+              </div>
               <div class="auto-edit-controls">
                 <span class="card-title" data-icon="transcript"
                   >Transcript</span

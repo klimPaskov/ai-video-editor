@@ -112,6 +112,15 @@ import { DesktopExports } from "./export.ts";
 import { DesktopMagicWand } from "./magic-wand.ts";
 import { DesktopRecorder, RecordingError } from "./recording.ts";
 import { DesktopPlaybackProxies } from "./playback-proxies.ts";
+import { CaptionSettingsStore } from "./caption-settings.ts";
+import {
+  assertCaptionSettingsRequest,
+  assertCaptionSettingsUpdate,
+  buildCaptionCues,
+  captionSourceWords,
+  captionWordsForDraft,
+  toSrt,
+} from "../../../packages/domain/src/captions.ts";
 import {
   assertPlaybackProjectRequest,
   assertPlaybackView,
@@ -358,6 +367,37 @@ async function start(): Promise<void> {
   const projects = new ProjectStore(projectRoot, library);
   const drafts = new DraftTransactionStore(projectRoot, projects);
   const projectRuntime = new DesktopProjectRuntime(drafts, library);
+  const captionSettings = new CaptionSettingsStore(
+    path.join(userData, "caption-settings"),
+  );
+  /** SubRip for the current draft when captions are on and a transcript exists. */
+  const captionsSrt = async (projectId: string): Promise<string | null> => {
+    if (!(await captionSettings.get(projectId)).enabled) return null;
+    const view = await transcription!.get({
+      schema_version: "1.0",
+      project_id: projectId,
+      job_id: null,
+    });
+    if (view.results.length === 0) return null;
+    const project = await projectRuntime.view(projectId);
+    const cues = buildCaptionCues(
+      captionWordsForDraft(
+        captionSourceWords(view.results, project.transcriptEdits ?? []),
+        project.clips ?? [],
+      ),
+    );
+    return cues.length ? toSrt(cues) : null;
+  };
+  register(channels.captionsGet, async (request) => {
+    assertCaptionSettingsRequest(request);
+    return captionSettings.get(request.project_id);
+  });
+  register(channels.captionsSet, async (request) => {
+    assertCaptionSettingsUpdate(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before changing captions.");
+    return captionSettings.set(request.project_id, request.settings);
+  });
   recorder = new DesktopRecorder({
     root: path.join(userData, "recordings"),
     platform: process.platform,
@@ -426,6 +466,7 @@ async function start(): Promise<void> {
     return recording(() => recorder!.cancel());
   });
   exports = new DesktopExports({
+    captions: captionsSrt,
     drafts,
     recordRoot: path.join(userData, "exports"),
     defaultDirectory: () => app.getPath("videos"),

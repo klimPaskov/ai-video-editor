@@ -54,6 +54,15 @@ class DesktopIpcContractTests(unittest.TestCase):
         for size in [{'width': 321}, {'height': 1281}]:
             self.invalid({'channel': 'library:thumbnail', 'payload': payload, 'response': {'ok': True, 'value': dict(picture, **size)}})
 
+    def test_caption_settings_hold_only_style_choices(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        settings = {'enabled': True, 'style': 'highlight', 'size': 'large', 'position': 'top'}
+        self.valid({'channel': 'captions:get', 'payload': request, 'response': {'ok': True, 'value': settings}})
+        self.valid({'channel': 'captions:set', 'payload': dict(request, settings=settings), 'response': {'ok': True, 'value': settings}})
+        for wrong in [dict(settings, style='karaoke'), dict(settings, cues=[]), dict(settings, enabled='yes')]:
+            self.invalid({'channel': 'captions:set', 'payload': dict(request, settings=wrong), 'response': {'ok': True, 'value': settings}})
+        self.invalid({'channel': 'captions:get', 'payload': dict(request, path='/x.srt'), 'response': {'ok': True, 'value': settings}})
+
     def test_playback_view_is_path_free(self):
         request = {'schema_version': '1.0', 'project_id': 'project-1'}
         for value in [{'status': 'ready', 'progress': None, 'message': None},

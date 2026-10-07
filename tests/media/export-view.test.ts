@@ -38,10 +38,22 @@ test("export views reject paths, raw errors and inconsistent states", () => {
       outputBytes: 1024,
       samplesEqual: true,
       draftSequence: 2,
+      captionsFileName: null,
     },
     message: null,
   };
   assertExportView(completed);
+  assertExportView({
+    ...completed,
+    result: { ...completed.result!, captionsFileName: "Talk master.srt" },
+  });
+  for (const captionsFileName of ["Talk master.txt", "../x.srt", "a/b.srt"])
+    assert.throws(() =>
+      assertExportView({
+        ...completed,
+        result: { ...completed.result!, captionsFileName },
+      }),
+    );
   for (const bad of [
     {
       ...completed,

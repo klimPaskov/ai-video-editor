@@ -19,7 +19,8 @@
         "frameCount": 134,
         "outputBytes": 3250112,
         "samplesEqual": true,
-        "draftSequence": 1
+        "draftSequence": 1,
+        "captionsFileName": null
       },
       "message": null
     }

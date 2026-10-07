@@ -1,6 +1,7 @@
 import { setupCodexSettings } from "./codex-settings.ts";
 import { iconElement, setupIcons } from "./icons.ts";
 import { setupTimelineStrip } from "./timeline-strip.ts";
+import { setupCaptions } from "./captions-panel.ts";
 import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { setupExportPanel } from "./export-panel.ts";
 import { setupPlayback } from "./playback.ts";
@@ -941,6 +942,7 @@ function syncTranscriptionPolling(): void {
 }
 const magicPanel = setupMagicPanel(() => void loadTranscription());
 function renderTranscriptionActions(): void {
+  refreshCaptions();
   const project = activeProject;
   const visible = project?.stage === "auto_edit";
   magicPanel.render(project, visible);
@@ -1220,7 +1222,17 @@ const timelineStrip = setupTimelineStrip({
   },
   time,
 });
+const captions = setupCaptions({ preview: canvas.parentElement! });
+function refreshCaptions(): void {
+  captions.render(
+    selected?.previewAvailable ? activeProject : undefined,
+    transcriptionView,
+    Number(seek.value),
+  );
+}
+window.addEventListener("resize", () => captions.position(Number(seek.value)));
 function renderTimeline(): void {
+  refreshCaptions();
   const project = selected?.previewAvailable ? activeProject : undefined;
   const currentMarks = !!project && markHead === currentHeadKey(project);
   timelineStrip.render(project, {
@@ -2009,6 +2021,7 @@ const playback = setupPlayback({
     seek.value = String(Math.min(Number(seek.max), Math.max(0, us)));
     element("time").textContent = time(us);
     timelineStrip.playhead(us);
+    captions.position(us);
     previous.disabled = us <= 0;
     next.disabled = us >= Number(seek.max);
   },
