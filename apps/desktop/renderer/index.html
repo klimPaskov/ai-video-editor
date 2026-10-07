@@ -462,6 +462,21 @@
                 >
                   Zoom
                 </button>
+                <label class="speed-control" data-icon="speed">
+                  <span class="visually-hidden">Speed</span>
+                  <select
+                    id="speed"
+                    aria-describedby="speed-scope"
+                    title="Speed of the marked range, or of the part under the playhead"
+                  >
+                    <option value="1">Normal speed</option>
+                    <option value="2">2× speed</option>
+                    <option value="3">3× speed</option>
+                    <option value="4">4× speed</option>
+                    <option value="8">8× speed</option>
+                  </select>
+                  <span id="speed-scope" class="visually-hidden"></span>
+                </label>
                 <span id="zoom-controls" class="zoom-controls" hidden>
                   <select id="zoom-scale" aria-label="Zoom strength">
                     <option value="1.5">1.5×</option>

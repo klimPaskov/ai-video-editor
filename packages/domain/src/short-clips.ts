@@ -1,3 +1,4 @@
+import { viewSourceAt } from "./speed.ts";
 import { joinCaptionWords, type CaptionWord } from "./captions.ts";
 
 /**
@@ -323,6 +324,7 @@ export interface DraftClipRange {
   timelineEndUs: number;
   sourceStartUs: number;
   sourceEndUs: number;
+  speed?: number;
 }
 
 /** Source ranges that make up output time [startUs, endUs) of the draft. */
@@ -330,11 +332,17 @@ export function draftWindowClips(
   clips: readonly DraftClipRange[],
   startUs: number,
   endUs: number,
-): { sourceId: string; sourceStartUs: number; sourceEndUs: number }[] {
+): {
+  sourceId: string;
+  sourceStartUs: number;
+  sourceEndUs: number;
+  speed?: number;
+}[] {
   const ranges: {
     sourceId: string;
     sourceStartUs: number;
     sourceEndUs: number;
+    speed?: number;
   }[] = [];
   for (const clip of [...clips].sort(
     (a, b) => a.timelineStartUs - b.timelineStartUs,
@@ -342,11 +350,13 @@ export function draftWindowClips(
     const from = Math.max(startUs, clip.timelineStartUs);
     const to = Math.min(endUs, clip.timelineEndUs);
     if (to <= from) continue;
-    const offset = clip.sourceStartUs - clip.timelineStartUs;
     ranges.push({
       sourceId: clip.sourceId,
-      sourceStartUs: from + offset,
-      sourceEndUs: to + offset,
+      sourceStartUs: viewSourceAt(clip, from),
+      // A clip's last output microsecond covers the rest of its source.
+      sourceEndUs:
+        to === clip.timelineEndUs ? clip.sourceEndUs : viewSourceAt(clip, to),
+      ...(clip.speed && clip.speed !== 1 ? { speed: clip.speed } : {}),
     });
   }
   return ranges;

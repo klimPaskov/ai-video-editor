@@ -1,3 +1,4 @@
+import { timelineAt } from "./speed.ts";
 import type {
   LocalTranscript,
   TranscriptAnalysis,
@@ -264,6 +265,7 @@ export interface MagicClip {
   source_end_us: number;
   timeline_start_us: number;
   timeline_end_us: number;
+  speed?: number;
 }
 
 export interface OutputCut {
@@ -289,8 +291,8 @@ export function mapCutsToOutput(
       const end = Math.min(cut.endUs, clip.source_end_us);
       if (end <= start) continue;
       output.push({
-        start_us: clip.timeline_start_us + (start - clip.source_start_us),
-        end_us: clip.timeline_start_us + (end - clip.source_start_us),
+        start_us: timelineAt(clip, start),
+        end_us: Math.min(clip.timeline_end_us, timelineAt(clip, end)),
         kinds: [...cut.kinds],
       });
     }

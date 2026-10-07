@@ -3,6 +3,7 @@
  * one magnifies a fixed point of the frame by `scale`, easing in at its
  * start and out at its end. The same math drives the preview and export.
  */
+import { viewTimelineAt } from "./speed.ts";
 
 export interface ZoomEffect {
   zoom_id: string;
@@ -21,6 +22,7 @@ export interface ZoomClip {
   timelineEndUs: number;
   sourceStartUs: number;
   sourceEndUs: number;
+  speed?: number;
 }
 
 /** A visible piece of a zoom in output time. */
@@ -137,11 +139,10 @@ export function zoomIntervals(
       const from = Math.max(zoom.source_start_us, clip.sourceStartUs);
       const to = Math.min(zoom.source_end_us, clip.sourceEndUs);
       if (to <= from) continue;
-      const offset = clip.timelineStartUs - clip.sourceStartUs;
       pieces.push({
         zoomId: zoom.zoom_id,
-        startUs: from + offset,
-        endUs: to + offset,
+        startUs: viewTimelineAt(clip, from),
+        endUs: Math.min(clip.timelineEndUs, viewTimelineAt(clip, to)),
         centerX: zoom.center_x,
         centerY: zoom.center_y,
         scale: zoom.scale,

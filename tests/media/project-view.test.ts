@@ -12,6 +12,7 @@ import {
   assertManualRangeCutRequest,
   assertManualZoomRequest,
   assertManualZoomRemoveRequest,
+  assertManualSpeedRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualUndoRequest,
@@ -630,4 +631,45 @@ test("zoom requests are path-free, bounded and tied to a draft head", () => {
     [value.zooms[0], value.zooms[0]],
   ])
     assert.throws(() => assertProjectDraftView({ ...value, zooms }));
+});
+
+test("speed requests and sped-up clip views are exact", () => {
+  const example = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../docs/examples/desktop_ipc_manual_speed.example.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ) as { payload: Record<string, unknown>; response: { value: unknown } };
+  assertManualSpeedRequest(example.payload);
+  assertManualSpeedRequest({ ...example.payload, speed: 1 });
+  for (const speed of [0, 1.5, 5, 16, "2", null])
+    assert.throws(() =>
+      assertManualSpeedRequest({ ...example.payload, speed }),
+    );
+  assert.throws(() =>
+    assertManualSpeedRequest({ ...example.payload, endUs: 200_000 }),
+  );
+  assert.throws(() =>
+    assertManualSpeedRequest({ ...example.payload, path: "/private" }),
+  );
+  assertProjectDraftView(example.response.value);
+  const value = example.response.value as unknown as {
+    clips: Record<string, unknown>[];
+  };
+  const withClip = (index: number, change: Record<string, unknown>) => ({
+    ...value,
+    clips: value.clips.map((clip, at) =>
+      at === index ? { ...clip, ...change } : clip,
+    ),
+  });
+  for (const bad of [
+    withClip(1, { speed: 1 }),
+    withClip(1, { speed: 5 }),
+    withClip(1, { speed: 3 }),
+    withClip(0, { speed: 2 }),
+  ])
+    assert.throws(() => assertProjectDraftView(bad));
 });

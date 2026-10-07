@@ -85,6 +85,8 @@ export interface InitialProjectSnapshot {
       timeline_start_us: number;
       timeline_end_us: number;
       enabled: true;
+      /** Whole-number speed-up; absent means normal speed. */
+      speed?: number;
     }[];
     operation_ids: string[];
     zoom_ids: string[];

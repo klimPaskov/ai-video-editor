@@ -96,7 +96,9 @@ const editActions = element("edit-actions"),
   zoomScale = element<HTMLSelectElement>("zoom-scale"),
   zoomTarget = element<HTMLButtonElement>("zoom-target"),
   zoomRemove = element<HTMLButtonElement>("zoom-remove"),
-  zoomHint = element("zoom-hint");
+  zoomHint = element("zoom-hint"),
+  speedSelect = element<HTMLSelectElement>("speed"),
+  speedScope = element("speed-scope");
 const reviewActions = element("review-actions"),
   checkDraftIntegrityButton = element<HTMLButtonElement>(
     "check-draft-integrity",
@@ -844,7 +846,8 @@ function transcriptCutRange(
       item.sourceStartUs <= first.start_us &&
       item.sourceEndUs >= last.end_us,
   );
-  if (!clip) return undefined;
+  // Word cuts map exactly only at normal speed.
+  if (!clip || clip.speed) return undefined;
   const startUs = clip.timelineStartUs + (first.start_us - clip.sourceStartUs);
   const endUs = clip.timelineStartUs + (last.end_us - clip.sourceStartUs);
   if (
@@ -1356,6 +1359,7 @@ function renderEditTools(): void {
     .filter(Boolean)
     .join(" · ");
   renderZoomTools(project, inUs, outUs);
+  renderSpeedTools(project, inUs, outUs);
   restoreToggleButton.disabled = manualEditPending || navigating;
   restoreToggleButton.textContent = restoreRangeOpen
     ? "Cancel restore"
@@ -2595,6 +2599,106 @@ clearMarksButton.addEventListener("click", () => {
   markInUs = undefined;
   markOutUs = undefined;
   renderEditTools();
+});
+/** The marked range, or the part under the playhead, that Speed changes. */
+function speedRange(
+  project: ProjectView,
+  inUs: number | undefined,
+  outUs: number | undefined,
+): { startUs: number; endUs: number; marked: boolean } | undefined {
+  if (inUs !== undefined && outUs !== undefined)
+    return inUs < outUs && outUs <= project.timeline.durationUs
+      ? { startUs: inUs, endUs: outUs, marked: true }
+      : undefined;
+  const clip = currentClip();
+  return clip
+    ? {
+        startUs: clip.timelineStartUs,
+        endUs: clip.timelineEndUs,
+        marked: false,
+      }
+    : undefined;
+}
+function renderSpeedTools(
+  project: ProjectView,
+  inUs: number | undefined,
+  outUs: number | undefined,
+): void {
+  const range = speedRange(project, inUs, outUs);
+  const speeds = new Set(
+    (project.clips ?? [])
+      .filter(
+        (clip) =>
+          range &&
+          clip.timelineStartUs < range.endUs &&
+          clip.timelineEndUs > range.startUs,
+      )
+      .map((clip) => String(clip.speed ?? 1)),
+  );
+  let mixed = speedSelect.querySelector<HTMLOptionElement>(
+    'option[value="mixed"]',
+  );
+  if (speeds.size > 1 && !mixed) {
+    mixed = new Option("Mixed speeds", "mixed");
+    mixed.disabled = true;
+    speedSelect.prepend(mixed);
+  }
+  if (speeds.size <= 1) mixed?.remove();
+  speedSelect.value = speeds.size === 1 ? [...speeds][0]! : "mixed";
+  speedSelect.disabled = !range || manualEditPending || navigating;
+  speedScope.textContent = range?.marked
+    ? "Applies to the marked range."
+    : "Applies to the part under the playhead.";
+}
+async function submitSpeed(speed: number): Promise<void> {
+  const project = activeProject,
+    generation = routeGeneration;
+  if (!project || project.stage !== "edit" || manualEditPending) return;
+  const currentMarks = markHead === currentHeadKey(project),
+    range = speedRange(
+      project,
+      currentMarks ? markInUs : undefined,
+      currentMarks ? markOutUs : undefined,
+    );
+  if (!range) return;
+  playback.stop();
+  manualEditPending = true;
+  back.disabled = true;
+  renderEditTools();
+  clearError();
+  try {
+    const reply = await window.desktop.applyManualSpeed({
+      schema_version: "1.0",
+      projectId: project.id,
+      draftId: project.draft.id,
+      baseRevisionId: project.draft.baseRevisionId,
+      expectedSequence: project.draft.sequence,
+      expectedTimelineSha256: project.draft.timelineSha256,
+      startUs: range.startUs,
+      endUs: range.endUs,
+      speed,
+    });
+    if (generation === routeGeneration && activeProject?.id === project.id) {
+      if (reply.ok && range.marked) {
+        markHead = undefined;
+        markInUs = undefined;
+        markOutUs = undefined;
+      }
+      applyProjectDraft(reply);
+      if (reply.ok) requestFrame(range.startUs);
+    }
+  } catch {
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      showError("The speed could not be saved. Try again.");
+  } finally {
+    manualEditPending = false;
+    back.disabled = false;
+    renderEditTools();
+  }
+}
+speedSelect.addEventListener("change", () => {
+  const speed = Number(speedSelect.value);
+  if (Number.isInteger(speed)) void submitSpeed(speed);
 });
 /** Output range a new zoom covers: the marks, or two seconds from the playhead. */
 function newZoomRange(

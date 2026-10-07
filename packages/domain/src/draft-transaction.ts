@@ -9,6 +9,12 @@ import {
   assertZoomEffects,
   type ZoomEffect,
 } from "./zoom.ts";
+import {
+  clipSpeed,
+  isClipSpeed,
+  speedLength,
+  type ClipSpeed,
+} from "./speed.ts";
 type ProjectBaseline = InitialProjectSnapshot | TwoSourceInitialProjectSnapshot;
 import {
   canonicalSha256,
@@ -98,7 +104,16 @@ export interface RemoveZoomIntent {
   zoom_id: string;
 }
 
+/** Plays output range [start_us, end_us) at `speed` (1 restores normal). */
+export interface SetSpeedIntent {
+  type: "set_speed";
+  start_us: number;
+  end_us: number;
+  speed: ClipSpeed;
+}
+
 export type DraftEditIntent =
+  | SetSpeedIntent
   | SetZoomIntent
   | RemoveZoomIntent
   | TrimEdgeIntent
@@ -274,6 +289,22 @@ export interface TranscriptCutOperationRecord {
   };
 }
 
+export interface SpeedOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "speed";
+  start_us: number;
+  end_us: number;
+  speed: ClipSpeed;
+  before: DraftTimeline["clips"];
+  after: DraftTimeline["clips"];
+  inverse: {
+    type: "restore_timeline_clips";
+    clips: DraftTimeline["clips"];
+    expected_after_sha256: string;
+  };
+}
+
 export interface ZoomOperationRecord {
   schema_version: "1.0";
   operation_id: string;
@@ -292,6 +323,7 @@ export interface ZoomOperationRecord {
 }
 
 export type DraftOperationRecord =
+  | SpeedOperationRecord
   | ZoomOperationRecord
   | TrimOperationRecord
   | SplitOperationRecord
@@ -467,16 +499,26 @@ function verificationCheck(
 }
 
 function clip(value: unknown): asserts value is DraftTimeline["clips"][number] {
-  exact(value, [
-    "clip_id",
-    "track_id",
-    "source_id",
-    "source_start_us",
-    "source_end_us",
-    "timeline_start_us",
-    "timeline_end_us",
-    "enabled",
-  ]);
+  exactOptional(
+    value,
+    [
+      "clip_id",
+      "track_id",
+      "source_id",
+      "source_start_us",
+      "source_end_us",
+      "timeline_start_us",
+      "timeline_end_us",
+      "enabled",
+    ],
+    ["speed"],
+  );
+  // Normal speed is stored by omission, so each clip map has one form.
+  if (
+    Object.hasOwn(value, "speed") &&
+    (!isClipSpeed(value.speed) || value.speed === 1)
+  )
+    invalid();
   id(value.clip_id);
   id(value.track_id);
   id(value.source_id);
@@ -573,10 +615,18 @@ export function assertDraftTimeline(
         current.source_end_us > original.source_end_us ||
         current.timeline_start_us !== position ||
         !Number.isSafeInteger(
-          position + current.source_end_us - current.source_start_us,
+          position +
+            speedLength(
+              current.source_end_us - current.source_start_us,
+              clipSpeed(current),
+            ),
         ) ||
         current.timeline_end_us !==
-          position + current.source_end_us - current.source_start_us
+          position +
+            speedLength(
+              current.source_end_us - current.source_start_us,
+              clipSpeed(current),
+            )
       )
         invalid();
       clipIds.add(current.clip_id);
@@ -656,6 +706,18 @@ export function assertApplyDraftTransactionRequest(
   const clips = new Set<string>();
   let previousRangeStart: number | null = null;
   for (const operation of value.operations) {
+    if (operation?.type === "set_speed") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "start_us", "end_us", "speed"]);
+      integer(operation.start_us);
+      integer(operation.end_us, 1);
+      if (
+        operation.start_us >= operation.end_us ||
+        !isClipSpeed(operation.speed)
+      )
+        invalid();
+      continue;
+    }
     if (operation?.type === "set_zoom") {
       if (value.operations.length !== 1) invalid();
       exact(operation, ["type", "zoom"]);

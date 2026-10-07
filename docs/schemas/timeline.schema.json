@@ -157,6 +157,10 @@
           "enabled": {
             "type": "boolean"
           },
+          "speed": {
+            "enum": [2, 3, 4, 8],
+            "description": "Whole-number speed-up. Omitted at normal speed. The clip lasts ceil(source length / speed) and output time maps to source time exactly."
+          },
           "transform": {
             "type": "object",
             "additionalProperties": false,

@@ -211,6 +211,7 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
       timeline_start_us: clip.timeline_start_us,
       timeline_end_us: clip.timeline_end_us,
       enabled: clip.enabled,
+      ...(clip.speed ? { speed: clip.speed } : {}),
     })),
     operation_ids: [...draft.timeline.operation_ids],
     zoom_ids: [...draft.timeline.zoom_ids],

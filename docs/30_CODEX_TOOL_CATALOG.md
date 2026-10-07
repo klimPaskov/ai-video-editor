@@ -92,7 +92,7 @@ Manage purposeful zoom ranges, normalized targets, scale, easing, and evidence.
 
 ### `speed.add`, `speed.update`, `speed.remove`
 
-Manage bounded speed ranges, rate, reason, and audio mode. Speech handling is explicit.
+Manage bounded speed ranges, rate, reason, and audio mode. Speech handling is explicit. Not yet exposed to assistants: speed is currently a manual Edit control (docs/12). The draft summary that existing guarded tools return includes a clip's whole-number `speed` when it is not normal, so assistants see why output and source spans differ.
 
 ### `captions.configure`, `captions.correct`
 

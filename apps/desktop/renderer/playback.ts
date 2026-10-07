@@ -1,3 +1,7 @@
+import {
+  viewSourceAt,
+  viewTimelineAt,
+} from "../../../packages/domain/src/speed.ts";
 import type {
   ProjectClipView,
   ProjectView,
@@ -103,6 +107,9 @@ export function setupPlayback(host: PlaybackHost): Playback {
       const seeked = when(video, "seeked");
       video.currentTime = sourceUs / 1_000_000;
       await seeked;
+      // Sped-up clips play faster; the browser keeps the voice's pitch.
+      video.preservesPitch = true;
+      video.defaultPlaybackRate = video.playbackRate = clip.speed ?? 1;
     })();
     // A standby slot that fails is reported only if playback reaches it.
     slot.ready.catch(() => undefined);
@@ -137,10 +144,7 @@ export function setupPlayback(host: PlaybackHost): Playback {
     const sourceUs = Math.round(mediaSeconds * 1_000_000);
     outputUs = Math.min(
       clip.timelineEndUs - 1,
-      Math.max(
-        clip.timelineStartUs,
-        clip.timelineStartUs + sourceUs - clip.sourceStartUs,
-      ),
+      Math.max(clip.timelineStartUs, viewTimelineAt(clip, sourceUs)),
     );
     host.show(outputUs);
     // The frame on screen is the clip's last one: move on after it.
@@ -221,7 +225,7 @@ export function setupPlayback(host: PlaybackHost): Playback {
     active = 0;
     const slot = slots[0];
     try {
-      await load(slot, index, clip.sourceStartUs + (at - clip.timelineStartUs));
+      await load(slot, index, viewSourceAt(clip, at));
       if (run !== token) return;
       await slot.video.play();
     } catch {

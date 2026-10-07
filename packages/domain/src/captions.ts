@@ -1,3 +1,4 @@
+import { viewTimelineAt } from "./speed.ts";
 import type {
   TranscriptTextOverride,
   TranscriptionSourceResult,
@@ -22,6 +23,7 @@ export interface CaptionClip {
   timelineStartUs: number;
   sourceStartUs: number;
   sourceEndUs: number;
+  speed?: number;
 }
 
 export interface CaptionWord {
@@ -78,11 +80,10 @@ export function captionWordsForDraft(
         continue;
       const text = word.text.trim();
       if (!text) continue;
-      const offset = clip.timelineStartUs - clip.sourceStartUs;
       result.push({
         text,
-        startUs: word.startUs + offset,
-        endUs: word.endUs + offset,
+        startUs: viewTimelineAt(clip, word.startUs),
+        endUs: viewTimelineAt(clip, word.endUs),
       });
     }
   }

@@ -82,12 +82,19 @@ export function setupTimelineStrip(options: {
           );
           block.className =
             sourceIndex > 0 ? "timeline-clip second-source" : "timeline-clip";
+          if (clip.speed) block.classList.add("sped");
           block.style.left = percent(clip.timelineStartUs);
           block.style.width = `calc(${percent(clip.timelineEndUs - clip.timelineStartUs)} - 2px)`;
           block.textContent =
             project.clips!.length > 1
               ? `${index + 1}`
               : (sources[0]?.name ?? "");
+          if (clip.speed) {
+            const badge = document.createElement("span");
+            badge.className = "timeline-speed";
+            badge.textContent = `${clip.speed}×`;
+            block.append(badge);
+          }
           return block;
         }),
       );
@@ -96,10 +103,19 @@ export function setupTimelineStrip(options: {
         0,
       );
       const parts = project.clips.length;
+      // Footage kept is measured in source time, so speed-ups do not count.
+      const keptUs = project.clips.reduce(
+        (sum, clip) => sum + clip.sourceEndUs - clip.sourceStartUs,
+        0,
+      );
+      const count = `${parts} ${parts === 1 ? "clip" : "clips"}`;
       summary.textContent =
-        originalUs > durationUs
-          ? `${parts} ${parts === 1 ? "clip" : "clips"} · ${options.time(durationUs)} of ${options.time(originalUs)} kept`
-          : `${parts} ${parts === 1 ? "clip" : "clips"} · ${options.time(durationUs)}`;
+        keptUs === durationUs
+          ? originalUs > keptUs
+            ? `${count} · ${options.time(durationUs)} of ${options.time(originalUs)} kept`
+            : `${count} · ${options.time(durationUs)}`
+          : // Sped-up parts make the output shorter than the footage kept.
+            `${count} · ${options.time(durationUs)} long · ${options.time(keptUs)} of ${options.time(originalUs)} footage`;
     }
     const layers: HTMLElement[] = [];
     const { inUs, outUs } = marks;

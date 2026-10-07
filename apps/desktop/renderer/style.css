@@ -940,6 +940,34 @@ dd {
   background: #f4b740;
   border-radius: 3px;
 }
+.speed-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+  color: var(--text-2);
+}
+.speed-control select {
+  width: auto;
+  min-width: 132px;
+  min-height: 30px;
+}
+.timeline-clip.sped {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(255 255 255 / 6%) 0 6px,
+    transparent 6px 12px
+  );
+}
+.timeline-speed {
+  margin-left: 6px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #0f2a1c;
+  background: #5fd39a;
+  border-radius: 3px;
+}
 .zoom-controls {
   display: inline-flex;
   align-items: center;

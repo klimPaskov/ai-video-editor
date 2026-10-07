@@ -148,7 +148,7 @@ Acceptance: a user can correct the Magic Wand draft without leaving the app.
 - [ ] P7-02 Implement manual zoom creation and on-canvas target editing. Zooms over a marked range (or two seconds from the playhead) with an on-canvas click target, strength, retarget, removal, shared Undo, preview and export that leaves unzoomed frames bit-identical are implemented and natively tested (docs/11); edge dragging, target rectangles and follow-cursor remain.
 - [ ] P7-03 Implement smooth cursor, click highlight, cursor visibility, and per-range controls.
 - [ ] P7-04 Detect safe typing, loading, and waiting ranges for speed-up.
-- [ ] P7-05 Implement manual speed segments with pitch-safe audio choices.
+- [ ] P7-05 Implement manual speed segments with pitch-safe audio choices. Whole-number 2–8× speed on a marked range or part with pitch-preserving time-stretch, preview playback rate, shared Undo and verified export are implemented and natively tested (docs/12); mute/lower audio choices and segment metadata remain.
 - [ ] P7-06 Implement 16:9, 9:16, 1:1, 4:5, and custom canvas reframing.
 - [ ] P7-07 Add boundary, centering, edge, motion, speech, and A/V QA. Verify every zoom at boundaries, midpoint and interior against its named target, camera occlusion and protected material.
 

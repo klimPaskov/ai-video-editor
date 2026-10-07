@@ -59,6 +59,7 @@ import {
   assertManualRangeCutRequest,
   assertManualZoomRequest,
   assertManualZoomRemoveRequest,
+  assertManualSpeedRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualTranscriptCutRequest,
@@ -155,6 +156,10 @@ import {
   invokeWithProjectDraftRefresh,
 } from "./project-runtime.ts";
 import type { ProjectDraftNotice } from "./project-runtime.ts";
+import {
+  sourceAt,
+  type ClipSpeed,
+} from "../../../packages/domain/src/speed.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
 const page = `${origin}/index.html`;
@@ -1481,11 +1486,12 @@ async function start(): Promise<void> {
       );
     const sourceId = existing?.source_id ?? first!.source_id;
     const sourceStartUs =
-      existing?.source_start_us ??
-      first!.source_start_us + (request.startUs - first!.timeline_start_us);
+      existing?.source_start_us ?? sourceAt(first!, request.startUs);
     const sourceEndUs =
       existing?.source_end_us ??
-      last!.source_start_us + (request.endUs - last!.timeline_start_us);
+      (request.endUs === last!.timeline_end_us
+        ? last!.source_end_us
+        : sourceAt(last!, request.endUs));
     try {
       const committed = await invokeWithProjectDraftRefresh({
         toolName: "zoom.set",
@@ -1528,6 +1534,52 @@ async function start(): Promise<void> {
         throw new UserFacingError(
           error.code === "conflict"
             ? "Zooms cannot overlap. Choose a range outside the other zoom."
+            : error.message,
+        );
+      throw error;
+    }
+  });
+  register(channels.projectManualSpeed, async (request) => {
+    assertManualSpeedRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "speed.set",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "speed" },
+            reason:
+              request.speed === 1
+                ? "Manual normal speed."
+                : `Manual ${request.speed}x speed.`,
+            operations: [
+              {
+                type: "set_speed",
+                start_us: request.startUs,
+                end_us: request.endUs,
+                speed: request.speed as ClipSpeed,
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(
+          error.code === "conflict"
+            ? "That part already plays at this speed."
             : error.message,
         );
       throw error;
@@ -1770,6 +1822,10 @@ async function start(): Promise<void> {
     if (!clip)
       throw new UserFacingError(
         "The selected words are not one continuous visible source range. Choose a smaller range.",
+      );
+    if (clip.speed)
+      throw new UserFacingError(
+        "These words are in a sped-up part. Set it back to normal speed before cutting words.",
       );
     const startUs =
         clip.timeline_start_us + (firstWord.start_us - clip.source_start_us),

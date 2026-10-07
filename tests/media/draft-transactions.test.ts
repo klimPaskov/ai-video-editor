@@ -1898,3 +1898,124 @@ test("zooms are reversible draft edits that survive reopen", async () => {
   assert.deepEqual(reopened.draft, redone.draft);
   assert.deepEqual(await readFile(source), sourceBytes);
 });
+
+test("speed-ups are exact, reversible clip-map edits that survive reopen", async () => {
+  const { projects, projectStore, baseline, source } = await fixture();
+  const sourceBytes = await readFile(source);
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  const pass = { pass_group_id: "pass-speed-001", kind: "speed" as const };
+  const sped = await store.applyManual(
+    trim(initial, {
+      request_id: "request-speed-001",
+      pass_group: pass,
+      reason: "Speed up the typing.",
+      operations: [
+        { type: "set_speed", start_us: 200_000, end_us: 600_000, speed: 2 },
+      ],
+    }),
+  );
+  assert.equal(sped.transaction.operations[0]?.operation_type, "speed");
+  const spans = (draft: typeof sped.draft) =>
+    draft.timeline.clips.map((clip) => [
+      clip.source_start_us,
+      clip.source_end_us,
+      clip.timeline_start_us,
+      clip.timeline_end_us,
+      clip.speed ?? 1,
+    ]);
+  assert.deepEqual(spans(sped.draft), [
+    [0, 200_000, 0, 200_000, 1],
+    [200_000, 600_000, 200_000, 400_000, 2],
+    [600_000, 1_000_000, 400_000, 800_000, 1],
+  ]);
+  assert.equal(sped.draft.timeline.duration_us, 800_000);
+  // The same speed again is not an edit.
+  await assert.rejects(
+    store.applyManual(
+      trim(sped.draft, {
+        request_id: "request-speed-002",
+        pass_group: pass,
+        operations: [
+          { type: "set_speed", start_us: 250_000, end_us: 350_000, speed: 2 },
+        ],
+      }),
+    ),
+    code("conflict"),
+  );
+  // Splitting and cutting inside the sped-up clip map output time exactly.
+  const fast = sped.draft.timeline.clips[1]!;
+  const split = await store.applyManual(
+    trim(sped.draft, {
+      request_id: "request-speed-split-001",
+      pass_group: { pass_group_id: "pass-manual-001", kind: "manual" },
+      operations: [
+        { type: "split", clip_id: fast.clip_id, timeline_position_us: 300_000 },
+      ],
+    }),
+  );
+  assert.deepEqual(spans(split.draft).slice(1, 3), [
+    [200_000, 400_000, 200_000, 300_000, 2],
+    [400_000, 600_000, 300_000, 400_000, 2],
+  ]);
+  const cut = await store.applyManual(
+    trim(split.draft, {
+      request_id: "request-speed-cut-001",
+      pass_group: { pass_group_id: "pass-manual-002", kind: "manual" },
+      operations: [
+        { type: "ripple_delete", start_us: 250_000, end_us: 350_000 },
+      ],
+    }),
+  );
+  assert.deepEqual(spans(cut.draft), [
+    [0, 200_000, 0, 200_000, 1],
+    [200_000, 300_000, 200_000, 250_000, 2],
+    [500_000, 600_000, 250_000, 300_000, 2],
+    [600_000, 1_000_000, 300_000, 700_000, 1],
+  ]);
+  // Back to normal speed over everything; an odd length at 3× rounds up.
+  const normal = await store.applyManual(
+    trim(cut.draft, {
+      request_id: "request-speed-normal-001",
+      pass_group: pass,
+      operations: [
+        { type: "set_speed", start_us: 0, end_us: 700_000, speed: 1 },
+      ],
+    }),
+  );
+  assert.ok(
+    normal.draft.timeline.clips.every((clip) => clip.speed === undefined),
+  );
+  assert.equal(normal.draft.timeline.duration_us, 800_000);
+  const triple = await store.applyManual(
+    trim(normal.draft, {
+      request_id: "request-speed-003",
+      pass_group: pass,
+      operations: [
+        { type: "set_speed", start_us: 0, end_us: 800_000, speed: 3 },
+      ],
+    }),
+  );
+  assert.deepEqual(
+    spans(triple.draft).map((span) => span[3]! - span[2]!),
+    [66_667, 33_334, 33_334, 133_334],
+  );
+  const undone = await store.undoManual(
+    undo(
+      triple.draft,
+      triple.transaction.transaction_id,
+      "request-speed-undo-001",
+    ),
+  );
+  assert.deepEqual(undone.draft.timeline, normal.draft.timeline);
+  const reopened = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopened.draft, undone.draft);
+  assert.deepEqual(await readFile(source), sourceBytes);
+});

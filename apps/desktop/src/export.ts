@@ -120,6 +120,7 @@ export async function planDraft(
     timelineEndUs: clip.timeline_end_us,
     sourceStartUs: clip.source_start_us,
     sourceEndUs: clip.source_end_us,
+    ...(clip.speed ? { speed: clip.speed } : {}),
   }));
   const allZooms = zoomIntervals(snapshot.draft.timeline.zooms ?? [], mapped);
   const zooms = window
@@ -131,6 +132,7 @@ export async function planDraft(
         sourceId: clip.source_id,
         sourceStartUs: clip.source_start_us,
         sourceEndUs: clip.source_end_us,
+        ...(clip.speed ? { speed: clip.speed } : {}),
       }));
   const used = new Set(clips.map((clip) => clip.sourceId));
   const exportSources: ExportSource[] = [];

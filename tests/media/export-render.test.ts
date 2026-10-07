@@ -989,3 +989,130 @@ test(
     }
   },
 );
+
+test(
+  "a sped-up clip keeps every Nth source frame and time-stretched audio",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-speed-"));
+    try {
+      const input = await source(directory, "typing.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=30:duration=3",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=48000:duration=3",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "rgb",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-c:a",
+        "pcm_s16le",
+      ]);
+      // Normal 0–1 s, then 1–2.5 s at 3× (45 source frames → 15).
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 0,
+            sourceEndUs: 1_000_000,
+          },
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 1_000_000,
+            sourceEndUs: 2_500_000,
+            speed: 3,
+          },
+        ],
+        [input],
+      );
+      assert.equal(plan.frameCount, 45);
+      assert.equal(plan.clips[1]!.outputFrames, 15);
+      assert.equal(plan.sampleCount, 48_000 + 24_000);
+      const output = join(directory, "sped master.mkv");
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: output,
+        replace: false,
+      });
+      assert.equal(evidence.samplesEqual, true);
+      const frameBytes = rawFrameBytes("bgra", 160, 90);
+      const original = (await fullDecode(input, "bgra", null)).video;
+      const exported = await ffmpeg([
+        "-i",
+        output,
+        "-c:v",
+        "rawvideo",
+        "-pix_fmt",
+        "bgra",
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ]);
+      const frame = (data: Buffer, index: number) =>
+        data.subarray(index * frameBytes, (index + 1) * frameBytes);
+      assert.equal(exported.length, 45 * frameBytes);
+      for (let index = 0; index < 30; index++)
+        assert.ok(frame(exported, index).equals(frame(original, index)));
+      for (let index = 0; index < 15; index++)
+        assert.ok(
+          frame(exported, 30 + index).equals(frame(original, 30 + index * 3)),
+          `sped frame ${index}`,
+        );
+      const audio = await ffmpeg([
+        "-i",
+        output,
+        "-map",
+        "0:a:0",
+        "-c:a",
+        "pcm_s16le",
+        "-f",
+        "s16le",
+        "pipe:1",
+      ]);
+      // Mono 16-bit: 1 s at normal speed plus 0.5 s from the 3× part.
+      assert.equal(audio.length, 72_000 * 2);
+      // The 3× part keeps the tone's pitch: about 440 Hz, not 1320 Hz.
+      let crossings = 0;
+      for (let index = 52_800; index < 52_800 + 14_400; index++)
+        if (
+          Math.sign(audio.readInt16LE(index * 2)) !==
+          Math.sign(audio.readInt16LE((index + 1) * 2))
+        )
+          crossings++;
+      const hertz = crossings / 2 / 0.3;
+      assert.ok(hertz > 400 && hertz < 480, `pitch ${hertz} Hz`);
+      // The first second is the source's own samples, untouched.
+      const sourceAudio = await ffmpeg([
+        "-i",
+        input.path,
+        "-map",
+        "0:a:0",
+        "-c:a",
+        "pcm_s16le",
+        "-f",
+        "s16le",
+        "pipe:1",
+      ]);
+      assert.ok(
+        audio
+          .subarray(0, 48_000 * 2)
+          .equals(sourceAudio.subarray(0, 48_000 * 2)),
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

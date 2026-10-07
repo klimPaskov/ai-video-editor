@@ -6,6 +6,7 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { once } from "node:events";
 import type { Readable, Writable } from "node:stream";
 import { MediaError, runProcess } from "./process.ts";
+import { atempoChain } from "../../domain/src/speed.ts";
 import type { PresentationTiming } from "./presentation-timing.ts";
 import type { MediaExecutables } from "./lossless.ts";
 import { publishFileWithoutOverwrite } from "./files.ts";
@@ -24,6 +25,8 @@ export interface ExportClip {
   sourceId: string;
   sourceStartUs: number;
   sourceEndUs: number;
+  /** Whole-number speed-up; absent means normal speed. */
+  speed?: number;
 }
 
 export interface ExportSource {
@@ -80,6 +83,14 @@ export interface PlannedClip {
   /** Source audio samples [firstSample, endSample) covering the same frames. */
   firstSample: number;
   sampleCount: number;
+  /**
+   * Whole-number speed-up. The output keeps every `speed`-th source frame
+   * (`outputFrames` of them) and time-stretches the source audio to
+   * `outputSamples` without changing its pitch.
+   */
+  speed: number;
+  outputFrames: number;
+  outputSamples: number;
 }
 
 export interface ExportPlan {
@@ -405,9 +416,14 @@ export function planExport(
       !Number.isSafeInteger(clip.sourceStartUs) ||
       !Number.isSafeInteger(clip.sourceEndUs) ||
       clip.sourceStartUs < 0 ||
-      clip.sourceEndUs <= clip.sourceStartUs
+      clip.sourceEndUs <= clip.sourceStartUs ||
+      (clip.speed !== undefined &&
+        (!Number.isSafeInteger(clip.speed) ||
+          clip.speed < 1 ||
+          clip.speed > 16))
     )
       unsupported("A clip has an invalid source range.");
+    const speed = clip.speed ?? 1;
     // Frame i is presented at exactly i / rate (see nominalFrameRate).
     const fn = BigInt(first.video.frameRate.numerator);
     const fd = BigInt(first.video.frameRate.denominator);
@@ -431,6 +447,16 @@ export function planExport(
       firstSample = Number(a);
       samples = Number(b - a);
     }
+    const outputFrames = Math.ceil(count / speed);
+    const outputSamples =
+      speed === 1 || !first.audio
+        ? samples
+        : Number(
+            ceilDiv(
+              BigInt(outputFrames) * fd * BigInt(first.audio.sampleRate),
+              fn,
+            ),
+          );
     planned.push({
       sourceId: source.sourceId,
       path: source.path,
@@ -441,9 +467,12 @@ export function planExport(
       seekSeconds: Math.max(0, trimStartSeconds - 2),
       firstSample,
       sampleCount: samples,
+      speed,
+      outputFrames,
+      outputSamples,
     });
-    frameCount += count;
-    sampleCount += samples;
+    frameCount += outputFrames;
+    sampleCount += outputSamples;
   }
   if (frameCount < 1) unsupported("This draft has no exportable frames.");
   return {
@@ -791,6 +820,38 @@ export async function exportDraft(
         await exited(child);
         decodedAudio.set(clip.path, { file, bytes: (await stat(file)).size });
       }
+      /** Copies `length` bytes of `file` from `offset`, chunk by chunk. */
+      const copyRange = async (
+        file: string,
+        offset: number,
+        length: number,
+        write: (buffer: Buffer) => Promise<void>,
+      ) => {
+        if (length <= 0) return;
+        const handle = await open(file, "r");
+        try {
+          const chunkSize = 4 * 1024 * 1024;
+          for (let done = 0; done < length;) {
+            const size = Math.min(chunkSize, length - done);
+            const buffer = Buffer.alloc(size);
+            const { bytesRead } = await handle.read(
+              buffer,
+              0,
+              size,
+              offset + done,
+            );
+            if (bytesRead !== size)
+              throw new MediaError(
+                "PROCESS_FAILED",
+                "Media executable failed.",
+              );
+            await write(buffer);
+            done += size;
+          }
+        } finally {
+          await handle.close();
+        }
+      };
       const output = createWriteStream(audioPath, { mode: 0o600 });
       try {
         for (const clip of plan.clips) {
@@ -801,37 +862,64 @@ export async function exportDraft(
             0,
             Math.min(expected, source.bytes - offset),
           );
-          if (available > 0) {
-            const handle = await open(source.file, "r");
-            try {
-              const chunkSize = 4 * 1024 * 1024;
-              for (let done = 0; done < available;) {
-                const size = Math.min(chunkSize, available - done);
-                const buffer = Buffer.alloc(size);
-                const { bytesRead } = await handle.read(
-                  buffer,
-                  0,
-                  size,
-                  offset + done,
-                );
-                if (bytesRead !== size)
-                  throw new MediaError(
-                    "PROCESS_FAILED",
-                    "Media executable failed.",
-                  );
-                hash.update(buffer);
-                await writeChunk(output, buffer);
-                done += size;
-              }
-            } finally {
-              await handle.close();
-            }
-          }
           // A source whose audio ends before its video contributes silence.
-          if (available < expected) {
-            const silence = Buffer.alloc(expected - available);
-            hash.update(silence);
-            await writeChunk(output, silence);
+          const silence = Buffer.alloc(expected - available);
+          if (clip.speed === 1) {
+            const write = async (buffer: Buffer) => {
+              hash.update(buffer);
+              await writeChunk(output, buffer);
+            };
+            await copyRange(source.file, offset, available, write);
+            if (silence.length) await write(silence);
+          } else {
+            // Time-stretch the slice without changing pitch, then fix its
+            // length to the exact planned sample count.
+            const slice = join(staging, "speed-slice.raw");
+            const stretched = join(staging, "speed-stretched.raw");
+            const sliceStream = createWriteStream(slice, { mode: 0o600 });
+            try {
+              await copyRange(source.file, offset, available, (buffer) =>
+                writeChunk(sliceStream, buffer),
+              );
+              if (silence.length) await writeChunk(sliceStream, silence);
+            } finally {
+              sliceStream.end();
+              await once(sliceStream, "close");
+            }
+            await runProcess({
+              executable: executables.ffmpeg,
+              args: [
+                ...quiet,
+                "-f",
+                audio.raw,
+                "-ar",
+                String(audio.sampleRate),
+                "-ch_layout",
+                audio.channelLayout,
+                "-i",
+                slice,
+                "-af",
+                `${atempoChain(clip.speed)},apad,atrim=end_sample=${clip.outputSamples}`,
+                "-c:a",
+                `pcm_${audio.raw}`,
+                "-f",
+                audio.raw,
+                stretched,
+              ],
+              ...(signal ? { signal } : {}),
+            });
+            const length = clip.outputSamples * sampleBytes;
+            if ((await stat(stretched)).size !== length)
+              throw new MediaError(
+                "FIDELITY_MISMATCH",
+                "Sped-up audio does not match the draft length.",
+              );
+            await copyRange(stretched, 0, length, async (buffer) => {
+              hash.update(buffer);
+              await writeChunk(output, buffer);
+            });
+            await rm(slice, { force: true });
+            await rm(stretched, { force: true });
           }
           if (signal?.aborted)
             throw new MediaError("CANCELLED", "Export cancelled.");
@@ -1084,21 +1172,41 @@ export async function exportDraft(
         );
         const done = exited(child);
         let written = 0;
+        let kept = 0;
         let reported = 0;
         await drain(child.stdout!, async (chunk) => {
+          const start = written;
           written += chunk.length;
           if (written > expected) return;
-          if (!compositor) videoHash.update(chunk);
-          await writeChunk(sink, chunk, halt.signal);
+          // A sped-up clip keeps every `speed`-th decoded frame.
+          const parts: Buffer[] = [];
+          if (clip.speed === 1) parts.push(chunk);
+          else
+            for (let at = start; at < written;) {
+              const frame = Math.floor(at / plan.frameBytes);
+              const frameEnd = (frame + 1) * plan.frameBytes;
+              const until = Math.min(frameEnd, written);
+              if (frame % clip.speed === 0)
+                parts.push(chunk.subarray(at - start, until - start));
+              at = until;
+            }
+          for (const part of parts) {
+            kept += part.length;
+            if (!compositor) videoHash.update(part);
+            await writeChunk(sink, part, halt.signal);
+          }
           if (compositor) return;
-          const frames = Math.floor(written / plan.frameBytes);
+          const frames = Math.floor(kept / plan.frameBytes);
           if (frames > reported) {
             progress("rendering", frames - reported);
             reported = frames;
           }
         });
         await done;
-        if (written !== expected)
+        if (
+          written !== expected ||
+          kept !== clip.outputFrames * plan.frameBytes
+        )
           throw new MediaError(
             "FIDELITY_MISMATCH",
             "A clip did not decode to its exact frame range.",

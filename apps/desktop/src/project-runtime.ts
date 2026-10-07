@@ -1,4 +1,5 @@
 import path from "node:path";
+import { sourceAt } from "../../../packages/domain/src/speed.ts";
 
 import type {
   DraftProjectReadResult,
@@ -73,6 +74,7 @@ export function committedDraftView(result: DraftReadResult): ProjectDraftView {
       timelineEndUs: clip.timeline_end_us,
       sourceStartUs: clip.source_start_us,
       sourceEndUs: clip.source_end_us,
+      ...(clip.speed ? { speed: clip.speed } : {}),
     })),
     transcriptEdits: structuredClone(draft.timeline.transcript_edits ?? []),
     zooms: structuredClone(draft.timeline.zooms ?? []),
@@ -101,6 +103,7 @@ export async function invokeWithProjectDraftRefresh<T>(options: {
     options.toolName === "timeline.ripple_delete" ||
     options.toolName === "zoom.set" ||
     options.toolName === "zoom.remove" ||
+    options.toolName === "speed.set" ||
     options.toolName === "timeline.undo" ||
     options.toolName === "timeline.redo";
   try {
@@ -239,8 +242,7 @@ export class DesktopProjectRuntime {
       !before.project.project.source_ids.includes(clip.source_id)
     )
       invalid();
-    const sourceTimeUs =
-      clip.source_start_us + request.timelineTimeUs - clip.timeline_start_us;
+    const sourceTimeUs = sourceAt(clip, request.timelineTimeUs);
     if (
       sourceTimeUs < clip.source_start_us ||
       sourceTimeUs >= clip.source_end_us

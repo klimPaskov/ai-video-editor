@@ -1,4 +1,5 @@
 import { assertZoomEffect, zoomLimits, type ZoomEffect } from "./zoom.ts";
+import { isClipSpeed, speedLength } from "./speed.ts";
 import {
   assertMediaFrame,
   assertMediaSummary,
@@ -81,6 +82,8 @@ export interface ProjectClipView {
   timelineEndUs: number;
   sourceStartUs: number;
   sourceEndUs: number;
+  /** Whole-number speed-up; absent means normal speed. */
+  speed?: number;
 }
 /** Path-free view of a committed project, never a renderer-owned persistence model. */
 export interface ProjectView extends Omit<ProjectDraftView, "projectId"> {
@@ -143,6 +146,18 @@ export interface ManualZoomRequest {
   centerX: number;
   centerY: number;
   scale: number;
+}
+/** Plays output interval [startUs, endUs) at `speed` (1 is normal speed). */
+export interface ManualSpeedRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  startUs: number;
+  endUs: number;
+  speed: number;
 }
 export interface ManualZoomRemoveRequest {
   schema_version: "1.0";
@@ -382,6 +397,25 @@ export function assertManualZoomRequest(
   )
     invalid();
 }
+export function assertManualSpeedRequest(
+  value: unknown,
+): asserts value is ManualSpeedRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "startUs",
+    "endUs",
+    "speed",
+  ]);
+  assertManualHead(value);
+  integer(value.startUs);
+  positive(value.endUs);
+  if (value.startUs >= value.endUs || !isClipSpeed(value.speed)) invalid();
+}
 export function assertManualZoomRemoveRequest(
   value: unknown,
 ): asserts value is ManualZoomRemoveRequest {
@@ -603,6 +637,10 @@ export function assertProjectDraftView(
     let activeSource: string | undefined;
     let priorSourceEnd = 0;
     for (const clip of value.clips) {
+      const sped =
+        clip !== null &&
+        typeof clip === "object" &&
+        Object.hasOwn(clip, "speed");
       exact(clip, [
         "id",
         "sourceId",
@@ -610,7 +648,9 @@ export function assertProjectDraftView(
         "timelineEndUs",
         "sourceStartUs",
         "sourceEndUs",
+        ...(sped ? ["speed"] : []),
       ]);
+      if (sped && (!isClipSpeed(clip.speed) || clip.speed === 1)) invalid();
       opaqueId(clip.id);
       id(clip.sourceId);
       integer(clip.timelineStartUs);
@@ -626,7 +666,10 @@ export function assertProjectDraftView(
         (activeSource !== clip.sourceId &&
           completedSources.has(clip.sourceId)) ||
         clip.timelineEndUs - clip.timelineStartUs !==
-          clip.sourceEndUs - clip.sourceStartUs
+          speedLength(
+            (clip.sourceEndUs as number) - (clip.sourceStartUs as number),
+            sped ? (clip.speed as number) : 1,
+          )
       )
         invalid();
       clipIds.add(clip.id);

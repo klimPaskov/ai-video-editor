@@ -48,6 +48,7 @@ interface DraftSummary {
     source_end_us: number;
     timeline_start_us: number;
     timeline_end_us: number;
+    speed?: number;
   }[];
 }
 
