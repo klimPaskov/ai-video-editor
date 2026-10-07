@@ -143,6 +143,8 @@ import {
 } from "../../../packages/domain/src/playback-view.ts";
 import {
   assertRecordingStartRequest,
+  assertRecordingRegionRequest,
+  assertRecordingRegionResult,
   assertRecordingView,
 } from "../../../packages/domain/src/recording-view.ts";
 import {
@@ -322,11 +324,111 @@ async function servePlaybackSource(
   });
 }
 
+/**
+ * Shows the area picker over one display and resolves to the dragged area
+ * as fractions of the display, or null. Only one picker is open at a time.
+ */
+let picking: Promise<{
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} | null> | null = null;
+function pickArea(display: Electron.Display) {
+  if (picking) return picking;
+  const overlay = new BrowserWindow({
+    ...display.bounds,
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    hasShadow: false,
+    show: false,
+    title: "Choose an area",
+    webPreferences: {
+      preload: path.join(app.getAppPath(), "region-preload.cjs"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      webviewTag: false,
+    },
+  });
+  overlay.setAlwaysOnTop(true, "screen-saver");
+  overlay.removeMenu();
+  overlay.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  overlay.webContents.on("will-navigate", (event) => event.preventDefault());
+  const regionPage = `${origin}/region.html`;
+  picking = new Promise((resolve) => {
+    let settled = false;
+    const settle = (
+      value: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      } | null,
+    ) => {
+      if (settled) return;
+      settled = true;
+      ipcMain.removeListener("region:done", done);
+      picking = null;
+      if (!overlay.isDestroyed()) overlay.destroy();
+      resolve(value);
+    };
+    const done = (event: Electron.IpcMainEvent, value: unknown) => {
+      if (
+        event.sender !== overlay.webContents ||
+        event.senderFrame?.url !== regionPage
+      )
+        return;
+      const area = value as Record<string, unknown> | null;
+      const valid =
+        area !== null &&
+        typeof area === "object" &&
+        ["x", "y", "width", "height"].every(
+          (key) =>
+            typeof area[key] === "number" &&
+            Number.isFinite(area[key]) &&
+            (area[key] as number) >= 0 &&
+            (area[key] as number) <= 1,
+        );
+      settle(
+        valid
+          ? {
+              x: area.x as number,
+              y: area.y as number,
+              width: area.width as number,
+              height: area.height as number,
+            }
+          : null,
+      );
+    };
+    ipcMain.on("region:done", done);
+    overlay.on("closed", () => settle(null));
+    overlay.once("ready-to-show", () => {
+      overlay.show();
+      overlay.focus();
+    });
+    void overlay.loadURL(regionPage).catch(() => settle(null));
+  });
+  return picking;
+}
+
 async function start(): Promise<void> {
   const files = new Map([
     ["/index.html", ["index.html", "text/html; charset=utf-8"]],
     ["/renderer.js", ["renderer.js", "text/javascript; charset=utf-8"]],
     ["/style.css", ["style.css", "text/css; charset=utf-8"]],
+    ["/region.html", ["region.html", "text/html; charset=utf-8"]],
+    ["/region.js", ["region.js", "text/javascript; charset=utf-8"]],
+    ["/region.css", ["region.css", "text/css; charset=utf-8"]],
   ]);
   // Fail before opening a product window if any required packaged resource is absent.
   const preload = await readFile(path.join(app.getAppPath(), "preload.cjs"));
@@ -540,6 +642,15 @@ async function start(): Promise<void> {
           primary: display.id === screen.getPrimaryDisplay().id,
         };
       }),
+    pickArea: (displayId) => {
+      const displays = screen.getAllDisplays();
+      const index = /^display-(\d{1,2})$/u.exec(displayId);
+      // The synthetic test display is shown over the primary display.
+      const display = index
+        ? displays[Number(index[1]) - 1]
+        : screen.getPrimaryDisplay();
+      return display ? pickArea(display) : Promise.resolve(null);
+    },
   });
   const recording = async (work: () => Promise<unknown>) => {
     try {
@@ -559,6 +670,20 @@ async function start(): Promise<void> {
   register(channels.recordingGet, async (request) => {
     assertEmptyRequest(request);
     return recording(async () => recorder!.get());
+  });
+  register(channels.recordingPickRegion, async (request) => {
+    assertRecordingRegionRequest(request);
+    try {
+      const value = { region: await recorder!.pickRegion(request.display_id) };
+      assertRecordingRegionResult(value);
+      return value;
+    } catch (error) {
+      if (error instanceof RecordingError)
+        throw new UserFacingError(error.message);
+      throw error;
+    } finally {
+      window?.focus();
+    }
   });
   register(channels.recordingStart, async (request) => {
     assertRecordingStartRequest(request);

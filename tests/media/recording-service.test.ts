@@ -11,6 +11,12 @@ function recorder(
   root: string,
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform = "linux",
+  pickArea?: () => Promise<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>,
 ): DesktopRecorder {
   const library = new MediaLibrary(join(root, "library"));
   return new DesktopRecorder({
@@ -29,6 +35,7 @@ function recorder(
         primary: true,
       },
     ],
+    ...(pickArea ? { pickArea } : {}),
     listOutput: async () =>
       "0\talsa_output.pci.monitor\tmodule\ts16le\tIDLE\n1\talsa_input.usb-Mic\tmodule\ts16le\tIDLE\n",
   });
@@ -130,6 +137,81 @@ test(
       ]);
       assert.equal((await service.cancel()).status, "idle");
       assert.equal(service.busy(), false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "a dragged area becomes a validated region of the display that is recorded",
+  { timeout: 120_000 },
+  async () => {
+    const root = await realpath(
+      await mkdtemp(join(tmpdir(), "recording-region-")),
+    );
+    try {
+      let area: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      } | null = { x: 0.25, y: 0.5, width: 0.5, height: 0.25 };
+      const real = recorder(root, { DISPLAY: ":0" }, "linux", async () => area);
+      await real.devices();
+      assert.deepEqual(await real.pickRegion("display-1"), {
+        x: 640,
+        y: 800,
+        width: 1280,
+        height: 400,
+      });
+      area = null;
+      assert.equal(await real.pickRegion("display-1"), null);
+      area = { x: 0.99, y: 0.99, width: 0.5, height: 0.5 };
+      await assert.rejects(real.pickRegion("display-1"), {
+        message: recordingIssues.region,
+      });
+      await assert.rejects(real.pickRegion("display-9"), {
+        message: recordingIssues.device,
+      });
+      // Without a picker (or on macOS) the choice is unavailable.
+      const plain = recorder(root, { DISPLAY: ":0" });
+      await plain.devices();
+      await assert.rejects(plain.pickRegion("display-1"), {
+        message: recordingIssues.regionUnavailable,
+      });
+      // A region outside the display is refused before anything starts.
+      await assert.rejects(
+        real.start({
+          schema_version: "1.0",
+          display_id: "display-1",
+          microphone_id: null,
+          region: { x: 2000, y: 0, width: 640, height: 480 },
+        }),
+        { message: recordingIssues.device },
+      );
+
+      area = { x: 0.5, y: 0.5, width: 0.5, height: 0.5 };
+      const synthetic = recorder(
+        root,
+        { AI_VIDEO_EDITOR_TEST_CAPTURE: "1" },
+        "linux",
+        async () => area,
+      );
+      const devices = await synthetic.devices();
+      const region = await synthetic.pickRegion(devices.displays[0]!.id);
+      assert.deepEqual(region, { x: 160, y: 90, width: 160, height: 90 });
+      await synthetic.start({
+        schema_version: "1.0",
+        display_id: devices.displays[0]!.id,
+        microphone_id: null,
+        region: region!,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const finished = await synthetic.stop();
+      assert.equal(finished.status, "finished");
+      assert.equal(finished.media!.width, 160);
+      assert.equal(finished.media!.height, 90);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -24,11 +24,35 @@ export interface RecordingDevices {
   message: string | null;
 }
 
+/** Part of a display to record, in its physical pixels. */
+export interface RecordingRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface RecordingStartRequest {
   schema_version: "1.0";
   display_id: string;
   microphone_id: string | null;
+  /** Omitted to record the whole display. */
+  region?: RecordingRegion;
 }
+
+/** Ask main to let the user drag out an area of a display. */
+export interface RecordingRegionRequest {
+  schema_version: "1.0";
+  display_id: string;
+}
+
+/** The chosen area, or null when the user cancelled. */
+export interface RecordingRegionResult {
+  region: RecordingRegion | null;
+}
+
+/** Smallest area worth recording, in physical pixels. */
+export const minimumRegionSize = 64;
 
 export type RecordingStatus =
   | "idle"
@@ -61,6 +85,9 @@ export const recordingIssues = Object.freeze({
     "Recording stopped unexpectedly. The part recorded so far was kept.",
   finish: "The recording could not be saved. Try recording again.",
   empty: "Nothing was recorded.",
+  region: "Choose a larger area to record.",
+  regionUnavailable:
+    "Recording part of the screen is not available on this device.",
 } as const);
 
 const messages = new Set<string>(Object.values(recordingIssues));
@@ -119,17 +146,53 @@ function message(value: unknown): void {
     invalid();
 }
 
+/** A region with non-negative whole-pixel bounds of at least the minimum. */
+export function assertRecordingRegion(
+  value: unknown,
+): asserts value is RecordingRegion {
+  const region = exact(value, ["x", "y", "width", "height"]);
+  for (const key of ["x", "y", "width", "height"] as const) count(region[key]);
+  if (
+    (region.width as number) < minimumRegionSize ||
+    (region.height as number) < minimumRegionSize ||
+    (region.width as number) > 16_384 ||
+    (region.height as number) > 16_384
+  )
+    invalid();
+}
+
 export function assertRecordingStartRequest(
   value: unknown,
 ): asserts value is RecordingStartRequest {
+  const hasRegion =
+    value !== null &&
+    typeof value === "object" &&
+    Object.hasOwn(value, "region");
   const request = exact(value, [
     "schema_version",
     "display_id",
     "microphone_id",
+    ...(hasRegion ? ["region"] : []),
   ]);
   if (request.schema_version !== "1.0") invalid();
   id(request.display_id);
   if (request.microphone_id !== null) id(request.microphone_id);
+  if (hasRegion) assertRecordingRegion(request.region);
+}
+
+export function assertRecordingRegionRequest(
+  value: unknown,
+): asserts value is RecordingRegionRequest {
+  const request = exact(value, ["schema_version", "display_id"]);
+  if (request.schema_version !== "1.0") invalid();
+  id(request.display_id);
+}
+
+export function assertRecordingRegionResult(
+  value: unknown,
+): asserts value is RecordingRegionResult {
+  const result = exact(value, ["region"]);
+  if (result.region !== null) assertRecordingRegion(result.region);
 }
 
 export function assertRecordingDevices(

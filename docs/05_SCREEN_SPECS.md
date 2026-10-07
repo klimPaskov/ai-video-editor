@@ -66,7 +66,7 @@ Visible:
 
 No editor or diagnostics chrome is visible during capture.
 
-Implemented subset (2026-10-07): one modal dialog. Setup shows a screen choice (radio cards with resolution), a microphone menu and Start recording. Live shows a countdown, then a pulsing record dot with elapsed time, a single status line (Recording, Paused, missed-frame count, Saving) and Pause/Resume and Stop. Stop opens the new project in Record or Import. Scenes, teleprompter, camera, system audio and window/region choices are not implemented. See docs/06.
+Implemented subset (2026-10-07): one modal dialog. Setup shows a screen choice (radio cards with resolution), a microphone menu and Start recording. Live shows a countdown, then a pulsing record dot with elapsed time, a single status line (Recording, Paused, missed-frame count, Saving) and Pause/Resume and Stop. Stop opens the new project in Record or Import. An Area choice (Whole screen or Part of the screen) opens an area picker over the chosen display: drag a rectangle, then Enter or Record this area; Escape cancels. The dialog then shows the area's size. Scenes, teleprompter, camera, system audio and window choices are not implemented. See docs/06.
 
 ## S05: take review
 

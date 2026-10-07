@@ -818,6 +818,30 @@
           role="radiogroup"
           aria-labelledby="record-display-label"
         ></div>
+        <p class="field-label" id="record-area-label">Area</p>
+        <div
+          class="area-choice"
+          role="radiogroup"
+          aria-labelledby="record-area-label"
+        >
+          <button
+            type="button"
+            role="radio"
+            id="record-area-whole"
+            aria-checked="true"
+          >
+            Whole screen</button
+          ><button
+            type="button"
+            role="radio"
+            id="record-area-part"
+            aria-checked="false"
+            tabindex="-1"
+          >
+            Part of the screen
+          </button>
+        </div>
+        <p id="record-area-size" class="muted" hidden></p>
         <label for="record-microphone" class="field-label">Microphone</label>
         <select id="record-microphone"></select>
         <p id="record-note" class="muted">

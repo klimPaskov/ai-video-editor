@@ -968,6 +968,32 @@ dd {
   background: #5fd39a;
   border-radius: 3px;
 }
+.area-choice {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  align-self: flex-start;
+}
+.area-choice button {
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  color: var(--text-2);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+.area-choice button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.area-choice button[aria-checked="true"],
+.area-choice button[aria-checked="true"]:hover:not(:disabled) {
+  color: #fff;
+  background: var(--accent);
+}
 .zoom-controls {
   display: inline-flex;
   align-items: center;

@@ -134,7 +134,23 @@ await build({
   platform: "browser",
   target: "chrome152",
 });
-for (const file of ["index.html", "style.css"])
+await build({
+  entryPoints: [join(root, "apps/desktop/src/region-preload.ts")],
+  outfile: join(staging, "region-preload.cjs"),
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  target: "node24",
+  external: ["electron"],
+});
+await build({
+  entryPoints: [join(root, "apps/desktop/renderer/region.ts")],
+  outfile: join(staging, "renderer/region.js"),
+  bundle: true,
+  platform: "browser",
+  target: "chrome152",
+});
+for (const file of ["index.html", "style.css", "region.html", "region.css"])
   await copyFile(
     join(root, "apps/desktop/renderer", file),
     join(staging, "renderer", file),

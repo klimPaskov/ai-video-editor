@@ -1,0 +1,78 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter,
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  cursor: crosshair;
+  user-select: none;
+}
+body {
+  background: rgb(5 6 10 / 45%);
+}
+#hint {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 14px;
+  color: #fff;
+  background: rgb(17 19 26 / 92%);
+  border-radius: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+#selection {
+  position: fixed;
+  outline: 2px solid #8b6cff;
+  /* The chosen area is clear; everything around it stays dimmed. */
+  box-shadow: 0 0 0 100vmax rgb(5 6 10 / 45%);
+  background: transparent;
+}
+body.chosen {
+  background: transparent;
+}
+#size {
+  position: absolute;
+  top: -26px;
+  left: 0;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: #fff;
+  background: #6d4aff;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+#actions {
+  position: fixed;
+  display: flex;
+  gap: 8px;
+}
+#actions button {
+  min-height: 34px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  color: #fff;
+  background: rgb(17 19 26 / 92%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 8px;
+  cursor: pointer;
+}
+#actions button.primary {
+  background: #6d4aff;
+  border-color: #6d4aff;
+}
+#actions button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

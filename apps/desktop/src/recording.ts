@@ -15,9 +15,12 @@ import { CaptureSession } from "../../../packages/recorder/src/session.ts";
 import type { MediaSummary } from "../../../packages/domain/src/library.ts";
 import {
   assertRecordingDevices,
+  assertRecordingRegion,
   assertRecordingView,
+  minimumRegionSize,
   recordingIssues,
   type RecordingDevices,
+  type RecordingRegion,
   type RecordingStartRequest,
   type RecordingView,
 } from "../../../packages/domain/src/recording-view.ts";
@@ -45,6 +48,13 @@ export interface RecorderOptions {
   importFile(path: string): Promise<MediaSummary>;
   /** Overridable for tests; lists capture microphones. */
   listOutput?(executable: string, args: string[]): Promise<string>;
+  /**
+   * Lets the user drag out an area of a display. Resolves to the area as
+   * fractions of the display (0..1), or null when cancelled.
+   */
+  pickArea?(
+    displayId: string,
+  ): Promise<{ x: number; y: number; width: number; height: number } | null>;
 }
 
 function output(executable: string, args: string[]): Promise<string> {
@@ -211,11 +221,68 @@ export class DesktopRecorder {
     return this.view;
   }
 
+  /** The area of a display the user drags out, in its physical pixels. */
+  async pickRegion(displayId: string): Promise<RecordingRegion | null> {
+    if (this.busy()) throw new RecordingError(recordingIssues.busy);
+    const display = this.displays.get(displayId);
+    if (!display) throw new RecordingError(recordingIssues.device);
+    if (!this.options.pickArea || this.platform() === "darwin")
+      throw new RecordingError(recordingIssues.regionUnavailable);
+    const area = await this.options.pickArea(displayId);
+    if (!area) return null;
+    const fraction = (value: number) =>
+      Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
+    const x = Math.round(fraction(area.x) * display.width);
+    const y = Math.round(fraction(area.y) * display.height);
+    // Even sizes, as capture records them.
+    const even = (value: number) => Math.floor(value / 2) * 2;
+    const region = {
+      x,
+      y,
+      width: even(
+        Math.min(
+          display.width - x,
+          Math.round(fraction(area.width) * display.width),
+        ),
+      ),
+      height: even(
+        Math.min(
+          display.height - y,
+          Math.round(fraction(area.height) * display.height),
+        ),
+      ),
+    };
+    if (region.width < minimumRegionSize || region.height < minimumRegionSize)
+      throw new RecordingError(recordingIssues.region);
+    assertRecordingRegion(region);
+    return region;
+  }
+
   async start(request: RecordingStartRequest): Promise<RecordingView> {
     if (this.busy()) throw new RecordingError(recordingIssues.busy);
     const message = this.unavailable();
     if (message) throw new RecordingError(message);
-    const display = this.displays.get(request.display_id);
+    const whole = this.displays.get(request.display_id);
+    const region = request.region;
+    if (
+      whole &&
+      region &&
+      (this.platform() === "darwin" ||
+        region.x + region.width > whole.width ||
+        region.y + region.height > whole.height)
+    )
+      throw new RecordingError(recordingIssues.device);
+    // A region is a smaller display target inside the chosen display.
+    const display =
+      whole && region
+        ? {
+            ...whole,
+            x: whole.x + region.x,
+            y: whole.y + region.y,
+            width: region.width,
+            height: region.height,
+          }
+        : whole;
     const microphone =
       request.microphone_id === null
         ? null

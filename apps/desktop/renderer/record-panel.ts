@@ -2,6 +2,7 @@ import type { MediaSummary } from "../../../packages/domain/src/library.ts";
 import type {
   RecordingDevices,
   RecordingView,
+  RecordingRegion,
 } from "../../../packages/domain/src/recording-view.ts";
 import { iconElement } from "./icons.ts";
 
@@ -44,7 +45,13 @@ export function setupRecordPanel(options: {
   const pause = element<HTMLButtonElement>("record-pause");
   const stop = element<HTMLButtonElement>("record-stop");
   const error = element("record-error");
+  const areaWhole = element<HTMLButtonElement>("record-area-whole");
+  const areaPart = element<HTMLButtonElement>("record-area-part");
+  const areaSize = element("record-area-size");
   let selectedDisplay: string | null = null;
+  /** Part of the selected display to record; null records all of it. */
+  let region: RecordingRegion | null = null;
+  let picking = false;
   let poll: number | undefined;
   let busy = false;
   let active = false;
@@ -57,8 +64,45 @@ export function setupRecordPanel(options: {
     error.hidden = !message;
   }
 
+  function renderArea(): void {
+    areaWhole.setAttribute("aria-checked", String(region === null));
+    areaPart.setAttribute("aria-checked", String(region !== null));
+    areaWhole.tabIndex = region === null ? 0 : -1;
+    areaPart.tabIndex = region === null ? -1 : 0;
+    areaWhole.disabled = picking || !selectedDisplay;
+    areaPart.disabled = picking || !selectedDisplay;
+    areaSize.hidden = region === null;
+    areaSize.textContent = region
+      ? `${region.width}×${region.height} area. Choose Part of the screen again to change it.`
+      : "";
+  }
+
+  async function pickArea(): Promise<void> {
+    if (!selectedDisplay || picking || busy) return;
+    picking = true;
+    start.disabled = true;
+    showError(null);
+    renderArea();
+    const display = selectedDisplay;
+    const reply = await window.desktop
+      .pickRecordingRegion({ schema_version: "1.0", display_id: display })
+      .catch(() => null);
+    picking = false;
+    start.disabled = !selectedDisplay;
+    if (!reply?.ok)
+      showError(
+        reply && !reply.ok ? reply.message : "The area could not be chosen.",
+      );
+    else if (reply.value.region && selectedDisplay === display)
+      region = reply.value.region;
+    renderArea();
+    (region ? areaPart : areaWhole).focus();
+  }
+
   function selectDisplay(id: string): void {
+    if (selectedDisplay !== id) region = null;
     selectedDisplay = id;
+    renderArea();
     for (const button of displays.querySelectorAll<HTMLButtonElement>(
       "[role=radio]",
     )) {
@@ -225,6 +269,7 @@ export function setupRecordPanel(options: {
         schema_version: "1.0",
         display_id: selectedDisplay,
         microphone_id: microphone.value || null,
+        ...(region ? { region } : {}),
       })
       .catch(() => null);
     busy = false;
@@ -275,6 +320,20 @@ export function setupRecordPanel(options: {
   }
 
   openButton.addEventListener("click", () => void openDialog());
+  areaWhole.addEventListener("click", () => {
+    region = null;
+    renderArea();
+  });
+  areaPart.addEventListener("click", () => void pickArea());
+  for (const button of [areaWhole, areaPart])
+    button.addEventListener("keydown", (event) => {
+      if (
+        !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
+      )
+        return;
+      event.preventDefault();
+      (button === areaWhole ? areaPart : areaWhole).focus();
+    });
   start.addEventListener("click", () => void begin());
   stop.addEventListener("click", () => void finish());
   pause.addEventListener("click", async () => {

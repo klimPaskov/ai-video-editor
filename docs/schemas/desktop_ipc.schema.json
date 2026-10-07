@@ -185,6 +185,26 @@
       "additionalProperties": false,
       "required": ["channel", "payload", "response"],
       "properties": {
+        "channel": { "const": "recording:pick-region" },
+        "payload": { "$ref": "#/$defs/recordingRegionRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": {
+              "type": "object", "additionalProperties": false,
+              "required": ["region"],
+              "properties": { "region": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/recordingRegion" }] } }
+            } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
         "channel": { "const": "recording:start" },
         "payload": { "$ref": "#/$defs/recordingStartRequest" },
         "response": { "oneOf": [
@@ -2167,7 +2187,7 @@
       "maxLength": 200,
       "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
     },
-    "recordingMessage": {"anyOf": [{"type": "null"}, {"enum": ["Screen recording needs FFmpeg screen capture on this device.", "Screen recording needs an X11 session on Linux. Sign in with an X11 session to record.", "A recording is already in progress.", "The selected screen or microphone is no longer available.", "Recording could not start. Check screen and microphone permissions and try again.", "Recording stopped unexpectedly. The part recorded so far was kept.", "The recording could not be saved. Try recording again.", "Nothing was recorded."]}]},
+    "recordingMessage": {"anyOf": [{"type": "null"}, {"enum": ["Screen recording needs FFmpeg screen capture on this device.", "Screen recording needs an X11 session on Linux. Sign in with an X11 session to record.", "A recording is already in progress.", "The selected screen or microphone is no longer available.", "Recording could not start. Check screen and microphone permissions and try again.", "Recording stopped unexpectedly. The part recorded so far was kept.", "The recording could not be saved. Try recording again.", "Nothing was recorded.", "Choose a larger area to record.", "Recording part of the screen is not available on this device."]}]},
     "recordingDevices": {
       "description": "Screens and microphones offered for recording. Ids are opaque; FFmpeg device names and coordinates stay in main.",
       "type": "object",
@@ -2215,7 +2235,30 @@
         "display_id": { "$ref": "#/$defs/recordingDeviceId" },
         "microphone_id": {
           "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/recordingDeviceId" }]
-        }
+        },
+        "region": { "$ref": "#/$defs/recordingRegion" }
+      }
+    },
+    "recordingRegion": {
+      "description": "Part of the chosen display to record, in its physical pixels. Omitted to record the whole display; main refuses a region outside the display.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "integer", "minimum": 0 },
+        "y": { "type": "integer", "minimum": 0 },
+        "width": { "type": "integer", "minimum": 64, "maximum": 16384 },
+        "height": { "type": "integer", "minimum": 64, "maximum": 16384 }
+      }
+    },
+    "recordingRegionRequest": {
+      "description": "Opens main's area picker over the display; the renderer never sees coordinates of other windows.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "display_id"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "display_id": { "$ref": "#/$defs/recordingDeviceId" }
       }
     },
     "recordingView": {

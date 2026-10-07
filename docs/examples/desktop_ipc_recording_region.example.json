@@ -1,0 +1,18 @@
+{
+  "channel": "recording:pick-region",
+  "payload": {
+    "schema_version": "1.0",
+    "display_id": "display-1"
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "region": {
+        "x": 640,
+        "y": 360,
+        "width": 1280,
+        "height": 720
+      }
+    }
+  }
+}
