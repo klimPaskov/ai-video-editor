@@ -298,6 +298,8 @@ export interface CaptionSettings {
   style: CaptionStyle;
   size: CaptionSize;
   position: CaptionPosition;
+  /** Draw the captions into exported frames as well as writing an .srt. */
+  burnIn: boolean;
 }
 
 export const defaultCaptionSettings: CaptionSettings = Object.freeze({
@@ -305,6 +307,7 @@ export const defaultCaptionSettings: CaptionSettings = Object.freeze({
   style: "plain",
   size: "medium",
   position: "bottom",
+  burnIn: false,
 });
 
 export interface CaptionSettingsRequest {
@@ -341,9 +344,16 @@ function exactRecord(
 export function assertCaptionSettings(
   value: unknown,
 ): asserts value is CaptionSettings {
-  const settings = exactRecord(value, ["enabled", "style", "size", "position"]);
+  const settings = exactRecord(value, [
+    "enabled",
+    "style",
+    "size",
+    "position",
+    "burnIn",
+  ]);
   if (
     typeof settings.enabled !== "boolean" ||
+    typeof settings.burnIn !== "boolean" ||
     !["plain", "highlight", "minimal"].includes(settings.style as string) ||
     !["small", "medium", "large"].includes(settings.size as string) ||
     !["bottom", "top"].includes(settings.position as string)
@@ -376,4 +386,138 @@ export function assertCaptionSettingsUpdate(
     project_id: request.project_id,
   });
   assertCaptionSettings(request.settings);
+}
+
+/** Caption text height as a fraction of frame height, shared with the preview. */
+export const captionSizeFraction: Record<CaptionSize, number> = {
+  small: 0.042,
+  medium: 0.054,
+  large: 0.07,
+};
+
+function assTime(us: number): string {
+  const cs = Math.max(0, Math.round(us / 10_000));
+  const hours = Math.floor(cs / 360_000);
+  const minutes = Math.floor((cs % 360_000) / 6000);
+  const seconds = Math.floor((cs % 6000) / 100);
+  const rest = cs % 100;
+  const two = (value: number) => String(value).padStart(2, "0");
+  return `${hours}:${two(minutes)}:${two(seconds)}.${two(rest)}`;
+}
+
+/** ASS treats `{`, `}` and backslash sequences as markup; keep them literal. */
+function assText(text: string): string {
+  return text
+    .replaceAll("\\", "\\\u2060")
+    .replaceAll("{", "(")
+    .replaceAll("}", ")");
+}
+
+/**
+ * Advanced SubStation script that draws the same captions as the preview
+ * into exported frames (rendered by libass, which leaves pixels outside the
+ * text unchanged).
+ */
+export function toAss(
+  cues: readonly CaptionCue[],
+  settings: CaptionSettings,
+  width: number,
+  height: number,
+): string {
+  const fontSize = Math.max(
+    8,
+    Math.round(height * captionSizeFraction[settings.size]),
+  );
+  const boxed = settings.style !== "minimal";
+  const alignment = settings.position === "top" ? 8 : 2;
+  const margin = Math.round(height * 0.07);
+  // Colours are &HAABBGGRR; alpha 00 is opaque. The box is 72% opaque black.
+  const style = [
+    "Default",
+    "Arial",
+    fontSize,
+    "&H00FFFFFF",
+    "&H00FFFFFF",
+    boxed ? "&H48000000" : "&H00000000",
+    boxed ? "&H48000000" : "&H80000000",
+    -1,
+    0,
+    0,
+    0,
+    100,
+    100,
+    0,
+    0,
+    boxed ? 3 : 1,
+    boxed
+      ? Math.max(1, Math.round(fontSize * 0.18))
+      : Math.max(1, Math.round(fontSize * 0.08)),
+    boxed ? 0 : Math.max(1, Math.round(fontSize * 0.06)),
+    alignment,
+    Math.round(width * 0.06),
+    Math.round(width * 0.06),
+    margin,
+    1,
+  ].join(",");
+  const events: string[] = [];
+  const line = (startUs: number, endUs: number, text: string) => {
+    if (endUs > startUs)
+      events.push(
+        `Dialogue: 0,${assTime(startUs)},${assTime(endUs)},Default,,0,0,0,,${text}`,
+      );
+  };
+  for (const cue of cues) {
+    const render = (spoken: number) => {
+      const out: string[] = [];
+      let index = 0;
+      for (const count of cue.lineWordCounts) {
+        const words = cue.words.slice(index, index + count);
+        const tokens = words.map((word, offset) =>
+          index + offset === spoken
+            ? `{\\c&H4DD8FF&}${assText(word.text)}{\\c&HFFFFFF&}`
+            : assText(word.text),
+        );
+        out.push(joinCaptionWords(tokens));
+        index += count;
+      }
+      return out.join("\\N");
+    };
+    if (settings.style !== "highlight") {
+      line(cue.startUs, cue.endUs, render(-1));
+      continue;
+    }
+    const bounds = [
+      ...new Set(
+        [
+          cue.startUs,
+          cue.endUs,
+          ...cue.words.flatMap((word) => [word.startUs, word.endUs]),
+        ].filter((us) => us >= cue.startUs && us <= cue.endUs),
+      ),
+    ].sort((a, b) => a - b);
+    for (let index = 0; index + 1 < bounds.length; index++) {
+      const at = bounds[index]!;
+      const spoken = cue.words.findIndex(
+        (word) => at >= word.startUs && at < word.endUs,
+      );
+      line(at, bounds[index + 1]!, render(spoken));
+    }
+  }
+  return [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    `PlayResX: ${width}`,
+    `PlayResY: ${height}`,
+    "ScaledBorderAndShadow: yes",
+    "WrapStyle: 2",
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    `Style: ${style}`,
+    "",
+    "[Events]",
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ...events,
+    "",
+  ].join("\n");
 }

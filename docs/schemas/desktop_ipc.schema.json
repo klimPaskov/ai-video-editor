@@ -1890,9 +1890,10 @@
       "description": "Per-project caption choices. Caption text and timing are derived from the transcript and the draft, never stored here.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "style", "size", "position"],
+      "required": ["enabled", "style", "size", "position", "burnIn"],
       "properties": {
         "enabled": { "type": "boolean" },
+        "burnIn": { "type": "boolean" },
         "style": { "enum": ["plain", "highlight", "minimal"] },
         "size": { "enum": ["small", "medium", "large"] },
         "position": { "enum": ["bottom", "top"] }
@@ -2297,7 +2298,8 @@
                 "outputBytes",
                 "samplesEqual",
                 "draftSequence",
-                "captionsFileName"
+                "captionsFileName",
+                "captionsBurnedIn"
               ],
               "properties": {
                 "fileName": {
@@ -2342,6 +2344,10 @@
                       "pattern": "^[^\\\\/:\\u0000-\\u001f\\u007f]+\\.srt$"
                     }
                   ]
+                },
+                "captionsBurnedIn": {
+                  "description": "Captions were drawn into the exported frames; the verified render includes them.",
+                  "type": "boolean"
                 }
               }
             }

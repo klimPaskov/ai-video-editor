@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
+import {
+  buildCaptionCues,
+  defaultCaptionSettings,
+  toAss,
+} from "../../packages/domain/src/captions.ts";
 import { probePresentationTiming } from "../../packages/media-engine/src/presentation-timing.ts";
 import {
   exportDraft,
@@ -585,6 +590,90 @@ test(
         sha(full.audio!.subarray(31 * 1600 * 2, 69 * 1600 * 2)),
       );
       assert.equal(evidence.samplesEqual, true);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "burned-in captions change only the frames they cover and stay verified",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-captions-"));
+    try {
+      const input = await source(directory, "talk.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=30:duration=2",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "rgb",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+      ]);
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 0,
+            sourceEndUs: 2_000_000,
+          },
+        ],
+        [input],
+      );
+      const cues = buildCaptionCues([
+        { text: "Hello", startUs: 500_000, endUs: 800_000 },
+        { text: "world.", startUs: 800_000, endUs: 1_000_000 },
+      ]);
+      const settings = {
+        ...defaultCaptionSettings,
+        enabled: true,
+        burnIn: true,
+      };
+      const output = join(directory, "captioned master.mkv");
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: output,
+        replace: false,
+        overlayAss: toAss(cues, settings, 160, 90),
+      });
+      assert.equal(evidence.samplesEqual, true);
+      const frameBytes = rawFrameBytes("bgra", 160, 90);
+      const original = (await fullDecode(input, "bgra", null)).video;
+      const exported = await ffmpeg([
+        "-i",
+        output,
+        "-c:v",
+        "rawvideo",
+        "-pix_fmt",
+        "bgra",
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ]);
+      assert.equal(exported.length, original.length);
+      const changed: number[] = [];
+      for (let frame = 0; frame < plan.frameCount; frame++) {
+        const range = [frame * frameBytes, (frame + 1) * frameBytes] as const;
+        if (!exported.subarray(...range).equals(original.subarray(...range)))
+          changed.push(frame);
+      }
+      // The caption is on screen from 0.5 s until it leaves after its hold.
+      const end = Math.ceil((cues[0]!.endUs * 30) / 1_000_000);
+      assert.equal(changed[0], 15);
+      assert.equal(changed.at(-1), end - 1);
+      assert.equal(changed.length, end - 15);
+      assert.ok(original.length > 0);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

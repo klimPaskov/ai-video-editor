@@ -39,6 +39,7 @@ test("export views reject paths, raw errors and inconsistent states", () => {
       samplesEqual: true,
       draftSequence: 2,
       captionsFileName: null,
+      captionsBurnedIn: false,
     },
     message: null,
   };

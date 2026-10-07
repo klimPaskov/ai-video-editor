@@ -56,7 +56,7 @@ class DesktopIpcContractTests(unittest.TestCase):
 
     def test_caption_settings_hold_only_style_choices(self):
         request = {'schema_version': '1.0', 'project_id': 'project-1'}
-        settings = {'enabled': True, 'style': 'highlight', 'size': 'large', 'position': 'top'}
+        settings = {'enabled': True, 'style': 'highlight', 'size': 'large', 'position': 'top', 'burnIn': True}
         self.valid({'channel': 'captions:get', 'payload': request, 'response': {'ok': True, 'value': settings}})
         self.valid({'channel': 'captions:set', 'payload': dict(request, settings=settings), 'response': {'ok': True, 'value': settings}})
         for wrong in [dict(settings, style='karaoke'), dict(settings, cues=[]), dict(settings, enabled='yes')]:

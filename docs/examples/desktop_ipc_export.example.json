@@ -20,7 +20,8 @@
         "outputBytes": 3250112,
         "samplesEqual": true,
         "draftSequence": 1,
-        "captionsFileName": null
+        "captionsFileName": null,
+        "captionsBurnedIn": false
       },
       "message": null
     }

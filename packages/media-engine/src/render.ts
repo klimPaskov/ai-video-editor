@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, open, rename, rm, stat } from "node:fs/promises";
+import { mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { once } from "node:events";
 import type { Readable, Writable } from "node:stream";
@@ -472,11 +472,13 @@ function startProcess(
   executable: string,
   args: string[],
   stdin: "pipe" | "ignore",
+  cwd?: string,
 ): ChildProcess {
   return spawn(executable, args, {
     shell: false,
     windowsHide: true,
     stdio: [stdin, "pipe", "pipe"],
+    ...(cwd ? { cwd } : {}),
   });
 }
 
@@ -548,6 +550,11 @@ export interface ExportRequest {
   executables?: MediaExecutables;
   signal?: AbortSignal;
   onProgress?: (progress: ExportProgress) => void;
+  /**
+   * Advanced SubStation script drawn into the frames (burned-in captions).
+   * The composed frames become the canonical render the export verifies.
+   */
+  overlayAss?: string;
 }
 
 const defaultExecutables: MediaExecutables = {
@@ -804,6 +811,69 @@ export async function exportDraft(
     encoder.stdout?.resume();
     encoder.stdin!.on("error", () => undefined);
     const videoHash = createHash("sha256");
+    // With an overlay, decoded frames pass through one compositor that draws
+    // the script in the frames' own pixel format; frames it does not touch
+    // stay bit-identical. Its output is what is hashed and encoded.
+    let compositor: ChildProcess | null = null;
+    let composed: Promise<number> | null = null;
+    if (request.overlayAss !== undefined) {
+      await writeFile(join(staging, "overlay.ass"), request.overlayAss, {
+        mode: 0o600,
+      });
+      const child = track(
+        startProcess(
+          executables.ffmpeg,
+          [
+            ...quiet,
+            "-f",
+            "rawvideo",
+            "-pixel_format",
+            video.pixelFormat,
+            "-video_size",
+            `${video.width}x${video.height}`,
+            "-framerate",
+            `${video.frameRate.numerator}/${video.frameRate.denominator}`,
+            "-i",
+            "pipe:0",
+            // A relative name avoids filter-argument escaping of full paths.
+            "-vf",
+            "ass=overlay.ass",
+            "-fps_mode",
+            "passthrough",
+            "-c:v",
+            "rawvideo",
+            "-pix_fmt",
+            video.pixelFormat,
+            "-f",
+            "rawvideo",
+            "pipe:1",
+          ],
+          "pipe",
+          staging,
+        ),
+      );
+      child.stdin!.on("error", () => undefined);
+      compositor = child;
+      const done = exited(child);
+      composed = (async () => {
+        let bytes = 0;
+        let reported = 0;
+        await drain(child.stdout!, async (chunk) => {
+          bytes += chunk.length;
+          videoHash.update(chunk);
+          await writeChunk(encoder.stdin!, chunk, halt.signal);
+          const frames = Math.floor(bytes / plan.frameBytes);
+          if (frames > reported) {
+            progress("rendering", frames - reported);
+            reported = frames;
+          }
+        });
+        await done;
+        return bytes;
+      })();
+      composed.catch(() => undefined);
+    }
+    const sink = compositor ? compositor.stdin! : encoder.stdin!;
     try {
       for (const clip of plan.clips) {
         const expected = clip.frameCount * plan.frameBytes;
@@ -842,8 +912,9 @@ export async function exportDraft(
         await drain(child.stdout!, async (chunk) => {
           written += chunk.length;
           if (written > expected) return;
-          videoHash.update(chunk);
-          await writeChunk(encoder.stdin!, chunk, halt.signal);
+          if (!compositor) videoHash.update(chunk);
+          await writeChunk(sink, chunk, halt.signal);
+          if (compositor) return;
           const frames = Math.floor(written / plan.frameBytes);
           if (frames > reported) {
             progress("rendering", frames - reported);
@@ -857,7 +928,16 @@ export async function exportDraft(
             "A clip did not decode to its exact frame range.",
           );
       }
+      if (compositor && composed) {
+        compositor.stdin!.end();
+        if ((await composed) !== plan.frameCount * plan.frameBytes)
+          throw new MediaError(
+            "FIDELITY_MISMATCH",
+            "The overlay did not return every rendered frame.",
+          );
+      }
     } finally {
+      compositor?.stdin?.end();
       encoder.stdin!.end();
     }
     await encoded;

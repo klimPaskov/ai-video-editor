@@ -234,11 +234,19 @@ try {
   assert.ok(afterCut.includes(before.replace(/[,.]$/u, "")), afterCut);
 
   step = "export";
+  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.locator("#captions-burn-in").check();
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await page.locator("#export-start").click();
   await expect(page.locator("#export-done")).toBeVisible({ timeout: 300_000 });
   await expect(page.locator("#export-result")).toContainText(
     "captions in Talk master.srt",
+  );
+  await expect(page.locator("#export-result")).toContainText(
+    "captions burned in",
+  );
+  await expect(page.locator("#export-result")).toContainText(
+    "verified lossless",
   );
   const srt = await readFile(join(outputs, "Talk master.srt"), "utf8");
   const cues = srt.split("\r\n\r\n").filter(Boolean);

@@ -39,6 +39,7 @@ export function setupCaptions(options: { preview: HTMLElement }): {
   const style = element<HTMLSelectElement>("captions-style");
   const size = element<HTMLSelectElement>("captions-size");
   const placement = element<HTMLSelectElement>("captions-position");
+  const burnIn = element<HTMLInputElement>("captions-burn-in");
   const note = element("captions-note");
   let projectId: string | undefined;
   let settings: CaptionSettings = { ...defaultCaptionSettings };
@@ -53,7 +54,8 @@ export function setupCaptions(options: { preview: HTMLElement }): {
     style.value = settings.style;
     size.value = settings.size;
     placement.value = settings.position;
-    for (const control of [style, size, placement])
+    burnIn.checked = settings.burnIn;
+    for (const control of [style, size, placement, burnIn])
       control.disabled = !settings.enabled;
   }
 
@@ -88,6 +90,7 @@ export function setupCaptions(options: { preview: HTMLElement }): {
       style: style.value as CaptionSettings["style"],
       size: size.value as CaptionSettings["size"],
       position: placement.value as CaptionSettings["position"],
+      burnIn: burnIn.checked,
     };
     const attempt = ++saving;
     const previous = settings;
@@ -108,7 +111,7 @@ export function setupCaptions(options: { preview: HTMLElement }): {
       position(lastPosition);
     }
   }
-  for (const control of [enabled, style, size, placement])
+  for (const control of [enabled, style, size, placement, burnIn])
     control.addEventListener("change", () => void save());
 
   /** The displayed media rectangle inside the preview (object-fit: contain). */

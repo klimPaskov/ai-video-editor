@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
+import {
+  toAss,
+  toSrt,
+  type CaptionCue,
+  type CaptionSettings,
+} from "../../../packages/domain/src/captions.ts";
 import { access, mkdir, open, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -39,8 +45,10 @@ export interface DesktopExportOptions {
   openFile: (file: string) => Promise<void>;
   ffmpeg?: string;
   ffprobe?: string;
-  /** SubRip captions for the project's current draft, or null when off. */
-  captions?: (projectId: string) => Promise<string | null>;
+  /** Captions for the project's current draft, or null when off. */
+  captions?: (
+    projectId: string,
+  ) => Promise<{ cues: CaptionCue[]; settings: CaptionSettings } | null>;
 }
 
 interface Job {
@@ -49,6 +57,7 @@ interface Job {
   controller: AbortController;
   outputPath: string;
   draftSequence: number;
+  captions: { cues: CaptionCue[]; settings: CaptionSettings } | null;
 }
 
 const unsupportedSet = new Set<string>(exportUnsupported);
@@ -176,8 +185,11 @@ export class DesktopExports {
         return this.get(projectId);
       }
     }
+    // Captions are fixed when the export starts, like the draft itself.
+    const captions = await this.options.captions?.(projectId).catch(() => null);
     const controller = new AbortController();
     const job: Job = {
+      captions: captions && captions.cues.length ? captions : null,
       projectId,
       profile,
       controller,
@@ -215,6 +227,16 @@ export class DesktopExports {
           ffprobe: this.options.ffprobe ?? "ffprobe",
         },
         signal: job.controller.signal,
+        ...(job.captions?.settings.burnIn
+          ? {
+              overlayAss: toAss(
+                job.captions.cues,
+                job.captions.settings,
+                plan.format.video.width,
+                plan.format.video.height,
+              ),
+            }
+          : {}),
         onProgress: (progress) => {
           if (this.job !== job || this.view.status !== "running") return;
           this.set({
@@ -241,7 +263,7 @@ export class DesktopExports {
     // verified video, and an unrelated existing file is not replaced.
     let captionsFileName: string | null = null;
     try {
-      const text = await this.options.captions?.(job.projectId);
+      const text = job.captions ? toSrt(job.captions.cues) : null;
       if (text) {
         const file = job.outputPath.replace(/\.[^.\\/]+$/u, "") + ".srt";
         await writeFile(file, text, { flag: replace ? "w" : "wx" });
@@ -268,6 +290,7 @@ export class DesktopExports {
         samplesEqual: evidence.samplesEqual,
         draftSequence: job.draftSequence,
         captionsFileName,
+        captionsBurnedIn: job.captions?.settings.burnIn === true,
       },
       message,
     });

@@ -69,3 +69,5 @@ Implement these checks in P0, P3, P4, P8, P9, and P10. Store actual evidence, no
 [L4] Apple, About Apple ProRes: https://support.apple.com/en-us/102207
 
 Checked 2026-09-05. The technical boundaries above are product requirements, not evidence of an implemented encoder.
+
+Burned-in captions (2026-10-07): the master's canonical render is the source frames with the caption overlay drawn by libass in the same pixel format; untouched frames are bit-identical to the source and the exported master decodes to exactly the composed frames. Without burn-in nothing changes.

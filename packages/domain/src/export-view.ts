@@ -52,6 +52,8 @@ export interface ExportResultView {
   draftSequence: number;
   /** SubRip captions written beside the video, if any. */
   captionsFileName: string | null;
+  /** Captions were drawn into the exported frames. */
+  captionsBurnedIn: boolean;
 }
 
 export interface ExportView {
@@ -205,7 +207,9 @@ export function assertExportView(value: unknown): asserts value is ExportView {
       "samplesEqual",
       "draftSequence",
       "captionsFileName",
+      "captionsBurnedIn",
     ]);
+    if (typeof result.captionsBurnedIn !== "boolean") invalid();
     if (
       result.captionsFileName !== null &&
       (typeof result.captionsFileName !== "string" ||

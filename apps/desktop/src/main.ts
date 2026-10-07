@@ -119,7 +119,6 @@ import {
   buildCaptionCues,
   captionSourceWords,
   captionWordsForDraft,
-  toSrt,
 } from "../../../packages/domain/src/captions.ts";
 import {
   assertPlaybackProjectRequest,
@@ -370,9 +369,10 @@ async function start(): Promise<void> {
   const captionSettings = new CaptionSettingsStore(
     path.join(userData, "caption-settings"),
   );
-  /** SubRip for the current draft when captions are on and a transcript exists. */
-  const captionsSrt = async (projectId: string): Promise<string | null> => {
-    if (!(await captionSettings.get(projectId)).enabled) return null;
+  /** Captions for the current draft when they are on and a transcript exists. */
+  const draftCaptions = async (projectId: string) => {
+    const settings = await captionSettings.get(projectId);
+    if (!settings.enabled) return null;
     const view = await transcription!.get({
       schema_version: "1.0",
       project_id: projectId,
@@ -386,7 +386,7 @@ async function start(): Promise<void> {
         project.clips ?? [],
       ),
     );
-    return cues.length ? toSrt(cues) : null;
+    return cues.length ? { cues, settings } : null;
   };
   register(channels.captionsGet, async (request) => {
     assertCaptionSettingsRequest(request);
@@ -466,7 +466,7 @@ async function start(): Promise<void> {
     return recording(() => recorder!.cancel());
   });
   exports = new DesktopExports({
-    captions: captionsSrt,
+    captions: draftCaptions,
     drafts,
     recordRoot: path.join(userData, "exports"),
     defaultDirectory: () => app.getPath("videos"),
