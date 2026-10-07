@@ -249,6 +249,12 @@
         "description": "Text-only correction metadata. It does not alter original speech. Runtime validates unique word identity, source membership, and different before/after text."
       }
     },
+    "graphics": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/graphic_effect" },
+      "description": "Draft motion graphics. Omitted when the draft has none."
+    },
     "zooms": {
       "type": "array",
       "maxItems": 256,
@@ -265,6 +271,22 @@
     }
   },
   "$defs": {
+    "graphic_effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["graphic_id", "name", "source_id", "source_us", "duration_us", "layer", "html", "css"],
+      "properties": {
+        "graphic_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "source_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_us": { "type": "integer", "minimum": 0 },
+        "duration_us": { "type": "integer", "minimum": 100000, "maximum": 600000000 },
+        "layer": { "type": "integer", "minimum": 0, "maximum": 99 },
+        "html": { "type": "string", "maxLength": 65536 },
+        "css": { "type": "string", "maxLength": 65536 }
+      },
+      "description": "A motion graphic: an HTML fragment and its CSS, starting where source moment source_us plays in the edit and lasting duration_us of output time. Runtime rejects scripts, event handlers, script URLs, embedded documents, form and media elements, @import and any non-data, non-fragment URL, and requires source_us inside the source and unique IDs."
+    },
     "zoom_effect": {
       "type": "object",
       "additionalProperties": false,

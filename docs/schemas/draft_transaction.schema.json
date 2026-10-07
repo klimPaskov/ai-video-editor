@@ -62,7 +62,8 @@
           { "$ref": "#/$defs/transcript_cut_operation" },
           { "$ref": "#/$defs/transcript_edit_operation" },
           { "$ref": "#/$defs/zoom_operation" },
-          { "$ref": "#/$defs/speed_operation" }
+          { "$ref": "#/$defs/speed_operation" },
+          { "$ref": "#/$defs/graphic_operation" }
         ]
       }
     },
@@ -106,6 +107,21 @@
         "properties": {
           "operations": {
             "contains": { "$ref": "#/$defs/transcript_cut_operation" }
+          }
+        },
+        "required": ["operations"]
+      },
+      "then": {
+        "properties": {
+          "operations": { "minItems": 1, "maxItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operations": {
+            "contains": { "$ref": "#/$defs/graphic_operation" }
           }
         },
         "required": ["operations"]
@@ -184,6 +200,7 @@
             "spoken_cut",
             "layout",
             "zoom",
+            "graphics",
             "captions",
             "speed",
             "audio",
@@ -402,6 +419,37 @@
         }
       },
       "description": "One user-selected contiguous half-open source word range mapped to the current output timeline. It shares ripple-delete's reversible clip-map inverse and records its transcript and word identity."
+    },
+    "graphic_operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "operation_type", "action", "graphic_id", "graphic", "before", "after", "inverse"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "operation_id": { "$ref": "#/$defs/id" },
+        "operation_type": { "const": "graphic" },
+        "action": { "enum": ["set", "remove"] },
+        "graphic_id": { "$ref": "#/$defs/id" },
+        "graphic": {
+          "oneOf": [
+            { "$ref": "timeline.schema.json#/$defs/graphic_effect" },
+            { "type": "null" }
+          ]
+        },
+        "before": { "type": "array", "maxItems": 256, "items": { "$ref": "timeline.schema.json#/$defs/graphic_effect" } },
+        "after": { "type": "array", "maxItems": 256, "items": { "$ref": "timeline.schema.json#/$defs/graphic_effect" } },
+        "inverse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "graphics", "expected_after_sha256"],
+          "properties": {
+            "type": { "const": "restore_graphics" },
+            "graphics": { "type": "array", "maxItems": 256, "items": { "$ref": "timeline.schema.json#/$defs/graphic_effect" } },
+            "expected_after_sha256": { "$ref": "#/$defs/hash" }
+          }
+        }
+      },
+      "description": "Adds or replaces one motion graphic (set) or removes one (remove, graphic null). It is the only operation in its transaction; its inverse restores the previous graphics list and the clip map is unchanged."
     },
     "speed_operation": {
       "type": "object",

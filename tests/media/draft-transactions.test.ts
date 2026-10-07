@@ -2019,3 +2019,86 @@ test("speed-ups are exact, reversible clip-map edits that survive reopen", async
   assert.deepEqual(reopened.draft, undone.draft);
   assert.deepEqual(await readFile(source), sourceBytes);
 });
+
+test("graphics are reversible draft edits that survive reopen", async () => {
+  const { projects, projectStore, baseline, source } = await fixture();
+  const sourceBytes = await readFile(source);
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  const graphic = {
+    graphic_id: "graphic-001",
+    name: "Title card",
+    source_id: baseline.source.source_id,
+    source_us: 100_000,
+    duration_us: 500_000,
+    layer: 0,
+    html: '<h1 class="t">Hello</h1>',
+    css: ".t { color: white; animation: in 400ms ease-out both } @keyframes in { from { opacity: 0 } }",
+  };
+  const pass = {
+    pass_group_id: "pass-graphics-001",
+    kind: "graphics" as const,
+  };
+  const added = await store.applyManual(
+    trim(initial, {
+      request_id: "request-graphic-add-001",
+      pass_group: pass,
+      reason: "Add a title card.",
+      operations: [{ type: "set_graphic", graphic }],
+    }),
+  );
+  assert.equal(added.transaction.operations[0]?.operation_type, "graphic");
+  assert.deepEqual(added.draft.timeline.graphics, [graphic]);
+  // Unsafe content and moments outside the source are refused.
+  for (const bad of [
+    { ...graphic, html: "<script>1</script>" },
+    { ...graphic, source_us: 5_000_000 },
+  ])
+    await assert.rejects(async () =>
+      store.applyManual(
+        trim(added.draft, {
+          request_id: `request-graphic-bad-${bad.source_us}-${bad.html.length}`,
+          pass_group: pass,
+          operations: [{ type: "set_graphic", graphic: bad }],
+        }),
+      ),
+    );
+  const changed = await store.applyManual(
+    trim(added.draft, {
+      request_id: "request-graphic-change-001",
+      pass_group: pass,
+      reason: "Longer title.",
+      operations: [
+        { type: "set_graphic", graphic: { ...graphic, duration_us: 800_000 } },
+      ],
+    }),
+  );
+  assert.equal(changed.draft.timeline.graphics?.[0]?.duration_us, 800_000);
+  const removed = await store.applyManual(
+    trim(changed.draft, {
+      request_id: "request-graphic-remove-001",
+      pass_group: pass,
+      reason: "Remove the title.",
+      operations: [{ type: "remove_graphic", graphic_id: "graphic-001" }],
+    }),
+  );
+  assert.equal(removed.draft.timeline.graphics, undefined);
+  const undone = await store.undoManual(
+    undo(
+      removed.draft,
+      removed.transaction.transaction_id,
+      "request-graphic-undo-001",
+    ),
+  );
+  assert.equal(undone.draft.timeline.graphics?.[0]?.duration_us, 800_000);
+  const reopened = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopened.draft, undone.draft);
+  assert.deepEqual(await readFile(source), sourceBytes);
+});
