@@ -17,7 +17,12 @@ export function claudeAccountText(view: ClaudeView): string {
     if (view.account.billing === "api")
       return "Claude · Anthropic Console (API billing)";
     if (view.account.billing === "subscription")
-      return plan ? `Claude · ${plan}` : "Claude · Signed in";
+      // Claude Code may report the plan with its product name ("Claude Max").
+      return plan
+        ? /^claude\b/iu.test(plan)
+          ? plan
+          : `Claude · ${plan}`
+        : "Claude · Signed in";
     return "Claude · Signed in";
   }
   return {

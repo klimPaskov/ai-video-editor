@@ -1,3 +1,4 @@
+import { claudeAccountText } from "../../apps/desktop/renderer/claude-settings.ts";
 import assert from "node:assert/strict";
 import {
   mkdtemp,
@@ -661,6 +662,20 @@ test("IPC schema enumerations match the Claude domain constants", async () => {
     null,
     ...Object.values(claudeThreadIssues),
   ]);
+});
+
+test("account text names the plan once", () => {
+  const view = (plan: string | null): ClaudeView => ({
+    status: "signed_in",
+    version: "2.1.292",
+    account: { billing: "subscription", plan },
+    models: [{ value: "default", label: "Default", detail: "", efforts: [] }],
+    selection: { model: "default", effort: null },
+    message: null,
+  });
+  assert.equal(claudeAccountText(view("max")), "Claude · Max");
+  assert.equal(claudeAccountText(view("Claude Max")), "Claude Max");
+  assert.equal(claudeAccountText(view(null)), "Claude · Signed in");
 });
 
 test("domain assertions reject leaked or inconsistent Claude state", () => {
