@@ -42,6 +42,7 @@ import {
 } from "../../domain/src/project.ts";
 import { sameProjectStorePath, serializeProjectStore } from "./serialize.ts";
 import { assertZoomEffects } from "../../domain/src/zoom.ts";
+import { assertGraphicEffects } from "../../domain/src/graphics.ts";
 import { clipSpeed, sourceAt, speedLength } from "../../domain/src/speed.ts";
 
 /** Lay clips end to end; each lasts its source length at its speed. */
@@ -568,6 +569,56 @@ function prepareApply(
           type: "restore_timeline_clips",
           clips: priorClips,
           expected_after_sha256: canonicalSha256(timeline.clips),
+        },
+      });
+      continue;
+    }
+    if (intent.type === "set_graphic" || intent.type === "remove_graphic") {
+      if (request.operations.length !== 1) fail("invalid");
+      const beforeGraphics = structuredClone(timeline.graphics ?? []);
+      const graphicId =
+        intent.type === "set_graphic"
+          ? intent.graphic.graphic_id
+          : intent.graphic_id;
+      const exists = beforeGraphics.some(
+        (graphic) => graphic.graphic_id === graphicId,
+      );
+      if (intent.type === "remove_graphic" && !exists) fail("conflict");
+      const afterGraphics = beforeGraphics.filter(
+        (graphic) => graphic.graphic_id !== graphicId,
+      );
+      if (intent.type === "set_graphic")
+        afterGraphics.push(structuredClone(intent.graphic));
+      afterGraphics.sort(
+        (a, b) =>
+          a.source_id.localeCompare(b.source_id) ||
+          a.source_us - b.source_us ||
+          a.graphic_id.localeCompare(b.graphic_id),
+      );
+      try {
+        assertGraphicEffects(afterGraphics, baseline.timeline.clips);
+      } catch {
+        fail("conflict");
+      }
+      if (afterGraphics.length) timeline.graphics = afterGraphics;
+      else delete timeline.graphics;
+      timeline.operation_ids.push(operationId);
+      records.push({
+        schema_version: "1.0",
+        operation_id: operationId,
+        operation_type: "graphic",
+        action: intent.type === "set_graphic" ? "set" : "remove",
+        graphic_id: graphicId,
+        graphic:
+          intent.type === "set_graphic"
+            ? structuredClone(intent.graphic)
+            : null,
+        before: beforeGraphics,
+        after: structuredClone(afterGraphics),
+        inverse: {
+          type: "restore_graphics",
+          graphics: beforeGraphics,
+          expected_after_sha256: canonicalSha256(afterGraphics),
         },
       });
       continue;
@@ -1189,65 +1240,75 @@ export class DraftTransactionStore {
           pass_group: record.pass_group,
           reason: record.reason,
           operations: record.operations.map((operation) =>
-            operation.operation_type === "speed"
-              ? {
-                  type: "set_speed" as const,
-                  start_us: operation.start_us,
-                  end_us: operation.end_us,
-                  speed: operation.speed,
-                }
-              : operation.operation_type === "zoom"
-                ? operation.action === "set" && operation.zoom
-                  ? { type: "set_zoom" as const, zoom: operation.zoom }
-                  : { type: "remove_zoom" as const, zoom_id: operation.zoom_id }
-                : operation.operation_type === "split"
-                  ? {
-                      type: "split" as const,
-                      clip_id: operation.clip_id,
-                      timeline_position_us: operation.timeline_position_us,
-                    }
-                  : operation.operation_type === "ripple_delete"
-                    ? {
-                        type: "ripple_delete" as const,
-                        start_us: operation.start_us,
-                        end_us: operation.end_us,
+            operation.operation_type === "graphic"
+              ? operation.action === "set" && operation.graphic
+                ? { type: "set_graphic" as const, graphic: operation.graphic }
+                : {
+                    type: "remove_graphic" as const,
+                    graphic_id: operation.graphic_id,
+                  }
+              : operation.operation_type === "speed"
+                ? {
+                    type: "set_speed" as const,
+                    start_us: operation.start_us,
+                    end_us: operation.end_us,
+                    speed: operation.speed,
+                  }
+                : operation.operation_type === "zoom"
+                  ? operation.action === "set" && operation.zoom
+                    ? { type: "set_zoom" as const, zoom: operation.zoom }
+                    : {
+                        type: "remove_zoom" as const,
+                        zoom_id: operation.zoom_id,
                       }
-                    : operation.operation_type === "restore"
+                  : operation.operation_type === "split"
+                    ? {
+                        type: "split" as const,
+                        clip_id: operation.clip_id,
+                        timeline_position_us: operation.timeline_position_us,
+                      }
+                    : operation.operation_type === "ripple_delete"
                       ? {
-                          type: "restore_range" as const,
-                          source_id: operation.source_id,
-                          source_start_us: operation.source_start_us,
-                          source_end_us: operation.source_end_us,
+                          type: "ripple_delete" as const,
+                          start_us: operation.start_us,
+                          end_us: operation.end_us,
                         }
-                      : operation.operation_type === "transcript_cut"
+                      : operation.operation_type === "restore"
                         ? {
-                            type: "transcript_cut" as const,
+                            type: "restore_range" as const,
                             source_id: operation.source_id,
-                            transcript_id: operation.transcript_id,
-                            start_word_id: operation.start_word_id,
-                            end_word_id: operation.end_word_id,
                             source_start_us: operation.source_start_us,
                             source_end_us: operation.source_end_us,
-                            start_us: operation.start_us,
-                            end_us: operation.end_us,
                           }
-                        : operation.operation_type === "transcript_edit"
+                        : operation.operation_type === "transcript_cut"
                           ? {
-                              type: "transcript_edit" as const,
+                              type: "transcript_cut" as const,
                               source_id: operation.source_id,
                               transcript_id: operation.transcript_id,
-                              word_id: operation.word_id,
-                              original_text: operation.original_text,
-                              expected_text: operation.before_text,
-                              replacement_text: operation.after_text,
+                              start_word_id: operation.start_word_id,
+                              end_word_id: operation.end_word_id,
+                              source_start_us: operation.source_start_us,
+                              source_end_us: operation.source_end_us,
+                              start_us: operation.start_us,
+                              end_us: operation.end_us,
                             }
-                          : {
-                              type: "trim" as const,
-                              clip_id: operation.clip_id,
-                              edge: operation.edge,
-                              timeline_position_us:
-                                operation.timeline_position_us,
-                            },
+                          : operation.operation_type === "transcript_edit"
+                            ? {
+                                type: "transcript_edit" as const,
+                                source_id: operation.source_id,
+                                transcript_id: operation.transcript_id,
+                                word_id: operation.word_id,
+                                original_text: operation.original_text,
+                                expected_text: operation.before_text,
+                                replacement_text: operation.after_text,
+                              }
+                            : {
+                                type: "trim" as const,
+                                clip_id: operation.clip_id,
+                                edge: operation.edge,
+                                timeline_position_us:
+                                  operation.timeline_position_us,
+                              },
           ),
         };
         assertApplyDraftTransactionRequest(request);

@@ -98,6 +98,10 @@
       "example": "docs/examples/draft_transaction_speed.example.json"
     },
     {
+      "schema": "docs/schemas/draft_transaction.schema.json",
+      "example": "docs/examples/draft_transaction_graphic.example.json"
+    },
+    {
       "schema": "docs/schemas/pass_checkpoint.schema.json",
       "example": "docs/examples/pass_checkpoint.example.json"
     },

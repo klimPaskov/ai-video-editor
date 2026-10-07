@@ -15,6 +15,11 @@ import {
   speedLength,
   type ClipSpeed,
 } from "./speed.ts";
+import {
+  assertGraphicEffect,
+  assertGraphicEffects,
+  type GraphicEffect,
+} from "./graphics.ts";
 type ProjectBaseline = InitialProjectSnapshot | TwoSourceInitialProjectSnapshot;
 import {
   canonicalSha256,
@@ -26,6 +31,8 @@ export type DraftTimeline = InitialProjectSnapshot["timeline"] & {
   transcript_edits?: TranscriptTextOverride[];
   /** Zoom effects anchored to source time; absent means none. */
   zooms?: ZoomEffect[];
+  /** Motion graphics anchored to source moments; absent means none. */
+  graphics?: GraphicEffect[];
 };
 export type DraftOrigin =
   "manual" | "codex" | "claude" | "api_provider" | "magic_wand";
@@ -34,6 +41,7 @@ export type DraftPassKind =
   | "spoken_cut"
   | "layout"
   | "zoom"
+  | "graphics"
   | "captions"
   | "speed"
   | "audio"
@@ -99,6 +107,17 @@ export interface SetZoomIntent {
   zoom: ZoomEffect;
 }
 
+/** Adds a graphic, or replaces the graphic with the same id. */
+export interface SetGraphicIntent {
+  type: "set_graphic";
+  graphic: GraphicEffect;
+}
+
+export interface RemoveGraphicIntent {
+  type: "remove_graphic";
+  graphic_id: string;
+}
+
 export interface RemoveZoomIntent {
   type: "remove_zoom";
   zoom_id: string;
@@ -113,6 +132,8 @@ export interface SetSpeedIntent {
 }
 
 export type DraftEditIntent =
+  | SetGraphicIntent
+  | RemoveGraphicIntent
   | SetSpeedIntent
   | SetZoomIntent
   | RemoveZoomIntent
@@ -322,7 +343,25 @@ export interface ZoomOperationRecord {
   };
 }
 
+export interface GraphicOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "graphic";
+  action: "set" | "remove";
+  graphic_id: string;
+  /** The graphic set, or null when removing. */
+  graphic: GraphicEffect | null;
+  before: GraphicEffect[];
+  after: GraphicEffect[];
+  inverse: {
+    type: "restore_graphics";
+    graphics: GraphicEffect[];
+    expected_after_sha256: string;
+  };
+}
+
 export type DraftOperationRecord =
+  | GraphicOperationRecord
   | SpeedOperationRecord
   | ZoomOperationRecord
   | TrimOperationRecord
@@ -388,6 +427,7 @@ const passKinds: readonly DraftPassKind[] = [
   "spoken_cut",
   "layout",
   "zoom",
+  "graphics",
   "captions",
   "speed",
   "audio",
@@ -556,10 +596,12 @@ export function assertDraftTimeline(
       "speed_ids",
       "created_at",
     ],
-    ["transcript_edits", "zooms"],
+    ["transcript_edits", "zooms", "graphics"],
   );
   if (Object.hasOwn(value, "zooms"))
     assertZoomEffects(value.zooms, baseline.clips);
+  if (Object.hasOwn(value, "graphics"))
+    assertGraphicEffects(value.graphics, baseline.clips);
   if (Object.hasOwn(value, "transcript_edits"))
     assertTranscriptTextOverrides(
       value.transcript_edits,
@@ -716,6 +758,18 @@ export function assertApplyDraftTransactionRequest(
         !isClipSpeed(operation.speed)
       )
         invalid();
+      continue;
+    }
+    if (operation?.type === "set_graphic") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "graphic"]);
+      assertGraphicEffect(operation.graphic);
+      continue;
+    }
+    if (operation?.type === "remove_graphic") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "graphic_id"]);
+      id(operation.graphic_id);
       continue;
     }
     if (operation?.type === "set_zoom") {
