@@ -10,6 +10,7 @@
  * Usage: <node> capture-supervisor <ffmpeg> <ffmpeg arguments...>
  */
 import { spawn } from "node:child_process";
+import { killProcessTree } from "./process-tree.ts";
 
 const [executable, ...args] = process.argv.slice(2);
 if (!executable) process.exit(2);
@@ -30,7 +31,7 @@ function finish(): void {
   if (ending) return;
   ending = true;
   child.stdin.end("q\n");
-  setTimeout(() => child.kill("SIGKILL"), 10_000).unref();
+  setTimeout(() => killProcessTree(child), 10_000).unref();
 }
 process.stdin.on("data", (chunk: Buffer) => {
   if (!ending) child.stdin.write(chunk);

@@ -16,6 +16,7 @@ import {
   type DisplayTarget,
 } from "../../packages/recorder/src/capture.ts";
 import { CaptureSession } from "../../packages/recorder/src/session.ts";
+import { killProcessTree } from "../../packages/recorder/src/process-tree.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 import { probePresentationTiming } from "../../packages/media-engine/src/presentation-timing.ts";
 import { planExport } from "../../packages/media-engine/src/render.ts";
@@ -300,6 +301,7 @@ test(
     const directory = await realpath(
       await mkdtemp(join(tmpdir(), "capture-supervisor-")),
     );
+    let running: { child: ChildProcess; done: Promise<void> } | undefined;
     try {
       const session = new CaptureSession({
         ffmpeg: "ffmpeg",
@@ -330,7 +332,7 @@ test(
       });
       await session.record();
       await new Promise((resolve) => setTimeout(resolve, 800));
-      const running = (
+      running = (
         session as unknown as {
           current: { child: ChildProcess; done: Promise<void> };
         }
@@ -362,6 +364,8 @@ test(
       const finished = await session.stop();
       assert.ok(finished.frames >= 15);
     } finally {
+      // Never leave a capture running if an assertion failed.
+      if (running) killProcessTree(running.child);
       await rm(directory, { recursive: true, force: true });
     }
   },

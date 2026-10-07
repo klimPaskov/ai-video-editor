@@ -15,6 +15,7 @@ import test from "node:test";
 import { DesktopRecorder, takeName } from "../../apps/desktop/src/recording.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { CaptureSession } from "../../packages/recorder/src/session.ts";
+import { killProcessTree } from "../../packages/recorder/src/process-tree.ts";
 import { testToneInput } from "../../packages/recorder/src/capture.ts";
 import { recordingIssues } from "../../packages/domain/src/recording-view.ts";
 
@@ -263,9 +264,11 @@ test(
       await session.pause();
       await session.record();
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      (
-        session as unknown as { current: { child: ChildProcess } }
-      ).current.child.kill("SIGKILL");
+      // On Windows FFmpeg may be a shim; end the real capture as well.
+      killProcessTree(
+        (session as unknown as { current: { child: ChildProcess } }).current
+          .child,
+      );
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const service = recorder(root, { AI_VIDEO_EDITOR_TEST_CAPTURE: "1" });

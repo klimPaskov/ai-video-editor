@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { open, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { killProcessTree } from "./process-tree.ts";
 import {
   audioAlignmentFilter,
   captureSampleRate,
@@ -365,7 +366,7 @@ export class CaptureSession {
     if (!running) return;
     running.stopping = true;
     running.child.stdin?.end("q\n");
-    const timer = setTimeout(() => running.child.kill("SIGKILL"), 15_000);
+    const timer = setTimeout(() => killProcessTree(running.child), 15_000);
     await running.done;
     clearTimeout(timer);
   }
