@@ -14,7 +14,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { _electron, expect } from "playwright/test";
@@ -27,6 +27,12 @@ import { sha256 } from "../../packages/media-engine/src/lossless.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 import { ProjectStore } from "../../packages/project-store/src/store.ts";
 import { DraftTransactionStore } from "../../packages/project-store/src/transactions.ts";
+import {
+  CodexStdioTransport,
+  CodexTransportError,
+} from "../../packages/codex-bridge/src/transport.ts";
+import { buildCodexAppServerArguments } from "../../packages/codex-bridge/src/client.ts";
+import { buildExperimentalInitialize } from "../../packages/codex-bridge/src/thread-protocol.ts";
 
 assert.equal(process.platform, "linux", "Requires isolated Linux guest");
 assert.equal(process.getuid?.(), 1000);
@@ -43,6 +49,21 @@ assert.equal(
   "Config root must not redirect",
 );
 assert.notEqual(configRoot, "/");
+if (process.argv.includes("--hostile-app-config")) {
+  const explicitModelId = process.argv
+    .find((argument) => argument.startsWith("--model-id="))
+    ?.slice("--model-id=".length);
+  const explicitReasoning = process.argv
+    .find((argument) => argument.startsWith("--reasoning="))
+    ?.slice("--reasoning=".length);
+  assert.ok(
+    process.argv.includes("--require-luna") ||
+      (explicitModelId === "gpt-5.6-luna" && explicitReasoning === "high"),
+    "Hostile-app probes require GPT-6-Luna/high or the explicit GPT-5.6-Luna/high test choice",
+  );
+  assert.ok(process.argv.includes("--require-dynamic"));
+  assert.ok(process.argv.includes("--probe-surface"));
+}
 const providedPaths = process.argv
   .slice(4)
   .filter(
@@ -50,7 +71,10 @@ const providedPaths = process.argv
       argument !== "--inspect" &&
       argument !== "--require-luna" &&
       argument !== "--require-dynamic" &&
-      argument !== "--probe-surface",
+      argument !== "--probe-surface" &&
+      argument !== "--hostile-app-config" &&
+      !argument.startsWith("--model-id=") &&
+      !argument.startsWith("--reasoning="),
   );
 assert.ok(
   providedPaths.length === 0 || providedPaths.length === 2,
@@ -62,6 +86,309 @@ async function fileHash(path: string): Promise<string> {
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest("hex");
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function multiAgentVersionForModel(
+  modelId: string | undefined,
+): "v1" | "v2" | null {
+  if (modelId === "gpt-6-luna") return "v2";
+  if (modelId === "gpt-5.6-luna") return "v1";
+  return null;
+}
+
+function collectStrings(value: unknown, depth = 0): string[] {
+  if (depth > 6) return [];
+  if (typeof value === "string") {
+    try {
+      return [value, ...collectStrings(JSON.parse(value), depth + 1)];
+    } catch {
+      return [value];
+    }
+  }
+  if (Array.isArray(value))
+    return value.flatMap((item) => collectStrings(item, depth + 1));
+  if (record(value))
+    return Object.values(value).flatMap((item) =>
+      collectStrings(item, depth + 1),
+    );
+  return [];
+}
+
+interface ToolSurfaceEvidence {
+  route: "mcp" | "dynamic";
+  ownedToolCount: 9;
+  nativeAgentToolCount: number;
+  nestedV2ToolCount: number;
+  clockToolCount: number;
+  applicationToolCount: 0;
+  otherToolCount: number;
+  multiAgentVersion: "disabled" | "v1" | "v2" | null;
+  readOnlyUtilityNames: string[];
+  completedCodeModeCall: true;
+  callOutputCorrelated: true;
+}
+
+async function verifyToolSurfaceRollout(options: {
+  executablePath: string;
+  userData: string;
+  projectThreadId: string;
+  diagnostic: string;
+  toolRoute: "mcp" | "dynamic";
+  multiAgentVersion: "disabled" | "v1" | "v2" | null;
+}): Promise<ToolSurfaceEvidence> {
+  mark("surface-audit-start");
+  const codexHome = join(options.userData, "codex/account");
+  const cwd = join(options.userData, "codex/context");
+  const runtime = join(
+    dirname(options.executablePath),
+    "resources/codex/codex",
+  );
+  const transport = new CodexStdioTransport({
+    executable: runtime,
+    args: buildCodexAppServerArguments(undefined, []),
+    cwd,
+    env: {
+      HOME: dirname(codexHome),
+      USERPROFILE: dirname(codexHome),
+      CODEX_HOME: codexHome,
+      ...(process.env.PATH ? { PATH: process.env.PATH } : {}),
+    },
+    requestTimeoutMs: 120_000,
+  });
+  try {
+    await transport.start(buildExperimentalInitialize("0.0.0"));
+    mark("surface-audit-thread-read");
+    const threadRead: unknown = await transport.request("thread/read", {
+      threadId: options.projectThreadId,
+      includeTurns: false,
+    });
+    assert.ok(record(threadRead) && record(threadRead.thread));
+    assert.equal(threadRead.thread.id, options.projectThreadId);
+    assert.ok(typeof threadRead.thread.path === "string");
+
+    mark("surface-audit-turn-list");
+    let page: unknown;
+    try {
+      page = await transport.request("thread/turns/list", {
+        threadId: options.projectThreadId,
+        limit: 100,
+        sortDirection: "desc",
+        itemsView: "full",
+      });
+    } catch (error) {
+      if (
+        !(error instanceof CodexTransportError) ||
+        error.code !== "remote_error"
+      )
+        throw error;
+      await transport.request("thread/resume", {
+        threadId: options.projectThreadId,
+        excludeTurns: true,
+      });
+      page = await transport.request("thread/turns/list", {
+        threadId: options.projectThreadId,
+        limit: 100,
+        sortDirection: "desc",
+        itemsView: "full",
+      });
+    }
+    assert.ok(record(page) && Array.isArray(page.data));
+    assert.ok(page.data.length > 0 && page.data.length <= 100);
+    const turns = page.data.filter(record);
+    mark("surface-audit-diagnostic-turn");
+    const matchingTurns = turns.filter(
+      (turn) =>
+        Array.isArray(turn.items) &&
+        turn.items.some(
+          (item) =>
+            record(item) &&
+            item.type === "userMessage" &&
+            Array.isArray(item.content) &&
+            item.content.some(
+              (content) =>
+                record(content) && content.text === options.diagnostic,
+            ),
+        ),
+    );
+    assert.equal(matchingTurns.length, 1);
+    const turn = matchingTurns[0]!;
+    assert.equal(turn.status, "completed");
+    assert.ok(typeof turn.id === "string");
+
+    mark("surface-audit-rollout-boundary");
+    const accountRoot = await realpath(codexHome);
+    const rolloutPath = await realpath(threadRead.thread.path);
+    const relativePath = relative(accountRoot, rolloutPath);
+    assert.ok(
+      relativePath.length > 0 &&
+        !isAbsolute(relativePath) &&
+        !relativePath.split(sep).includes(".."),
+      "Native tool-surface rollout must remain inside the isolated account",
+    );
+    assert.ok((await stat(rolloutPath)).size <= 8_000_000);
+    const lines = (await readFile(rolloutPath, "utf8"))
+      .split("\n")
+      .filter((line) => line.trim().length > 0);
+    assert.ok(lines.length > 0 && lines.length <= 2_000);
+    const records = lines.map((line: string) => {
+      const item: unknown = JSON.parse(line);
+      assert.ok(record(item));
+      return item;
+    });
+    mark("surface-audit-turn-context");
+    const turnContextIndexes = records.flatMap((item, index) =>
+      item.type === "turn_context" &&
+      record(item.payload) &&
+      item.payload.turn_id === turn.id
+        ? [index]
+        : [],
+    );
+    assert.equal(turnContextIndexes.length, 1);
+    const turnStart = turnContextIndexes[0]!;
+    const nextTurn = records.findIndex(
+      (item, index) => index > turnStart && item.type === "turn_context",
+    );
+    const responseItems = records
+      .slice(turnStart, nextTurn < 0 ? undefined : nextTurn)
+      .filter((item) => item.type === "response_item" && record(item.payload))
+      .map((item) => item.payload as Record<string, unknown>);
+    mark("surface-audit-inventory-call");
+    const codeCalls = responseItems.filter(
+      (item) =>
+        item.type === "custom_tool_call" &&
+        item.name === "exec" &&
+        typeof item.input === "string" &&
+        item.input.includes("ALL_TOOLS.filter") &&
+        item.input.includes("agentCount") &&
+        item.input.includes("appCount"),
+    );
+    const inventoryCalls = codeCalls.filter((candidate) => {
+      if (typeof candidate.call_id !== "string") return false;
+      const outputs = responseItems.filter(
+        (item) =>
+          item.type === "custom_tool_call_output" &&
+          item.call_id === candidate.call_id,
+      );
+      return (
+        outputs.length === 1 &&
+        collectStrings(outputs[0]).some(
+          (output) =>
+            output.includes('"ownedCount"') && output.includes('"otherCount"'),
+        )
+      );
+    });
+    mark("surface-audit-call-correlation");
+    assert.equal(
+      responseItems.filter(
+        (item) => item.type === "custom_tool_call" && item.name !== "exec",
+      ).length,
+      0,
+      "The tool-surface probe must not invoke an unrelated tool",
+    );
+    assert.equal(
+      inventoryCalls.length,
+      1,
+      "Require one correlated code-mode inventory result",
+    );
+    const call = inventoryCalls[0]!;
+    assert.ok(typeof call.call_id === "string");
+    const codeOutputs = responseItems.filter(
+      (item) =>
+        item.type === "custom_tool_call_output" &&
+        item.call_id === call.call_id,
+    );
+    assert.equal(codeOutputs.length, 1, "Require its correlated tool output");
+    assert.ok(JSON.stringify(codeOutputs[0]).length <= 64_000);
+    mark("surface-audit-capability-counts");
+    const outputText = collectStrings(codeOutputs[0]).join("\n");
+    const expectedAgentCount =
+      options.toolRoute === "dynamic" && options.multiAgentVersion === "v1"
+        ? 5
+        : 0;
+    const v2ToolNames =
+      options.toolRoute === "dynamic" && options.multiAgentVersion === "v2"
+        ? [
+            "codex_video_edit_agents__spawn_agent",
+            "codex_video_edit_agents__send_message",
+            "codex_video_edit_agents__followup_task",
+            "codex_video_edit_agents__interrupt_agent",
+            "codex_video_edit_agents__list_agents",
+            "codex_video_edit_agents__wait_agent",
+          ]
+        : [];
+    const expectedV2Count = 0;
+    const expectedClockCount =
+      options.toolRoute === "dynamic" && options.multiAgentVersion === "v2"
+        ? 1
+        : 0;
+    const expectedUnownedCount =
+      expectedAgentCount + expectedV2Count + expectedClockCount;
+    const expectedOtherCount = 0;
+    for (const [key, value] of [
+      ["ownedCount", 9],
+      ["agentCount", expectedAgentCount],
+      ["v2AgentCount", expectedV2Count],
+      ["clockCount", expectedClockCount],
+      ["appCount", 0],
+      ["unownedCount", expectedUnownedCount],
+      ["otherCount", expectedOtherCount],
+    ] as const)
+      assert.match(
+        outputText,
+        new RegExp(`"${key}"\\s*:\\s*${value}\\b`, "u"),
+        `Code-mode output did not report the expected ${key}`,
+      );
+    mark("surface-audit-capability-denials");
+    for (const key of [
+      "apps",
+      "goals",
+      "plan",
+      "input",
+      "skills",
+      "images",
+      "web",
+      "shell",
+    ])
+      assert.match(
+        outputText,
+        new RegExp(`"${key}"\\s*:\\s*"undefined"`, "u"),
+        `Code-mode output did not suppress ${key}`,
+      );
+    assert.match(
+      outputText,
+      expectedAgentCount > 0
+        ? /"spawn"\s*:\s*"function"/u
+        : /"spawn"\s*:\s*"undefined"/u,
+    );
+    if (options.toolRoute === "dynamic" && options.multiAgentVersion === "v2") {
+      for (const name of v2ToolNames)
+        assert.ok(
+          !outputText.includes(name),
+          `Direct-only V2 tool ${name} leaked into the nested code-mode surface`,
+        );
+      assert.ok(outputText.includes("clock__curr_time"));
+    }
+    mark("surface-audit-complete");
+    return {
+      route: options.toolRoute,
+      ownedToolCount: 9,
+      nativeAgentToolCount: expectedAgentCount,
+      nestedV2ToolCount: expectedV2Count,
+      clockToolCount: expectedClockCount,
+      applicationToolCount: 0,
+      otherToolCount: expectedOtherCount,
+      multiAgentVersion: options.multiAgentVersion,
+      readOnlyUtilityNames: expectedClockCount > 0 ? ["clock__curr_time"] : [],
+      completedCodeModeCall: true,
+      callOutputCorrelated: true,
+    };
+  } finally {
+    await transport.close();
+  }
 }
 const resultRoot = resolve("test-results");
 await mkdir(resultRoot, { recursive: true });
@@ -77,9 +404,18 @@ if (process.argv.includes("--require-luna")) {
   await mkdir(target, { recursive: true, mode: 0o700 });
   await copyFile(source, join(target, "auth.json"));
   await chmod(join(target, "auth.json"), 0o600);
+  if (process.argv.includes("--hostile-app-config"))
+    await writeFile(
+      join(target, "config.toml"),
+      "[apps._default]\nenabled = true\n\n[apps.adobe]\nenabled = true\n",
+      { mode: 0o600 },
+    );
+  if (process.argv.includes("--hostile-app-config"))
+    assert.equal((await stat(join(target, "config.toml"))).mode & 0o077, 0);
   configRoot = fresh;
 }
 let step = "fixture";
+let surfaceEvidence: ToolSurfaceEvidence | undefined;
 const mark = (value: string): void => {
   step = value;
   console.log(`STEP ${value}`);
@@ -232,13 +568,67 @@ try {
       { timeout: 60_000 },
     )
     .toBe(true);
-  const account = await page.evaluate(() => window.desktop.getCodex());
+  let account = await page.evaluate(() => window.desktop.getCodex());
   assert.ok(account.ok);
-  if (process.argv.includes("--require-luna"))
+  const requestedModelId = process.argv
+    .find((argument) => argument.startsWith("--model-id="))
+    ?.slice("--model-id=".length);
+  const requestedReasoning =
+    process.argv
+      .find((argument) => argument.startsWith("--reasoning="))
+      ?.slice("--reasoning=".length) ?? "high";
+  if (requestedModelId !== undefined) {
+    assert.ok(
+      requestedModelId === "gpt-5.6-luna" || requestedModelId === "gpt-6-luna",
+      "The policy fixture may select only a Luna model",
+    );
+    assert.ok(!process.argv.includes("--require-luna"));
+    const model = account.value.models.find(
+      (item) => item.id === requestedModelId,
+    );
+    assert.ok(model, "The explicitly requested Luna model is unavailable");
+    assert.ok(
+      model.reasoning.includes(requestedReasoning),
+      "The explicitly requested reasoning effort is unavailable",
+    );
+    await page.locator("#codex-model").selectOption(model.id);
+    await expect
+      .poll(
+        async () => {
+          const state = await page!.evaluate(() => window.desktop.getCodex());
+          return (
+            state.ok &&
+            !state.value.busy &&
+            state.value.selection?.modelId === model.id
+          );
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(true);
+    await page.locator("#codex-reasoning").selectOption(requestedReasoning);
+    await expect
+      .poll(
+        async () => {
+          const state = await page!.evaluate(() => window.desktop.getCodex());
+          return state.ok && !state.value.busy ? state.value.selection : null;
+        },
+        { timeout: 60_000 },
+      )
+      .toEqual({ modelId: model.id, reasoning: requestedReasoning });
+    account = await page.evaluate(() => window.desktop.getCodex());
+    assert.ok(account.ok);
+  } else {
+    assert.ok(
+      account.value.selection,
+      "Do not silently choose from a missing default model selection; supply --model-id for an explicit fixture choice",
+    );
+  }
+  if (process.argv.includes("--require-luna")) {
     assert.deepEqual(account.value.selection, {
-      modelId: "gpt-5.6-luna",
+      modelId: "gpt-6-luna",
       reasoning: "high",
     });
+  }
   if (!account.value.selection) {
     const model = account.value.models[0]!;
     await page.locator("#codex-model").selectOption(model.id);
@@ -366,12 +756,17 @@ try {
     ),
   ) as {
     schemaVersion: number;
-    entries: Array<{ projectId: string; toolRoute?: string }>;
+    entries: Array<{
+      projectId: string;
+      threadId: string;
+      toolRoute?: string;
+    }>;
   };
   const bindings = registry.entries.filter(
     (entry) => entry.projectId === combined.id,
   );
   assert.equal(bindings.length, 1);
+  assert.ok(bindings[0]!.threadId.length > 0);
   const toolRoute = bindings[0]!.toolRoute ?? "mcp";
   assert.ok(toolRoute === "mcp" || toolRoute === "dynamic");
   if (process.argv.includes("--require-dynamic")) {
@@ -384,36 +779,42 @@ try {
       toolRoute === "dynamic"
         ? "codex_video_edit__"
         : "mcp__codex_video_edit__";
-    const diagnostic = `In a code-mode JavaScript cell, evaluate only JSON.stringify({owned: typeof tools.${ownedPrefix}project_get_summary, apps: typeof tools.mcp__codex_apps__adobe_adobe_mandatory_init, goals: typeof tools.update_goal, plan: typeof tools.update_plan, input: typeof tools.request_user_input_async, skills: typeof tools.skills__list, spawn: typeof tools.multi_agent_v1__spawn_agent, images: typeof tools.image_gen__imagegen, web: typeof tools.web__run, shell: typeof tools.exec_command, ownedCount: ALL_TOOLS.filter(x => x.name.startsWith('${ownedPrefix}')).length, unownedCount: ALL_TOOLS.filter(x => !x.name.startsWith('${ownedPrefix}')).length, unownedNames: ALL_TOOLS.filter(x => !x.name.startsWith('${ownedPrefix}')).map(x => x.name).slice(0, 20)}). Print that exact JSON with text(). Do not invoke any nested tool, access any file or contact any service. Report the observed JSON only.`;
+    const diagnostic = `In a code-mode JavaScript cell, evaluate only JSON.stringify({owned: typeof tools.${ownedPrefix}project_get_summary, apps: typeof tools.mcp__codex_apps__adobe_adobe_mandatory_init, goals: typeof tools.update_goal, plan: typeof tools.update_plan, input: typeof tools.request_user_input_async, skills: typeof tools.skills__list, spawn: typeof tools.multi_agent_v1__spawn_agent, images: typeof tools.image_gen__imagegen, web: typeof tools.web__run, shell: typeof tools.exec_command, spawnV2: typeof tools.codex_video_edit_agents__spawn_agent, waitV2: typeof tools.codex_video_edit_agents__wait_agent, ownedCount: ALL_TOOLS.filter(x => x.name.startsWith('${ownedPrefix}')).length, agentCount: ALL_TOOLS.filter(x => x.name.startsWith('multi_agent_v1__')).length, v2AgentCount: ALL_TOOLS.filter(x => x.name.startsWith('codex_video_edit_agents__')).length, clockCount: ALL_TOOLS.filter(x => x.name === 'clock__curr_time').length, appCount: ALL_TOOLS.filter(x => x.name.startsWith('mcp__codex_apps__')).length, unownedCount: ALL_TOOLS.filter(x => !x.name.startsWith('${ownedPrefix}')).length, otherCount: ALL_TOOLS.filter(x => !x.name.startsWith('${ownedPrefix}') && !x.name.startsWith('multi_agent_v1__') && !x.name.startsWith('codex_video_edit_agents__') && x.name !== 'clock__curr_time').length, unownedNames: ALL_TOOLS.filter(x => !x.name.startsWith('${ownedPrefix}')).map(x => x.name)}). Print that exact JSON with text(). Do not invoke any nested tool, access any file or contact any service. Report the observed JSON only.`;
     await page.locator("#codex-thread-input").fill(diagnostic);
     await page.locator("#send-codex-thread").click();
     await expect
       .poll(async () => (await thread()).status, { timeout: 120_000 })
       .toBe("ready");
-    const diagnosticState = await thread();
-    const answer = diagnosticState.messages
-      .filter((message) => message.role === "codex" && message.complete)
-      .at(-1)?.text;
-    assert.ok(answer);
+    step = "surface-turn-completed";
+    assert.equal((await thread()).status, "ready");
+    await electron.close();
+    mark("authoritative-surface-rollout");
+    surfaceEvidence = await verifyToolSurfaceRollout({
+      executablePath,
+      userData,
+      projectThreadId: bindings[0]!.threadId,
+      diagnostic,
+      toolRoute,
+      multiAgentVersion: multiAgentVersionForModel(
+        account.value.selection?.modelId,
+      ),
+    });
     await writeFile(
       join(evidence, "tool-surface-probe.json"),
-      JSON.stringify({ answer: answer.slice(0, 500) }),
+      JSON.stringify(surfaceEvidence),
     );
-    assert.match(answer, /"owned"\s*:\s*"function"/u);
-    assert.match(answer, /"ownedCount"\s*:\s*7\b/u);
-    assert.match(answer, /"unownedCount"\s*:\s*0\b/u);
-    for (const key of [
-      "apps",
-      "goals",
-      "plan",
-      "input",
-      "skills",
-      "spawn",
-      "images",
-      "web",
-      "shell",
-    ])
-      assert.match(answer, new RegExp(`"${key}"\\s*:\\s*"undefined"`, "u"));
+    electron = await launch();
+    page = await electron.firstWindow();
+    await page.locator(`#projects [data-project-id="${combined.id}"]`).click();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(page.locator("#edit-actions")).toBeVisible();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Open conversation", exact: true })
+      .click();
+    await expect
+      .poll(async () => (await thread()).status, { timeout: 90_000 })
+      .toBe("ready");
   }
   async function records(): Promise<DraftTransactionRecord[]> {
     const folder = join(projectFolder, "draft/journal");
@@ -605,16 +1006,20 @@ try {
     })
     .toBe(true);
   mark("reopen-exact-frame");
-  mark("verify-immutable-inputs");
+  mark("verify-baseline-file-bytes");
   assert.deepEqual(await readFile(baselinePath), baselineBytes);
   for (let index = 0; index < sources.length; index++) {
+    mark(`verify-original-source-${index + 1}`);
     assert.equal(await fileHash(sources[index]!), originalHashes[index]);
+    mark(`verify-managed-source-${index + 1}`);
     assert.equal(
       await fileHash(baseline.sources[index]!.managed_path),
       originalHashes[index],
     );
   }
   if (process.argv.includes("--inspect")) {
+    mark("native-visual-inspection");
+    await page?.bringToFront();
     await writeFile(join(evidence, "inspection.ready"), "ready\n");
     const deadline = Date.now() + 120_000;
     while (
@@ -649,6 +1054,8 @@ try {
         sharedUndo: true,
         reopen: true,
         immutableSourcesAndBaseline: true,
+        toolSurface: surfaceEvidence ?? null,
+        hostilePerAppConfig: process.argv.includes("--hostile-app-config"),
         audioListening: false,
         windowsAcceptance: false,
       },

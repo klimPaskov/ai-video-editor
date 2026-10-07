@@ -4,7 +4,7 @@
   "title": "Renderer-safe Codex project conversation",
   "type": "object",
   "additionalProperties": false,
-  "required": ["status", "projectId", "messages", "activities", "message"],
+  "required": ["status", "projectId", "messages", "activities", "message", "retryable"],
   "properties": {
     "status": {
       "enum": ["closed", "opening", "ready", "starting", "running", "interrupting", "uncertain", "failed"]
@@ -30,6 +30,10 @@
         { "type": "string", "minLength": 1, "maxLength": 240, "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]+$" },
         { "type": "null" }
       ]
+    },
+    "retryable": {
+      "type": "boolean",
+      "description": "True only after the authoritative server marks the active Codex turn failed; it permits an explicit user retry of the last submitted request."
     }
   },
   "allOf": [
@@ -40,10 +44,25 @@
           "projectId": { "type": "null" },
           "messages": { "maxItems": 0 },
           "activities": { "maxItems": 0 },
-          "message": { "type": "null" }
+          "message": { "type": "null" },
+          "retryable": { "const": false }
         }
       },
       "else": { "properties": { "projectId": { "$ref": "#/$defs/id" } } }
+    },
+    {
+      "if": { "properties": { "retryable": { "const": true } } },
+      "then": {
+        "properties": {
+          "status": { "const": "ready" },
+          "messages": {
+            "contains": {
+              "properties": { "role": { "const": "user" } },
+              "required": ["role"]
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {

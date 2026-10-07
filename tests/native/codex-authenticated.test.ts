@@ -28,6 +28,49 @@ assert.equal(process.platform, "linux", "Requires isolated Linux guest");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
 await access("/.dockerenv");
+
+async function appServerChildren(parentPid: number, appExecutable: string) {
+  const runtimeExecutable = await realpath(
+    join(dirname(appExecutable), "resources/codex/codex"),
+  );
+  const children: number[] = [];
+  for (const entry of await readdir("/proc")) {
+    if (!/^\d+$/u.test(entry)) continue;
+    const pid = Number(entry);
+    const proc = join("/proc", entry);
+    let statLine: string;
+    try {
+      statLine = await readFile(join(proc, "stat"), "utf8");
+    } catch {
+      continue;
+    }
+    const close = statLine.lastIndexOf(")");
+    const fields = statLine
+      .slice(close + 1)
+      .trim()
+      .split(/\s+/u);
+    if (Number(fields[1]) !== parentPid) continue;
+    let args: string[];
+    try {
+      args = (await readFile(join(proc, "cmdline")))
+        .toString("utf8")
+        .split("\0")
+        .filter(Boolean);
+    } catch {
+      continue;
+    }
+    if (
+      !args.includes("app-server") ||
+      !args.includes("--listen") ||
+      !args.includes("stdio://")
+    )
+      continue;
+    const executable = await realpath(join(proc, "exe")).catch(() => "");
+    if (executable === runtimeExecutable) children.push(pid);
+  }
+  return children.sort((left, right) => left - right);
+}
+
 const executablePath = process.argv[2],
   configArgument = process.argv[3];
 assert.ok(executablePath && isAbsolute(executablePath));
@@ -238,17 +281,42 @@ try {
     "Real skill discovery must return entries",
   );
   const requireLunaHigh = process.argv.includes("--require-luna-high");
-  const model = requireLunaHigh
-    ? account.value.models.find(
-        (item) => item.id === "gpt-5.6-luna" && item.reasoning.includes("high"),
-      )
-    : (account.value.models.find(
-        (item) => item.id === account.value.selection?.modelId,
-      ) ?? account.value.models[0]);
+  const requestedModelId = process.argv
+    .find((argument) => argument.startsWith("--model-id="))
+    ?.slice("--model-id=".length);
+  const requestedReasoning = process.argv
+    .find((argument) => argument.startsWith("--reasoning="))
+    ?.slice("--reasoning=".length);
+  if (requestedModelId !== undefined) {
+    assert.ok(
+      requestedModelId === "gpt-5.6-luna" || requestedModelId === "gpt-6-luna",
+      "The authenticated policy fixture may select only a Luna model",
+    );
+    assert.ok(!requireLunaHigh);
+  }
+  const model = requestedModelId
+    ? account.value.models.find((item) => item.id === requestedModelId)
+    : requireLunaHigh
+      ? account.value.models.find(
+          (item) => item.id === "gpt-6-luna" && item.reasoning.includes("high"),
+        )
+      : account.value.models.find(
+          (item) => item.id === account.value.selection?.modelId,
+        );
   assert.ok(model, "The required Codex model is unavailable");
+  const reasoning = requireLunaHigh
+    ? "high"
+    : (requestedReasoning ??
+      (account.value.selection?.modelId === model.id
+        ? account.value.selection.reasoning
+        : model.defaultReasoning));
+  assert.ok(
+    model.reasoning.includes(reasoning),
+    "The required Codex reasoning effort is unavailable",
+  );
   const selection = {
     modelId: model.id,
-    reasoning: requireLunaHigh ? "high" : model.defaultReasoning,
+    reasoning,
   };
   mark("authenticated-settings-select-model");
   await page.locator("#codex-model").selectOption(model.id);
@@ -613,6 +681,7 @@ try {
   assert.equal(undo.after.draft_sequence, 2);
   assert.equal(undo.after.timeline.duration_us, 1500000);
   assert.deepEqual(undo.after.timeline, baseline.timeline);
+  let expectedFinalDraft = undo.after;
   assert.deepEqual(await readFile(baselinePath), baselineBytes);
   assert.equal(
     sha256(await readFile(baseline.source.managed_path)),
@@ -679,6 +748,266 @@ try {
   );
   await expect(page.locator("#seek")).toHaveAttribute("max", "1000000");
   await assertCanvasFrame(page, 0);
+  mark("app-server-process-recovery");
+  const historyBeforeServerRestart = (await thread()).messages.map(
+    ({ role, text, complete }) => ({ role, text, complete }),
+  );
+  const journalBeforeServerRestart = await records();
+  assert.equal(await threadIdentity(), originalThreadId);
+  const mainPid = electron.process().pid;
+  if (typeof mainPid !== "number" || !Number.isSafeInteger(mainPid))
+    throw new Error("The Electron main process could not be identified");
+  const appServerBefore = await appServerChildren(mainPid, executablePath);
+  assert.equal(appServerBefore.length, 1);
+  process.kill(appServerBefore[0]!, "SIGKILL");
+  await expect
+    .poll(
+      async () => {
+        const state = await page.evaluate(() => window.desktop.getCodex());
+        return state.ok ? state.value.connection : "unavailable";
+      },
+      { timeout: 60000, intervals: [100, 250, 500] },
+    )
+    .toBe("unavailable");
+  await expect
+    .poll(
+      async () => (await appServerChildren(mainPid, executablePath)).length,
+      { timeout: 30000, intervals: [100, 250, 500] },
+    )
+    .toBe(0);
+  assert.deepEqual(await records(), journalBeforeServerRestart);
+  mark("settings-reconnect-after-app-server-exit");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator("#settings-codex").click();
+  await expect(page.locator("#codex-reconnect")).toBeVisible();
+  await page.locator("#codex-reconnect").click();
+  await expect
+    .poll(
+      async () => {
+        const state = await page.evaluate(() => window.desktop.getCodex());
+        return (
+          state.ok &&
+          !state.value.busy &&
+          state.value.connection === "connected" &&
+          state.value.account === "signed_in" &&
+          state.value.selection?.modelId === selection.modelId &&
+          state.value.selection?.reasoning === selection.reasoning
+        );
+      },
+      { timeout: 60000, intervals: [250, 500, 1000] },
+    )
+    .toBe(true);
+  await page.keyboard.press("Escape");
+  mark("resume-project-thread-after-app-server-restart");
+  const reopenedAfterServerRestart = await page.evaluate(
+    (value) => window.desktop.openCodexThread(value),
+    request,
+  );
+  assert.ok(reopenedAfterServerRestart.ok);
+  await expect
+    .poll(async () => (await thread()).status, {
+      timeout: 90000,
+      intervals: [250, 500, 1000],
+    })
+    .toBe("ready");
+  assert.equal(await threadIdentity(), originalThreadId);
+  assert.deepEqual(
+    (await thread()).messages.map(({ role, text, complete }) => ({
+      role,
+      text,
+      complete,
+    })),
+    historyBeforeServerRestart,
+  );
+  assert.deepEqual(await records(), journalBeforeServerRestart);
+  assert.deepEqual(await readFile(baselinePath), baselineBytes);
+  assert.equal(
+    sha256(await readFile(baseline.source.managed_path)),
+    sourceHash,
+  );
+  assert.equal(sha256(await readFile(source)), sourceHash);
+  const appServerAfter = await appServerChildren(mainPid, executablePath);
+  assert.equal(appServerAfter.length, 1);
+  assert.notEqual(appServerAfter[0], appServerBefore[0]);
+  await expect(page.locator("#seek")).toHaveAttribute("max", "1000000");
+  await assertCanvasFrame(page, 0);
+  mark("inflight-committed-mutation-send");
+  if (await page.locator("#codex-drawer").isHidden())
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
+  await expect(page.locator("#codex-thread-input")).toBeVisible();
+  const inFlightMutationPrompt =
+    "Use the guarded editor tools to read the active draft and trim exactly 250000 microseconds from the END of its sole clip. Apply exactly one end-trim transaction. The current draft is 1.5 seconds and must become 1.25 seconds. After the trim, read the current draft twelve times sequentially without changing it, then reply briefly. Do not make any other edits.";
+  await page.locator("#codex-thread-input").fill(inFlightMutationPrompt);
+  await page.locator("#send-codex-thread").click();
+  mark("inflight-committed-mutation-wait");
+  await expect
+    .poll(
+      async () => {
+        const state = await thread();
+        if (state.status !== "running") return false;
+        const journal = await records();
+        const candidate = journal[2];
+        return (
+          journal.length === 3 &&
+          state.messages.filter(
+            (message) =>
+              message.role === "user" &&
+              message.text === inFlightMutationPrompt,
+          ).length === 1 &&
+          candidate?.origin === "codex" &&
+          candidate.status === "committed" &&
+          candidate.kind === "apply" &&
+          candidate.after.draft_sequence === 3 &&
+          candidate.after.timeline.duration_us === 1250000 &&
+          candidate.operations.length === 1 &&
+          candidate.operations[0]?.operation_type === "trim" &&
+          candidate.operations[0]?.edge === "end" &&
+          candidate.operations[0]?.timeline_position_us === 1250000
+        );
+      },
+      { timeout: 240000, intervals: [50, 100, 250] },
+    )
+    .toBe(true);
+  const inFlightJournalBeforeLoss = await records();
+  assert.equal(inFlightJournalBeforeLoss.length, 3);
+  const inFlightTrim = inFlightJournalBeforeLoss[2]!;
+  assert.equal(inFlightTrim.origin, "codex");
+  assert.equal(inFlightTrim.after.timeline.duration_us, 1250000);
+  const appServerDuringMutation = await appServerChildren(
+    mainPid,
+    executablePath,
+  );
+  assert.equal(appServerDuringMutation.length, 1);
+  mark("kill-app-server-after-committed-mutation");
+  process.kill(appServerDuringMutation[0]!, "SIGKILL");
+  await expect
+    .poll(
+      async () => {
+        const state = await page.evaluate(() => window.desktop.getCodex());
+        return state.ok ? state.value.connection : "unavailable";
+      },
+      { timeout: 60000, intervals: [100, 250, 500] },
+    )
+    .toBe("unavailable");
+  await expect
+    .poll(
+      async () => (await appServerChildren(mainPid, executablePath)).length,
+      { timeout: 30000, intervals: [100, 250, 500] },
+    )
+    .toBe(0);
+  assert.deepEqual(await records(), inFlightJournalBeforeLoss);
+  assert.deepEqual(await readFile(baselinePath), baselineBytes);
+  assert.equal(
+    sha256(await readFile(baseline.source.managed_path)),
+    sourceHash,
+  );
+  mark("settings-reconnect-after-inflight-mutation-loss");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator("#settings-codex").click();
+  await expect(page.locator("#codex-reconnect")).toBeVisible();
+  await page.locator("#codex-reconnect").click();
+  await expect
+    .poll(
+      async () => {
+        const state = await page.evaluate(() => window.desktop.getCodex());
+        return (
+          state.ok &&
+          !state.value.busy &&
+          state.value.connection === "connected" &&
+          state.value.account === "signed_in" &&
+          state.value.selection?.modelId === selection.modelId &&
+          state.value.selection?.reasoning === selection.reasoning
+        );
+      },
+      { timeout: 60000, intervals: [250, 500, 1000] },
+    )
+    .toBe(true);
+  await page.keyboard.press("Escape");
+  mark("resume-inflight-project-thread");
+  const reopenedAfterInFlightLoss = await page.evaluate(
+    (value) => window.desktop.openCodexThread(value),
+    request,
+  );
+  assert.ok(reopenedAfterInFlightLoss.ok);
+  await expect
+    .poll(async () => (await thread()).status !== "opening", {
+      timeout: 90000,
+      intervals: [250, 500, 1000],
+    })
+    .toBe(true);
+  if ((await thread()).status === "running") {
+    mark("interrupt-resumed-inflight-turn");
+    const interrupted = await page.evaluate((value) => {
+      return window.desktop.interruptCodexThread(value);
+    }, request);
+    assert.ok(interrupted.ok);
+    await expect
+      .poll(
+        async () =>
+          !["running", "interrupting"].includes((await thread()).status),
+        { timeout: 90000, intervals: [250, 500, 1000] },
+      )
+      .toBe(true);
+  }
+  const threadAfterInFlightRecovery = await thread();
+  assert.ok(
+    ["ready", "uncertain", "failed"].includes(
+      threadAfterInFlightRecovery.status,
+    ),
+  );
+  assert.equal(
+    threadAfterInFlightRecovery.messages.filter(
+      (message) =>
+        message.role === "user" && message.text === inFlightMutationPrompt,
+    ).length,
+    1,
+  );
+  assert.deepEqual(await records(), inFlightJournalBeforeLoss);
+  const projectsAfterRecovery = await page.evaluate(() =>
+    window.desktop.listProjects(),
+  );
+  assert.ok(projectsAfterRecovery.ok);
+  const recoveredProject = projectsAfterRecovery.value.find(
+    (candidate) => candidate.id === project.id,
+  );
+  assert.ok(recoveredProject);
+  assert.equal(recoveredProject.draft.sequence, 3);
+  assert.equal(
+    recoveredProject.draft.undoTransactionId,
+    inFlightTrim.transaction_id,
+  );
+  mark("manual-undo-recovered-inflight-transaction");
+  const undoAfterInFlightLoss = await page.evaluate(
+    (value) => window.desktop.undoManualEdit(value),
+    {
+      schema_version: "1.0" as const,
+      projectId: recoveredProject.id,
+      draftId: recoveredProject.draft.id,
+      baseRevisionId: recoveredProject.draft.baseRevisionId,
+      expectedSequence: recoveredProject.draft.sequence,
+      expectedTimelineSha256: recoveredProject.draft.timelineSha256,
+      targetTransactionId: inFlightTrim.transaction_id,
+    },
+  );
+  assert.ok(undoAfterInFlightLoss.ok);
+  assert.equal(undoAfterInFlightLoss.value.draft.sequence, 4);
+  assert.equal(undoAfterInFlightLoss.value.timeline.durationUs, 1500000);
+  const inFlightUndoJournal = await records();
+  assert.equal(inFlightUndoJournal.length, 4);
+  const inFlightUndo = inFlightUndoJournal[3]!;
+  assert.equal(inFlightUndo.origin, "manual");
+  assert.equal(inFlightUndo.kind, "undo");
+  assert.equal(inFlightUndo.target_transaction_id, inFlightTrim.transaction_id);
+  assert.deepEqual(inFlightUndo.after.timeline, baseline.timeline);
+  expectedFinalDraft = inFlightUndo.after;
+  assert.deepEqual(await readFile(baselinePath), baselineBytes);
+  assert.equal(sha256(await readFile(source)), sourceHash);
+  assert.equal(
+    sha256(await readFile(baseline.source.managed_path)),
+    sourceHash,
+  );
+  await expect(page.locator("#seek")).toHaveAttribute("max", "1000000");
+  await assertCanvasFrame(page, 0);
   mark("guest-inspection");
   if (process.argv.includes("--inspect")) {
     console.log(JSON.stringify({ inspectionReady: true, evidence }));
@@ -695,7 +1024,10 @@ try {
     }
   }
   await electron.close();
-  assert.deepEqual((await offline.snapshot(project.id)).draft, undo.after);
+  assert.deepEqual(
+    (await offline.snapshot(project.id)).draft,
+    expectedFinalDraft,
+  );
   await writeFile(
     join(evidence, "result.json"),
     JSON.stringify(
@@ -721,6 +1053,15 @@ try {
         realReadOnlyTurnInterrupted: true,
         interruptionPreservedJournal: true,
         interruptedThreadReopened: true,
+        appServerProcessRestartedInPlace: true,
+        settingsReconnectActionUsed: true,
+        projectThreadHistoryRestoredAfterAppServerRestart: true,
+        committedJournalUnchangedDuringRecovery: true,
+        appServerProcessLostDuringCommittedMutation: true,
+        committedMutationNotDuplicatedAfterRecovery: true,
+        manualUndoRestoredCommittedMutationAfterRecovery: true,
+        inFlightTrimSequence: 3,
+        inFlightUndoSequence: 4,
         computerUse: false,
         audioListening: false,
         windowsAcceptance: false,

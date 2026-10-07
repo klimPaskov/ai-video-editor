@@ -154,6 +154,172 @@ function validatePolicy(policy: ThreadRuntimePolicy): ThreadRuntimePolicy {
   };
 }
 
+export const CODEX_VIDEO_EDIT_V2_AGENT_NAMESPACE = "codex_video_edit_agents";
+
+type CodeModeNamespace =
+  | "mcp__codex_apps"
+  | "multi_agent_v1"
+  | typeof CODEX_VIDEO_EDIT_V2_AGENT_NAMESPACE
+  | "skills"
+  | "functions"
+  | "image_gen";
+
+export type ThreadToolRoute = "mcp" | "dynamic";
+export type NativeSubagentProtocol = "disabled" | "v1" | "v2";
+
+export interface ThreadFeaturePolicy {
+  route: ThreadToolRoute;
+  nativeSubagentProtocol: NativeSubagentProtocol;
+  nativeSubagentModel?: string;
+  nativeSubagentReasoning?: string;
+}
+
+function codeModeExclusions(
+  nativeSubagentProtocol: NativeSubagentProtocol,
+): CodeModeNamespace[] {
+  if (nativeSubagentProtocol === "v1")
+    return ["mcp__codex_apps", "skills", "functions", "image_gen"];
+  if (nativeSubagentProtocol === "v2")
+    return [
+      "mcp__codex_apps",
+      "multi_agent_v1",
+      "skills",
+      "functions",
+      "image_gen",
+    ];
+  return [
+    "mcp__codex_apps",
+    "multi_agent_v1",
+    CODEX_VIDEO_EDIT_V2_AGENT_NAMESPACE,
+    "skills",
+    "functions",
+    "image_gen",
+  ];
+}
+
+const defaultThreadFeaturePolicy: ThreadFeaturePolicy = {
+  route: "mcp",
+  nativeSubagentProtocol: "disabled",
+};
+
+function validatedFeaturePolicy(
+  supplied: ThreadFeaturePolicy = defaultThreadFeaturePolicy,
+): ThreadFeaturePolicy {
+  const hasChildModel = supplied.nativeSubagentModel !== undefined;
+  const hasChildReasoning = supplied.nativeSubagentReasoning !== undefined;
+  if (
+    (supplied.route !== "mcp" && supplied.route !== "dynamic") ||
+    !["disabled", "v1", "v2"].includes(supplied.nativeSubagentProtocol) ||
+    (supplied.nativeSubagentProtocol !== "disabled" &&
+      supplied.route !== "dynamic") ||
+    (supplied.nativeSubagentProtocol !== "disabled" &&
+      (!hasChildModel ||
+        !hasChildReasoning ||
+        !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u.test(
+          supplied.nativeSubagentModel ?? "",
+        ) ||
+        !reasoningPattern.test(supplied.nativeSubagentReasoning ?? ""))) ||
+    (supplied.nativeSubagentProtocol === "disabled" &&
+      (hasChildModel || hasChildReasoning))
+  ) {
+    throw new CodexThreadProtocolError("configuration");
+  }
+  return supplied;
+}
+
+function threadFeatures(policy: ThreadFeaturePolicy) {
+  const codeModeOnly = policy.route === "dynamic";
+  const nativeV2 = policy.nativeSubagentProtocol === "v2";
+  return {
+    api_key_model_discovery: false,
+    apps: false,
+    auth_elicitation: false,
+    browser_use: false,
+    browser_use_external: false,
+    browser_use_full_cdp_access: false,
+    chronicle: false,
+    compaction_image_budget: false,
+    code_mode_only: codeModeOnly,
+    code_mode: {
+      enabled: codeModeOnly,
+      excluded_tool_namespaces: codeModeExclusions(
+        policy.nativeSubagentProtocol,
+      ),
+      ...(policy.nativeSubagentProtocol === "v2"
+        ? {
+            direct_only_tool_namespaces: [CODEX_VIDEO_EDIT_V2_AGENT_NAMESPACE],
+          }
+        : {}),
+    },
+    code_mode_host: {
+      enabled: codeModeOnly,
+      disable_in_process_fallback: true,
+    },
+    codex_apps_mcp_2026_07_28: false,
+    codex_git_commit: false,
+    computer_use: false,
+    default_mode_request_user_input: false,
+    deferred_executor: false,
+    enable_mcp_apps: false,
+    exec_permission_approvals: false,
+    external_agent_memory_import: false,
+    fast_mode: false,
+    goals: false,
+    guardian_approval: false,
+    hooks: false,
+    image_generation: false,
+    in_app_browser: false,
+    in_app_chat: false,
+    in_app_dictation: false,
+    in_app_local_automation: false,
+    in_app_updates: false,
+    mcp_oauth_refresh_coordination: false,
+    memories: false,
+    mentions_v2: false,
+    multi_agent: policy.nativeSubagentProtocol === "v1",
+    multi_agent_v2: nativeV2
+      ? {
+          enabled: true,
+          // The root thread occupies one slot, so two permits exactly one child.
+          max_concurrent_threads_per_session: 2,
+          min_wait_timeout_ms: 1_000,
+          default_wait_timeout_ms: 10_000,
+          max_wait_timeout_ms: 30_000,
+          subagent_developer_instructions:
+            "Read-only project helper. Use only the path-free project and timeline summary JSON supplied in your task message. Do not infer missing state or ask for other access. Never edit the draft, access files, use services, or spawn another child.",
+          tool_namespace: "codex_video_edit_agents",
+          expose_spawn_agent_model_overrides: false,
+          wait_agent_enabled: true,
+          non_code_mode_only: false,
+        }
+      : false,
+    plugins: false,
+    plugin_sharing: false,
+    personality: false,
+    recommended_plugins: false,
+    remote_control: false,
+    remote_plugin: false,
+    request_permissions_tool: false,
+    request_rule: false,
+    search_tool: false,
+    shell_tool: false,
+    shell_snapshot: false,
+    sleep_tool: false,
+    token_budget: false,
+    unified_exec_tty: false,
+    unbounded_connection_retries: false,
+    workspace_dependencies: false,
+    skill_mcp_dependency_install: false,
+    skill_search: false,
+    standalone_web_search: false,
+    tool_call_mcp_elicitation: false,
+    tool_suggest: false,
+    view_image: false,
+    web_search_cached: false,
+    web_search_request: false,
+  } as const;
+}
+
 export interface ThreadStartRequest {
   model: string;
   modelProvider: "openai";
@@ -176,23 +342,14 @@ export interface ThreadStartRequest {
       update_plan: { enabled: false };
       experimental_request_user_input: { enabled: false };
     };
-    agents: { enabled: false };
-    project_root_markers: [];
-    features: {
-      shell_tool: false;
-      multi_agent: false;
-      multi_agent_v2: false;
-      code_mode: {
-        excluded_tool_namespaces: [
-          "mcp__codex_apps",
-          "multi_agent_v1",
-          "skills",
-          "functions",
-          "image_gen",
-        ];
-      };
-      code_mode_host: { disable_in_process_fallback: true };
+    agents: {
+      enabled: boolean;
+      max_depth?: 1;
+      default_subagent_model?: string;
+      default_subagent_reasoning_effort?: string;
     };
+    project_root_markers: [];
+    features: ReturnType<typeof threadFeatures>;
     web_search: "disabled";
   };
   ephemeral: false;
@@ -205,8 +362,10 @@ export interface ThreadStartRequest {
 
 export function buildThreadStartRequest(
   suppliedPolicy: ThreadRuntimePolicy,
+  suppliedFeaturePolicy: ThreadFeaturePolicy = defaultThreadFeaturePolicy,
 ): ThreadStartRequest {
   const policy = validatePolicy(suppliedPolicy);
+  const featurePolicy = validatedFeaturePolicy(suppliedFeaturePolicy);
   const request: ThreadStartRequest = {
     model: policy.model,
     modelProvider: "openai",
@@ -229,23 +388,26 @@ export function buildThreadStartRequest(
         update_plan: { enabled: false },
         experimental_request_user_input: { enabled: false },
       },
-      agents: { enabled: false },
+      agents:
+        featurePolicy.nativeSubagentProtocol === "v1"
+          ? {
+              enabled: true,
+              max_depth: 1,
+              default_subagent_model: featurePolicy.nativeSubagentModel!,
+              default_subagent_reasoning_effort:
+                featurePolicy.nativeSubagentReasoning!,
+            }
+          : featurePolicy.nativeSubagentProtocol === "v2"
+            ? {
+                enabled: true,
+                max_depth: 1,
+                default_subagent_model: featurePolicy.nativeSubagentModel!,
+                default_subagent_reasoning_effort:
+                  featurePolicy.nativeSubagentReasoning!,
+              }
+            : { enabled: false },
       project_root_markers: [],
-      features: {
-        shell_tool: false,
-        multi_agent: false,
-        multi_agent_v2: false,
-        code_mode: {
-          excluded_tool_namespaces: [
-            "mcp__codex_apps",
-            "multi_agent_v1",
-            "skills",
-            "functions",
-            "image_gen",
-          ],
-        },
-        code_mode_host: { disable_in_process_fallback: true },
-      },
+      features: threadFeatures(featurePolicy),
       web_search: "disabled",
     },
     ephemeral: false,
@@ -293,8 +455,10 @@ export interface ThreadTurnsListRequest {
 export function buildThreadResumeRequest(
   trustedThreadId: string,
   suppliedPolicy: ThreadRuntimePolicy,
+  suppliedFeaturePolicy: ThreadFeaturePolicy = defaultThreadFeaturePolicy,
 ): ThreadResumeRequest {
   const policy = validatePolicy(suppliedPolicy);
+  const featurePolicy = validatedFeaturePolicy(suppliedFeaturePolicy);
   const request: ThreadResumeRequest = {
     threadId: identifier(trustedThreadId, "configuration"),
     model: policy.model,
@@ -318,23 +482,26 @@ export function buildThreadResumeRequest(
         update_plan: { enabled: false },
         experimental_request_user_input: { enabled: false },
       },
-      agents: { enabled: false },
+      agents:
+        featurePolicy.nativeSubagentProtocol === "v1"
+          ? {
+              enabled: true,
+              max_depth: 1,
+              default_subagent_model: featurePolicy.nativeSubagentModel!,
+              default_subagent_reasoning_effort:
+                featurePolicy.nativeSubagentReasoning!,
+            }
+          : featurePolicy.nativeSubagentProtocol === "v2"
+            ? {
+                enabled: true,
+                max_depth: 1,
+                default_subagent_model: featurePolicy.nativeSubagentModel!,
+                default_subagent_reasoning_effort:
+                  featurePolicy.nativeSubagentReasoning!,
+              }
+            : { enabled: false },
       project_root_markers: [],
-      features: {
-        shell_tool: false,
-        multi_agent: false,
-        multi_agent_v2: false,
-        code_mode: {
-          excluded_tool_namespaces: [
-            "mcp__codex_apps",
-            "multi_agent_v1",
-            "skills",
-            "functions",
-            "image_gen",
-          ],
-        },
-        code_mode_host: { disable_in_process_fallback: true },
-      },
+      features: threadFeatures(featurePolicy),
       web_search: "disabled",
     },
     excludeTurns: true,
@@ -580,6 +747,46 @@ export function decodeThreadSession(
 
 export type TurnStatus = "completed" | "interrupted" | "failed" | "inProgress";
 
+export type TurnFailureCategory =
+  "authentication" | "rate_limit" | "service" | "other";
+
+function turnFailureCategory(value: unknown): TurnFailureCategory | null {
+  if (!record(value) || value.status !== "failed") return null;
+  if (value.error === null || value.error === undefined) return null;
+  if (!record(value.error)) return "other";
+  const info = value.error.codexErrorInfo;
+  if (info === "unauthorized") return "authentication";
+  if (info === "rateLimitExceeded" || info === "usageLimitExceeded")
+    return "rate_limit";
+  if (info === "serverOverloaded" || info === "internalServerError")
+    return "service";
+  if (!record(info)) return "other";
+  const names = Object.keys(info);
+  if (names.length !== 1) return "other";
+  const [name] = names;
+  const details = name ? info[name] : undefined;
+  if (
+    !record(details) ||
+    Object.keys(details).some((key) => key !== "httpStatusCode")
+  ) {
+    return "other";
+  }
+  const status = Number.isSafeInteger(details.httpStatusCode)
+    ? (details.httpStatusCode as number)
+    : null;
+  if (status === 429) return "rate_limit";
+  if (status === 401 || status === 403) return "other";
+  if (
+    name === "httpConnectionFailed" ||
+    name === "responseStreamConnectionFailed" ||
+    name === "responseStreamDisconnected" ||
+    name === "responseTooManyFailedAttempts"
+  ) {
+    return "service";
+  }
+  return "other";
+}
+
 function turn(value: unknown): { id: string; status: TurnStatus } {
   if (!record(value)) throw new CodexThreadProtocolError("protocol");
   const status = value.status;
@@ -614,4 +821,9 @@ export function decodeTurnInterrupt(
   }
 }
 
-export const threadProtocolInternals = { record, identifier, turn };
+export const threadProtocolInternals = {
+  record,
+  identifier,
+  turn,
+  turnFailureCategory,
+};

@@ -303,6 +303,76 @@ test("Gemini 3 missing first function signature and foreign signature fail befor
   }
 });
 
+test("API providers receive transcript pages only through the bounded read tool", async () => {
+  const input = {
+    schema_version: "1.0",
+    project_id: project,
+    source_id: "source-001",
+    source_start_us: 0,
+    source_end_us: 1_000_000,
+    offset: 0,
+    limit: 250,
+  };
+  let round = 0;
+  const invoked: Array<[string, unknown]> = [];
+  const f = await fixture(
+    async (_selectedProvider, _selectedKey, request) => {
+      round++;
+      if (round === 1) {
+        const reader = request.tools?.find(
+          (tool) => tool.name === "transcript_get_range",
+        );
+        assert.ok(reader);
+        const parameters = reader.parameters as {
+          properties: { limit: { maximum: number } };
+          required: string[];
+        };
+        assert.equal(parameters.properties.limit.maximum, 250);
+        assert.ok(parameters.required.includes("source_start_us"));
+        assert.ok(parameters.required.includes("source_end_us"));
+        assert.equal(parameters.required.includes("transcript_id"), false);
+        return call("transcript_get_range", input);
+      }
+      assert.equal(request.messages.at(-1)?.role, "tool");
+      return stop("I reviewed the requested transcript page.");
+    },
+    async (requestedProject, name, parsed) => {
+      assert.equal(requestedProject, project);
+      invoked.push([name, parsed]);
+      return { transcript_id: "transcript-001", words: [] };
+    },
+  );
+  try {
+    await f.threads.open(project, provider);
+    const view = await f.threads.send(project, provider, "Review speech");
+    assert.equal(view.status, "ready");
+    assert.deepEqual(invoked, [["transcript.get_range", input]]);
+  } finally {
+    await f.cleanup();
+  }
+
+  let rejectedInvocations = 0;
+  const invalid = await fixture(
+    async () => call("transcript_get_range", { ...input, limit: 251 }),
+    async () => {
+      rejectedInvocations++;
+      return {};
+    },
+  );
+  try {
+    await invalid.threads.open(project, provider);
+    const view = await invalid.threads.send(
+      project,
+      provider,
+      "Review this transcript",
+    );
+    assert.equal(view.status, "failed");
+    assert.equal(rejectedInvocations, 0);
+  } finally {
+    await invalid.cleanup();
+  }
+});
+
 test("range-cut function is offered to API providers and routes to the guarded dotted tool", async () => {
   const input = {
     schema_version: "1.0",

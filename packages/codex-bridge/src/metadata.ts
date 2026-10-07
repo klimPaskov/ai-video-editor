@@ -9,7 +9,12 @@ export type AccountState =
   { status: "signed_out" } | { status: "chatgpt"; plan: PlanType };
 export type ModelSummary = Pick<
   Model,
-  "id" | "model" | "displayName" | "description" | "isDefault"
+  | "id"
+  | "model"
+  | "displayName"
+  | "description"
+  | "isDefault"
+  | "multiAgentVersion"
 > & { reasoning: string[]; defaultReasoning: string };
 export type SkillSummary = Pick<
   SkillMetadata,
@@ -178,12 +183,21 @@ export function decodeModels(value: unknown): {
     });
     const defaultReasoning = text(model.defaultReasoningEffort, 64);
     if (!reasoning.includes(defaultReasoning)) invalid();
+    const multiAgentVersion = model.multiAgentVersion;
+    if (
+      multiAgentVersion !== null &&
+      multiAgentVersion !== "disabled" &&
+      multiAgentVersion !== "v1" &&
+      multiAgentVersion !== "v2"
+    )
+      invalid();
     const summary: ModelSummary = {
       id,
       model: text(model.model, 256),
       displayName: text(model.displayName, 1024),
       description: text(model.description),
       isDefault: flag(model.isDefault),
+      multiAgentVersion,
       reasoning,
       defaultReasoning,
     };

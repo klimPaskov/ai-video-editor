@@ -21,6 +21,7 @@ import {
   CODEX_DEVICE_VERIFICATION_URL,
 } from "../../../packages/domain/src/codex-device-login.ts";
 import { PreferencesStore } from "./preferences.ts";
+import { DesktopTranscriptionManager } from "./transcription.ts";
 import { ProjectStore } from "../../../packages/project-store/src/store.ts";
 import {
   DraftTransactionError,
@@ -33,7 +34,12 @@ import {
 import {
   CodexVideoEditToolError,
   CodexVideoEditToolService,
+  type CodexVideoEditToolName,
 } from "../../../packages/codex-tools/src/service.ts";
+import {
+  nativeChildReadOnlyToolNames,
+  type DynamicToolAccess,
+} from "../../../packages/codex-bridge/src/dynamic-tools.ts";
 import {
   assertProjectFrameRequest,
   assertProjectRequest,
@@ -43,10 +49,19 @@ import {
   assertManualTrimRequest,
   assertManualSplitRequest,
   assertManualRangeCutRequest,
+  assertManualRestoreRangeRequest,
+  assertManualTranscriptCorrectionRequest,
+  assertManualTranscriptCutRequest,
   assertManualUndoRequest,
   assertManualRedoRequest,
+  type ProjectView,
 } from "../../../packages/domain/src/project-view.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
+import {
+  assertTranscriptionJobRequest,
+  assertTranscriptionProjectRequest,
+  assertTranscriptionStopRequest,
+} from "../../../packages/domain/src/transcription.ts";
 import {
   app,
   BrowserWindow,
@@ -90,14 +105,16 @@ const frameRequests = new Set<AbortController>();
 let quitting = false;
 let codex: DesktopCodex | undefined;
 let mcpBroker: CodexMcpBroker | undefined;
+let transcription: DesktopTranscriptionManager | undefined;
 let servicesClosed = false;
 app.on("before-quit", (event) => {
   quitting = true;
-  if (!servicesClosed && (codex || mcpBroker)) {
+  if (!servicesClosed && (codex || mcpBroker || transcription)) {
     event.preventDefault();
     void Promise.allSettled([
       Promise.resolve().then(() => codex?.close()),
       Promise.resolve().then(() => mcpBroker?.close()),
+      Promise.resolve().then(() => transcription?.close()),
     ]).then(() => {
       servicesClosed = true;
       app.quit();
@@ -204,20 +221,76 @@ async function start(): Promise<void> {
   const projects = new ProjectStore(projectRoot, library);
   const drafts = new DraftTransactionStore(projectRoot, projects);
   const projectRuntime = new DesktopProjectRuntime(drafts, library);
+  transcription = new DesktopTranscriptionManager({
+    projects,
+    library,
+    userData,
+    workerPath: path.join(app.getAppPath(), "transcription-worker.mjs"),
+  });
   let activeProjectId: string | undefined;
+  const activeAutoEditProject = async (projectId: string): Promise<void> => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before transcribing.");
+    const project = await projectRuntime.view(projectId);
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("The active project changed. Try again.");
+    if (project.stage !== "auto_edit")
+      throw new UserFacingError("Switch to Auto Edit to transcribe locally.");
+  };
+  const activeTranscriptProject = async (projectId: string): Promise<void> => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError(
+        "Open this project before reading its transcript.",
+      );
+    const project = await projectRuntime.view(projectId);
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("The active project changed. Try again.");
+    if (project.stage !== "auto_edit" && project.stage !== "edit")
+      throw new UserFacingError(
+        "Switch to Auto Edit or Edit to view the transcript.",
+      );
+  };
+  const readTranscriptForTool = async (projectId: string) => {
+    await activeTranscriptProject(projectId);
+    const value = await transcription!.get({
+      schema_version: "1.0",
+      project_id: projectId,
+      job_id: null,
+    });
+    if (activeProjectId !== projectId)
+      throw new UserFacingError(
+        "The active project changed. Refresh the transcript.",
+      );
+    return value;
+  };
   const publishDraftNotice = (notice: ProjectDraftNotice): void => {
     if (!window || window.isDestroyed()) return;
     window.webContents.send(channels.projectDraftChanged, notice);
   };
-  const invokeCodexTool = async (name: unknown, input: unknown) => {
+  const invokeCodexTool = async (
+    name: unknown,
+    input: unknown,
+    access: DynamicToolAccess = "project_editor",
+  ) => {
     if (!activeProjectId) throw new CodexVideoEditToolError("inactive_project");
+    if (
+      access === "native_child_read_only" &&
+      !nativeChildReadOnlyToolNames.has(name as CodexVideoEditToolName)
+    ) {
+      throw new CodexVideoEditToolError("tool_not_available");
+    }
     const projectId = activeProjectId;
     return invokeWithProjectDraftRefresh({
       toolName: name,
       projectId,
       activeProjectId: () => activeProjectId,
       work: () =>
-        new CodexVideoEditToolService(projectId, drafts).invoke(name, input),
+        new CodexVideoEditToolService(
+          projectId,
+          drafts,
+          "codex",
+          readTranscriptForTool,
+        ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
     });
@@ -257,6 +330,7 @@ async function start(): Promise<void> {
             projectId,
             drafts,
             "api_provider",
+            readTranscriptForTool,
           ).invoke(name, input),
         drafts,
         notify: publishDraftNotice,
@@ -360,6 +434,10 @@ async function start(): Promise<void> {
   register(channels.projectClose, async (request) => {
     assertProjectRequest(request);
     if (activeProjectId === request.id) {
+      if (transcription!.isRunning(request.id))
+        throw new UserFacingError(
+          "Stop local transcription before closing this project.",
+        );
       if (
         ["opening", "starting", "running", "interrupting"].includes(
           codex!.getThread(request.id).status,
@@ -381,6 +459,7 @@ async function start(): Promise<void> {
           apiThreads.close(request.id, provider),
         ),
       );
+      await transcription!.closeProject(request.id);
       activeProjectId = undefined;
     }
     return null;
@@ -388,8 +467,47 @@ async function start(): Promise<void> {
   register(channels.projectNavigate, async (request) => {
     assertProjectNavigation(request);
     if (activeProjectId !== request.id) throw new Error("Inactive project");
+    if (request.stage !== "auto_edit" && transcription!.isRunning(request.id))
+      throw new UserFacingError(
+        "Stop local transcription before leaving Auto Edit.",
+      );
     await projects.navigate(request.id, request.stage);
     return projectRuntime.view(request.id);
+  });
+  register(channels.transcriptionGet, async (request) => {
+    assertTranscriptionJobRequest(request);
+    await activeTranscriptProject(request.project_id);
+    return transcription!.get(request);
+  });
+  register(channels.transcriptionStart, async (request) => {
+    assertTranscriptionProjectRequest(request);
+    await activeAutoEditProject(request.project_id);
+    return transcription!.start(request);
+  });
+  register(channels.transcriptionStop, async (request) => {
+    assertTranscriptionStopRequest(request);
+    await activeAutoEditProject(request.project_id);
+    return transcription!.stop(request);
+  });
+  register(channels.projectIntegrityCheck, async (request) => {
+    assertProjectRequest(request);
+    if (activeProjectId !== request.id)
+      throw new UserFacingError(
+        "Open the active project in Review to check draft integrity.",
+      );
+    try {
+      const value = await projectRuntime.verifyDraftIntegrity(request.id);
+      if (activeProjectId !== request.id)
+        throw new UserFacingError(
+          "The active project changed. Run the check again.",
+        );
+      return value;
+    } catch (error) {
+      if (error instanceof UserFacingError) throw error;
+      throw new UserFacingError(
+        "Draft integrity could not be checked. Reopen the project and try again.",
+      );
+    }
   });
   const activeCodexProject = async (projectId: string) => {
     if (activeProjectId !== projectId) throw new Error("Inactive project");
@@ -646,6 +764,260 @@ async function start(): Promise<void> {
                 type: "ripple_delete",
                 start_us: request.startUs,
                 end_us: request.endUs,
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.projectManualRestoreRange, async (request) => {
+    assertManualRestoreRangeRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    let project: ProjectView;
+    try {
+      project = await projectRuntime.view(request.projectId);
+    } catch {
+      throw new UserFacingError("Reopen the project before restoring footage.");
+    }
+    if (project.stage !== "edit")
+      throw new UserFacingError("Switch to Edit to restore a source range.");
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("The active project changed. Try again.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "cut.restore_range",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "manual" },
+            reason: "Manual source-range restore.",
+            operations: [
+              {
+                type: "restore_range",
+                source_id: request.sourceId,
+                source_start_us: request.sourceStartUs,
+                source_end_us: request.sourceEndUs,
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.projectTranscriptCorrection, async (request) => {
+    assertManualTranscriptCorrectionRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError(
+        "Open this project before correcting its transcript.",
+      );
+    let project: ProjectView;
+    try {
+      project = await projectRuntime.view(request.projectId);
+    } catch {
+      throw new UserFacingError(
+        "Reopen the project before correcting its transcript.",
+      );
+    }
+    if (project.stage !== "edit")
+      throw new UserFacingError(
+        "Switch to Edit to correct transcript wording.",
+      );
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError(
+        "The active project changed. Select the word again.",
+      );
+    const transcriptView = await transcription!.get({
+      schema_version: "1.0",
+      project_id: request.projectId,
+      job_id: null,
+    });
+    const sourceResult = transcriptView.results.find(
+      (result) =>
+        result.source_id === request.sourceId &&
+        result.transcript.transcript_id === request.transcriptId,
+    );
+    const sourceWord = sourceResult?.transcript.segments
+      .flatMap((segment) => segment.words)
+      .find((word) => word.word_id === request.wordId);
+    if (!sourceWord)
+      throw new UserFacingError(
+        "That transcript word is no longer available. Refresh the transcript.",
+      );
+    const draft = await drafts.snapshot(request.projectId);
+    const currentOverride = draft.draft.timeline.transcript_edits?.find(
+      (edit) =>
+        edit.source_id === request.sourceId &&
+        edit.transcript_id === request.transcriptId &&
+        edit.word_id === request.wordId,
+    );
+    const currentText = currentOverride?.replacement_text ?? sourceWord.text;
+    if (currentText !== request.expectedText)
+      throw new UserFacingError(
+        "The transcript changed. Select the word again.",
+      );
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "transcript.correct_word",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "manual" },
+            reason: "Correct transcript wording; recorded audio is unchanged.",
+            operations: [
+              {
+                type: "transcript_edit",
+                source_id: request.sourceId,
+                transcript_id: request.transcriptId,
+                word_id: request.wordId,
+                original_text: sourceWord.text,
+                expected_text: request.expectedText,
+                replacement_text: request.replacementText,
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.projectTranscriptCut, async (request) => {
+    assertManualTranscriptCutRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError(
+        "Open this project before cutting transcript words.",
+      );
+    let project: ProjectView;
+    try {
+      project = await projectRuntime.view(request.projectId);
+    } catch {
+      throw new UserFacingError(
+        "Reopen the project before cutting transcript words.",
+      );
+    }
+    if (project.stage !== "edit")
+      throw new UserFacingError(
+        "Switch to Edit to cut selected transcript words.",
+      );
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError(
+        "The active project changed. Select the words again.",
+      );
+    const transcriptView = await transcription!.get({
+      schema_version: "1.0",
+      project_id: request.projectId,
+      job_id: null,
+    });
+    const sourceResult = transcriptView.results.find(
+      (result) =>
+        result.source_id === request.sourceId &&
+        result.transcript.transcript_id === request.transcriptId,
+    );
+    const words = sourceResult?.transcript.segments.flatMap(
+      (segment) => segment.words,
+    );
+    const startIndex = words?.findIndex(
+      (word) => word.word_id === request.startWordId,
+    );
+    const endIndex = words?.findIndex(
+      (word) => word.word_id === request.endWordId,
+    );
+    if (
+      !words ||
+      startIndex === undefined ||
+      endIndex === undefined ||
+      startIndex < 0 ||
+      endIndex < startIndex
+    )
+      throw new UserFacingError(
+        "The selected transcript range is unavailable. Refresh it and try again.",
+      );
+    const firstWord = words[startIndex]!;
+    const lastWord = words[endIndex]!;
+    if (firstWord.start_us >= lastWord.end_us)
+      throw new UserFacingError(
+        "The selected transcript range has invalid timing.",
+      );
+    const draft = await drafts.snapshot(request.projectId);
+    const clip = draft.draft.timeline.clips.find(
+      (candidate) =>
+        candidate.source_id === request.sourceId &&
+        candidate.source_start_us <= firstWord.start_us &&
+        candidate.source_end_us >= lastWord.end_us,
+    );
+    if (!clip)
+      throw new UserFacingError(
+        "The selected words are not one continuous visible source range. Choose a smaller range.",
+      );
+    const startUs =
+        clip.timeline_start_us + (firstWord.start_us - clip.source_start_us),
+      endUs = clip.timeline_start_us + (lastWord.end_us - clip.source_start_us);
+    if (startUs >= endUs || endUs > draft.draft.timeline.duration_us)
+      throw new UserFacingError(
+        "The selected transcript range is outside the current draft.",
+      );
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "transcript.cut_words",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "spoken_cut" },
+            reason:
+              "Remove the explicitly selected transcript words from the draft.",
+            operations: [
+              {
+                type: "transcript_cut",
+                source_id: request.sourceId,
+                transcript_id: request.transcriptId,
+                start_word_id: request.startWordId,
+                end_word_id: request.endWordId,
+                source_start_us: firstWord.start_us,
+                source_end_us: lastWord.end_us,
+                start_us: startUs,
+                end_us: endUs,
               },
             ],
           }),

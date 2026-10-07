@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "hostnames": [
+    "registry.npmjs.org",
+    "github.com",
+    "release-assets.githubusercontent.com",
+    "objects.githubusercontent.com",
+    "github-cloud.s3.amazonaws.com",
+    "huggingface.co",
+    "cdn-lfs-us-1.hf.co",
+    "us.aws.cdn.hf.co",
+    "cas-bridge.xethub.hf.co",
+    "auth.openai.com",
+    "api.openai.com",
+    "chatgpt.com"
+  ]
+}

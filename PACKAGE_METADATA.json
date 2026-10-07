@@ -8,14 +8,14 @@
   "implementation_agent": "Codex in an isolated computer-use environment; Astra subagents prohibited",
   "ai_provider_scope": "Codex subscription plus fixed OpenAI API, DeepSeek, and Gemini API keys",
   "goal_prompt_characters": 3960,
-  "task_count": 73,
+  "task_count": 76,
   "phase_count": 11,
   "screen_count": 13,
-  "guarded_codex_tool_count": 35,
+  "guarded_codex_tool_count": 36,
   "skill_count": 19,
   "subagent_count": 12,
-  "schema_example_pair_count": 32,
-  "adr_count": 16,
+  "schema_example_pair_count": 57,
+  "adr_count": 17,
   "reference_screenshots_included": true,
   "example_video_included": false,
   "notes": [
@@ -25,11 +25,11 @@
     "The secure packaged native shell and project navigation are accepted within their recorded Linux guest scope.",
     "Bounded authenticated Codex editing and ordered private-source tests passed; full tool policy, capture hardware, complete editing, export, and phase acceptance remain incomplete."
   ],
-  "package_file_count": 606,
+  "package_file_count": 741,
   "numbered_spec_count": 48,
   "prompt_count": 11,
-  "template_count": 11,
-  "updated_at": "2026-09-12T00:00:00Z",
+  "template_count": 10,
+  "updated_at": "2026-09-27T18:21:22Z",
   "reference_image_count": 20,
   "contact_sheets_included": false,
   "reference_sets": {
@@ -37,5 +37,5 @@
     "previous": 10
   },
   "repository_status": "public origin verified; reviewed slices published through P2 transaction and thread foundations",
-  "schema_count": 31
+  "schema_count": 38
 }

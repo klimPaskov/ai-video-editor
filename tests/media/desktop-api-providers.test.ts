@@ -39,9 +39,13 @@ test("model chooser intersects live IDs with reviewed Chat Completions families"
       "gemini-2.5-pro",
       "gemini-2.5-flash-image",
       "gemini-3.8-live",
+      "gemini-3.8-live-extended-thinking",
+      "gemini-3.8-flash-tts",
+      "gemini-3.8-flash-lite-tts",
       "gemini-3.5-transcribe",
       "gemini-3.1-flash-tts-preview",
       "gemini-3-pro-preview",
+      "gemini-3.1-pro-preview",
       "gemini-embedding-001",
     ]),
     [

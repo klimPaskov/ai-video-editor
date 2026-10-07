@@ -485,7 +485,163 @@ function prepareApply(
       operationId = authority.operation_ids[index]!;
     if (!validId(operationId) || timeline.operation_ids.includes(operationId))
       fail("conflict");
-    if (intent.type === "ripple_delete") {
+    if (intent.type === "transcript_edit") {
+      if (request.operations.length !== 1) fail("invalid");
+      if (
+        !baseline.timeline.clips.some(
+          (clip) => clip.source_id === intent.source_id,
+        )
+      )
+        fail("invalid");
+      const beforeEdits = structuredClone(timeline.transcript_edits ?? []);
+      const key = (edit: (typeof beforeEdits)[number]) =>
+        `${edit.source_id}\0${edit.transcript_id}\0${edit.word_id}`;
+      const targetKey = `${intent.source_id}\0${intent.transcript_id}\0${intent.word_id}`;
+      const existing = beforeEdits.find((edit) => key(edit) === targetKey);
+      const currentText = existing?.replacement_text ?? intent.original_text;
+      if (
+        (existing && existing.original_text !== intent.original_text) ||
+        currentText !== intent.expected_text
+      )
+        fail("conflict");
+      const afterEdits = beforeEdits.filter((edit) => key(edit) !== targetKey);
+      if (intent.replacement_text !== intent.original_text)
+        afterEdits.push({
+          source_id: intent.source_id,
+          transcript_id: intent.transcript_id,
+          word_id: intent.word_id,
+          original_text: intent.original_text,
+          replacement_text: intent.replacement_text,
+        });
+      timeline.transcript_edits = afterEdits;
+      timeline.operation_ids.push(operationId);
+      records.push({
+        schema_version: "1.0",
+        operation_id: operationId,
+        operation_type: "transcript_edit",
+        source_id: intent.source_id,
+        transcript_id: intent.transcript_id,
+        word_id: intent.word_id,
+        original_text: intent.original_text,
+        before_text: currentText,
+        after_text: intent.replacement_text,
+        before: beforeEdits,
+        after: structuredClone(afterEdits),
+        inverse: {
+          type: "restore_transcript_edits",
+          edits: beforeEdits,
+          expected_after_sha256: canonicalSha256(afterEdits),
+        },
+      });
+      continue;
+    }
+    if (intent.type === "restore_range") {
+      if (request.operations.length !== 1) fail("invalid");
+      const sourceClips = baseline.timeline.clips.filter(
+        (candidate) => candidate.source_id === intent.source_id,
+      );
+      if (sourceClips.length !== 1) fail("conflict");
+      const source = sourceClips[0]!;
+      if (
+        intent.source_start_us < source.source_start_us ||
+        intent.source_end_us > source.source_end_us
+      )
+        fail("invalid");
+      if (
+        timeline.clips.some(
+          (candidate) =>
+            candidate.source_id === intent.source_id &&
+            intent.source_start_us < candidate.source_end_us &&
+            candidate.source_start_us < intent.source_end_us,
+        )
+      )
+        fail("conflict");
+      if (timeline.clips.length >= 4096) fail("conflict");
+      const clipId = `clip-${canonicalSha256({
+        operation_id: operationId,
+        source_id: intent.source_id,
+        source_start_us: intent.source_start_us,
+        source_end_us: intent.source_end_us,
+      }).slice(0, 32)}`;
+      if (timeline.clips.some((candidate) => candidate.clip_id === clipId))
+        fail("conflict");
+      const sourceOrder = new Map(
+        baseline.timeline.clips.map((candidate, sourceIndex) => [
+          candidate.source_id,
+          sourceIndex,
+        ]),
+      );
+      const targetSourceOrder = sourceOrder.get(intent.source_id);
+      if (targetSourceOrder === undefined) fail("invalid");
+      const insertAt = timeline.clips.findIndex((candidate) => {
+        const candidateOrder = sourceOrder.get(candidate.source_id);
+        if (candidateOrder === undefined) fail("invalid");
+        return (
+          candidateOrder > targetSourceOrder ||
+          (candidateOrder === targetSourceOrder &&
+            candidate.source_start_us > intent.source_start_us)
+        );
+      });
+      const priorClips = structuredClone(timeline.clips);
+      timeline.clips.splice(
+        insertAt < 0 ? timeline.clips.length : insertAt,
+        0,
+        {
+          clip_id: clipId,
+          track_id: source.track_id,
+          source_id: source.source_id,
+          source_start_us: intent.source_start_us,
+          source_end_us: intent.source_end_us,
+          timeline_start_us: 0,
+          timeline_end_us: intent.source_end_us - intent.source_start_us,
+          enabled: true,
+        },
+      );
+      let position = 0;
+      for (const candidate of timeline.clips) {
+        candidate.timeline_start_us = position;
+        position += candidate.source_end_us - candidate.source_start_us;
+        candidate.timeline_end_us = position;
+      }
+      if (!Number.isSafeInteger(position) || position < 1) fail("conflict");
+      timeline.duration_us = position;
+      records.push({
+        schema_version: "1.0",
+        operation_id: operationId,
+        operation_type: "restore",
+        source_id: intent.source_id,
+        source_start_us: intent.source_start_us,
+        source_end_us: intent.source_end_us,
+        before: priorClips,
+        after: structuredClone(timeline.clips),
+        inverse: {
+          type: "restore_timeline_clips",
+          clips: priorClips,
+          expected_after_sha256: canonicalSha256(timeline.clips),
+        },
+      });
+      timeline.operation_ids.push(operationId);
+      continue;
+    }
+    if (intent.type === "ripple_delete" || intent.type === "transcript_cut") {
+      if (intent.type === "transcript_cut") {
+        const clip = timeline.clips.find(
+          (candidate) =>
+            candidate.source_id === intent.source_id &&
+            candidate.source_start_us <= intent.source_start_us &&
+            candidate.source_end_us >= intent.source_end_us,
+        );
+        if (
+          !clip ||
+          clip.timeline_start_us +
+            (intent.source_start_us - clip.source_start_us) !==
+            intent.start_us ||
+          clip.timeline_start_us +
+            (intent.source_end_us - clip.source_start_us) !==
+            intent.end_us
+        )
+          fail("conflict");
+      }
       if (
         intent.end_us > timeline.duration_us ||
         (intent.start_us === 0 && intent.end_us === timeline.duration_us)
@@ -538,20 +694,41 @@ function prepareApply(
       }
       if (!Number.isSafeInteger(position) || position < 1) fail("conflict");
       timeline.duration_us = position;
-      records.push({
-        schema_version: "1.0",
-        operation_id: operationId,
-        operation_type: "ripple_delete",
-        start_us: intent.start_us,
-        end_us: intent.end_us,
-        before: priorClips,
-        after: structuredClone(timeline.clips),
-        inverse: {
-          type: "restore_timeline_clips",
-          clips: structuredClone(priorClips),
-          expected_after_sha256: canonicalSha256(timeline.clips),
-        },
-      });
+      const afterClips = structuredClone(timeline.clips);
+      const inverse = {
+        type: "restore_timeline_clips" as const,
+        clips: structuredClone(priorClips),
+        expected_after_sha256: canonicalSha256(timeline.clips),
+      };
+      records.push(
+        intent.type === "transcript_cut"
+          ? {
+              schema_version: "1.0",
+              operation_id: operationId,
+              operation_type: "transcript_cut",
+              source_id: intent.source_id,
+              transcript_id: intent.transcript_id,
+              start_word_id: intent.start_word_id,
+              end_word_id: intent.end_word_id,
+              source_start_us: intent.source_start_us,
+              source_end_us: intent.source_end_us,
+              start_us: intent.start_us,
+              end_us: intent.end_us,
+              before: priorClips,
+              after: afterClips,
+              inverse,
+            }
+          : {
+              schema_version: "1.0",
+              operation_id: operationId,
+              operation_type: "ripple_delete",
+              start_us: intent.start_us,
+              end_us: intent.end_us,
+              before: priorClips,
+              after: afterClips,
+              inverse,
+            },
+      );
       timeline.operation_ids.push(operationId);
       continue;
     }
@@ -911,12 +1088,41 @@ export class DraftTransactionStore {
                     start_us: operation.start_us,
                     end_us: operation.end_us,
                   }
-                : {
-                    type: "trim" as const,
-                    clip_id: operation.clip_id,
-                    edge: operation.edge,
-                    timeline_position_us: operation.timeline_position_us,
-                  },
+                : operation.operation_type === "restore"
+                  ? {
+                      type: "restore_range" as const,
+                      source_id: operation.source_id,
+                      source_start_us: operation.source_start_us,
+                      source_end_us: operation.source_end_us,
+                    }
+                  : operation.operation_type === "transcript_cut"
+                    ? {
+                        type: "transcript_cut" as const,
+                        source_id: operation.source_id,
+                        transcript_id: operation.transcript_id,
+                        start_word_id: operation.start_word_id,
+                        end_word_id: operation.end_word_id,
+                        source_start_us: operation.source_start_us,
+                        source_end_us: operation.source_end_us,
+                        start_us: operation.start_us,
+                        end_us: operation.end_us,
+                      }
+                    : operation.operation_type === "transcript_edit"
+                      ? {
+                          type: "transcript_edit" as const,
+                          source_id: operation.source_id,
+                          transcript_id: operation.transcript_id,
+                          word_id: operation.word_id,
+                          original_text: operation.original_text,
+                          expected_text: operation.before_text,
+                          replacement_text: operation.after_text,
+                        }
+                      : {
+                          type: "trim" as const,
+                          clip_id: operation.clip_id,
+                          edge: operation.edge,
+                          timeline_position_us: operation.timeline_position_us,
+                        },
           ),
         };
         assertApplyDraftTransactionRequest(request);
@@ -1300,6 +1506,128 @@ export class DraftTransactionStore {
         replayed: false,
       };
     });
+  }
+
+  /**
+   * Persist a structural-only checkpoint for the current manual group. Evidence
+   * comes from this store's validated reads, never from renderer or model text.
+   * This does not certify editorial meaning or rendered A/V joins.
+   */
+  private manualStructureCheckpointRequest(
+    projectId: string,
+    loaded: LoadedDraft,
+    passGroupId: string,
+  ): PassCheckpointRequest {
+    if (!validId(passGroupId)) fail("invalid");
+    const passGroup = { pass_group_id: passGroupId, kind: "manual" as const },
+      transactionIds = loaded.applied
+        .filter(
+          (transaction) =>
+            transaction.origin === "manual" &&
+            transaction.pass_group?.pass_group_id === passGroupId &&
+            transaction.pass_group.kind === "manual",
+        )
+        .map((transaction) => transaction.transaction_id),
+      newestApplied = loaded.applied.at(-1);
+    if (
+      transactionIds.length < 1 ||
+      transactionIds.length > 64 ||
+      newestApplied?.origin !== "manual" ||
+      newestApplied?.pass_group?.pass_group_id !== passGroupId ||
+      newestApplied.pass_group.kind !== "manual" ||
+      !loaded.state.head_transaction_sha256
+    )
+      fail("conflict");
+    const sourceHashes = [
+      ...new Set(
+        loaded.baseline.schema_version === "1.1"
+          ? loaded.baseline.sources.map((source) => source.sha256)
+          : [loaded.baseline.source.sha256],
+      ),
+    ];
+    const checkpointRequest: PassCheckpointRequest = {
+      schema_version: "1.0",
+      request_id: `structure-${canonicalSha256({
+        project_id: projectId,
+        draft_id: loaded.state.draft_id,
+        draft_sequence: loaded.state.draft_sequence,
+        timeline_sha256: loaded.state.timeline_sha256,
+        head_transaction_sha256: loaded.state.head_transaction_sha256,
+        pass_group: passGroup,
+      })}`,
+      project_id: projectId,
+      draft_id: loaded.state.draft_id,
+      base_revision_id: loaded.state.base_revision_id,
+      expected_sequence: loaded.state.draft_sequence,
+      expected_timeline_sha256: loaded.state.timeline_sha256,
+      pass_group: passGroup,
+      verified_transaction_ids: transactionIds,
+      summary:
+        "Manual draft structure integrity verified; editorial meaning and audio/video review were not performed.",
+      checks: [
+        {
+          check_id: "draft-timeline-structure",
+          status: "pass",
+          method:
+            "Re-read the committed draft and validated source intervals against the immutable baseline.",
+          evidence_ids: [loaded.state.timeline_sha256],
+        },
+        {
+          check_id: "draft-journal-integrity",
+          status: "pass",
+          method:
+            "Replayed complete committed transactions and matched the current journal head.",
+          evidence_ids: [loaded.state.head_transaction_sha256],
+        },
+        {
+          check_id: "draft-managed-source-integrity",
+          status: "pass",
+          method:
+            "Re-read managed sources and validated hashes, sizes, probes, and timing metadata against the project manifest.",
+          evidence_ids: sourceHashes,
+        },
+      ],
+    };
+    try {
+      assertPassCheckpointRequest(checkpointRequest);
+    } catch {
+      fail("invalid");
+    }
+    return checkpointRequest;
+  }
+
+  recordManualStructureCheckpoint(
+    projectId: string,
+    passGroupId: string,
+  ): Promise<PassCheckpointCommitResult> {
+    return this.serialize(projectId, async () => {
+      return this.manualStructureCheckpointRequest(
+        projectId,
+        await this.load(projectId),
+        passGroupId,
+      );
+    }).then((request) => this.recordPassCheckpoint(request));
+  }
+
+  /**
+   * Record a structure-only checkpoint when the current head belongs to a
+   * main-owned manual group. AI-origin groups are never checkpointed here.
+   */
+  recordLatestManualStructureCheckpoint(
+    projectId: string,
+  ): Promise<PassCheckpointCommitResult | null> {
+    return this.serialize(projectId, async () => {
+      const loaded = await this.load(projectId),
+        newestApplied = loaded.applied.at(-1),
+        passGroup = newestApplied?.pass_group;
+      if (newestApplied?.origin !== "manual" || passGroup?.kind !== "manual")
+        return null;
+      return this.manualStructureCheckpointRequest(
+        projectId,
+        loaded,
+        passGroup.pass_group_id,
+      );
+    }).then((request) => (request ? this.recordPassCheckpoint(request) : null));
   }
 
   undoManual(value: unknown): Promise<DraftCommitResult> {

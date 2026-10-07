@@ -18,6 +18,8 @@ Discover the connected app's guidance/capability catalog once for this connectio
 
 If transcription is running, poll that real job. If absent, request it once and retain/poll its handle. Do not restart on an observation timeout. When a required runtime, project, source or capability is missing, explain the exact blocker and preserve the draft.
 
+Treat local Whisper word timing as estimated, and preserve the language as unidentified when the runtime reports none. Verify names, numbers, negation, and boundaries against the source audio before proposing cuts. Silence evidence is not a cut instruction. Correcting transcript text never resynthesizes speech.
+
 Verify the synchronized camera/screen/microphone edit set. Never ripple narration cuts onto an independent screen source without a verified mapping. Inspect approved layouts and existing edits. Protect finished or licensed segments and work only within the requested scope; a general first-cut request does not authorize replacing intentional earlier work.
 
 ### 2. Resolve recorded editor cues

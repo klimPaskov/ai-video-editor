@@ -11,6 +11,6 @@ Everything lives directly under `codex-video-edit/`, the working project root.
 - `docs/references/screenshots/previous/`: ten individual earlier native-app images
 - `docs/references/index.html`: one-image-at-a-time viewer
 - `.github/`: source-review guidance and planning-contract CI
-- `apps/`, `packages/`, `tests/`: intended implementation locations, not a pretend compiled app
+- `apps/`, `packages/`, `tests/`: the packaged Electron desktop application, evolving media/Codex services, and deterministic and native test suites; remaining product scope is tracked by phase
 
 Generated evidence belongs in ignored `test-results/`; private machine-local inputs belong in ignored `local-data/`. Neither directory is part of the public package. No contact sheets, multi-screen collages, browser-app reference sets, model weights, font binaries, private media, or credentials are included. Original reference image bytes are preserved. Screen coverage gaps are explicit in `docs/references/SCREEN_COVERAGE.md`.

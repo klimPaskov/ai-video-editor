@@ -52,6 +52,7 @@ const model = {
   description: "Runtime description",
   hidden: false,
   isDefault: true,
+  multiAgentVersion: "v2",
   supportedReasoningEfforts: [
     { reasoningEffort: "runtime-effort", description: "Runtime effort" },
   ],
@@ -61,6 +62,7 @@ const model = {
 test("model metadata is runtime-derived, bounded, paginated and detached", () => {
   const result = decodeModels({ data: [model], nextCursor: "opaque" });
   assert.equal(result.cursor, "opaque");
+  assert.equal(result.models[0]?.multiAgentVersion, "v2");
   assert.deepEqual(result.models[0]?.reasoning, ["runtime-effort"]);
   assert.ok(!JSON.stringify(result).includes("PRIVATE"));
   assert.deepEqual(
@@ -71,6 +73,7 @@ test("model metadata is runtime-derived, bounded, paginated and detached", () =>
     [model, model],
     [{ ...model, defaultReasoningEffort: "unsupported" }],
     [{ ...model, hidden: "false" }],
+    [{ ...model, multiAgentVersion: "unexpected" }],
   ])
     assert.throws(() => decodeModels({ data }), CodexTransportError);
   assert.throws(

@@ -80,7 +80,7 @@
       "screen_id": "S07",
       "name": "Auto Edit",
       "step": "auto_edit",
-      "primary_action": "Run Magic Wand",
+      "primary_action": "Transcribe locally",
       "panel_policy": "one_context_panel",
       "spec": "docs/05_SCREEN_SPECS.md",
       "task_phases": [

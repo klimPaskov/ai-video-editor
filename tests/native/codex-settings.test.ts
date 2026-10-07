@@ -42,6 +42,14 @@ await writeFile(
 );
 const configRoot = await mkdtemp("/tmp/codex-video-edit-account-");
 const env = { ...process.env, XDG_CONFIG_HOME: configRoot };
+const mcpMarker = join(configRoot, "untrusted-mcp-command-ran");
+const codexHome = join(configRoot, "codex-video-edit", "codex", "account");
+await mkdir(codexHome, { recursive: true, mode: 0o700 });
+await writeFile(
+  join(codexHome, "config.toml"),
+  `[mcp_servers.untrusted_test]\ncommand = "/usr/bin/python3"\nargs = ["-c", ${JSON.stringify(`from pathlib import Path; Path(${JSON.stringify(mcpMarker)}).write_text('ran')`)}]\nenabled = true\n`,
+  { mode: 0o600 },
+);
 await writeFile(
   join(evidence, "private-config-location.json"),
   JSON.stringify({ configRoot }),
@@ -83,6 +91,8 @@ try {
   const state = await page.evaluate(() => window.desktop.getCodex());
   assert.ok(state.ok);
   assert.equal(state.value.account, "signed_out");
+  assert.equal(state.value.connection, "connected");
+  await assert.rejects(access(mcpMarker));
   step = "state-privacy";
   const keys: string[] = [];
   function collect(value: unknown): void {
@@ -141,6 +151,11 @@ try {
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Codex", exact: true }).click();
   await expect(page.locator("#codex-login")).toBeVisible({ timeout: 30000 });
+  const reopenedState = await page.evaluate(() => window.desktop.getCodex());
+  assert.ok(reopenedState.ok);
+  assert.equal(reopenedState.value.account, "signed_out");
+  assert.equal(reopenedState.value.connection, "connected");
+  await assert.rejects(access(mcpMarker));
   await page.screenshot({ path: join(evidence, "reopened-settings.png") });
   await page.getByRole("button", { name: "Appearance", exact: true }).click();
   await page.locator("#interface-scale").selectOption("2");
@@ -179,6 +194,8 @@ try {
         packagedNativeWindow: true,
         realSignedOutRuntime: true,
         ownedMcpVerifiedAtStartup: true,
+        hostileMcpServerDisabled: true,
+        hostileMcpCommandNotRun: true,
         managedLoginStartedAndCanceled: true,
         browserLaunchSuppressedForTest: true,
         browserOpened: false,

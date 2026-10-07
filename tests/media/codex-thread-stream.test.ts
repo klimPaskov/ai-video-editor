@@ -289,6 +289,9 @@ test("recent history restores redacted messages and seeds the active turn", () =
     backwardsCursor: "newer-page",
   });
   assert.equal(history.activeTurnId, "turn-active");
+  assert.equal(history.terminalStatus, null);
+  assert.equal(history.failureCategory, null);
+  assert.equal(history.retryable, false);
   assert.deepEqual(
     history.messages.map(({ role, complete }) => ({ role, complete })),
     [
@@ -323,6 +326,174 @@ test("recent history restores redacted messages and seeds the active turn", () =
       itemId: "agent-active",
       text: " and continuing",
     },
+  );
+});
+
+test("resume retryability comes only from the newest failed user turn", () => {
+  const userMessage = (id: string, text: string) => ({
+    type: "userMessage",
+    id,
+    content: [{ type: "text", text, text_elements: [] }],
+  });
+  const restore = (data: unknown[]) =>
+    projector().restoreHistory({
+      data,
+      nextCursor: null,
+      backwardsCursor: null,
+    });
+  const failed = restore([
+    {
+      id: "turn-failed-newest",
+      items: [userMessage("user-failed-newest", "Retry this request")],
+      status: "failed",
+      error: {
+        message: "private-authentication-error",
+        codexErrorInfo: "unauthorized",
+        additionalDetails: "private-provider-detail",
+        misalignment: null,
+      },
+    },
+    {
+      id: "turn-completed-older",
+      items: [userMessage("user-completed-older", "Earlier request")],
+      status: "completed",
+    },
+  ]);
+  assert.equal(failed.activeTurnId, null);
+  assert.equal(failed.terminalStatus, "failed");
+  assert.equal(failed.failureCategory, "authentication");
+  assert.equal(failed.retryable, true);
+  assert.equal(failed.messages.at(-1)?.text, "Retry this request");
+  assert.ok(!JSON.stringify(failed).includes("private-authentication-error"));
+  assert.ok(!JSON.stringify(failed).includes("private-provider-detail"));
+
+  const completedAfterFailure = restore([
+    {
+      id: "turn-completed-newest",
+      items: [userMessage("user-completed-newest", "Finished request")],
+      status: "completed",
+    },
+    {
+      id: "turn-failed-older",
+      items: [userMessage("user-failed-older", "Old failed request")],
+      status: "failed",
+    },
+  ]);
+  assert.equal(completedAfterFailure.terminalStatus, "completed");
+  assert.equal(completedAfterFailure.failureCategory, null);
+  assert.equal(completedAfterFailure.retryable, false);
+
+  const interrupted = restore([
+    {
+      id: "turn-interrupted",
+      items: [userMessage("user-interrupted", "Interrupted request")],
+      status: "interrupted",
+    },
+  ]);
+  assert.equal(interrupted.terminalStatus, "interrupted");
+  assert.equal(interrupted.failureCategory, null);
+  assert.equal(interrupted.retryable, false);
+
+  const failedWithoutRequest = restore([
+    { id: "turn-failed-without-request", items: [], status: "failed" },
+  ]);
+  assert.equal(failedWithoutRequest.terminalStatus, "failed");
+  assert.equal(failedWithoutRequest.failureCategory, null);
+  assert.equal(failedWithoutRequest.retryable, false);
+
+  const failedPromptOutsideBoundedHistory = restore([
+    {
+      id: "turn-failed-overflow",
+      items: [
+        userMessage("user-before-bounded-history", "Oldest saved request"),
+        ...Array.from({ length: 200 }, (_, index) => ({
+          type: "agentMessage",
+          id: `agent-${index}`,
+          text: "A saved response.",
+        })),
+      ],
+      status: "failed",
+    },
+  ]);
+  assert.equal(failedPromptOutsideBoundedHistory.messages.length, 200);
+  assert.equal(
+    failedPromptOutsideBoundedHistory.messages.some(
+      (message) => message.role === "user",
+    ),
+    false,
+  );
+  assert.equal(failedPromptOutsideBoundedHistory.retryable, false);
+});
+
+test("live failed turns expose only fixed authentication and rate-limit categories", () => {
+  const observeFailure = (id: string, codexErrorInfo: unknown) => {
+    const stream = projector();
+    stream.beginTurn(7, id);
+    return stream.observe(7, "turn/completed", {
+      threadId: "thread-1",
+      turn: {
+        id,
+        status: "failed",
+        items: [],
+        error: {
+          message: "private-raw-error",
+          codexErrorInfo,
+          additionalDetails: "private-detail",
+          misalignment: null,
+        },
+      },
+    });
+  };
+  const authentication = observeFailure("turn-auth-error", "unauthorized");
+  assert.equal(authentication?.type, "turn_terminal");
+  assert.equal(
+    authentication?.type === "turn_terminal"
+      ? authentication.failureCategory
+      : null,
+    "authentication",
+  );
+  assert.ok(!JSON.stringify(authentication).includes("private-raw-error"));
+  assert.ok(!JSON.stringify(authentication).includes("private-detail"));
+
+  const rateLimit = observeFailure("turn-rate-limit", "rateLimitExceeded");
+  assert.equal(
+    rateLimit?.type === "turn_terminal" ? rateLimit.failureCategory : null,
+    "rate_limit",
+  );
+
+  const ambiguousHttpUnauthorized = observeFailure("turn-http-unauthorized", {
+    httpConnectionFailed: { httpStatusCode: 401 },
+  });
+  assert.equal(
+    ambiguousHttpUnauthorized?.type === "turn_terminal"
+      ? ambiguousHttpUnauthorized.failureCategory
+      : null,
+    "other",
+  );
+
+  const malformedErrorCategory = observeFailure(
+    "turn-malformed-error-category",
+    {
+      httpConnectionFailed: { httpStatusCode: 429 },
+      unauthorized: true,
+    },
+  );
+  assert.equal(
+    malformedErrorCategory?.type === "turn_terminal"
+      ? malformedErrorCategory.failureCategory
+      : null,
+    "other",
+  );
+
+  const serviceUnavailable = observeFailure(
+    "turn-service-unavailable",
+    "serverOverloaded",
+  );
+  assert.equal(
+    serviceUnavailable?.type === "turn_terminal"
+      ? serviceUnavailable.failureCategory
+      : null,
+    "service",
   );
 });
 
@@ -571,10 +742,18 @@ test("owned read tools report reading activity instead of claiming an edit", () 
     generation: 7,
     threadId: "thread-1",
     allowedMcpServer: "codex-video-edit",
-    allowedMcpTools: new Set(["project.get_summary", "timeline.get_summary"]),
+    allowedMcpTools: new Set([
+      "project.get_summary",
+      "timeline.get_summary",
+      "transcript.get_range",
+    ]),
   });
   stream.beginTurn(7, "turn-read");
-  for (const tool of ["project.get_summary", "timeline.get_summary"]) {
+  for (const tool of [
+    "project.get_summary",
+    "timeline.get_summary",
+    "transcript.get_range",
+  ]) {
     const event = stream.observe(7, "item/started", {
       threadId: "thread-1",
       turnId: "turn-read",
@@ -590,8 +769,44 @@ test("owned read tools report reading activity instead of claiming an edit", () 
     assert.equal(event?.type, "item_started");
     if (event?.type === "item_started") {
       assert.equal(event.kind, "activity");
-      assert.equal(event.label, "Reading the project");
+      assert.equal(
+        event.label,
+        tool === "transcript.get_range"
+          ? "Reading the transcript"
+          : "Reading the project",
+      );
     }
+  }
+});
+
+test("owned dynamic transcript reads report activity instead of edits", () => {
+  const stream = new ThreadStreamProjector({
+    experimentalApiNegotiated: true,
+    generation: 7,
+    threadId: "thread-1",
+    allowedMcpServer: "codex-video-edit",
+    allowedMcpTools: new Set<string>(),
+    allowedDynamicNamespace: "codex_video_edit",
+    allowedDynamicTools: new Set(["transcript_get_range"]),
+  });
+  stream.beginTurn(7, "turn-transcript");
+  const event = stream.observe(7, "item/started", {
+    threadId: "thread-1",
+    turnId: "turn-transcript",
+    startedAtMs: 1,
+    item: {
+      id: "transcript-read",
+      type: "dynamicToolCall",
+      namespace: "codex_video_edit",
+      tool: "transcript_get_range",
+      arguments: { source_start_us: 0, source_end_us: 1000 },
+      status: "inProgress",
+    },
+  });
+  assert.equal(event?.type, "item_started");
+  if (event?.type === "item_started") {
+    assert.equal(event.kind, "activity");
+    assert.equal(event.label, "Reading the transcript");
   }
 });
 

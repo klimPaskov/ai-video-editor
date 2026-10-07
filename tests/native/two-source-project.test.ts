@@ -118,6 +118,26 @@ try {
     (project) => project.sources?.length === 2,
   );
   assert.ok(combined);
+  const restoreBeforeEdit = await page.evaluate(
+    (request) => window.desktop.applyManualRestoreRange(request),
+    {
+      schema_version: "1.0" as const,
+      projectId: combined.id,
+      draftId: combined.draft.id,
+      baseRevisionId: combined.draft.baseRevisionId,
+      expectedSequence: combined.draft.sequence,
+      expectedTimelineSha256: combined.draft.timelineSha256,
+      sourceId: combined.sources![1]!.id,
+      sourceStartUs: 0,
+      sourceEndUs: 100_000,
+    },
+  );
+  assert.equal(restoreBeforeEdit.ok, false);
+  if (!restoreBeforeEdit.ok)
+    assert.equal(
+      restoreBeforeEdit.message,
+      "Switch to Edit to restore a source range.",
+    );
   const baselinePath = join(
     userData,
     "project-store",
@@ -267,6 +287,103 @@ try {
       timeout: 30_000,
     })
     .toBe(true);
+  await page.locator("#restore-toggle").click();
+  await expect(page.locator("#restore-form")).toBeVisible();
+  await page
+    .locator("#restore-source")
+    .selectOption(baseline.sources[1].source_id);
+  await page.locator("#restore-source-start").fill("0.000000");
+  await expect(page.locator("#restore-submit")).toBeDisabled();
+  await expect(page.locator("#restore-error")).toHaveText(
+    "Enter both source times to restore the interval.",
+  );
+  await page.locator("#restore-source-start").fill("");
+  await page.locator("#restore-source-start").fill("0.500000");
+  await page.locator("#restore-source-end").fill("1.000000");
+  await expect(page.locator("#restore-submit")).toBeDisabled();
+  await expect(page.locator("#restore-error")).toHaveText(
+    "That source interval is already visible in the draft.",
+  );
+  await page.locator("#restore-source-start").fill("0.000000");
+  await page.locator("#restore-source-end").fill("0.500000");
+  await expect(page.locator("#restore-submit")).toBeEnabled();
+  if (process.argv.includes("--inspect")) {
+    const marker = join(evidence, "restore-inspection.done"),
+      deadline = Date.now() + 300_000;
+    await page.screenshot({ path: join(evidence, "restore-form.png") });
+    await writeFile(join(evidence, "restore-inspection.ready"), "ready\n");
+    while (Date.now() < deadline) {
+      if (
+        await access(marker).then(
+          () => true,
+          () => false,
+        )
+      )
+        break;
+      await new Promise((done) => setTimeout(done, 500));
+    }
+    await access(marker);
+  }
+  await page.locator("#restore-submit").click();
+  await expect(page.locator("#duration")).toHaveText(" / 0:01.250");
+  const manuallyRestoredProjects = await page.evaluate(() =>
+    window.desktop.listProjects(),
+  );
+  assert.ok(manuallyRestoredProjects.ok);
+  const manuallyRestored = manuallyRestoredProjects.value.find(
+    (project) => project.id === combined.id,
+  );
+  assert.ok(manuallyRestored);
+  const restoredSourceInterval = manuallyRestored.clips?.find(
+    (clip) =>
+      clip.sourceId === baseline.sources[1].source_id &&
+      clip.sourceStartUs === 0 &&
+      clip.sourceEndUs === 500_000,
+  );
+  assert.equal(restoredSourceInterval?.timelineStartUs, 250_000);
+  await seek(page, 250_000);
+  await expect
+    .poll(async () => (await canvasBytes(page)).equals(expectedSecond), {
+      timeout: 30_000,
+    })
+    .toBe(true);
+  if (process.argv.includes("--inspect")) {
+    const marker = join(evidence, "restore-complete.done"),
+      deadline = Date.now() + 300_000;
+    await page.screenshot({ path: join(evidence, "restore-committed.png") });
+    await writeFile(join(evidence, "restore-complete.ready"), "ready\n");
+    console.log(JSON.stringify({ restoreCompleteReady: true, evidence }));
+    while (Date.now() < deadline) {
+      if (
+        await access(marker).then(
+          () => true,
+          () => false,
+        )
+      )
+        break;
+      await new Promise((done) => setTimeout(done, 500));
+    }
+    await access(marker);
+  }
+  assert.deepEqual(await readFile(baselinePath), baselineBytes);
+  for (let index = 0; index < sources.length; index++) {
+    assert.deepEqual(await readFile(sources[index]!), originals[index]);
+    assert.deepEqual(
+      await readFile(baseline.sources[index]!.managed_path),
+      originals[index],
+    );
+  }
+  assert.deepEqual(await readFile(baselinePath), baselineBytes);
+  for (let index = 0; index < sources.length; index++)
+    assert.deepEqual(await readFile(sources[index]!), originals[index]);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator("#duration")).toHaveText(" / 0:00.750");
+  await seek(page, 250_000);
+  await expect
+    .poll(async () => (await canvasBytes(page)).equals(expectedAfterCut), {
+      timeout: 30_000,
+    })
+    .toBe(true);
   await expect(page.locator("#cut-selection")).toBeHidden();
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.locator("#duration")).toHaveText(" / 0:02.000");
@@ -317,8 +434,27 @@ try {
       timeout: 30_000,
     })
     .toBe(true);
+  await expect(page.locator("#redo-edit")).toBeEnabled();
+  await page.locator("#redo-edit").click();
+  await expect(page.locator("#duration")).toHaveText(" / 0:01.250");
+  await seek(page, 250_000);
+  await expect
+    .poll(async () => (await canvasBytes(page)).equals(expectedSecond), {
+      timeout: 30_000,
+    })
+    .toBe(true);
+  await page.locator("#undo-edit").click();
+  await expect(page.locator("#duration")).toHaveText(" / 0:00.750");
   await page.locator("#undo-edit").click();
   await expect(page.locator("#duration")).toHaveText(" / 0:02.000");
+  assert.deepEqual(await readFile(baselinePath), baselineBytes);
+  for (let index = 0; index < sources.length; index++) {
+    assert.deepEqual(await readFile(sources[index]!), originals[index]);
+    assert.deepEqual(
+      await readFile(baseline.sources[index]!.managed_path),
+      originals[index],
+    );
+  }
   await page.screenshot({ path: join(evidence, "two-source-reopened.png") });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.locator("#interface-scale").selectOption("2");
@@ -340,7 +476,7 @@ try {
   await page.screenshot({ path: join(evidence, "two-source-edit-200.png") });
   if (process.argv.includes("--inspect")) {
     await writeFile(join(evidence, "inspection.ready"), "ready\n");
-    const deadline = Date.now() + 120_000;
+    const deadline = Date.now() + 300_000;
     while (Date.now() < deadline) {
       if (
         await access(join(evidence, "inspection.done")).then(
@@ -364,6 +500,8 @@ try {
         reopen: true,
         manualRedo: true,
         redoSurvivesReopen: true,
+        manualRestore: true,
+        restoreUndoAndRedoSurviveReopen: true,
         originalsAndManagedCopiesUnchanged: true,
         baselineUnchanged: true,
         syntheticFixtureHashes: originals.map((bytes) =>

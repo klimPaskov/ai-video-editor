@@ -43,6 +43,7 @@
         "move",
         "reorder",
         "transcript_cut",
+        "transcript_edit",
         "zoom_add",
         "zoom_update",
         "zoom_remove",
@@ -69,28 +70,16 @@
       ]
     },
     "status": {
-      "enum": [
-        "proposed",
-        "applied",
-        "undone",
-        "rejected",
-        "failed"
-      ]
+      "enum": ["proposed", "applied", "undone", "rejected", "failed"]
     },
     "created_at": {
       "type": "string",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
     },
     "range": {
-      "type": [
-        "object",
-        "null"
-      ],
+      "type": ["object", "null"],
       "additionalProperties": false,
-      "required": [
-        "start_us",
-        "end_us"
-      ],
+      "required": ["start_us", "end_us"],
       "properties": {
         "start_us": {
           "type": "integer",
@@ -108,10 +97,7 @@
       "maxLength": 1000
     },
     "confidence": {
-      "type": [
-        "number",
-        "null"
-      ],
+      "type": ["number", "null"],
       "minimum": 0,
       "maximum": 1
     },
@@ -133,11 +119,74 @@
       "type": "object"
     },
     "transaction_id": {
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": ["string", "null"],
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+    },
+    "source_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+    },
+    "transcript_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+    },
+    "word_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+    },
+    "original_text": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "before_text": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "after_text": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "start_word_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+    },
+    "end_word_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+    },
+    "source_start_us": { "type": "integer", "minimum": 0 },
+    "source_end_us": { "type": "integer", "minimum": 1 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "operation_type": { "const": "transcript_edit" } },
+        "required": ["operation_type"]
+      },
+      "then": {
+        "required": [
+          "source_id",
+          "transcript_id",
+          "word_id",
+          "original_text",
+          "before_text",
+          "after_text"
+        ],
+        "properties": { "range": { "type": "null" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "operation_type": { "const": "transcript_cut" } },
+        "required": ["operation_type"]
+      },
+      "then": {
+        "required": [
+          "source_id",
+          "transcript_id",
+          "start_word_id",
+          "end_word_id",
+          "source_start_us",
+          "source_end_us",
+          "range"
+        ],
+        "properties": {
+          "range": { "type": "object" },
+          "before": { "type": "object" },
+          "after": { "type": "object" }
+        }
+      }
     }
-  }
+  ]
 }

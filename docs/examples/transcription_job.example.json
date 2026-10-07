@@ -1,0 +1,10 @@
+{
+  "project_id": "project-demo-001",
+  "job_id": "transcription-550e8400-e29b-41d4-a716-446655440000",
+  "status": "completed",
+  "progress_percent": 100,
+  "source_count": 1,
+  "completed_source_count": 1,
+  "word_count": 4,
+  "message": "Transcript ready."
+}

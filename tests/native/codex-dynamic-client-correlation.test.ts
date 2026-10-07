@@ -72,14 +72,13 @@ try {
   const models = await client.models();
   assert.ok(
     models.some(
-      (model) =>
-        model.id === "gpt-5.6-luna" && model.reasoning.includes("high"),
+      (model) => model.id === "gpt-6-luna" && model.reasoning.includes("high"),
     ),
   );
   phase = "thread";
   await client.openProjectThread({
     projectId: "fixture-project",
-    model: "gpt-5.6-luna",
+    model: "gpt-6-luna",
     effort: "high",
     baseInstructions:
       "You are testing a local video editor. Use only its owned read-only project tool. Do not use files, shell, network, apps or other tools.",

@@ -1,28 +1,24 @@
 import { build } from "esbuild";
 import { packager } from "@electron/packager";
 import {
-  access,
   chmod,
+  cp,
   copyFile,
   lstat,
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   writeFile,
 } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { resolve, join } from "node:path";
+import { resolve, join, relative, sep } from "node:path";
 import assert from "node:assert/strict";
+import { assertNativeTestEnvironment } from "./native-test-environment.ts";
 
-assert.equal(
-  process.platform,
-  "linux",
-  "Automated builds run only in the isolated guest",
-);
-assert.equal(process.getuid(), 1000);
-assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const root = resolve(import.meta.dirname, "..");
 const evidence = join(root, "test-results");
 await mkdir(evidence, { recursive: true });
@@ -123,6 +119,15 @@ await build({
   external: ["electron"],
 });
 await build({
+  entryPoints: [join(root, "apps/desktop/src/transcription-worker.ts")],
+  outfile: join(staging, "transcription-worker.mjs"),
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node24",
+  external: ["@huggingface/transformers", "onnxruntime-node", "sharp"],
+});
+await build({
   entryPoints: [join(root, "apps/desktop/renderer/renderer.ts")],
   outfile: join(staging, "renderer/renderer.js"),
   bundle: true,
@@ -135,6 +140,82 @@ for (const file of ["index.html", "style.css"])
     join(staging, "renderer", file),
   );
 await copyFile(join(root, "LICENSE"), join(staging, "LICENSE"));
+const installedPackages = execFileSync(
+  "npm",
+  ["ls", "--omit=dev", "--all", "--parseable"],
+  { cwd: root, encoding: "utf8" },
+)
+  .split(/\r?\n/u)
+  .filter(Boolean)
+  .map((entry) => resolve(entry))
+  .filter((entry) => {
+    const relativePath = relative(join(root, "node_modules"), entry);
+    return (
+      relativePath !== "" &&
+      relativePath !== ".." &&
+      !relativePath.startsWith(`..${sep}`) &&
+      !relativePath.startsWith(sep)
+    );
+  })
+  .sort();
+const stagedModules = join(staging, "node_modules");
+await mkdir(stagedModules, { recursive: true });
+const thirdPartyNotices = [
+  "Third-party packages bundled with codex-video-edit.",
+  "Each dependency retains its package license file under licenses/.",
+  "",
+];
+const copiedPackagePaths = new Set();
+const thirdPartyLicenseDirectory = join(staging, "licenses");
+await mkdir(thirdPartyLicenseDirectory, { recursive: true });
+for (const sourcePath of installedPackages) {
+  const sourceStat = await lstat(sourcePath);
+  if (sourceStat.isSymbolicLink()) continue;
+  if (!sourceStat.isDirectory())
+    throw new Error("A production dependency is not a regular directory");
+  const relativePath = relative(join(root, "node_modules"), sourcePath);
+  const targetPath = join(stagedModules, relativePath);
+  if (!copiedPackagePaths.has(relativePath)) {
+    await cp(sourcePath, targetPath, {
+      recursive: true,
+      dereference: false,
+      preserveTimestamps: false,
+      filter: async (entry) => !(await lstat(entry)).isSymbolicLink(),
+    });
+    copiedPackagePaths.add(relativePath);
+  }
+  const metadata = JSON.parse(
+    await readFile(join(sourcePath, "package.json"), "utf8"),
+  );
+  const packageName = String(metadata.name ?? relativePath);
+  const packageVersion = String(metadata.version ?? "unknown");
+  const packageLicense =
+    typeof metadata.license === "string"
+      ? metadata.license
+      : Array.isArray(metadata.licenses)
+        ? metadata.licenses.map((item) => item.type).join(" OR ")
+        : "Unspecified; see package metadata";
+  thirdPartyNotices.push(
+    `${packageName}@${packageVersion} - ${packageLicense}`,
+  );
+  for (const name of await readdir(sourcePath)) {
+    if (!/^license(?:[._-].*)?$/iu.test(name)) continue;
+    const licensePath = join(sourcePath, name);
+    if (!(await lstat(licensePath)).isFile()) continue;
+    const safeName = packageName.replace(/[^A-Za-z0-9._-]+/gu, "_");
+    await copyFile(
+      licensePath,
+      join(
+        thirdPartyLicenseDirectory,
+        `${safeName}-${packageVersion}-${name.replace(/[^A-Za-z0-9._-]/gu, "_")}`,
+      ),
+    );
+  }
+}
+await writeFile(
+  join(staging, "THIRD_PARTY_NOTICES.txt"),
+  `${thirdPartyNotices.join("\n")}\n`,
+);
 await writeFile(
   join(staging, "package.json"),
   JSON.stringify({
@@ -153,7 +234,7 @@ const packages = await packager({
   platform: "linux",
   arch: "x64",
   electronVersion: "44.2.0",
-  asar: true,
+  asar: { unpackDir: "node_modules" },
   extraResource: [codexResources, mcpResources],
   prune: false,
   overwrite: false,
@@ -167,6 +248,14 @@ await writeFile(
       electron: "44.2.0",
       codex: codexManifest,
       mcp: mcpManifest,
+      transcription: {
+        package: "@huggingface/transformers",
+        version: "4.3.0",
+        runtime: "onnxruntime-node",
+        model: "downloaded on first local transcription into app userData",
+        license: "Apache-2.0",
+        thirdPartyPackageCount: copiedPackagePaths.size,
+      },
       scope: "native-media-bootstrap",
     },
     null,

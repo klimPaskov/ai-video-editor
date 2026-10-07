@@ -1,6 +1,7 @@
 import {
   CodexThreadProtocolError,
   threadProtocolInternals,
+  type TurnFailureCategory,
   type TurnStatus,
 } from "./thread-protocol.ts";
 import type { ThreadTurnsListResponse } from "./generated/v2/ThreadTurnsListResponse.ts";
@@ -31,6 +32,9 @@ export interface ThreadHistoryActivity {
 /** Main-only projection. Source item/turn IDs are replaced before renderer IPC. */
 export interface ThreadHistorySnapshot {
   activeTurnId: string | null;
+  terminalStatus: Exclude<TurnStatus, "inProgress"> | null;
+  failureCategory: TurnFailureCategory | null;
+  retryable: boolean;
   messages: ThreadHistoryMessage[];
   activities: ThreadHistoryActivity[];
 }
@@ -67,6 +71,7 @@ export type ThreadStreamEvent =
   | (CorrelatedEvent & {
       type: "turn_terminal";
       status: Exclude<TurnStatus, "inProgress">;
+      failureCategory?: TurnFailureCategory | null;
     })
   | (CorrelatedEvent & { type: "connection_uncertain" });
 
@@ -291,7 +296,8 @@ function itemProjection(
       if (
         item.status !== "inProgress" &&
         item.status !== "completed" &&
-        item.status !== "failed"
+        item.status !== "failed" &&
+        item.status !== "interrupted"
       ) {
         throw new CodexThreadProtocolError("protocol");
       }
@@ -317,9 +323,11 @@ function itemProjection(
       ) {
         throw new CodexThreadProtocolError("forbidden");
       }
-      return tool === "project.get_summary" || tool === "timeline.get_summary"
-        ? { id, type, kind: "activity", label: "Reading the project" }
-        : { id, type, kind: "edit", label: "Applying an edit" };
+      return tool === "transcript.get_range"
+        ? { id, type, kind: "activity", label: "Reading the transcript" }
+        : tool === "project.get_summary" || tool === "timeline.get_summary"
+          ? { id, type, kind: "activity", label: "Reading the project" }
+          : { id, type, kind: "edit", label: "Applying an edit" };
     }
     case "dynamicToolCall": {
       const namespace = threadProtocolInternals.identifier(
@@ -338,9 +346,11 @@ function itemProjection(
         !options.allowedDynamicTools?.has(tool)
       )
         throw new CodexThreadProtocolError("forbidden");
-      return tool === "project_get_summary" || tool === "timeline_get_summary"
-        ? { id, type, kind: "activity", label: "Reading the project" }
-        : { id, type, kind: "edit", label: "Applying an edit" };
+      return tool === "transcript_get_range"
+        ? { id, type, kind: "activity", label: "Reading the transcript" }
+        : tool === "project_get_summary" || tool === "timeline_get_summary"
+          ? { id, type, kind: "activity", label: "Reading the project" }
+          : { id, type, kind: "edit", label: "Applying an edit" };
     }
     default:
       throw new CodexThreadProtocolError("forbidden");
@@ -358,7 +368,11 @@ function historicalItemComplete(
     item.type === "dynamicToolCall" ||
     item.type === "collabAgentToolCall"
   ) {
-    return item.status === "completed" || item.status === "failed";
+    return (
+      item.status === "completed" ||
+      item.status === "failed" ||
+      item.status === "interrupted"
+    );
   }
   return false;
 }
@@ -434,6 +448,10 @@ export class ThreadStreamProjector {
         messages: ThreadHistoryMessage[] = [],
         activities: ThreadHistoryActivity[] = [];
       let activeTurnId: string | null = null,
+        newestTurnId: string | null = null,
+        terminalStatus: Exclude<TurnStatus, "inProgress"> | null = null,
+        failureCategory: TurnFailureCategory | null = null,
+        retryableUserItemId: string | null = null,
         itemCount = 0,
         textBytes = 0;
       for (let index = 0; index < turns.length; index++) {
@@ -446,6 +464,12 @@ export class ThreadStreamProjector {
           throw new CodexThreadProtocolError("protocol");
         }
         turnIds.add(decoded.id);
+        if (index === 0) {
+          newestTurnId = decoded.id;
+          terminalStatus =
+            decoded.status === "inProgress" ? null : decoded.status;
+          failureCategory = threadProtocolInternals.turnFailureCategory(raw);
+        }
         if (decoded.status === "inProgress") {
           if (activeTurnId !== null) {
             throw new CodexThreadProtocolError("protocol");
@@ -484,6 +508,13 @@ export class ThreadStreamProjector {
             const text = historicalUserText(rawItem);
             activeText = text;
             textBytes += Buffer.byteLength(text);
+            if (
+              decoded.id === newestTurnId &&
+              terminalStatus === "failed" &&
+              text.trim().length > 0
+            ) {
+              retryableUserItemId = projected.id;
+            }
             messages.push({
               itemId: projected.id,
               role: "user",
@@ -521,9 +552,17 @@ export class ThreadStreamProjector {
           }
         }
       }
+      const boundedMessages = messages.slice(-200);
       return {
         activeTurnId,
-        messages: messages.slice(-200),
+        terminalStatus,
+        failureCategory,
+        retryable:
+          retryableUserItemId !== null &&
+          boundedMessages.some(
+            (message) => message.itemId === retryableUserItemId,
+          ),
+        messages: boundedMessages,
         activities: activities.slice(-32),
       };
     } catch (error) {
@@ -631,7 +670,10 @@ export class ThreadStreamProjector {
         return this.event(turn.id, { type: "turn_started" });
       }
       if (turn.status === "inProgress") return this.failProtocol();
-      return this.complete(turn.status);
+      return this.complete(
+        turn.status,
+        threadProtocolInternals.turnFailureCategory(params.turn),
+      );
     }
 
     const turnId = threadProtocolInternals.identifier(
@@ -749,11 +791,16 @@ export class ThreadStreamProjector {
 
   private complete(
     status: Exclude<TurnStatus, "inProgress">,
+    failureCategory: TurnFailureCategory | null = null,
   ): ThreadStreamEvent | null {
     if (!this.active || this.active.terminal) return null;
     this.active.terminal = status;
     this.rememberTerminal(this.active.id, status);
-    return this.event(this.active.id, { type: "turn_terminal", status });
+    return this.event(this.active.id, {
+      type: "turn_terminal",
+      status,
+      ...(failureCategory ? { failureCategory } : {}),
+    });
   }
 
   private rememberTerminal(

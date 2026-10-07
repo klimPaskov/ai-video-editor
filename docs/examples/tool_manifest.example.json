@@ -32,6 +32,21 @@
       ]
     },
     {
+      "name": "transcript.get_range",
+      "mode": "read",
+      "description": "Read a paginated half-open source-time range of at most five minutes and 250 words from a completed local transcript.",
+      "undoable": false,
+      "user_confirmation": "none",
+      "allowed_scope": "project_read",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "change source audio",
+        "authorize a cut",
+        "read filesystem paths"
+      ]
+    },
+    {
       "name": "cut.trim_edge",
       "mode": "mutation",
       "description": "Move a clip boundary to an exact validated output-time position.",
@@ -95,6 +110,21 @@
       "name": "timeline.undo",
       "mode": "mutation",
       "description": "Undo the newest still-applied draft transaction through the shared journal.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "cut.restore_range",
+      "mode": "mutation",
+      "description": "Restore one exact missing source-time interval in original source order without changing source files.",
       "undoable": true,
       "user_confirmation": "none",
       "allowed_scope": "active_draft",

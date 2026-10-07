@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:codex-video-edit:spoken-candidate-policy:1.0",
+  "title": "Spoken candidate analysis policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cue_language",
+    "filler_cues",
+    "editor_cue",
+    "legacy_editor_cues",
+    "legacy_aliases_enabled",
+    "pause_review_threshold_us",
+    "protected_word_ids",
+    "protected_ranges"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "cue_language": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 35,
+          "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+        }
+      ]
+    },
+    "filler_cues": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "\\S"
+      }
+    },
+    "editor_cue": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "\\S"
+    },
+    "legacy_editor_cues": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "\\S"
+      }
+    },
+    "legacy_aliases_enabled": { "type": "boolean" },
+    "pause_review_threshold_us": {
+      "type": "integer",
+      "minimum": 100000,
+      "maximum": 60000000
+    },
+    "protected_word_ids": {
+      "type": "array",
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/identifier" }
+    },
+    "protected_ranges": {
+      "type": "array",
+      "maxItems": 4096,
+      "items": { "$ref": "#/$defs/protected_range" }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+    },
+    "protected_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_us", "end_us", "reason"],
+      "properties": {
+        "start_us": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "end_us": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "reason": { "enum": ["manual", "sponsor", "licensed"] }
+      }
+    }
+  }
+}

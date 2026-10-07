@@ -88,11 +88,11 @@ try {
       const view = reply.value;
       const offered = view.models.find(
         (model) =>
-          model.id === "gpt-5.6-luna" && model.reasoning.includes("high"),
+          model.id === "gpt-6-luna" && model.reasoning.includes("high"),
       );
       if (offered) {
         assert.deepEqual(view.selection, {
-          modelId: "gpt-5.6-luna",
+          modelId: "gpt-6-luna",
           reasoning: "high",
         });
         assert.equal(view.message, null);
@@ -100,7 +100,7 @@ try {
         assert.equal(view.selection, null);
         assert.match(
           view.message ?? "",
-          /Luna with high reasoning is unavailable/,
+          /GPT-6-Luna with high reasoning is unavailable/,
         );
       }
       step = `visible-settings-${launchNumber}`;
@@ -108,7 +108,7 @@ try {
       await page.getByRole("button", { name: "Codex", exact: true }).click();
       await expect(page.locator("#codex-model-settings")).toBeVisible();
       if (offered) {
-        await expect(page.locator("#codex-model")).toHaveValue("gpt-5.6-luna");
+        await expect(page.locator("#codex-model")).toHaveValue("gpt-6-luna");
         await expect(page.locator("#codex-reasoning")).toHaveValue("high");
       }
       await page.screenshot({

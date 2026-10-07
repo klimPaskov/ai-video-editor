@@ -28,6 +28,7 @@ export interface CodexThreadView {
   messages: CodexThreadMessage[];
   activities: CodexThreadActivity[];
   message: string | null;
+  retryable: boolean;
 }
 
 export interface CodexThreadProjectRequest {
@@ -106,6 +107,7 @@ export function assertCodexThreadView(
     "messages",
     "activities",
     "message",
+    "retryable",
   ]);
   if (
     ![
@@ -121,7 +123,8 @@ export function assertCodexThreadView(
     !Array.isArray(view.messages) ||
     view.messages.length > 200 ||
     !Array.isArray(view.activities) ||
-    view.activities.length > 32
+    view.activities.length > 32 ||
+    typeof view.retryable !== "boolean"
   )
     invalid();
   if (view.projectId !== null) id(view.projectId);
@@ -156,7 +159,11 @@ export function assertCodexThreadView(
       (view.projectId !== null ||
         view.messages.length !== 0 ||
         view.activities.length !== 0 ||
-        view.message !== null)) ||
+        view.message !== null ||
+        view.retryable)) ||
+    (view.retryable &&
+      (view.status !== "ready" ||
+        !view.messages.some((message) => message.role === "user"))) ||
     (view.status !== "closed" && view.projectId === null)
   )
     invalid();

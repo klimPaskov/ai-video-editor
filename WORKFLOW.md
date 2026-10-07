@@ -43,7 +43,7 @@ Running it creates or updates the active draft. If an API-backed option is selec
 
 Show a large preview, a simple timeline, transcript, and one context panel at a time. The user can:
 
-- split, trim, ripple-delete, restore, move, and reorder supported clips
+- split, trim, ripple-delete, exact missing source-range restore, move, and reorder supported clips
 - delete transcript words to cut matching media
 - adjust zoom target, duration, and strength
 - adjust speed range and multiplier
@@ -57,6 +57,8 @@ Show a large preview, a simple timeline, transcript, and one context panel at a 
 ## 5. Review
 
 Watch the complete draft, compare revisions, and run decode, timing, audio, caption, framing, missing-media, black-frame, freeze-frame, zoom, speed, and licence checks. Return to Edit for corrections without losing draft history. Show a plain summary. Open technical details only when requested.
+
+The current Review shell also offers Check draft integrity, which re-reads the committed timeline/journal and managed-source measurements. If the current head ends in an eligible main-owned manual group, the explicit action records a structural-only checkpoint with concrete evidence IDs. Its result is not the required watch-through, semantic speech review, playback, A/V join check, or full QA. Hide the action while another inspector or Codex drawer is open, and clear its result when the committed head changes.
 
 ## 6. Export
 

@@ -29,6 +29,7 @@ test("conversation IPC accepts only compact path-free state and exact intent", (
       },
     ],
     message: null,
+    retryable: false,
   };
   assertCodexThreadView(view);
   assertCodexThreadProjectRequest({
@@ -43,6 +44,8 @@ test("conversation IPC accepts only compact path-free state and exact intent", (
   for (const invalid of [
     { ...view, path: "C:\\private\\recording.mp4" },
     { ...view, status: "closed" },
+    { ...view, retryable: true },
+    { ...view, status: "ready", messages: [], retryable: true },
     { ...view, projectId: null },
     { ...view, messages: [...view.messages, view.messages[0]] },
     {
@@ -51,6 +54,9 @@ test("conversation IPC accepts only compact path-free state and exact intent", (
     },
   ])
     assert.throws(() => assertCodexThreadView(invalid));
+  const missingRetryability = { ...view } as Record<string, unknown>;
+  delete missingRetryability.retryable;
+  assert.throws(() => assertCodexThreadView(missingRetryability));
   assert.throws(() =>
     assertCodexThreadProjectRequest({
       schema_version: "1.0",

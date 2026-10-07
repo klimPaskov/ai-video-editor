@@ -24,20 +24,122 @@ const policy = {
   developerInstructions: "Keep source media immutable.",
 };
 const restrictedFeatures = {
-  shell_tool: false,
-  multi_agent: false,
-  multi_agent_v2: false,
+  api_key_model_discovery: false,
+  apps: false,
+  auth_elicitation: false,
+  browser_use: false,
+  browser_use_external: false,
+  browser_use_full_cdp_access: false,
+  chronicle: false,
+  compaction_image_budget: false,
+  code_mode_only: false,
   code_mode: {
+    enabled: false,
     excluded_tool_namespaces: [
       "mcp__codex_apps",
       "multi_agent_v1",
+      "codex_video_edit_agents",
       "skills",
       "functions",
       "image_gen",
     ],
   },
-  code_mode_host: { disable_in_process_fallback: true },
+  code_mode_host: {
+    enabled: false,
+    disable_in_process_fallback: true,
+  },
+  codex_apps_mcp_2026_07_28: false,
+  codex_git_commit: false,
+  computer_use: false,
+  default_mode_request_user_input: false,
+  deferred_executor: false,
+  enable_mcp_apps: false,
+  exec_permission_approvals: false,
+  external_agent_memory_import: false,
+  fast_mode: false,
+  goals: false,
+  guardian_approval: false,
+  hooks: false,
+  image_generation: false,
+  in_app_browser: false,
+  in_app_chat: false,
+  in_app_dictation: false,
+  in_app_local_automation: false,
+  in_app_updates: false,
+  mcp_oauth_refresh_coordination: false,
+  memories: false,
+  mentions_v2: false,
+  multi_agent: false,
+  multi_agent_v2: false,
+  plugins: false,
+  plugin_sharing: false,
+  personality: false,
+  recommended_plugins: false,
+  remote_control: false,
+  remote_plugin: false,
+  request_permissions_tool: false,
+  request_rule: false,
+  search_tool: false,
+  shell_tool: false,
+  shell_snapshot: false,
+  sleep_tool: false,
+  token_budget: false,
+  unified_exec_tty: false,
+  unbounded_connection_retries: false,
+  workspace_dependencies: false,
+  skill_mcp_dependency_install: false,
+  skill_search: false,
+  standalone_web_search: false,
+  tool_call_mcp_elicitation: false,
+  tool_suggest: false,
+  view_image: false,
+  web_search_cached: false,
+  web_search_request: false,
 };
+const dynamicFeatures = (nativeSubagentProtocol: "disabled" | "v1" | "v2") => ({
+  ...restrictedFeatures,
+  code_mode_only: true,
+  code_mode: {
+    enabled: true,
+    excluded_tool_namespaces:
+      nativeSubagentProtocol === "v1"
+        ? ["mcp__codex_apps", "skills", "functions", "image_gen"]
+        : [
+            "mcp__codex_apps",
+            "multi_agent_v1",
+            ...(nativeSubagentProtocol === "disabled"
+              ? ["codex_video_edit_agents"]
+              : []),
+            "skills",
+            "functions",
+            "image_gen",
+          ],
+    ...(nativeSubagentProtocol === "v2"
+      ? { direct_only_tool_namespaces: ["codex_video_edit_agents"] }
+      : {}),
+  },
+  code_mode_host: {
+    enabled: true,
+    disable_in_process_fallback: true,
+  },
+  multi_agent: nativeSubagentProtocol === "v1",
+  multi_agent_v2:
+    nativeSubagentProtocol === "v2"
+      ? {
+          enabled: true,
+          max_concurrent_threads_per_session: 2,
+          min_wait_timeout_ms: 1_000,
+          default_wait_timeout_ms: 10_000,
+          max_wait_timeout_ms: 30_000,
+          subagent_developer_instructions:
+            "Read-only project helper. Use only the path-free project and timeline summary JSON supplied in your task message. Do not infer missing state or ask for other access. Never edit the draft, access files, use services, or spawn another child.",
+          tool_namespace: "codex_video_edit_agents",
+          expose_spawn_agent_model_overrides: false,
+          wait_agent_enabled: true,
+          non_code_mode_only: false,
+        }
+      : false,
+});
 const restrictedApps = {
   _default: {
     enabled: false,
@@ -127,6 +229,129 @@ test("experimental initialization and no-environment requests are exact", () => 
     sortDirection: "desc",
     itemsView: "full",
   });
+
+  const dynamicStart = buildThreadStartRequest(policy, {
+    route: "dynamic",
+    nativeSubagentProtocol: "disabled",
+  });
+  const dynamicResume = buildThreadResumeRequest("thread-1", policy, {
+    route: "dynamic",
+    nativeSubagentProtocol: "disabled",
+  });
+  const collaborativeStart = buildThreadStartRequest(policy, {
+    route: "dynamic",
+    nativeSubagentProtocol: "v1",
+    nativeSubagentModel: "gpt-5.6-luna",
+    nativeSubagentReasoning: "high",
+  });
+  const collaborativeResume = buildThreadResumeRequest("thread-1", policy, {
+    route: "dynamic",
+    nativeSubagentProtocol: "v1",
+    nativeSubagentModel: "gpt-5.6-luna",
+    nativeSubagentReasoning: "high",
+  });
+  const v2Start = buildThreadStartRequest(policy, {
+    route: "dynamic",
+    nativeSubagentProtocol: "v2",
+    nativeSubagentModel: "gpt-6-luna",
+    nativeSubagentReasoning: "high",
+  });
+  const v2Resume = buildThreadResumeRequest("thread-1", policy, {
+    route: "dynamic",
+    nativeSubagentProtocol: "v2",
+    nativeSubagentModel: "gpt-6-luna",
+    nativeSubagentReasoning: "high",
+  });
+  assert.deepEqual(dynamicStart.config.features, dynamicFeatures("disabled"));
+  assert.deepEqual(dynamicResume.config.features, dynamicFeatures("disabled"));
+  assert.deepEqual(collaborativeStart.config.features, dynamicFeatures("v1"));
+  assert.deepEqual(collaborativeResume.config.features, dynamicFeatures("v1"));
+  assert.deepEqual(v2Start.config.features, dynamicFeatures("v2"));
+  assert.deepEqual(v2Resume.config.features, dynamicFeatures("v2"));
+  for (const request of [dynamicStart, dynamicResume]) {
+    assert.equal(request.config.features.deferred_executor, false);
+    assert.equal(request.config.features.token_budget, false);
+    assert.equal(request.config.features.code_mode_only, true);
+    assert.equal(request.config.features.code_mode.enabled, true);
+    assert.equal(request.config.features.code_mode_host.enabled, true);
+    assert.equal(
+      request.config.features.code_mode_host.disable_in_process_fallback,
+      true,
+    );
+    assert.equal(request.config.features.multi_agent, false);
+    assert.deepEqual(
+      request.config.features.code_mode.excluded_tool_namespaces,
+      [
+        "mcp__codex_apps",
+        "multi_agent_v1",
+        "codex_video_edit_agents",
+        "skills",
+        "functions",
+        "image_gen",
+      ],
+    );
+  }
+  for (const request of [collaborativeStart, collaborativeResume]) {
+    assert.equal(request.config.features.multi_agent, true);
+    assert.equal(request.config.features.multi_agent_v2, false);
+    assert.equal(request.config.features.shell_tool, false);
+    assert.equal(request.config.features.sleep_tool, false);
+    assert.equal(request.config.features.view_image, false);
+    assert.equal(request.config.features.code_mode_only, true);
+    assert.equal(request.config.features.computer_use, false);
+    assert.equal(request.config.features.browser_use, false);
+    assert.equal(request.config.features.browser_use_external, false);
+    assert.equal(request.config.features.browser_use_full_cdp_access, false);
+    assert.equal(request.config.features.compaction_image_budget, false);
+    assert.equal(request.config.features.fast_mode, false);
+    assert.equal(request.config.features.guardian_approval, false);
+    assert.equal(request.config.features.in_app_browser, false);
+    assert.equal(request.config.features.in_app_chat, false);
+    assert.equal(request.config.features.in_app_dictation, false);
+    assert.equal(request.config.features.in_app_local_automation, false);
+    assert.equal(request.config.features.in_app_updates, false);
+    assert.equal(request.config.features.mentions_v2, false);
+    assert.equal(request.config.features.personality, false);
+    assert.equal(request.config.features.shell_snapshot, false);
+    assert.equal(request.config.features.unified_exec_tty, false);
+    assert.equal(request.config.features.workspace_dependencies, false);
+    assert.equal(request.config.features.image_generation, false);
+    assert.equal(request.config.features.codex_git_commit, false);
+    assert.deepEqual(
+      request.config.features.code_mode.excluded_tool_namespaces,
+      ["mcp__codex_apps", "skills", "functions", "image_gen"],
+    );
+    assert.deepEqual(request.config.tools, restrictedTools);
+    assert.deepEqual(request.config.apps, restrictedApps);
+    assert.deepEqual(request.config.agents, {
+      enabled: true,
+      max_depth: 1,
+      default_subagent_model: "gpt-5.6-luna",
+      default_subagent_reasoning_effort: "high",
+    });
+    assert.equal(request.approvalPolicy, "never");
+    assert.equal(request.sandbox, "read-only");
+  }
+  for (const request of [v2Start, v2Resume]) {
+    assert.equal(request.config.features.multi_agent, false);
+    assert.equal(
+      (request.config.features.multi_agent_v2 as { enabled: boolean }).enabled,
+      true,
+    );
+    assert.equal(request.config.features.code_mode_only, true);
+    assert.deepEqual(
+      request.config.features.code_mode.direct_only_tool_namespaces,
+      ["codex_video_edit_agents"],
+    );
+    assert.deepEqual(request.config.agents, {
+      enabled: true,
+      max_depth: 1,
+      default_subagent_model: "gpt-6-luna",
+      default_subagent_reasoning_effort: "high",
+    });
+    assert.equal(request.sandbox, "read-only");
+    assert.equal(request.approvalPolicy, "never");
+  }
 
   assert.deepEqual(
     buildTurnStartRequest(
@@ -286,6 +511,24 @@ test("builders reject renderer-style policy and identifier overrides", () => {
         ...policy,
         approvalPolicy: "on-request",
       } as never),
+    CodexThreadProtocolError,
+  );
+  assert.throws(
+    () =>
+      buildThreadStartRequest(policy, {
+        route: "mcp",
+        nativeSubagentProtocol: "v1",
+        nativeSubagentModel: "gpt-5.6-luna",
+        nativeSubagentReasoning: "high",
+      }),
+    CodexThreadProtocolError,
+  );
+  assert.throws(
+    () =>
+      buildThreadStartRequest(policy, {
+        route: "dynamic",
+        nativeSubagentProtocol: "v1",
+      }),
     CodexThreadProtocolError,
   );
 });

@@ -13,8 +13,10 @@ import {
   decodeTurnStart,
   threadProtocolInternals,
   type ExperimentalInitializeRequest,
+  type ThreadFeaturePolicy,
   type ThreadResumeRequest,
   type ThreadRuntimePolicy,
+  type NativeSubagentProtocol,
   type ThreadStartRequest,
   type ThreadTurnsListRequest,
   type ThreadUnsubscribeRequest,
@@ -49,8 +51,11 @@ export interface ProjectThreadRuntimeOptions {
   allowedMcpTools: ReadonlySet<string>;
   allowedDynamicNamespace?: string;
   allowedDynamicTools?: ReadonlySet<string>;
-  /** Only used for new threads; a persisted binding decides resume mode. */
+  /** Main-owned live model capability used for both start and resume policy. */
   newThreadToolRoute?: ProjectThreadToolRoute;
+  nativeSubagentProtocol?: NativeSubagentProtocol;
+  nativeSubagentModel?: string;
+  nativeSubagentReasoning?: string;
   /** Main-owned id source; overridden only by deterministic tests. */
   clientMessageId?: () => string;
 }
@@ -101,6 +106,30 @@ export class ProjectThreadRuntime {
     ) {
       throw new CodexThreadProtocolError("configuration");
     }
+    if (
+      options.nativeSubagentProtocol !== undefined &&
+      !["disabled", "v1", "v2"].includes(options.nativeSubagentProtocol)
+    )
+      throw new CodexThreadProtocolError("configuration");
+    if (
+      options.newThreadToolRoute === "mcp" &&
+      options.nativeSubagentProtocol !== undefined &&
+      options.nativeSubagentProtocol !== "disabled"
+    )
+      throw new CodexThreadProtocolError("configuration");
+    const nativeSubagentProtocol =
+      options.newThreadToolRoute === "dynamic"
+        ? (options.nativeSubagentProtocol ?? "disabled")
+        : "disabled";
+    const hasChildModel = options.nativeSubagentModel !== undefined;
+    const hasChildReasoning = options.nativeSubagentReasoning !== undefined;
+    if (
+      (nativeSubagentProtocol !== "disabled" &&
+        (!options.nativeSubagentModel || !options.nativeSubagentReasoning)) ||
+      (nativeSubagentProtocol === "disabled" &&
+        (hasChildModel || hasChildReasoning))
+    )
+      throw new CodexThreadProtocolError("configuration");
     const reviewedDynamicNames = ownedDynamicToolWireNames();
     if (
       options.allowedDynamicTools &&
@@ -119,7 +148,16 @@ export class ProjectThreadRuntime {
       throw new CodexThreadProtocolError("configuration");
     }
     // Validate the complete no-environment thread policy at construction.
-    buildThreadStartRequest(this.options.policy);
+    buildThreadStartRequest(this.options.policy, {
+      route: this.options.newThreadToolRoute ?? "mcp",
+      nativeSubagentProtocol,
+      ...(nativeSubagentProtocol !== "disabled"
+        ? {
+            nativeSubagentModel: options.nativeSubagentModel!,
+            nativeSubagentReasoning: options.nativeSubagentReasoning!,
+          }
+        : {}),
+    });
   }
 
   initializeRequest(applicationVersion: string): ExperimentalInitializeRequest {
@@ -140,13 +178,33 @@ export class ProjectThreadRuntime {
       throw new CodexThreadProtocolError("configuration");
     }
     this.openingToolRoute = toolRoute;
+    const nativeSubagentProtocol =
+      toolRoute === "dynamic"
+        ? (this.options.nativeSubagentProtocol ?? "disabled")
+        : "disabled";
+    if (toolRoute === "mcp" && nativeSubagentProtocol !== "disabled")
+      throw new CodexThreadProtocolError("configuration");
+    const featurePolicy: ThreadFeaturePolicy = {
+      route: toolRoute,
+      nativeSubagentProtocol,
+      ...(nativeSubagentProtocol !== "disabled"
+        ? {
+            nativeSubagentModel: this.options.nativeSubagentModel!,
+            nativeSubagentReasoning: this.options.nativeSubagentReasoning!,
+          }
+        : {}),
+    };
     if (!existing) {
       return {
         method: "thread/start",
         params: {
-          ...buildThreadStartRequest(this.options.policy),
+          ...buildThreadStartRequest(this.options.policy, featurePolicy),
           ...(toolRoute === "dynamic"
-            ? { dynamicTools: buildCodexVideoEditDynamicTools() }
+            ? {
+                dynamicTools: buildCodexVideoEditDynamicTools(
+                  this.options.projectId,
+                ),
+              }
             : {}),
         },
       };
@@ -156,6 +214,7 @@ export class ProjectThreadRuntime {
       params: await this.options.registry.resumeRequestForProject(
         this.options.projectId,
         this.options.policy,
+        featurePolicy,
       ),
     };
   }
@@ -213,6 +272,23 @@ export class ProjectThreadRuntime {
 
   toolRoute(): ProjectThreadToolRoute | undefined {
     return this.activeToolRoute;
+  }
+
+  activeThreadId(): string | undefined {
+    return this.threadId;
+  }
+
+  activeTurnId(): string | undefined {
+    return this.currentTurnId;
+  }
+
+  notificationTurnId(): string | undefined {
+    if (this.currentTurnId) return this.currentTurnId;
+    return this.turnStarting &&
+      this.turnStartSubmitted &&
+      !this.notifiedStartingTurnEnded
+      ? this.notifiedStartingTurnId
+      : undefined;
   }
 
   acceptHistoryPage(
@@ -390,6 +466,54 @@ export class ProjectThreadRuntime {
       this.notifiedStartingTurnId = turn.id;
       this.notifiedStartingTurnEnded = true;
     }
+  }
+
+  /** A server-owned native spawn can identify a started turn before turn/started arrives. */
+  noteBufferedParentSpawn(method: string, params: unknown): void {
+    if (
+      method !== "item/started" ||
+      this.activeToolRoute !== "dynamic" ||
+      !this.turnStarting ||
+      !this.turnStartSubmitted ||
+      this.currentTurnId
+    )
+      return;
+    if (!threadProtocolInternals.record(params))
+      throw new CodexThreadProtocolError("protocol");
+    const threadId = threadProtocolInternals.identifier(
+      params.threadId,
+      "protocol",
+    );
+    const turnId = threadProtocolInternals.identifier(
+      params.turnId,
+      "protocol",
+    );
+    if (threadId !== this.threadId)
+      throw new CodexThreadProtocolError("forbidden");
+    if (!threadProtocolInternals.record(params.item)) return;
+    const item = params.item;
+    const v1SpawnStarted =
+      item.type === "collabAgentToolCall" &&
+      item.tool === "spawnAgent" &&
+      item.status === "inProgress" &&
+      item.senderThreadId === this.threadId &&
+      Array.isArray(item.receiverThreadIds) &&
+      item.receiverThreadIds.length > 0 &&
+      item.receiverThreadIds.length <= 8;
+    const v2SpawnStarted =
+      item.type === "subAgentActivity" &&
+      item.kind === "started" &&
+      typeof item.agentThreadId === "string" &&
+      /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u.test(item.agentThreadId);
+    if (!v1SpawnStarted && !v2SpawnStarted) return;
+    if (
+      (this.notifiedStartingTurnId && this.notifiedStartingTurnId !== turnId) ||
+      this.notifiedStartingTurnEnded ||
+      (!this.notifiedStartingTurnId &&
+        this.requireProjector().hasSeenTurn(turnId))
+    )
+      throw new CodexThreadProtocolError("protocol");
+    this.notifiedStartingTurnId = turnId;
   }
 
   assertActiveCorrelation(

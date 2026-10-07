@@ -16,7 +16,10 @@ import {
 import type { ProjectStage } from "../../packages/domain/src/project.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
-import { ProjectStore } from "../../packages/project-store/src/store.ts";
+import {
+  ProjectStore,
+  renameProjectDirectoryWithRetry,
+} from "../../packages/project-store/src/store.ts";
 
 async function fixture() {
   const base = resolve("test-results/project-store");
@@ -54,6 +57,51 @@ async function fixture() {
   const store = new ProjectStore(projects, library);
   return { root, source, library, media, projects, store };
 }
+test("Windows project publish retries transient rename locks within a fixed bound", async () => {
+  let attempts = 0;
+  await renameProjectDirectoryWithRetry(
+    async () => {
+      attempts++;
+      if (attempts < 3)
+        throw Object.assign(new Error("fixture lock"), { code: "EPERM" });
+    },
+    "staged-project",
+    "published-project",
+    "win32",
+    async () => {},
+  );
+  assert.equal(attempts, 3);
+
+  attempts = 0;
+  await assert.rejects(
+    renameProjectDirectoryWithRetry(
+      async () => {
+        attempts++;
+        throw Object.assign(new Error("fixture lock"), { code: "EPERM" });
+      },
+      "staged-project",
+      "published-project",
+      "win32",
+      async () => {},
+    ),
+  );
+  assert.equal(attempts, 6);
+
+  attempts = 0;
+  await assert.rejects(
+    renameProjectDirectoryWithRetry(
+      async () => {
+        attempts++;
+        throw Object.assign(new Error("unrelated"), { code: "EIO" });
+      },
+      "staged-project",
+      "published-project",
+      "linux",
+      async () => {},
+    ),
+  );
+  assert.equal(attempts, 1);
+});
 test("real initial project reopens and navigates all five stages without changing baseline or sources", async () => {
   const { source, library, media, projects, store } = await fixture();
   assert.deepEqual(await store.list(), []);

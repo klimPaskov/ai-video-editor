@@ -1,7 +1,11 @@
 import { CodexTransportError } from "./transport.ts";
 import type { ServerRequest } from "./transport.ts";
 import { CodexThreadProtocolError } from "./thread-protocol.ts";
-import type { ThreadRuntimePolicy, TurnStartInput } from "./thread-protocol.ts";
+import type {
+  NativeSubagentProtocol,
+  ThreadRuntimePolicy,
+  TurnStartInput,
+} from "./thread-protocol.ts";
 import type { ProjectThreadRegistry } from "./thread-registry.ts";
 import { ProjectThreadRuntime } from "./thread-runtime.ts";
 import type {
@@ -12,12 +16,18 @@ import {
   CODEX_EDITOR_NAMESPACE,
   decodeOwnedDynamicToolCall,
   invokeOwnedDynamicTool,
+  nativeChildReadOnlyToolNames,
   ownedDynamicToolWireNames,
 } from "./dynamic-tools.ts";
-import type { CodexVideoEditToolName } from "../../codex-tools/src/service.ts";
+import type { DynamicToolAccess } from "./dynamic-tools.ts";
+import {
+  CodexVideoEditToolError,
+  type CodexVideoEditToolName,
+} from "../../codex-tools/src/service.ts";
 
 const MAX_BUFFERED_NOTIFICATIONS = 64;
 const MAX_BUFFERED_NOTIFICATION_BYTES = 256 * 1024;
+const MAX_NATIVE_CHILDREN = 32;
 
 export interface ThreadRpc {
   request(method: string, params: unknown): Promise<unknown>;
@@ -31,9 +41,13 @@ export interface CodexProjectThreadClientOptions {
   registry: ProjectThreadRegistry;
   allowedMcpServer: string;
   allowedMcpTools: ReadonlySet<string>;
+  nativeSubagentProtocol?: NativeSubagentProtocol;
+  nativeSubagentModel?: string;
+  nativeSubagentReasoning?: string;
   dynamicToolInvoker?: (
     name: CodexVideoEditToolName,
     input: unknown,
+    access: DynamicToolAccess,
   ) => Promise<unknown>;
   onEvent?: (event: ThreadStreamEvent) => void;
   onHistory?: (history: ThreadHistorySnapshot) => void;
@@ -42,6 +56,22 @@ export interface CodexProjectThreadClientOptions {
 }
 
 type BufferedNotification = { method: string; params: unknown };
+
+type NativeChildState = {
+  parentTurnId: string;
+  spawnSeen: boolean;
+  activeTurnId?: string;
+  complete: boolean;
+};
+
+// A child can start before the parent's spawn item carries its receiver ID.
+// This bounded cache is only a candidate; it grants no tool access until a
+// server-owned parent spawn correlates the same thread and turn.
+type PendingNativeChildTurn = {
+  parentTurnId: string;
+  activeTurnId?: string;
+  complete: boolean;
+};
 
 function record(value: unknown): value is Record<string, unknown> {
   return (
@@ -72,6 +102,11 @@ export class CodexProjectThreadClient {
   private inFlight = false;
   private quarantined = false;
   private pending: BufferedNotification[] = [];
+  private readonly nativeChildren = new Map<string, NativeChildState>();
+  private readonly pendingNativeChildTurns = new Map<
+    string,
+    PendingNativeChildTurn
+  >();
 
   constructor(options: CodexProjectThreadClientOptions) {
     this.options = {
@@ -90,6 +125,15 @@ export class CodexProjectThreadClient {
       ...(options.dynamicToolInvoker
         ? {
             newThreadToolRoute: "dynamic",
+            nativeSubagentProtocol:
+              options.nativeSubagentProtocol ?? "disabled",
+            ...(options.nativeSubagentProtocol !== undefined &&
+            options.nativeSubagentProtocol !== "disabled"
+              ? {
+                  nativeSubagentModel: options.nativeSubagentModel!,
+                  nativeSubagentReasoning: options.nativeSubagentReasoning!,
+                }
+              : {}),
             allowedDynamicNamespace: CODEX_EDITOR_NAMESPACE,
             allowedDynamicTools: ownedDynamicToolWireNames(),
           }
@@ -138,6 +182,7 @@ export class CodexProjectThreadClient {
 
   async startTurn(input: TurnStartInput): Promise<void> {
     this.begin(true);
+    this.clearNativeChildren();
     let requestBuilt = false;
     try {
       const request = await this.runtime.turnStartRequest(input);
@@ -219,14 +264,23 @@ export class CodexProjectThreadClient {
       );
       this.runtime.acceptUnsubscribeResponse(response);
       this.pending = [];
+      this.clearNativeChildren();
       this.opened = false;
     } finally {
       this.inFlight = false;
     }
   }
 
+  activeThreadId(): string | undefined {
+    return this.runtime.activeThreadId();
+  }
+
   notification(method: string, params: unknown): void {
     if (this.quarantined) throw new CodexThreadProtocolError("forbidden");
+    if (method === "thread/started") {
+      // Parent spawn items, not thread broadcasts, authorize child lineage.
+      return;
+    }
     // Native child threads share this app-server transport. Their ordinary
     // stream belongs to the child, never to the active project projection.
     if (
@@ -237,8 +291,10 @@ export class CodexProjectThreadClient {
         method === "item/agentMessage/delta" ||
         method === "error") &&
       this.runtime.isOtherThreadNotification(params)
-    )
+    ) {
+      this.observeChildTurn(method, params);
       return;
+    }
     if (this.inFlight) {
       if (
         this.pending.length >= MAX_BUFFERED_NOTIFICATIONS ||
@@ -249,6 +305,10 @@ export class CodexProjectThreadClient {
       }
       try {
         this.runtime.noteBufferedTurnNotification(method, params);
+        this.runtime.noteBufferedParentSpawn(method, params);
+        // Keep authoritative parent spawn lineage even when the App Server
+        // streams it before the turn/start response resolves.
+        this.observeParentSpawn(method, params);
       } catch (error) {
         this.quarantine();
         throw error;
@@ -257,7 +317,10 @@ export class CodexProjectThreadClient {
       return;
     }
     if (!this.opened) throw new CodexThreadProtocolError("configuration");
-    this.emit(this.runtime.notification(method, params));
+    const event = this.runtime.notification(method, params);
+    this.observeParentSpawn(method, params);
+    if (event?.type === "turn_terminal") this.clearNativeChildren();
+    this.emit(event);
   }
 
   serverRequest(request: ServerRequest): unknown {
@@ -275,9 +338,41 @@ export class CodexProjectThreadClient {
       }
       try {
         const call = decodeOwnedDynamicToolCall(params);
-        // A host edit cannot commit before the current turn ID is authoritative.
-        this.runtime.assertActiveCorrelation(params, false, false);
-        return invokeOwnedDynamicTool(call, this.options.dynamicToolInvoker);
+        const parentThreadId = this.runtime.activeThreadId();
+        const parentTurnId = this.runtime.notificationTurnId();
+        if (!parentThreadId) {
+          throw new CodexThreadProtocolError("forbidden");
+        }
+        let access: DynamicToolAccess = "project_editor";
+        if (call.threadId === parentThreadId) {
+          // A host edit cannot commit before the current turn ID is authoritative.
+          this.runtime.assertActiveCorrelation(params, false, false);
+        } else {
+          if (!parentTurnId) throw new CodexThreadProtocolError("forbidden");
+          const child = this.nativeChildren.get(call.threadId);
+          if (
+            !child ||
+            child.parentTurnId !== parentTurnId ||
+            !child.spawnSeen ||
+            child.activeTurnId !== call.turnId ||
+            child.complete
+          ) {
+            throw new CodexThreadProtocolError("forbidden");
+          }
+          access = "native_child_read_only";
+          if (!nativeChildReadOnlyToolNames.has(call.name)) {
+            return invokeOwnedDynamicTool(
+              call,
+              async () => {
+                throw new CodexVideoEditToolError("tool_not_available");
+              },
+              access,
+            );
+          }
+        }
+        return invokeOwnedDynamicTool(call, (name, input) =>
+          this.options.dynamicToolInvoker!(name, input, access),
+        );
       } catch (error) {
         this.quarantine();
         throw error;
@@ -322,6 +417,7 @@ export class CodexProjectThreadClient {
 
   disconnect(): void {
     this.pending = [];
+    this.clearNativeChildren();
     this.inFlight = false;
     const opened = this.opened;
     this.opened = false;
@@ -350,9 +446,162 @@ export class CodexProjectThreadClient {
   private flush(): void {
     while (this.pending.length) {
       const notification = this.pending.shift()!;
-      this.emit(
-        this.runtime.notification(notification.method, notification.params),
+      const event = this.runtime.notification(
+        notification.method,
+        notification.params,
       );
+      this.observeParentSpawn(notification.method, notification.params);
+      if (event?.type === "turn_terminal") this.clearNativeChildren();
+      this.emit(event);
+    }
+  }
+
+  private observeParentSpawn(method: string, params: unknown): void {
+    if (
+      (method !== "item/started" && method !== "item/completed") ||
+      !record(params) ||
+      !record(params.item)
+    ) {
+      return;
+    }
+    const parentThreadId = this.runtime.activeThreadId();
+    const parentTurnId = this.runtime.notificationTurnId();
+    const item = params.item;
+    const isParentItem = params.threadId === parentThreadId;
+    const itemTurnId = params.turnId;
+    const spawnStarted =
+      method === "item/started" && item.status === "inProgress";
+    const spawnCompleted =
+      method === "item/completed" && item.status === "completed";
+    if (
+      !parentThreadId ||
+      !parentTurnId ||
+      !isParentItem ||
+      itemTurnId !== parentTurnId
+    ) {
+      return;
+    }
+    const v1Spawn =
+      item.type === "collabAgentToolCall" &&
+      item.tool === "spawnAgent" &&
+      item.senderThreadId === parentThreadId &&
+      (spawnStarted || spawnCompleted) &&
+      Array.isArray(item.receiverThreadIds) &&
+      item.receiverThreadIds.length > 0 &&
+      item.receiverThreadIds.length <= 8;
+    const v2SpawnStarted =
+      method === "item/started" &&
+      item.type === "subAgentActivity" &&
+      item.kind === "started";
+    if (!v1Spawn && !v2SpawnStarted) return;
+    const childIds = v1Spawn
+      ? (item.receiverThreadIds as unknown[])
+      : [item.agentThreadId];
+    for (const childId of childIds) {
+      if (
+        typeof childId === "string" &&
+        /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u.test(childId)
+      ) {
+        const existing = this.nativeChildren.get(childId);
+        if (existing && existing.parentTurnId !== parentTurnId) continue;
+        const childLimit = v2SpawnStarted ? 1 : MAX_NATIVE_CHILDREN;
+        if (!existing && this.nativeChildren.size >= childLimit) continue;
+        const child: NativeChildState = existing ?? {
+          parentTurnId,
+          spawnSeen: false,
+          complete: false,
+        };
+        child.spawnSeen = true;
+        child.complete = false;
+        const pendingTurn = this.pendingNativeChildTurns.get(childId);
+        if (pendingTurn?.parentTurnId === parentTurnId) {
+          if (pendingTurn.activeTurnId !== undefined)
+            child.activeTurnId = pendingTurn.activeTurnId;
+          child.complete = pendingTurn.complete;
+        }
+        this.nativeChildren.set(childId, child);
+        this.pendingNativeChildTurns.delete(childId);
+      }
+    }
+  }
+
+  private clearNativeChildren(): void {
+    this.nativeChildren.clear();
+    this.pendingNativeChildTurns.clear();
+  }
+
+  private observeChildTurn(method: string, params: unknown): void {
+    if (method !== "turn/started" && method !== "turn/completed") return;
+    if (!record(params)) return;
+    const threadId = params.threadId;
+    const parentTurnId = this.runtime.notificationTurnId();
+    if (
+      typeof threadId !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u.test(threadId)
+    )
+      return;
+    const child = this.nativeChildren.get(threadId);
+    const turn = params.turn;
+    if (
+      !record(turn) ||
+      typeof turn.id !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u.test(turn.id)
+    ) {
+      throw new CodexThreadProtocolError("protocol");
+    }
+    if (method === "turn/started") {
+      if (turn.status !== "inProgress") {
+        throw new CodexThreadProtocolError("protocol");
+      }
+      if (!child || !parentTurnId || child.parentTurnId !== parentTurnId) {
+        if (!parentTurnId) return;
+        const pending = this.pendingNativeChildTurns.get(threadId);
+        if (
+          (pending && pending.parentTurnId !== parentTurnId) ||
+          (pending?.activeTurnId &&
+            pending.activeTurnId !== turn.id &&
+            !pending.complete)
+        ) {
+          throw new CodexThreadProtocolError("protocol");
+        }
+        if (
+          !pending &&
+          this.pendingNativeChildTurns.size >= MAX_NATIVE_CHILDREN
+        )
+          return;
+        this.pendingNativeChildTurns.set(threadId, {
+          parentTurnId,
+          activeTurnId: turn.id,
+          complete: false,
+        });
+        return;
+      }
+      if (child.activeTurnId && !child.complete) {
+        throw new CodexThreadProtocolError("protocol");
+      }
+      child.activeTurnId = turn.id;
+      child.complete = false;
+      return;
+    }
+    if (method === "turn/completed" && turn.status !== "inProgress") {
+      if (
+        child &&
+        parentTurnId &&
+        child.parentTurnId === parentTurnId &&
+        child.activeTurnId === turn.id
+      ) {
+        child.complete = true;
+        return;
+      }
+      const pending = this.pendingNativeChildTurns.get(threadId);
+      if (
+        pending &&
+        parentTurnId &&
+        pending.parentTurnId === parentTurnId &&
+        pending.activeTurnId === turn.id
+      ) {
+        pending.complete = true;
+      }
     }
   }
 

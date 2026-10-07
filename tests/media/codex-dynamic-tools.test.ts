@@ -26,8 +26,9 @@ function outputText(response: DynamicToolCallResponse): string {
   return item.text;
 }
 
-test("host-defined namespace exposes exactly the reviewed seven guarded schemas", () => {
-  const specs = buildCodexVideoEditDynamicTools();
+test("host-defined namespace exposes exactly the reviewed nine guarded schemas", () => {
+  const projectId = "project-1";
+  const specs = buildCodexVideoEditDynamicTools(projectId);
   assert.equal(specs.length, 1);
   const namespace = specs[0]!;
   assert.equal(namespace.type, "namespace");
@@ -43,18 +44,29 @@ test("host-defined namespace exposes exactly the reviewed seven guarded schemas"
       "cut_delete_range",
       "timeline_undo",
       "cut_delete_ranges",
+      "cut_restore_range",
+      "transcript_get_range",
     ],
   );
   for (const [index, tool] of namespace.tools.entries()) {
-    assert.deepEqual(
-      tool.inputSchema,
-      codexVideoEditMcpTools[index]!.inputSchema,
-    );
+    const normalized = structuredClone(tool.inputSchema) as {
+      properties: Record<string, Record<string, unknown>>;
+    };
+    assert.equal(normalized.properties.project_id?.const, projectId);
+    delete normalized.properties.project_id.const;
+    assert.deepEqual(normalized, codexVideoEditMcpTools[index]!.inputSchema);
     assert.equal(tool.description, codexVideoEditMcpTools[index]!.description);
   }
+  assert.throws(
+    () => buildCodexVideoEditDynamicTools("../other-project"),
+    (error: unknown) =>
+      error instanceof CodexThreadProtocolError &&
+      error.code === "configuration",
+  );
   namespace.tools[0]!.name = "tampered";
   assert.equal(
-    (buildCodexVideoEditDynamicTools()[0] as typeof namespace).tools[0]!.name,
+    (buildCodexVideoEditDynamicTools(projectId)[0] as typeof namespace)
+      .tools[0]!.name,
     "project_get_summary",
   );
 });

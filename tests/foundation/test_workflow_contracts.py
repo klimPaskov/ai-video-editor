@@ -64,11 +64,13 @@ class WorkflowContractsTests(unittest.TestCase):
                     [
                         "project.get_summary",
                         "timeline.get_summary",
+                        "transcript.get_range",
                         "cut.trim_edge",
                         "cut.split",
                         "cut.delete_range",
                         "cut.delete_ranges",
                         "timeline.undo",
+                        "cut.restore_range",
                     ],
                 )
                 self.assertNotIn("export.prepare", by_name)

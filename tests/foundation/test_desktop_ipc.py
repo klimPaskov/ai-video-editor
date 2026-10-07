@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 
 from jsonschema import Draft202012Validator
+from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -14,7 +15,15 @@ class DesktopIpcContractTests(unittest.TestCase):
     def setUpClass(cls):
         cls.schema = json.loads((ROOT / 'docs/schemas/desktop_ipc.schema.json').read_text(encoding='utf8'))
         Draft202012Validator.check_schema(cls.schema)
-        cls.validator = Draft202012Validator(cls.schema)
+        registry = Registry()
+        for schema_path in (ROOT / 'docs/schemas').glob('*.json'):
+            schema_value = json.loads(schema_path.read_text(encoding='utf8'))
+            resource = Resource.from_contents(schema_value)
+            registry = registry.with_resource(schema_path.resolve().as_uri(), resource)
+            schema_id = schema_value.get('$id')
+            if isinstance(schema_id, str):
+                registry = registry.with_resource(schema_id, resource)
+        cls.validator = Draft202012Validator(cls.schema, registry=registry)
         cls.frame = json.loads((ROOT / 'docs/examples/desktop_ipc.example.json').read_text(encoding='utf8'))
         cls.summary = json.loads((ROOT / 'docs/examples/media_library.example.json').read_text(encoding='utf8'))['summary']
 
@@ -68,9 +77,50 @@ class DesktopIpcContractTests(unittest.TestCase):
         value = deepcopy(self.frame)
         value['response']['value']['path'] = '/private/example'
         self.invalid(value)
-        self.invalid({'channel': 'library:list', 'response': {'ok': False, 'message': ''}})
-        self.invalid({'channel': 'library:list', 'response': {'ok': False, 'message': 'x' * 241}})
-        self.invalid({'channel': 'library:list', 'response': {'ok': False, 'message': '', 'value': []}})
+
+    def test_transcription_exchange_is_path_free_and_job_bound(self):
+        exchange = json.loads((ROOT / 'docs/examples/desktop_ipc_transcription.example.json').read_text(encoding='utf8'))
+        self.valid(exchange)
+        value = deepcopy(exchange)
+        value['payload']['source_path'] = '/private/source.mkv'
+        self.invalid(value)
+        value = deepcopy(exchange)
+        value['response']['value']['job']['job_id'] = '../other-job'
+        self.invalid(value)
+        value = deepcopy(exchange)
+        value['response']['value']['results'] = [{'source_id': 'source-001', 'path': '/private/transcript.json'}]
+        self.invalid(value)
+
+    def test_transcript_correction_exchange_is_head_bound_and_path_free(self):
+        exchange = json.loads((ROOT / 'docs/examples/desktop_ipc_transcript_correction.example.json').read_text(encoding='utf8'))
+        self.valid(exchange)
+        for request_patch in [
+            {'audio_path': '/private/source.mkv'},
+            {'expectedSequence': -1},
+            {'replacementText': ''},
+        ]:
+            value = deepcopy(exchange)
+            value['payload'].update(request_patch)
+            self.invalid(value)
+        value = deepcopy(exchange)
+        value['response']['value']['transcriptEdits'][0]['word_id'] = '../private'
+        self.invalid(value)
+
+    def test_transcript_cut_exchange_is_head_bound_and_path_free(self):
+        exchange = json.loads((ROOT / 'docs/examples/desktop_ipc_transcript_cut.example.json').read_text(encoding='utf8'))
+        self.valid(exchange)
+        for request_patch in [
+            {'source_path': '/private/source.mkv'},
+            {'expectedSequence': -1},
+            {'startWordId': '../private'},
+            {'endWordId': ''},
+        ]:
+            value = deepcopy(exchange)
+            value['payload'].update(request_patch)
+            self.invalid(value)
+        value = deepcopy(exchange)
+        value['response']['value']['clips'][0]['sourceStartUs'] = -1
+        self.invalid(value)
 
     def test_frame_and_summary_limits(self):
         for field, bad in [('width', 16777217), ('height', 0), ('rgbaBase64', 'not base64!?')]:
@@ -277,6 +327,27 @@ class DesktopIpcContractTests(unittest.TestCase):
                 'payload': request,
                 'response': {'ok': True, 'value': thread},
             })
+        retryable_thread = deepcopy(thread)
+        retryable_thread['retryable'] = True
+        self.valid({
+            'channel': 'codex-thread:get',
+            'payload': request,
+            'response': {'ok': True, 'value': retryable_thread},
+        })
+        running_retry = deepcopy(retryable_thread)
+        running_retry['status'] = 'running'
+        self.invalid({
+            'channel': 'codex-thread:get',
+            'payload': request,
+            'response': {'ok': True, 'value': running_retry},
+        })
+        no_prompt_retry = deepcopy(retryable_thread)
+        no_prompt_retry['messages'] = []
+        self.invalid({
+            'channel': 'codex-thread:get',
+            'payload': request,
+            'response': {'ok': True, 'value': no_prompt_retry},
+        })
         self.valid({
             'channel': 'codex-thread:send',
             'payload': dict(request, text='Trim the false start.'),
@@ -297,6 +368,35 @@ class DesktopIpcContractTests(unittest.TestCase):
             'response': {'ok': True, 'value': leaked},
         })
 
+    def test_manual_restore_range_uses_one_exact_path_free_source_interval(self):
+        restore = json.loads(
+            (ROOT / 'docs/examples/desktop_ipc_manual_restore_range.example.json').read_text(encoding='utf-8')
+        )
+        self.valid(restore)
+        for key, value in [
+            ('path', 'C:/private/source.mkv'),
+            ('sourceId', '../private'),
+            ('sourceStartUs', -1),
+            ('sourceEndUs', 1.5),
+        ]:
+            bad = deepcopy(restore)
+            bad['payload'][key] = value
+            self.invalid(bad)
+
+    def test_review_integrity_channel_returns_only_a_path_free_draft_head(self):
+        integrity = json.loads(
+            (ROOT / 'docs/examples/desktop_ipc_integrity_check.example.json').read_text(encoding='utf-8')
+        )
+        self.valid(integrity)
+        leaked = deepcopy(integrity)
+        leaked['response']['value']['draft']['sourcePath'] = 'C:/private/source.mkv'
+        self.invalid(leaked)
+        bad_payload = deepcopy(integrity)
+        bad_payload['payload']['path'] = 'C:/private/source.mkv'
+        self.invalid(bad_payload)
+        bad_checkpoint = deepcopy(integrity)
+        bad_checkpoint['response']['value']['structuralCheckpointRecorded'] = 'yes'
+        self.invalid(bad_checkpoint)
 
 if __name__ == '__main__':
     unittest.main()

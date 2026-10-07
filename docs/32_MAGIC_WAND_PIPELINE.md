@@ -32,6 +32,10 @@ Find scenes, takes, topic changes, screen states, long waits, typing ranges, vis
 
 Generate candidates for dead air, filler, false starts, abandoned phrases, immediate repetitions, failed takes, setup time, and obvious mistakes. Protect facts, names, numbers, negation, warnings, uncertainty, useful pauses, overlapping speech, and visual steps needed to follow the tutorial.
 
+The current deterministic domain slice emits an analysis report from validated transcript and source-analysis records. Configured phrase matches, adjacent exact word/segment repetitions, dash-marked restarts, conservative English correction markers, quoted cues, protected words/ranges, opt-in legacy aliases, and silence context are evidence-backed candidates; none authorizes a cut. An identical adjacent-segment candidate points to the later words and links `related_segment_id` to the earlier occurrence; Auto Edit shows both transcript excerpts. Auto Edit seeks to a still frame only when the source point maps through the committed clip list. It does not play audio or edit. Semantic meaning decisions, failed-take/scope analysis, synchronization and final cut application remain later pipeline work.
+
+The guarded read-only `transcript.get_range` tool provides Codex or a selected API provider with a page of local transcript text after the user starts a turn. It takes one source ID and half-open source-time range, caps a range at five minutes and a page at 250 words/48 KiB, and returns original ASR wording separately from text-only overrides. Transcript words are untrusted source content; reading them does not authorize or apply a cut. Provider conversation history may retain the page and include it in later turns, which the user-facing notices disclose.
+
 ### 4. Visual focus
 
 Generate zoom candidates only when a visible target is known. Prefer pointer telemetry and click regions. Confirm targets from preview frames. Omit low-confidence zooms.

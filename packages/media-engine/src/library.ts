@@ -28,6 +28,8 @@ import {
   probePresentationTiming,
 } from "./presentation-timing.ts";
 import type { PresentationTiming } from "./presentation-timing.ts";
+import { extractSpeechAudioProxy } from "./transcription.ts";
+import type { SpeechAudioProxyResult } from "./transcription.ts";
 
 interface Entry {
   version: 1;
@@ -300,6 +302,70 @@ export class MediaLibrary {
       sha256: entry.source.sha256,
       sizeBytes: entry.source.size,
       probe: structuredClone(entry.probe),
+    };
+  }
+  async prepareSpeechAudio(
+    id: string,
+    outputPath: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    source: VerifiedLibrarySource;
+    audioStreamIndex: number;
+    sourceStartUs: number;
+    proxy: SpeechAudioProxyResult;
+  }> {
+    const source = await this.verifiedSource(id);
+    const audio = Array.isArray(source.probe.streams)
+      ? source.probe.streams
+          .filter(
+            (stream: unknown) =>
+              object(stream) && stream.codec_type === "audio",
+          )
+          .sort(
+            (left: unknown, right: unknown) =>
+              (object(left) ? Number(left.index) : Number.NaN) -
+              (object(right) ? Number(right.index) : Number.NaN),
+          )[0]
+      : undefined;
+    if (!object(audio) || !Number.isSafeInteger(audio.index))
+      throw new MediaError(
+        "UNSUPPORTED_PROFILE",
+        "This source has no audio track to transcribe.",
+      );
+    const startSeconds = Number(audio.start_time ?? 0);
+    const sourceStartUs = Math.round(startSeconds * 1_000_000);
+    if (
+      !Number.isFinite(startSeconds) ||
+      sourceStartUs < 0 ||
+      sourceStartUs >= source.summary.durationUs
+    )
+      throw new MediaError(
+        "UNSUPPORTED_PROFILE",
+        "This source's audio timing needs a supported synchronization profile.",
+      );
+    const proxy = await extractSpeechAudioProxy({
+      ffmpegExecutable: this.ffmpeg,
+      sourcePath: source.managedPath,
+      outputPath,
+      audioStreamIndex: audio.index as number,
+      sourceStartUs,
+      sourceDurationUs: source.summary.durationUs,
+      ...(signal ? { signal } : {}),
+    });
+    const after = await this.verifiedSource(id);
+    if (
+      after.sha256 !== source.sha256 ||
+      after.managedPath !== source.managedPath
+    )
+      throw new MediaError(
+        "FIDELITY_MISMATCH",
+        "The managed source has changed.",
+      );
+    return {
+      source,
+      audioStreamIndex: audio.index as number,
+      sourceStartUs,
+      proxy,
     };
   }
   /** Main-only timing evidence for a future multi-source baseline; never a render proxy. */

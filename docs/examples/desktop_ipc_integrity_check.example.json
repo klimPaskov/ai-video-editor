@@ -1,0 +1,41 @@
+{
+  "channel": "projects:verify-draft-integrity",
+  "payload": {
+    "id": "ec68bd7a-79eb-4a96-9475-4db15df75d3a"
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "draft": {
+        "projectId": "ec68bd7a-79eb-4a96-9475-4db15df75d3a",
+        "draft": {
+          "id": "draft-bfddc982-903a-4570-8efc-27dc381b98b6",
+          "baseRevisionId": "a647be34-c87d-44eb-82fb-70d6afcbdc31",
+          "sequence": 1,
+          "timelineSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "undoTransactionId": "manual-transaction-1",
+          "redoTransactionId": null
+        },
+        "timeline": {
+          "id": "d0d743dc-b2af-4a60-8dd9-3cb7644a7ba4",
+          "durationUs": 1500000,
+          "frameRate": {
+            "numerator": 60,
+            "denominator": 1
+          }
+        },
+        "clips": [
+          {
+            "id": "8ae27d25-c778-4d2c-9678-6be65c0ca717",
+            "sourceId": "d81632fb-4cde-4d40-a75d-679e22c15f2a",
+            "timelineStartUs": 0,
+            "timelineEndUs": 1500000,
+            "sourceStartUs": 500000,
+            "sourceEndUs": 2000000
+          }
+        ]
+      },
+      "structuralCheckpointRecorded": true
+    }
+  }
+}

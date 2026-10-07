@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "project_id": "project-demo-001",
+  "source_id": "source-mic-001",
+  "source_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "duration_us": 62000000,
+  "silence_policy": {
+    "version": "1",
+    "noise_db": -40,
+    "minimum_duration_us": 250000
+  },
+  "silences": [
+    { "start_us": 0, "end_us": 420000 },
+    { "start_us": 18600000, "end_us": 19500000 }
+  ]
+}

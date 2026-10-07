@@ -1,0 +1,24 @@
+{
+  "channel": "transcription:start",
+  "payload": {
+    "schema_version": "1.0",
+    "project_id": "550e8400-e29b-41d4-a716-446655440000"
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "project_id": "550e8400-e29b-41d4-a716-446655440000",
+      "job": {
+        "project_id": "550e8400-e29b-41d4-a716-446655440000",
+        "job_id": "transcription-550e8400-e29b-41d4-a716-446655440001",
+        "status": "downloading_model",
+        "progress_percent": 12,
+        "source_count": 1,
+        "completed_source_count": 0,
+        "word_count": 0,
+        "message": "Downloading the local speech model."
+      },
+      "results": []
+    }
+  }
+}

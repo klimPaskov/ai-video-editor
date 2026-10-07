@@ -49,7 +49,7 @@ assert.ok(
 
 const policy = {
   cwd,
-  model: "gpt-5.6-luna",
+  model: "gpt-6-luna",
   effort: "high",
   baseInstructions:
     "You are in a local video editor. Use only the application-owned codex_video_edit tools. Do not use files, shell, network, apps, or other tools.",
@@ -157,8 +157,11 @@ try {
   );
   phase = "thread-start";
   const response = (await transport.request("thread/start", {
-    ...buildThreadStartRequest(policy),
-    dynamicTools: buildCodexVideoEditDynamicTools(),
+    ...buildThreadStartRequest(policy, {
+      route: "dynamic",
+      nativeSubagentProtocol: "disabled",
+    }),
+    dynamicTools: buildCodexVideoEditDynamicTools("fixture-project"),
   })) as { thread?: { id?: string } };
   assert.ok(response.thread?.id);
   threadId = response.thread.id;

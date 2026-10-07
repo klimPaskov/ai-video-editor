@@ -2,6 +2,8 @@ import type {
   InitialProjectSnapshot,
   TwoSourceInitialProjectSnapshot,
 } from "./project.ts";
+import { assertTranscriptTextOverrides } from "./transcription.ts";
+import type { TranscriptTextOverride } from "./transcription.ts";
 type ProjectBaseline = InitialProjectSnapshot | TwoSourceInitialProjectSnapshot;
 import {
   canonicalSha256,
@@ -9,7 +11,9 @@ import {
   timelineSha256,
 } from "./project.ts";
 
-export type DraftTimeline = InitialProjectSnapshot["timeline"];
+export type DraftTimeline = InitialProjectSnapshot["timeline"] & {
+  transcript_edits?: TranscriptTextOverride[];
+};
 export type DraftOrigin = "manual" | "codex" | "api_provider" | "magic_wand";
 export type DraftPassKind =
   | "manual"
@@ -46,8 +50,42 @@ export interface RippleDeleteIntent {
   end_us: number;
 }
 
+export interface RestoreRangeIntent {
+  type: "restore_range";
+  source_id: string;
+  source_start_us: number;
+  source_end_us: number;
+}
+
+export interface TranscriptEditIntent {
+  type: "transcript_edit";
+  source_id: string;
+  transcript_id: string;
+  word_id: string;
+  original_text: string;
+  expected_text: string;
+  replacement_text: string;
+}
+
+export interface TranscriptCutIntent {
+  type: "transcript_cut";
+  source_id: string;
+  transcript_id: string;
+  start_word_id: string;
+  end_word_id: string;
+  source_start_us: number;
+  source_end_us: number;
+  start_us: number;
+  end_us: number;
+}
+
 export type DraftEditIntent =
-  TrimEdgeIntent | SplitClipIntent | RippleDeleteIntent;
+  | TrimEdgeIntent
+  | SplitClipIntent
+  | RippleDeleteIntent
+  | RestoreRangeIntent
+  | TranscriptEditIntent
+  | TranscriptCutIntent;
 
 /** Untrusted callers provide intent and freshness only. Authority is injected by the adapter. */
 export interface ApplyDraftTransactionRequest {
@@ -159,8 +197,69 @@ export interface RippleDeleteOperationRecord {
   };
 }
 
+export interface RestoreRangeOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "restore";
+  source_id: string;
+  source_start_us: number;
+  source_end_us: number;
+  before: DraftTimeline["clips"];
+  after: DraftTimeline["clips"];
+  inverse: {
+    type: "restore_timeline_clips";
+    clips: DraftTimeline["clips"];
+    expected_after_sha256: string;
+  };
+}
+
+export interface TranscriptEditOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "transcript_edit";
+  source_id: string;
+  transcript_id: string;
+  word_id: string;
+  original_text: string;
+  before_text: string;
+  after_text: string;
+  before: TranscriptTextOverride[];
+  after: TranscriptTextOverride[];
+  inverse: {
+    type: "restore_transcript_edits";
+    edits: TranscriptTextOverride[];
+    expected_after_sha256: string;
+  };
+}
+
+export interface TranscriptCutOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "transcript_cut";
+  source_id: string;
+  transcript_id: string;
+  start_word_id: string;
+  end_word_id: string;
+  source_start_us: number;
+  source_end_us: number;
+  start_us: number;
+  end_us: number;
+  before: DraftTimeline["clips"];
+  after: DraftTimeline["clips"];
+  inverse: {
+    type: "restore_timeline_clips";
+    clips: DraftTimeline["clips"];
+    expected_after_sha256: string;
+  };
+}
+
 export type DraftOperationRecord =
-  TrimOperationRecord | SplitOperationRecord | RippleDeleteOperationRecord;
+  | TrimOperationRecord
+  | SplitOperationRecord
+  | RippleDeleteOperationRecord
+  | RestoreRangeOperationRecord
+  | TranscriptEditOperationRecord
+  | TranscriptCutOperationRecord;
 
 export interface DraftTransactionRecord {
   schema_version: "1.0";
@@ -247,6 +346,27 @@ function exact(
     invalid();
 }
 
+function exactOptional(
+  value: unknown,
+  required: readonly string[],
+  optional: readonly string[],
+): asserts value is Record<string, unknown> {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype ||
+    Object.getOwnPropertySymbols(value).length
+  )
+    invalid();
+  const keys = Object.keys(value);
+  if (
+    required.some((key) => !Object.hasOwn(value, key)) ||
+    keys.some((key) => !required.includes(key) && !optional.includes(key))
+  )
+    invalid();
+}
+
 function id(value: unknown): asserts value is string {
   if (typeof value !== "string" || !idPattern.test(value)) invalid();
 }
@@ -274,6 +394,16 @@ function prose(value: unknown): asserts value is string {
     invalid();
 }
 
+function transcriptText(value: unknown): asserts value is string {
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.length > 200 ||
+    /[\u0000-\u001f\u007f]/u.test(value)
+  )
+    invalid();
+}
+
 function passGroup(value: unknown): asserts value is DraftPassGroup {
   exact(value, ["pass_group_id", "kind"]);
   id(value.pass_group_id);
@@ -287,7 +417,11 @@ function verificationCheck(
   id(value.check_id);
   if (value.status !== "pass") invalid();
   prose(value.method);
-  if (!Array.isArray(value.evidence_ids) || value.evidence_ids.length > 64)
+  if (
+    !Array.isArray(value.evidence_ids) ||
+    value.evidence_ids.length < 1 ||
+    value.evidence_ids.length > 64
+  )
     invalid();
   for (const evidenceId of value.evidence_ids) id(evidenceId);
   if (new Set(value.evidence_ids).size !== value.evidence_ids.length) invalid();
@@ -324,21 +458,30 @@ export function assertDraftTimeline(
   value: unknown,
   baseline: DraftTimeline,
 ): asserts value is DraftTimeline {
-  exact(value, [
-    "schema_version",
-    "timeline_id",
-    "project_id",
-    "revision_id",
-    "duration_us",
-    "frame_rate",
-    "canvas",
-    "tracks",
-    "clips",
-    "operation_ids",
-    "zoom_ids",
-    "speed_ids",
-    "created_at",
-  ]);
+  exactOptional(
+    value,
+    [
+      "schema_version",
+      "timeline_id",
+      "project_id",
+      "revision_id",
+      "duration_us",
+      "frame_rate",
+      "canvas",
+      "tracks",
+      "clips",
+      "operation_ids",
+      "zoom_ids",
+      "speed_ids",
+      "created_at",
+    ],
+    ["transcript_edits"],
+  );
+  if (Object.hasOwn(value, "transcript_edits"))
+    assertTranscriptTextOverrides(
+      value.transcript_edits,
+      baseline.clips.map((clip) => clip.source_id),
+    );
   if (
     value.schema_version !== "1.0" ||
     value.timeline_id !== baseline.timeline_id ||
@@ -472,6 +615,68 @@ export function assertApplyDraftTransactionRequest(
   const clips = new Set<string>();
   let previousRangeStart: number | null = null;
   for (const operation of value.operations) {
+    if (operation?.type === "transcript_cut") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, [
+        "type",
+        "source_id",
+        "transcript_id",
+        "start_word_id",
+        "end_word_id",
+        "source_start_us",
+        "source_end_us",
+        "start_us",
+        "end_us",
+      ]);
+      id(operation.source_id);
+      id(operation.transcript_id);
+      id(operation.start_word_id);
+      id(operation.end_word_id);
+      integer(operation.source_start_us);
+      integer(operation.source_end_us, 1);
+      integer(operation.start_us);
+      integer(operation.end_us, 1);
+      if (
+        operation.source_start_us >= operation.source_end_us ||
+        operation.start_us >= operation.end_us
+      )
+        invalid();
+      continue;
+    }
+    if (operation?.type === "transcript_edit") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, [
+        "type",
+        "source_id",
+        "transcript_id",
+        "word_id",
+        "original_text",
+        "expected_text",
+        "replacement_text",
+      ]);
+      id(operation.source_id);
+      id(operation.transcript_id);
+      id(operation.word_id);
+      transcriptText(operation.original_text);
+      transcriptText(operation.expected_text);
+      transcriptText(operation.replacement_text);
+      if (operation.expected_text === operation.replacement_text) invalid();
+      continue;
+    }
+    if (operation?.type === "restore_range") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, [
+        "type",
+        "source_id",
+        "source_start_us",
+        "source_end_us",
+      ]);
+      id(operation.source_id);
+      integer(operation.source_start_us);
+      integer(operation.source_end_us, 1);
+      if (operation.source_start_us >= operation.source_end_us) invalid();
+      continue;
+    }
     if (operation?.type === "ripple_delete") {
       exact(operation, ["type", "start_us", "end_us"]);
       integer(operation.start_us);
@@ -486,7 +691,10 @@ export function assertApplyDraftTransactionRequest(
     }
     if (
       previousRangeStart !== null ||
-      value.operations.some((item) => item?.type === "ripple_delete")
+      value.operations.some(
+        (item) =>
+          item?.type === "ripple_delete" || item?.type === "restore_range",
+      )
     )
       invalid();
     exact(

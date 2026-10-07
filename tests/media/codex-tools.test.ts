@@ -9,6 +9,7 @@ import {
 } from "../../packages/codex-tools/src/service.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
+import type { TranscriptionProjectView } from "../../packages/domain/src/transcription.ts";
 import { ProjectStore } from "../../packages/project-store/src/store.ts";
 import {
   DraftTransactionStore,
@@ -110,6 +111,27 @@ function rangeInput(
     reason: "Remove the selected false start while preserving the source.",
     start_us: 200_000,
     end_us: 600_000,
+  };
+}
+
+function restoreInput(
+  draft: Awaited<ReturnType<DraftTransactionStore["snapshot"]>>["draft"],
+  sourceId = draft.timeline.clips[0]!.source_id,
+) {
+  return {
+    schema_version: "1.0",
+    request_id: "codex-restore-request-001",
+    project_id: draft.project_id,
+    draft_id: draft.draft_id,
+    base_revision_id: draft.base_revision_id,
+    expected_sequence: draft.draft_sequence,
+    expected_timeline_sha256: draft.timeline_sha256,
+    pass_group_id: "codex-spoken-cut-001",
+    reason:
+      "Restore the reviewed source interval that is missing from the cut.",
+    source_id: sourceId,
+    source_start_us: 200_000,
+    source_end_us: 400_000,
   };
 }
 
@@ -564,6 +586,153 @@ test("guarded range batch is one reversible commit and rejects unsafe order", as
   assert.equal(undone.draft.draft_sequence, 2);
 });
 
+test("guarded restore_range uses source coordinates, exact freshness, and the shared journal", async () => {
+  const { active, source, projectsRoot, drafts, service } = await fixture();
+  const baselinePath = join(
+    projectsRoot,
+    active.project.project_id,
+    "baseline.json",
+  );
+  const [sourceBytes, baselineBytes] = await Promise.all([
+    readFile(source),
+    readFile(baselinePath),
+  ]);
+  const initial = (await drafts.snapshot(active.project.project_id)).draft;
+  const cut = (await service.invoke("cut.delete_range", {
+    ...rangeInput(initial),
+    start_us: 200_000,
+    end_us: 400_000,
+  })) as { draft: { draft_sequence: number; timeline_sha256: string } };
+  const cutDraft = (await drafts.snapshot(active.project.project_id)).draft;
+  assert.equal(cut.draft.draft_sequence, 1);
+  assert.equal(cutDraft.timeline_sha256, cut.draft.timeline_sha256);
+  const input = restoreInput(cutDraft);
+  await assert.rejects(
+    service.invoke("cut.restore_range", {
+      ...input,
+      source_start_us: 0,
+      source_end_us: 200_000,
+    }),
+    expectCode("edit_conflict"),
+  );
+  assert.equal(
+    (await drafts.snapshot(active.project.project_id)).draft.draft_sequence,
+    1,
+  );
+  const restored = (await service.invoke("cut.restore_range", input)) as {
+    transaction_id: string;
+    draft: {
+      draft_sequence: number;
+      duration_us: number;
+      clips: { source_start_us: number; source_end_us: number }[];
+    };
+  };
+  assert.equal(restored.draft.draft_sequence, 2);
+  assert.equal(restored.draft.duration_us, 1_000_000);
+  assert.deepEqual(
+    restored.draft.clips.map((clip) => [
+      clip.source_start_us,
+      clip.source_end_us,
+    ]),
+    [
+      [0, 200_000],
+      [200_000, 400_000],
+      [400_000, 1_000_000],
+    ],
+  );
+  const journal = join(
+    projectsRoot,
+    active.project.project_id,
+    "draft",
+    "journal",
+  );
+  const record = JSON.parse(
+    await readFile(
+      join(journal, "000000000002." + restored.transaction_id + ".json"),
+      "utf8",
+    ),
+  ) as { origin: string; operations: { operation_type: string }[] };
+  assert.equal(record.origin, "codex");
+  assert.equal(record.operations[0]?.operation_type, "restore");
+  await assert.rejects(
+    service.invoke("cut.restore_range", {
+      ...input,
+      request_id: "codex-restore-stale-001",
+    }),
+    expectCode("stale_draft"),
+  );
+  assert.deepEqual(
+    await Promise.all([readFile(source), readFile(baselinePath)]),
+    [sourceBytes, baselineBytes],
+  );
+});
+
+test("API-provider restore uses the same active draft journal and Undo", async () => {
+  const { active, source, projectsRoot, drafts, service } = await fixture();
+  const baselinePath = join(
+    projectsRoot,
+    active.project.project_id,
+    "baseline.json",
+  );
+  const [baselineBytes, sourceBytes] = await Promise.all([
+    readFile(baselinePath),
+    readFile(source),
+  ]);
+  const initial = (await drafts.snapshot(active.project.project_id)).draft;
+  await service.invoke("cut.delete_range", {
+    ...rangeInput(initial),
+    start_us: 200_000,
+    end_us: 400_000,
+  });
+  const missing = (await drafts.snapshot(active.project.project_id)).draft;
+  const api = new CodexVideoEditToolService(
+    active.project.project_id,
+    drafts,
+    "api_provider",
+  );
+  const input = {
+    ...restoreInput(missing),
+    request_id: "api-restore-request-001",
+  };
+  const restored = (await api.invoke("cut.restore_range", input)) as {
+    transaction_id: string;
+    draft: { draft_sequence: number; duration_us: number };
+  };
+  assert.equal(restored.draft.draft_sequence, 2);
+  assert.equal(restored.draft.duration_us, 1_000_000);
+  const head = (await drafts.snapshot(active.project.project_id)).draft;
+  const undone = (await api.invoke("timeline.undo", {
+    schema_version: "1.0",
+    request_id: "api-restore-undo-001",
+    project_id: head.project_id,
+    draft_id: head.draft_id,
+    base_revision_id: head.base_revision_id,
+    expected_sequence: head.draft_sequence,
+    expected_timeline_sha256: head.timeline_sha256,
+    target_transaction_id: restored.transaction_id,
+    reason: "Undo the provider restore through the shared journal.",
+  })) as { draft: { draft_sequence: number; duration_us: number } };
+  assert.equal(undone.draft.draft_sequence, 3);
+  assert.equal(undone.draft.duration_us, 800_000);
+  const journal = join(
+    projectsRoot,
+    active.project.project_id,
+    "draft",
+    "journal",
+  );
+  const records = (await readdir(journal)).sort();
+  assert.equal(records.length, 3);
+  const restoreRecord = JSON.parse(
+    await readFile(join(journal, records[1]!), "utf8"),
+  ) as { origin: string; operations: { operation_type: string }[] };
+  assert.equal(restoreRecord.origin, "api_provider");
+  assert.equal(restoreRecord.operations[0]?.operation_type, "restore");
+  assert.deepEqual(
+    await Promise.all([readFile(baselinePath), readFile(source)]),
+    [baselineBytes, sourceBytes],
+  );
+});
+
 test("an undo committed before an uncertain response is idempotent on retry", async () => {
   let commits = 0;
   const { active, drafts, service } = await fixture({
@@ -702,5 +871,197 @@ test("unexpected backend details are replaced with a fixed safe error", async ()
       );
       return true;
     },
+  );
+});
+
+test("transcript.get_range returns bounded path-free source words and stable page identity", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const sourceId = active.source.source_id;
+  const transcriptId = "transcript-local-001";
+  const transcriptView: TranscriptionProjectView = {
+    project_id: projectId,
+    job: {
+      project_id: projectId,
+      job_id: "transcription-local-001",
+      status: "completed",
+      progress_percent: 100,
+      source_count: 1,
+      completed_source_count: 1,
+      word_count: 4,
+      message: "Transcript ready.",
+    },
+    results: [
+      {
+        source_id: sourceId,
+        transcript: {
+          schema_version: "1.0",
+          transcript_id: transcriptId,
+          project_id: projectId,
+          source_id: sourceId,
+          duration_us: active.source.duration_us,
+          language: "en",
+          model: { provider: "local", name: "fixture", version: "1" },
+          segments: [
+            {
+              segment_id: "transcript-segment-001",
+              start_us: 100_000,
+              end_us: 600_000,
+              text: "Um use the panel",
+              words: [
+                {
+                  word_id: "transcript-word-001",
+                  text: "Um",
+                  start_us: 100_000,
+                  end_us: 180_000,
+                  confidence: 0.4,
+                  flags: ["uncertain"],
+                },
+                {
+                  word_id: "transcript-word-002",
+                  text: "use",
+                  start_us: 220_000,
+                  end_us: 300_000,
+                  confidence: 0.95,
+                  flags: [],
+                },
+                {
+                  word_id: "transcript-word-003",
+                  text: "the",
+                  start_us: 400_000,
+                  end_us: 450_000,
+                  confidence: null,
+                  flags: [],
+                },
+                {
+                  word_id: "transcript-word-004",
+                  text: "panel",
+                  start_us: 500_000,
+                  end_us: 600_000,
+                  confidence: null,
+                  flags: ["name"],
+                },
+              ],
+            },
+          ],
+          warnings: [],
+        },
+        analysis: {
+          schema_version: "1.0",
+          project_id: projectId,
+          source_id: sourceId,
+          source_sha256: active.source.sha256,
+          duration_us: active.source.duration_us,
+          silence_policy: {
+            version: "1",
+            noise_db: -40,
+            minimum_duration_us: 250_000,
+          },
+          silences: [],
+        },
+      },
+    ],
+  };
+  const service = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "codex",
+    async (requestedProjectId) => {
+      assert.equal(requestedProjectId, projectId);
+      return transcriptView;
+    },
+  );
+  const request = {
+    schema_version: "1.0",
+    project_id: projectId,
+    source_id: sourceId,
+    source_start_us: 100_000,
+    source_end_us: 500_000,
+    offset: 0,
+    limit: 2,
+  };
+  const first = (await service.invoke("transcript.get_range", request)) as {
+    transcript_id: string;
+    source_sha256: string;
+    total_word_count: number;
+    next_offset: number | null;
+    draft: { draft_sequence: number };
+    words: Array<Record<string, unknown>>;
+  };
+  assert.equal(first.transcript_id, transcriptId);
+  assert.equal(first.source_sha256, active.source.sha256);
+  assert.equal(first.total_word_count, 3);
+  assert.equal(first.next_offset, 2);
+  assert.equal(first.draft.draft_sequence, 0);
+  assert.deepEqual(
+    first.words.map((word) => word.word_id),
+    ["transcript-word-001", "transcript-word-002"],
+  );
+  assert.equal(first.words[0]?.asr_text, "Um");
+  assert.deepEqual(first.words[0]?.flags, ["uncertain"]);
+  assert.equal(first.words[0]?.transcript_override_text, null);
+  assert.doesNotMatch(
+    JSON.stringify(first),
+    /private-source|original_path|managed_path|project_root/u,
+  );
+
+  const second = (await service.invoke("transcript.get_range", {
+    ...request,
+    transcript_id: first.transcript_id,
+    offset: first.next_offset!,
+  })) as { next_offset: number | null; words: Array<Record<string, unknown>> };
+  assert.equal(second.next_offset, null);
+  assert.deepEqual(
+    second.words.map((word) => word.word_id),
+    ["transcript-word-003"],
+  );
+  const beforeCorrection = await drafts.snapshot(projectId);
+  const sourceBeforeCorrection = await readFile(active.source.managed_path);
+  await drafts.applyCodex({
+    schema_version: "1.0",
+    request_id: "codex-transcript-override-001",
+    project_id: projectId,
+    draft_id: beforeCorrection.draft.draft_id,
+    base_revision_id: beforeCorrection.draft.base_revision_id,
+    expected_sequence: beforeCorrection.draft.draft_sequence,
+    expected_timeline_sha256: beforeCorrection.draft.timeline_sha256,
+    pass_group: { pass_group_id: "codex-spoken-cut-001", kind: "spoken_cut" },
+    reason: "Correct transcript display text only.",
+    operations: [
+      {
+        type: "transcript_edit",
+        source_id: sourceId,
+        transcript_id: transcriptId,
+        word_id: "transcript-word-001",
+        original_text: "Um",
+        expected_text: "Um",
+        replacement_text: "Hmm",
+      },
+    ],
+  });
+  const correctedPage = (await service.invoke(
+    "transcript.get_range",
+    request,
+  )) as {
+    draft: { draft_sequence: number };
+    words: Array<Record<string, unknown>>;
+  };
+  assert.equal(correctedPage.words[0]?.asr_text, "Um");
+  assert.equal(correctedPage.words[0]?.transcript_override_text, "Hmm");
+  assert.equal(correctedPage.draft.draft_sequence, 1);
+  assert.deepEqual(
+    await readFile(active.source.managed_path),
+    sourceBeforeCorrection,
+  );
+  await assert.rejects(
+    service.invoke("transcript.get_range", {
+      ...request,
+      transcript_id: "transcript-stale-001",
+    }),
+    expectCode("transcript_unavailable"),
+  );
+  await assert.rejects(
+    service.invoke("transcript.get_range", { ...request, limit: 251 }),
+    expectCode("invalid_request"),
   );
 });

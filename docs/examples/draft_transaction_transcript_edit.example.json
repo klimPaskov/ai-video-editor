@@ -1,0 +1,158 @@
+{
+  "schema_version": "1.0",
+  "transaction_id": "transaction-transcript-001",
+  "request_id": "request-transcript-001",
+  "request_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+  "transaction_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+  "previous_transaction_sha256": null,
+  "project_id": "project-demo-001",
+  "draft_id": "draft-demo-001",
+  "base_revision_id": "rev-001",
+  "kind": "apply",
+  "origin": "codex",
+  "pass_group": {
+    "pass_group_id": "pass-spoken-001",
+    "kind": "spoken_cut"
+  },
+  "reason": "Correct transcript wording; recorded audio is unchanged.",
+  "created_at": "2026-09-12T12:00:00.000Z",
+  "target_transaction_id": null,
+  "before": {
+    "schema_version": "1.0",
+    "project_id": "project-demo-001",
+    "draft_id": "draft-demo-001",
+    "base_revision_id": "rev-001",
+    "draft_sequence": 0,
+    "timeline_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "head_transaction_sha256": null,
+    "timeline": {
+      "schema_version": "1.0",
+      "timeline_id": "timeline-rev-001",
+      "project_id": "project-demo-001",
+      "revision_id": "rev-001",
+      "duration_us": 1000000,
+      "frame_rate": {
+        "numerator": 30,
+        "denominator": 1
+      },
+      "canvas": {
+        "width": 2560,
+        "height": 1440,
+        "aspect_ratio": "custom"
+      },
+      "tracks": [
+        {
+          "track_id": "track-main",
+          "kind": "main_video",
+          "order": 0,
+          "visible": true,
+          "locked": false
+        }
+      ],
+      "clips": [
+        {
+          "clip_id": "clip-main",
+          "track_id": "track-main",
+          "source_id": "source-screen-001",
+          "source_start_us": 0,
+          "source_end_us": 1000000,
+          "timeline_start_us": 0,
+          "timeline_end_us": 1000000,
+          "enabled": true
+        }
+      ],
+      "operation_ids": [],
+      "zoom_ids": [],
+      "speed_ids": [],
+      "created_at": "2026-09-12T12:00:00.000Z"
+    }
+  },
+  "after": {
+    "schema_version": "1.0",
+    "project_id": "project-demo-001",
+    "draft_id": "draft-demo-001",
+    "base_revision_id": "rev-001",
+    "draft_sequence": 1,
+    "timeline_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "head_transaction_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "timeline": {
+      "schema_version": "1.0",
+      "timeline_id": "timeline-rev-001",
+      "project_id": "project-demo-001",
+      "revision_id": "rev-001",
+      "duration_us": 1000000,
+      "frame_rate": {
+        "numerator": 30,
+        "denominator": 1
+      },
+      "canvas": {
+        "width": 2560,
+        "height": 1440,
+        "aspect_ratio": "custom"
+      },
+      "tracks": [
+        {
+          "track_id": "track-main",
+          "kind": "main_video",
+          "order": 0,
+          "visible": true,
+          "locked": false
+        }
+      ],
+      "clips": [
+        {
+          "clip_id": "clip-main",
+          "track_id": "track-main",
+          "source_id": "source-screen-001",
+          "source_start_us": 0,
+          "source_end_us": 1000000,
+          "timeline_start_us": 0,
+          "timeline_end_us": 1000000,
+          "enabled": true
+        }
+      ],
+      "operation_ids": ["operation-transcript-001"],
+      "zoom_ids": [],
+      "speed_ids": [],
+      "created_at": "2026-09-12T12:00:00.000Z",
+      "transcript_edits": [
+        {
+          "source_id": "source-screen-001",
+          "transcript_id": "transcript-demo-001",
+          "word_id": "word-00000001",
+          "original_text": "teh",
+          "replacement_text": "the"
+        }
+      ]
+    }
+  },
+  "operations": [
+    {
+      "schema_version": "1.0",
+      "operation_id": "operation-transcript-001",
+      "operation_type": "transcript_edit",
+      "source_id": "source-screen-001",
+      "transcript_id": "transcript-demo-001",
+      "word_id": "word-00000001",
+      "original_text": "teh",
+      "before_text": "teh",
+      "after_text": "the",
+      "before": [],
+      "after": [
+        {
+          "source_id": "source-screen-001",
+          "transcript_id": "transcript-demo-001",
+          "word_id": "word-00000001",
+          "original_text": "teh",
+          "replacement_text": "the"
+        }
+      ],
+      "inverse": {
+        "type": "restore_transcript_edits",
+        "edits": [],
+        "expected_after_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  ],
+  "status": "committed"
+}

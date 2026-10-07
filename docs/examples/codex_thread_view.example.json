@@ -23,5 +23,6 @@
       "complete": true
     }
   ],
-  "message": null
+  "message": null,
+  "retryable": false
 }

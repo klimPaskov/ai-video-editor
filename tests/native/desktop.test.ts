@@ -243,14 +243,97 @@ try {
   } finally {
     await chmod(projectFolder, 0o700);
   }
-  await window
+  const editStageButton = window
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Review", exact: true })
+    .getByRole("button", { name: "Edit", exact: true });
+  await editStageButton.click();
+  await expect(editStageButton).toHaveAttribute("aria-current", "step");
+  await expect(window.locator("#stage-select")).toHaveValue("edit");
+  await expect(window.locator("#edit-actions")).toBeVisible();
+  await window
+    .getByRole("button", {
+      name: "Split clip at playhead",
+      exact: true,
+    })
     .click();
+  await expect(window.locator("#duration")).toHaveText(" / 0:01.500");
+  await expect(window.locator("#undo-edit")).toBeEnabled();
+  await expect(window.locator("#edit-clip")).toHaveText("Part 2");
+  const reviewStageButton = window
+    .getByRole("navigation", { name: "Project stages" })
+    .getByRole("button", { name: "Review", exact: true });
+  await reviewStageButton.click();
+  await expect(reviewStageButton).toHaveAttribute("aria-current", "step");
+  await expect(window.locator("#stage-select")).toHaveValue("review");
   await expect(window.locator("#error")).toBeHidden();
+  const reviewProjectBytes = await readFile(
+      join(projectFolder, "project.json"),
+    ),
+    integrityButton = window.getByRole("button", {
+      name: "Check draft integrity",
+      exact: true,
+    }),
+    managedSourcePath = baseline.source.managed_path,
+    managedSourceBytes = await readFile(managedSourcePath);
+  await expect(integrityButton).toBeVisible();
+  await expect(window.locator("#draft-integrity-result")).toBeHidden();
+  if (process.argv.includes("--inspect")) {
+    await integrityButton.scrollIntoViewIfNeeded();
+    await window.screenshot({
+      path: join(evidence, "review-integrity-ready.png"),
+    });
+    console.log(JSON.stringify({ reviewInspectionReady: true, evidence }));
+    const marker = join(evidence, "review-inspection.done"),
+      deadline = Date.now() + 120_000;
+    while (Date.now() < deadline) {
+      try {
+        await access(marker);
+        break;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+    await access(marker);
+  }
+  await integrityButton.click();
+  await expect(window.locator("#draft-integrity-result")).toHaveText(
+    "Structure and managed sources verified. Manual checkpoint recorded; meaning and A/V not reviewed.",
+  );
+  await expect(window.locator("#draft-integrity-error")).toBeHidden();
+  assert.deepEqual(
+    await readFile(join(projectFolder, "project.json")),
+    reviewProjectBytes,
+  );
+  assert.deepEqual(await readFile(baselinePath), baselineBytes);
+  assert.equal(sha256(await readFile(source)), sourceHash);
+  await writeFile(
+    managedSourcePath,
+    Buffer.concat([managedSourceBytes, Buffer.from([0])]),
+  );
+  try {
+    await integrityButton.click();
+    await expect(window.locator("#draft-integrity-error")).toHaveText(
+      "Draft integrity could not be checked. Reopen the project and try again.",
+    );
+  } finally {
+    await writeFile(managedSourcePath, managedSourceBytes);
+  }
+  await integrityButton.click();
+  await expect(window.locator("#draft-integrity-result")).toHaveText(
+    "Structure and managed sources verified. Manual checkpoint recorded; meaning and A/V not reviewed.",
+  );
+  await expect(window.locator("#draft-integrity-error")).toBeHidden();
+  assert.deepEqual(await readFile(managedSourcePath), managedSourceBytes);
+  assert.deepEqual(
+    await readFile(join(projectFolder, "project.json")),
+    reviewProjectBytes,
+  );
+  assert.deepEqual(await readFile(baselinePath), baselineBytes);
+  assert.equal(sha256(await readFile(source)), sourceHash);
   await window
     .getByRole("button", { name: "Source details", exact: true })
     .click();
+  await expect(window.locator("#review-actions")).toBeHidden();
   await expect(
     window.getByRole("complementary", { name: "Source details" }),
   ).toBeVisible();
@@ -280,6 +363,8 @@ try {
   ).toBeFocused();
   await window.keyboard.press("Escape");
   await expect(window.locator("#inspector")).toBeHidden();
+  await expect(window.locator("#review-actions")).toBeVisible();
+  await expect(window.locator("#draft-integrity-result")).toBeHidden();
   await expect(
     window.getByRole("button", { name: "Source details", exact: true }),
   ).toBeFocused();
@@ -287,11 +372,18 @@ try {
     .getByRole("button", { name: "Source details", exact: true })
     .click();
   await window.getByRole("button", { name: "Codex", exact: true }).click();
+  await expect(window.locator("#review-actions")).toBeHidden();
   await expect(window.locator("#inspector")).toBeHidden();
   await expect(
     window.getByRole("complementary", { name: "Codex conversation" }),
   ).toBeVisible();
+  await expect(window.locator("#codex-context-notice")).toBeVisible();
+  await expect(window.locator("#codex-context-notice")).toContainText(
+    "included in later turns",
+  );
+  await expect(window.locator("#api-turn-notice")).toBeHidden();
   await expect(window.locator("#codex-thread-status")).toBeHidden();
+  await expect(window.locator("#retry-codex-thread")).toBeHidden();
   await window
     .getByRole("button", { name: "Open conversation", exact: true })
     .click();
@@ -305,11 +397,29 @@ try {
   await window.screenshot({
     path: join(evidence, "codex-drawer-signed-out.png"),
   });
+  if (process.argv.includes("--inspect")) {
+    console.log(JSON.stringify({ inspectionReady: true, evidence }));
+    const marker = join(evidence, "inspection.done"),
+      deadline = Date.now() + 120_000;
+    while (Date.now() < deadline) {
+      try {
+        await access(marker);
+        break;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+    await access(marker);
+  }
   await window.locator("#assistant-provider").selectOption("deepseek");
   await expect(
     window.getByRole("complementary", { name: "DeepSeek conversation" }),
   ).toBeVisible();
   await expect(window.locator("#api-turn-notice")).toBeVisible();
+  await expect(window.locator("#api-turn-notice")).toContainText(
+    "included in later turns",
+  );
+  await expect(window.locator("#codex-context-notice")).toBeHidden();
   await window.getByRole("button", { name: "Open conversation" }).click();
   await expect(window.locator("#codex-thread-error")).toHaveText(
     "Connect and choose a provider model in Settings to continue.",
@@ -321,6 +431,7 @@ try {
   await window.locator("#assistant-provider").selectOption("codex");
   await window.getByRole("button", { name: "Close Codex" }).click();
   await expect(window.locator("#codex-drawer")).toBeHidden();
+  await expect(window.locator("#review-actions")).toBeVisible();
   for (const [width, height, scale] of [
     [1366, 768, 1],
     [1366, 768, 1.5],
@@ -444,9 +555,9 @@ try {
       offlineProjects,
     ),
     initialDraft = await offlineDrafts.snapshot(project.id),
-    committedTrim = await offlineDrafts.applyManual({
+    committedManualEdit = await offlineDrafts.applyManual({
       schema_version: "1.0",
-      request_id: "native-project-trim-001",
+      request_id: "native-project-range-delete-001",
       project_id: project.id,
       draft_id: initialDraft.draft.draft_id,
       base_revision_id: initialDraft.draft.base_revision_id,
@@ -457,16 +568,9 @@ try {
         kind: "manual",
       },
       reason: "Verify the packaged committed draft preview.",
-      operations: [
-        {
-          type: "trim",
-          clip_id: initialDraft.draft.timeline.clips[0]!.clip_id,
-          edge: "start",
-          timeline_position_us: 500_000,
-        },
-      ],
+      operations: [{ type: "ripple_delete", start_us: 0, end_us: 500_000 }],
     });
-  assert.equal(committedTrim.draft.timeline.duration_us, 1_000_000);
+  assert.equal(committedManualEdit.draft.timeline.duration_us, 1_000_000);
   electron = await _electron.launch({
     executablePath,
     chromiumSandbox: true,
@@ -485,7 +589,7 @@ try {
     .toBe(1.25);
   await expect(
     window.locator(`#projects [data-project-id="${project.id}"] small`),
-  ).toHaveText("0:01.000 · Review");
+  ).toHaveText("0:01.000 · 1 source · Review");
   await window.locator(`#projects [data-project-id="${project.id}"]`).click();
   await expect(window.locator("#frame")).toBeVisible();
   await expect(window.locator("#time")).toHaveText("0:00.000");
@@ -540,8 +644,9 @@ try {
         pixelScope:
           "All pixels of opaque nonuniform BGRA frames through native canvas readback; not display or arbitrary alpha equality",
         reopen: true,
-        committedDraftSequence: committedTrim.draft.draft_sequence,
-        committedDraftDurationUs: committedTrim.draft.timeline.duration_us,
+        committedDraftSequence: committedManualEdit.draft.draft_sequence,
+        committedDraftDurationUs:
+          committedManualEdit.draft.timeline.duration_us,
         timelineSourceMapping: true,
         headBoundProjectFrames: true,
         sourceUnchanged: true,

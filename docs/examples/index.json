@@ -15,7 +15,23 @@
     },
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_transcription.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_transcript_correction.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_transcript_cut.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
       "example": "docs/examples/desktop_ipc_manual_edit.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_integrity_check.example.json"
     },
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
@@ -24,6 +40,10 @@
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
       "example": "docs/examples/desktop_ipc_manual_range_cut.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_manual_restore_range.example.json"
     },
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
@@ -36,6 +56,18 @@
     {
       "schema": "docs/schemas/draft_transaction.schema.json",
       "example": "docs/examples/draft_transaction.example.json"
+    },
+    {
+      "schema": "docs/schemas/draft_transaction.schema.json",
+      "example": "docs/examples/draft_transaction_restore.example.json"
+    },
+    {
+      "schema": "docs/schemas/draft_transaction.schema.json",
+      "example": "docs/examples/draft_transaction_transcript_edit.example.json"
+    },
+    {
+      "schema": "docs/schemas/draft_transaction.schema.json",
+      "example": "docs/examples/draft_transaction_transcript_cut.example.json"
     },
     {
       "schema": "docs/schemas/pass_checkpoint.schema.json",
@@ -86,6 +118,14 @@
       "example": "docs/examples/edit_operation.example.json"
     },
     {
+      "schema": "docs/schemas/edit_operation.schema.json",
+      "example": "docs/examples/edit_operation_transcript_edit.example.json"
+    },
+    {
+      "schema": "docs/schemas/edit_operation.schema.json",
+      "example": "docs/examples/edit_operation_transcript_cut.example.json"
+    },
+    {
       "schema": "docs/schemas/export_manifest.schema.json",
       "example": "docs/examples/export_manifest.example.json"
     },
@@ -134,6 +174,14 @@
       "example": "docs/examples/speed_segment.example.json"
     },
     {
+      "schema": "docs/schemas/spoken_candidate_policy.schema.json",
+      "example": "docs/examples/spoken_candidate_policy.example.json"
+    },
+    {
+      "schema": "docs/schemas/spoken_candidate_report.schema.json",
+      "example": "docs/examples/spoken_candidate_report.example.json"
+    },
+    {
       "schema": "docs/schemas/subagent_routing.schema.json",
       "example": "docs/examples/subagent_routing.example.json"
     },
@@ -148,6 +196,18 @@
     {
       "schema": "docs/schemas/transcript.schema.json",
       "example": "docs/examples/transcript.example.json"
+    },
+    {
+      "schema": "docs/schemas/transcription_analysis.schema.json",
+      "example": "docs/examples/transcription_analysis.example.json"
+    },
+    {
+      "schema": "docs/schemas/transcription_job.schema.json",
+      "example": "docs/examples/transcription_job.example.json"
+    },
+    {
+      "schema": "docs/schemas/transcription_project_view.schema.json",
+      "example": "docs/examples/transcription_project_view.example.json"
     },
     {
       "schema": "docs/schemas/ui_state.schema.json",

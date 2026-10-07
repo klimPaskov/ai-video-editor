@@ -79,13 +79,21 @@
               <option value="openai">OpenAI API</option>
               <option value="gemini">Gemini API</option>
             </select>
+            <p id="codex-context-notice">
+              Requests and the project information Codex reads are sent to
+              OpenAI. Speech work may include bounded local transcript text;
+              transcript pages may remain in this conversation and be included
+              in later turns. Source audio and video stay on this device.
+            </p>
             <p id="codex-thread-status" role="status"></p>
             <div id="codex-thread-messages" aria-live="polite"></div>
             <ul id="codex-thread-activity" aria-label="Assistant activity"></ul>
             <p id="api-turn-notice" hidden>
               Sending shares your request and project/timeline tool results with
-              this provider. It can use paid API credits and up to four model
-              calls.
+              this provider. Speech work may also share local transcript text;
+              transcript pages may remain in this conversation and be included
+              in later turns. API calls can use paid credits and up to four
+              model calls; source audio and video stay on this device.
             </p>
             <button id="open-codex-thread">Open conversation</button>
             <form id="codex-thread-form" hidden>
@@ -98,6 +106,9 @@
               <div class="codex-thread-actions">
                 <button type="button" id="interrupt-codex-thread" hidden>
                   Stop
+                </button>
+                <button type="button" id="retry-codex-thread" hidden>
+                  Retry request
                 </button>
                 <button type="submit" id="send-codex-thread" class="primary">
                   Send
@@ -124,6 +135,98 @@
             <button id="previous" aria-label="Previous frame">←</button
             ><button id="next" aria-label="Next frame">→</button>
           </div>
+          <section id="auto-edit-actions" class="auto-edit-actions" hidden>
+            <div class="auto-edit-controls">
+              <button id="transcribe-local" class="primary" type="button">
+                Transcribe locally
+              </button>
+              <button id="stop-transcription" type="button" hidden>Stop</button>
+            </div>
+            <p id="transcription-disclosure">
+              First use downloads about 76 MiB of model weights from Hugging
+              Face. Source audio stays on this device.
+            </p>
+            <progress
+              id="transcription-progress"
+              max="100"
+              value="0"
+              aria-label="Local transcription progress"
+              hidden
+            ></progress>
+            <p id="transcription-status" role="status" hidden></p>
+            <p id="transcription-error" role="alert" hidden></p>
+            <details id="transcript-results" hidden>
+              <summary id="transcript-summary">Transcript</summary>
+              <p id="transcript-timing-note">
+                Word timings are local model estimates. Verify before editing.
+              </p>
+              <p id="transcript-language-note" hidden>
+                The local model did not identify a language.
+              </p>
+              <div id="transcript-content"></div>
+              <button id="review-speech-cues" type="button" hidden>
+                Review speech cues
+              </button>
+              <details id="speech-candidate-results" hidden>
+                <summary id="speech-candidate-summary">Speech cues</summary>
+                <p id="speech-candidate-note">
+                  Original local transcript cues. Preview selects a frame; no
+                  cut is applied.
+                </p>
+                <p id="speech-candidate-error" role="alert" hidden></p>
+                <div id="speech-candidate-content"></div>
+              </details>
+            </details>
+          </section>
+          <section
+            id="transcript-edit-panel"
+            class="transcript-edit-panel"
+            hidden
+          >
+            <details id="transcript-edit-details">
+              <summary>Transcript</summary>
+              <div class="transcript-edit-controls">
+                <label for="transcript-edit-source">Source</label>
+                <select id="transcript-edit-source"></select>
+                <label for="transcript-word-filter">Find a word</label>
+                <input
+                  id="transcript-word-filter"
+                  type="search"
+                  maxlength="80"
+                  autocomplete="off"
+                />
+                <label for="transcript-edit-word">Word</label>
+                <select id="transcript-edit-word"></select>
+                <label for="transcript-cut-start">Cut from word</label>
+                <select id="transcript-cut-start"></select>
+                <label for="transcript-cut-end">Through word</label>
+                <select id="transcript-cut-end"></select>
+                <button id="transcript-cut-submit" type="button">
+                  Cut selected words
+                </button>
+                <label for="transcript-correction-input">
+                  Correct transcript text
+                </label>
+                <input
+                  id="transcript-correction-input"
+                  type="text"
+                  maxlength="200"
+                  autocomplete="off"
+                />
+                <button id="save-transcript-correction" type="button">
+                  Save correction
+                </button>
+              </div>
+              <p id="transcript-edit-note">
+                Transcript text changes do not alter recorded audio. Undo shares
+                the edit history.
+              </p>
+              <p id="transcript-correction-status" role="status" hidden></p>
+              <p id="transcript-correction-error" role="alert" hidden></p>
+              <p id="transcript-cut-status" role="status" hidden></p>
+              <p id="transcript-cut-error" role="alert" hidden></p>
+            </details>
+          </section>
           <div id="edit-actions" class="edit-actions" hidden>
             <span id="edit-clip" hidden></span>
             <button id="trim-start">Trim start</button>
@@ -138,6 +241,50 @@
               <button id="cut-range">Cut range</button>
               <button id="clear-marks">Clear</button>
             </div>
+            <div id="restore-actions" class="restore-actions">
+              <button id="restore-toggle" type="button" aria-expanded="false">
+                Restore source range
+              </button>
+              <div id="restore-form" class="restore-form" hidden>
+                <label class="restore-field" for="restore-source">
+                  Source
+                  <select id="restore-source"></select>
+                </label>
+                <label class="restore-field" for="restore-source-start">
+                  Source start (seconds)
+                  <input
+                    id="restore-source-start"
+                    type="text"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    placeholder="0.000000"
+                    maxlength="24"
+                  />
+                </label>
+                <label class="restore-field" for="restore-source-end">
+                  Source end (seconds)
+                  <input
+                    id="restore-source-end"
+                    type="text"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    placeholder="0.000000"
+                    maxlength="24"
+                  />
+                </label>
+                <button id="restore-submit" type="button" disabled>
+                  Restore range
+                </button>
+                <p id="restore-error" role="alert" hidden></p>
+              </div>
+            </div>
+          </div>
+          <div id="review-actions" class="review-actions" hidden>
+            <button id="check-draft-integrity" class="primary">
+              Check draft integrity
+            </button>
+            <p id="draft-integrity-result" role="status" hidden></p>
+            <p id="draft-integrity-error" role="alert" hidden></p>
           </div>
         </div>
       </section>
@@ -182,9 +329,11 @@
         <section id="codex-settings" aria-label="Codex account" hidden>
           <p id="codex-account" role="status"></p>
           <p id="codex-disclosure">
-            Codex may receive project instructions, transcript excerpts,
-            timeline state, requested preview frames and local tool results.
-            Original recordings are not sent by default.
+            Codex may receive project instructions, bounded local transcript
+            pages, timeline state, requested preview frames and tool results
+            during a turn. Transcript pages may remain in thread history and be
+            included in later turns. Source audio/video stays on this device by
+            default.
           </p>
           <div class="codex-actions">
             <button type="button" id="codex-login" hidden>

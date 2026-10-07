@@ -10,6 +10,9 @@ import {
 } from "../../codex-tools/src/service.ts";
 
 export const CODEX_EDITOR_NAMESPACE = "codex_video_edit";
+export type DynamicToolAccess = "project_editor" | "native_child_read_only";
+export const nativeChildReadOnlyToolNames: ReadonlySet<CodexVideoEditToolName> =
+  new Set(["project.get_summary", "timeline.get_summary"]);
 const MAX_INPUT_BYTES = 16 * 1024;
 const MAX_OUTPUT_BYTES = 256 * 1024;
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u;
@@ -23,6 +26,8 @@ const dynamicNames: Record<CodexVideoEditToolName, string> = {
   "cut.delete_range": "cut_delete_range",
   "cut.delete_ranges": "cut_delete_ranges",
   "timeline.undo": "timeline_undo",
+  "cut.restore_range": "cut_restore_range",
+  "transcript.get_range": "transcript_get_range",
 };
 const internalNames = new Map(
   Object.entries(dynamicNames).map(([internal, wire]) => [
@@ -35,7 +40,12 @@ export function ownedDynamicToolWireNames(): Set<string> {
   return new Set(internalNames.keys());
 }
 
-export function buildCodexVideoEditDynamicTools(): DynamicToolSpec[] {
+/** Bind model-visible identity to the main-owned project selected for this thread. */
+export function buildCodexVideoEditDynamicTools(
+  activeProjectId: string,
+): DynamicToolSpec[] {
+  if (!validIdentifier(activeProjectId))
+    throw new CodexThreadProtocolError("configuration");
   return [
     {
       type: "namespace",
@@ -45,10 +55,28 @@ export function buildCodexVideoEditDynamicTools(): DynamicToolSpec[] {
         type: "function" as const,
         name: dynamicNames[tool.name],
         description: tool.description,
-        inputSchema: structuredClone(tool.inputSchema) as unknown as JsonValue,
+        inputSchema: bindProjectIdSchema(tool.inputSchema, activeProjectId),
       })),
     },
   ];
+}
+
+function bindProjectIdSchema(
+  inputSchema: unknown,
+  projectId: string,
+): JsonValue {
+  const schema: unknown = structuredClone(inputSchema);
+  if (
+    !record(schema) ||
+    !record(schema.properties) ||
+    !record(schema.properties.project_id)
+  )
+    throw new CodexThreadProtocolError("configuration");
+  schema.properties.project_id = {
+    ...schema.properties.project_id,
+    const: projectId,
+  };
+  return schema as unknown as JsonValue;
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -132,10 +160,15 @@ function safeError(
 /** A rejected edit is a safe model-visible result; a malformed call is never dispatched. */
 export async function invokeOwnedDynamicTool(
   call: OwnedDynamicToolCall,
-  invoke: (name: CodexVideoEditToolName, input: unknown) => Promise<unknown>,
+  invoke: (
+    name: CodexVideoEditToolName,
+    input: unknown,
+    access: DynamicToolAccess,
+  ) => Promise<unknown>,
+  access: DynamicToolAccess = "project_editor",
 ): Promise<DynamicToolCallResponse> {
   try {
-    const value = await invoke(call.name, call.arguments);
+    const value = await invoke(call.name, call.arguments, access);
     const text = JSON.stringify(value);
     if (typeof text !== "string" || Buffer.byteLength(text) > MAX_OUTPUT_BYTES)
       return safeError("outcome_unknown");

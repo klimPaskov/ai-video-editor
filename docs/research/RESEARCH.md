@@ -1,5 +1,27 @@
 # Research summary
 
+## Pinned 0.155.1 feature-list verification
+
+The exact packaged Linux Codex 0.155.1 binary reports `stable true` by default for unrelated capabilities, including external/full-CDP browser access, computer use, shell snapshots, interactive unified-exec terminals, workspace dependency helpers, guardian approvals, and in-app utilities. Sixteen relevant toggles were explicitly disabled in the app process arguments and both thread routes; a fresh guest `CODEX_HOME` feature-list run confirmed each false. The same command continued to report `unified_exec` true despite `--disable unified_exec` and equivalent `-c` forms. Do not count the backend toggle as disabled or use a process feature listing as proof of per-thread/model-visible absence. `shell_tool=false` remains configured; the complete effective tool catalog remains open because 0.155.1 has no generic direct-tool allowlist in the inspected thread schema.
+
+Source: [pinned 0.155.1 feature registry](https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/features/src/lib.rs). It describes `unified_exec` as an execution-implementation feature, separate from shell-tool registration. This observation is limited to the exact packaged Linux binary and feature-list command.
+
+## Pinned default-on retry, hook and route gates
+
+The exact 0.155.1 feature registry describes `unbounded_connection_retries` as keeping active sampling turns alive until a failed network connection recovers; the app now disables it because uncertain turns must be reconciled before another explicit request. The same inventory shows default-on `hooks`, `skill_search`, and `code_mode_host`. Process overrides and both thread routes now disable hooks, skill-search shadow work, retries, Code Mode, and its host; only dynamic Codex start/resume opts back into Code Mode and the standalone host, while MCP remains off. A packaged `features list` run using the application-generated process config verified `hooks`, `skill_search`, `unbounded_connection_retries`, `code_mode`, and `code_mode_host` all false at process scope. Exact thread-policy tests cover MCP-off and dynamic-on. Allowed native subagents remain separately selected from runtime model metadata.
+
+Source: [pinned 0.155.1 feature registry](https://raw.githubusercontent.com/openai/codex/rust-v0.155.1/codex-rs/features/src/lib.rs). This is feature-policy evidence only; it does not prove the complete effective model-visible tool catalog.
+
+The packaged process-argument audit also found `features.connectors=false` had no entry in the pinned feature inventory. That unsupported override was removed from launch and thread config; do not count it as a working gate. Host-owned Apps remain disabled through `features.apps=false`, and external MCP servers are controlled by exact per-server disabled entries plus status validation. The feature-policy regression now rejects any top-level process `features.*` override absent from the pinned binary's `features list`.
+
+The same feature-policy regression also cross-checks every thread/start and thread/resume top-level feature key. A first run rejected unsupported `connectors`, `memory_tool`, and `codex_hooks` entries; those fields were removed. The supported `apps`, `memories`, and `hooks` controls remain, while external MCP servers stay covered by the exact per-server inventory.
+
+## Pinned 0.155.1 direct-tool configuration limit
+
+The exact tagged `ThreadStartParams` schema has no `allowed_tools` or `allowedTools` member; its `config` is an open JSON object, which does not itself define a tool allowlist. The pinned `core/config.schema.json` defines `ToolsToml` with only `experimental_request_user_input`, `update_plan`, and `web_search`; it has no `disable_defaults` or generic direct-tool-name map. Configured MCP servers have their own `enabled_tools`, and Code Mode has nested namespace exclusions, but those scopes do not constrain every direct built-in. This confirms that the current adapter cannot claim a complete upstream allowlist. Keep the account-contained runtime inventory bounded and the residual direct surface open under P2-07.
+
+Sources: [pinned `ThreadStartParams` schema](https://raw.githubusercontent.com/openai/codex/rust-v0.155.1/codex-rs/app-server-protocol/schema/json/v2/ThreadStartParams.json) and [pinned Codex config schema](https://raw.githubusercontent.com/openai/codex/rust-v0.155.1/codex-rs/core/config.schema.json). This source review corroborates runtime-specific tests; it is not a live authenticated model-tool inventory.
+
 Research date: 2026-09-04
 
 Current foundation review: [P0 research, checked 2026-09-05](P0_FOUNDATION.md). Use that report for current dependency observations, protocol corrections, and explicit limits; the earlier summary below is background research.
@@ -52,3 +74,145 @@ Sources:
 - https://www.electronjs.org/docs/latest/api/desktop-capturer/
 - https://www.electronjs.org/docs/latest/tutorial/security
 - https://playwright.dev/docs/api/class-electron
+
+## Local speech runtime, 2026-09-27
+
+The first P5 local-transcription slice uses revision-pinned `Xenova/whisper-base` through the official Transformers.js ASR pipeline. Weight hashes, local-only audio handling, model-cache behavior, and public test-fixture provenance are recorded in [P5_LOCAL_TRANSCRIPTION.md](P5_LOCAL_TRANSCRIPTION.md). Word boundaries remain model estimates, language is left unidentified when not returned, and silence evidence cannot authorize cuts.
+
+## Gemini API provider model filter, 2026-09-25
+
+Google's current [function-calling model table](https://ai.google.dev/gemini-api/docs/generate-content/function-calling) lists the stable text/function families used by the editor's reviewed allowlist. The [OpenAI compatibility guide](https://ai.google.dev/gemini-api/docs/openai) describes the fixed OpenAI-compatible endpoints as beta and supports model listing; live account membership alone does not establish the full completion/tool-loop contract. Google release notes dated September 15 and 22 add 3.8 Live and 3.8 Flash TTS variants. The app continues to exclude Live, speech/TTS, image, embedding, transcription, video, and preview families per ADR 0015. New negative model-filter cases cover 3.8 Live, TTS, and Gemini 3.1 Pro Preview. See [P2 provider contract notes](P2_API_PROVIDERS.md#current-gemini-model-review-2026-09-25). No Gemini key was available for authenticated discovery or generation tests.
+
+Sources:
+
+- https://ai.google.dev/gemini-api/docs/generate-content/function-calling
+- https://ai.google.dev/gemini-api/docs/openai
+- https://ai.google.dev/gemini-api/docs/changelog
+
+## Codex App Server 0.156.0 confinement review, 2026-09-25
+
+Reviewed the current official release after the pinned 0.155.1 runtime's full tool-catalog gate remained open. The tagged 0.156.0 thread-start contract still offers `dynamicTools`, but the reviewed app-server request and configuration types expose no complete model-visible tool allowlist. The release notes add no such boundary. The product remains pinned to the already verified 0.155.1 package; upgrading would require generated-protocol and packaged native regression checks and does not, by itself, close P2-07.
+
+Sources:
+
+- https://github.com/openai/codex/releases/tag/rust-v0.156.0
+- https://github.com/openai/codex/blob/rust-v0.156.0/codex-rs/app-server-protocol/src/protocol/v2/thread.rs
+- https://github.com/openai/codex/blob/rust-v0.156.0/codex-rs/config/src/config_toml.rs
+
+## Codex app-tool default override review, 2026-09-25
+
+The pinned Codex 0.155.1 configuration types document `apps._default.enabled=false` as disabling apps unless a per-app setting overrides it. A later packaged native fixture seeded both `[apps._default].enabled=true` and `[apps.adobe].enabled=true`; its exact completed-turn rollout still showed zero connected-app functions on the dynamic editor route, and the guarded split/Undo/reopen checks passed. This closes that specific hostile per-app configuration edge for the tested thread and pinned runtime. It does not establish the complete effective tool catalog; P2-07 remains open.
+
+Source:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/config/src/types.rs#L2904-L2910
+
+## Codex browser OAuth callback failure path, 2026-09-25
+
+The pinned official Codex 0.155.1 login server binds a local callback listener, includes its selected port and OAuth state in the authorization URL, rejects a mismatched state with HTTP 400, and reports a matching provider denial as a failed login. The new packaged Electron regression uses that actual listener with a fresh signed-out account: an incorrect state leaves the attempt pending; a matching `access_denied` callback returns the app to signed out with fixed recovery text; a private error description and authorization state/URL stay out of the renderer; and a subsequent login can be canceled. This is negative callback and redaction evidence only. It does not exchange an authorization code, create an authenticated account, or prove successful browser OAuth completion. Keep the successful browser-login gate open until a real completion and reconciled account are observed.
+
+Sources:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/login/src/server.rs#L2470-L2865
+
+## Codex 0.155.1 route-specific thread features, 2026-09-25
+
+The pinned official 0.155.1 configuration schema (https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json) defines the feature fields used by the thread builder, including code_mode_only, code_mode.enabled, code_mode_host.enabled, disable_in_process_fallback, browser/computer-use, apps, image, memory, hooks, plugins, remote-control and commit switches. The route-aware builder applies only dynamic code-mode enablement to dynamic-bound Codex threads and keeps it off for existing MCP-bound threads; both routes disable the supported unrelated feature flags and disable in-process host fallback. Exact start/resume unit tests passed. A packaged Luna/high synthetic dynamic split run passed its bounded seven-editor/five-v1-child inventory, zero app/other counts, shared Undo/reopen and immutable-source/baseline checks after the real Electron window was inspected inside Docker. These schema fields and one tested nested surface do not establish a complete or permanent upstream effective-tool allowlist; P2-07 remains open.
+
+Source:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json
+
+## Codex 0.155.1 additional capability gates, 2026-09-25
+
+The pinned [feature definitions](https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/features/src/lib.rs) identify API-key model discovery, passive Chronicle screen-context memory, external-agent memory import, persisted goals, permission/rule requests, MCP OAuth elicitation and MCP dependency installation as separate capabilities. The pinned [feature schema](https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json) accepts explicit false values for these switches. The project now disables them at App Server launch and in both route-specific thread policies, along with web search and plugin suggestions. This is account-default defense in depth; it does not expose or prove the complete effective tool catalog. The dynamic v1 child route remains available only with its existing depth-one main-process checks.
+
+The pinned [tool planner](https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/src/tools/spec_plan.rs) selects v1 collaboration tools from the runtime's resolved `MultiAgentVersion::V1` and applies the configured spawn-depth limit. The added gates leave that model-resolved, already-tested path unchanged. Exact route request tests and native split/child fixtures are required after the policy change; P2-07 remains partial until the effective upstream catalog boundary is proven.
+
+Sources:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/features/src/lib.rs
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/src/tools/spec_plan.rs
+
+## Current upstream App Server tool-boundary review, 2026-09-26
+
+Inspected the official `openai/codex` main-branch `ThreadStartParams`, app-server README, and tool planner after the pinned 0.155.1 complete-catalog gate remained open. The current public `thread/start` shape includes host-supplied `dynamicTools` and selected capability roots, but the inspected request type has no general allowed-tools field. The README says `disabledPluginIds` records a selection but does not filter plugin capabilities. The planner composes core, MCP, extension, dynamic, and hosted tool sources, so adding host tools is not by itself an allowlist. This main-branch review is not a released package and does not describe the exact pinned runtime; it is a reason not to upgrade or claim stronger isolation without a version-pinned contract and packaged regression. Retain the 0.155.1 tested configuration gates, per-thread routes, MCP inventory verification, sandbox boundaries, and owned-call validation. P2-07 remains open until supported runtime enforcement or stronger pinned evidence establishes the complete effective surface.
+
+Sources:
+
+- https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/src/protocol/v2/thread.rs
+- https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md
+- https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/spec_plan.rs
+
+## Current App Server permissions profile and tool allowlist, 2026-09-27
+
+Inspected the current public-main `ThreadStartParams` after the pinned 0.155.1 tool-surface gate remained open. The typed request exposes host-supplied `dynamicTools`, selected capability roots and an experimental named `permissions` profile. The profile is documented as mutually exclusive with the legacy `sandbox` field; it is a permission-profile selector, not a declared list of model-visible tool names. No general `allowed_tools` or `allowedTools` field appeared in the inspected request type. The current App Server README also states that saved `disabledPluginIds` do not filter plugin capabilities. These source observations do not prove the effective runtime catalog and are not from the pinned 0.155.1 release. Keep the product on its pinned, tested feature gates and host-tool validation; do not upgrade or claim a complete allowlist from the profile, dynamic tool definitions, or plugin selection.
+
+Sources:
+
+- https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/src/protocol/v2/thread.rs
+- https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md
+
+## Pinned Codex 0.155.1 thread tool-boundary schema, 2026-09-27
+
+Inspected the exact `rust-v0.155.1` tagged `ThreadStartParams` and `ThreadResumeParams` source used to generate the app's pinned protocol closure. `ThreadStartParams` has `dynamicTools` and `selectedCapabilityRoots`; its `permissions` field is documented as a named profile ID mutually exclusive with the legacy sandbox field. The typed start/resume request contains no general `allowed_tools` or `allowedTools` list. The same release's config schema scopes `enabled_tools` allowlists to plugin-provided MCP servers and `direct_only_tool_namespaces`/`excluded_tool_namespaces` to the nested Code Mode surface. Its top-level `tools` settings cover specific built-ins such as plan, user-input and web-search, not a global direct-tool name allowlist. Those narrower controls do not enumerate every runtime-selected direct/deferred tool or establish that feature gates form a complete allowlist. Keep the guarded app-owned tool adapter, route checks, child policy and tested feature gates; the full effective surface remains open.
+
+Sources:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/app-server-protocol/src/protocol/v2/thread.rs#L59-L155
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/app-server-protocol/src/protocol/v2/thread.rs#L323-L395
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L496-L523
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L3169-L3204
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L3932-L3950
+
+## Current upstream global tool allowlist request, 2026-09-27
+
+The current public-main generated [`ThreadStartParams`](https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/schema/typescript/v2/ThreadStartParams.ts) still has no general `allowed_tools` or `allowedTools` field. The official [openai/codex issue #47652](https://github.com/openai/codex/issues/47652), opened on 2026-09-23 and still open at this review, requests a session-wide hard tool allowlist across built-in, collaboration, hosted, MCP, app and dynamic tool sources. The issue is a feature request, not a released protocol or supported configuration contract. Do not synthesize an undocumented setting or assume thread-local `dynamicTools` restrict other sources. The product retains its pinned 0.155.1 feature gates, read-only/no-network sandbox, empty workspace roots, guarded host tools and fail-closed call quarantine; P2-07 remains open until supported enforcement or stronger pinned evidence establishes the complete effective surface.
+
+## Pinned Codex 0.155.1 direct utility feature gates, 2026-09-27
+
+The 0.155.1 core tool planner registers `wait_for_environment` only when `Feature::DeferredExecutor` is enabled, and registers `new_context_window` plus `get_context_remaining` only when `Feature::TokenBudget` is enabled. The pinned config schema exposes both feature settings. The app now explicitly disables them in App Server process arguments and both route-derived thread configs; exact unit assertions cover launch, `thread/start` and `thread/resume`. This removes those unnecessary utility tools from the tested configuration but does not establish the complete model-visible catalog or prove that every upstream capability can be disabled.
+
+Sources:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/src/tools/spec_plan.rs#L1063-L1090
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/src/tools/spec_plan.rs#L1071-L1139
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L748-L751
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L1021-L1024
+
+
+## Pinned Codex 0.155.1 child model inheritance, 2026-09-27
+
+The pinned `AgentsToml` supports `default_subagent_model` and `default_subagent_reasoning_effort` for child spawns without an explicit override. The editor now supplies the selected parent model and effort for both dynamic V1 and V2 policies; the main process disables child protocols for Astra model IDs. Unit tests cover the emitted settings and the Astra block. A packaged V1 child run with explicit GPT-5.6-Luna/high reached the native turn but did not complete, so the source and request assertions are configuration evidence only, not a new live child success.
+
+Source:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/config.schema.json#L33-L53
+
+## Pinned Codex 0.155.1 asynchronous user-input surface, 2026-09-27
+
+The pinned core tool planner registers `request_user_input_async` or the compatibility-named `send_user_message_async` when those identifiers appear in `model_info.experimental_supported_tools`; the registration branch is separate from the `experimental_request_user_input_enabled` setting. When invoked, App Server sends the host a typed `item/tool/requestUserInput` server request. This means the fixed config can disable the standard request-user-input tool without proving asynchronous user-input functions are absent from the model catalog.
+
+The editor's project-thread client allows only the reviewed application edit tool call, approval decisions and cancellation of the owned MCP elicitation request. It rejects any other server request and quarantines the thread. A focused regression submits a synthetic `item/tool/requestUserInput` request containing a sentinel question, proves the request is rejected, proves the subsequent notification is also rejected, and verifies neither sentinel enters renderer event projection. This is bounded denial evidence, not a complete effective-tool allowlist.
+
+Sources:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/core/src/tools/spec_plan.rs#L1091-L1131
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/app-server/src/bespoke_event_handling.rs#L823-L868
+
+## Pinned Codex failure categories and async-input opt-out gap, 2026-09-27
+
+The pinned `TurnError` contract carries `codexErrorInfo` alongside human-readable and additional error detail. In the pinned core, `CodexErrorDetails::RefreshTokenFailed` maps to `CodexErrorInfo::Unauthorized`. The application maps only allowlisted categories to fixed Reconnect, usage, or service guidance; raw error messages and additional details stay out of renderer state. A private packaged failed turn carried `unauthorized` with no tool call. This identifies refresh-token failure in the runtime protocol, not which local credential field or account state needs repair.
+
+The upstream [request for an App Server opt-out for `request_user_input_async`](https://github.com/openai/codex/issues/43821) remains a maintainer request, not a released API contract. Its reproduction reports that `tools.experimental_request_user_input.enabled=false` leaves model-advertised asynchronous input visible on 0.153.2; the report inspected, but did not run, a later public-main revision. The exact pinned 0.155.1 planner check above independently shows async registration from model metadata outside that standard toggle. Do not add an undocumented config key or claim complete model-visible restriction. Keep the host quarantine and P2-07 open until an official pinned opt-out or direct allowlist is supported and verified.
+
+Sources:
+
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/app-server-protocol/src/protocol/v2/thread_data.rs#L1933-L1955
+- https://github.com/openai/codex/blob/rust-v0.155.1/codex-rs/protocol/src/error.rs#L2686-L2751
+- https://github.com/openai/codex/issues/43821
+
+## Codex browser OAuth success path, 2026-09-27
+
+The packaged `codex-browser-callback.test.ts --await-browser-success` harness passed in a fresh no-mount Linux guest against the pinned 0.155.1 App Server. The real loopback callback reconciled the user-completed browser sign-in to connected/signed-in account state and a nonempty live model catalog; a separate Electron launch against the same private profile restored signed-in state and models. Guest-only inspection confirmed the actual native Settings window. The account, authorization URL, screenshot, and bounded result remain private and are not source-control evidence. Earlier timeouts remain distinct failed attempts.

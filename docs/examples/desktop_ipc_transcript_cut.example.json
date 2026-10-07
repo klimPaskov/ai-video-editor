@@ -1,0 +1,47 @@
+{
+  "channel": "projects:transcript-cut",
+  "payload": {
+    "schema_version": "1.0",
+    "projectId": "550e8400-e29b-41d4-a716-446655440000",
+    "draftId": "draft-demo-001",
+    "baseRevisionId": "550e8400-e29b-41d4-a716-446655440001",
+    "expectedSequence": 0,
+    "expectedTimelineSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sourceId": "550e8400-e29b-41d4-a716-446655440002",
+    "transcriptId": "transcript-demo-001",
+    "startWordId": "word-00000001",
+    "endWordId": "word-00000002"
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "projectId": "550e8400-e29b-41d4-a716-446655440000",
+      "draft": {
+        "id": "draft-demo-001",
+        "baseRevisionId": "550e8400-e29b-41d4-a716-446655440001",
+        "sequence": 1,
+        "timelineSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "undoTransactionId": "transaction-transcript-cut-001",
+        "redoTransactionId": null
+      },
+      "timeline": {
+        "id": "550e8400-e29b-41d4-a716-446655440003",
+        "durationUs": 900000,
+        "frameRate": {
+          "numerator": 30,
+          "denominator": 1
+        }
+      },
+      "clips": [
+        {
+          "id": "clip-main",
+          "sourceId": "550e8400-e29b-41d4-a716-446655440002",
+          "timelineStartUs": 0,
+          "timelineEndUs": 900000,
+          "sourceStartUs": 100000,
+          "sourceEndUs": 1000000
+        }
+      ]
+    }
+  }
+}

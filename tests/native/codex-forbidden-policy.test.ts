@@ -276,7 +276,7 @@ try {
   const requireLunaHigh = process.argv.includes("--require-luna-high");
   const model = requireLunaHigh
     ? catalog.value.models.find(
-        (item) => item.id === "gpt-5.6-luna" && item.reasoning.includes("high"),
+        (item) => item.id === "gpt-6-luna" && item.reasoning.includes("high"),
       )
     : (catalog.value.models.find(
         (item) => item.id === catalog.value.selection?.modelId,
@@ -481,7 +481,12 @@ try {
       // Some pinned runtimes require the persisted thread to be loaded first.
       await transport!.request(
         "thread/resume",
-        buildThreadResumeRequest(threadId, auditPolicy),
+        buildThreadResumeRequest(threadId, auditPolicy, {
+          route: "dynamic",
+          nativeSubagentProtocol: "v1",
+          nativeSubagentModel: model.id,
+          nativeSubagentReasoning: reasoning,
+        }),
       );
       return turns(
         await transport!.request("thread/turns/list", pageParams(threadId)),
@@ -574,7 +579,12 @@ try {
   mark("parent-policy-metadata");
   const resumed: unknown = await transport.request(
     "thread/resume",
-    buildThreadResumeRequest(parentThreadId, auditPolicy),
+    buildThreadResumeRequest(parentThreadId, auditPolicy, {
+      route: "dynamic",
+      nativeSubagentProtocol: "v1",
+      nativeSubagentModel: model.id,
+      nativeSubagentReasoning: reasoning,
+    }),
   );
   mark("parent-policy-thread");
   assert.ok(record(resumed) && record(resumed.thread));

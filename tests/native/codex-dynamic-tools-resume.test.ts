@@ -27,7 +27,7 @@ const key = await lstat(join(root, "account", "auth.json"));
 assert.ok(key.isFile() && !(key.mode & 0o077));
 const policy = {
   cwd: join(root, "context"),
-  model: "gpt-5.6-luna",
+  model: "gpt-6-luna",
   effort: "high",
   baseInstructions:
     "Use only the host-defined codex_video_edit.editor_probe tool. Do not access files, shell, network, apps or external tools.",
@@ -112,7 +112,10 @@ try {
   transport = startTransport(resolveFirst);
   await transport.start(buildExperimentalInitialize("0.0.0"));
   const started = (await transport.request("thread/start", {
-    ...buildThreadStartRequest(policy),
+    ...buildThreadStartRequest(policy, {
+      route: "dynamic",
+      nativeSubagentProtocol: "disabled",
+    }),
     dynamicTools: [
       {
         type: "namespace",
@@ -163,7 +166,10 @@ try {
   await transport.start(buildExperimentalInitialize("0.0.0"));
   const resumed = (await transport.request(
     "thread/resume",
-    buildThreadResumeRequest(expectedThread, policy),
+    buildThreadResumeRequest(expectedThread, policy, {
+      route: "dynamic",
+      nativeSubagentProtocol: "disabled",
+    }),
   )) as { thread?: { id?: string } };
   assert.equal(resumed.thread?.id, expectedThread);
   step = "second-turn";

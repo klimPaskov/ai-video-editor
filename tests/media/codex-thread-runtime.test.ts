@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { CodexThreadProtocolError } from "../../packages/codex-bridge/src/thread-protocol.ts";
+import { ownedDynamicToolWireNames } from "../../packages/codex-bridge/src/dynamic-tools.ts";
 import { ProjectThreadRegistry } from "../../packages/codex-bridge/src/thread-registry.ts";
 import { ProjectThreadRuntime } from "../../packages/codex-bridge/src/thread-runtime.ts";
 
@@ -46,6 +47,7 @@ test("project runtime requires experimental negotiation and owns server IDs", as
     const opening = await runtime.openThreadRequest();
     assert.equal(opening.method, "thread/start");
     assert.deepEqual(opening.params.environments, []);
+    assert.equal(opening.params.config.features.code_mode_only, false);
 
     await runtime.acceptThreadResponse({
       thread: { id: "server-thread-1", ephemeral: false },
@@ -126,6 +128,7 @@ test("project runtime requires experimental negotiation and owns server IDs", as
     const resume = await reopened.openThreadRequest();
     assert.equal(resume.method, "thread/resume");
     assert.equal("environments" in resume.params, false);
+    assert.equal(resume.params.config.features.code_mode_only, false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -153,6 +156,85 @@ test("dynamic thread creation requires the exact reviewed host inventory", async
         }),
       CodexThreadProtocolError,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("dynamic thread start and resume retain the route-specific code-mode policy", async () => {
+  const fixtures = resolve("test-results", "codex-thread-runtime");
+  await mkdir(fixtures, { recursive: true });
+  const root = await mkdtemp(join(fixtures, "dynamic-fixture-"));
+  const options = {
+    experimentalApiNegotiated: true,
+    generation: 1,
+    projectId: "dynamic-project",
+    policy,
+    registry: await ProjectThreadRegistry.open(root),
+    allowedMcpServer: "codex-video-edit",
+    allowedMcpTools: new Set<string>(),
+    newThreadToolRoute: "dynamic" as const,
+    nativeSubagentProtocol: "v1" as const,
+    nativeSubagentModel: policy.model,
+    nativeSubagentReasoning: policy.effort,
+    allowedDynamicNamespace: "codex_video_edit",
+    allowedDynamicTools: ownedDynamicToolWireNames(),
+  };
+  try {
+    const runtime = new ProjectThreadRuntime(options);
+    const opening = await runtime.openThreadRequest();
+    assert.equal(opening.method, "thread/start");
+    assert.equal(opening.params.config.features.code_mode_only, true);
+    assert.equal(opening.params.config.features.multi_agent, true);
+    assert.deepEqual(opening.params.config.agents, {
+      enabled: true,
+      max_depth: 1,
+      default_subagent_model: policy.model,
+      default_subagent_reasoning_effort: policy.effort,
+    });
+    assert.deepEqual(
+      opening.params.dynamicTools?.[0]?.name,
+      "codex_video_edit",
+    );
+    const dynamicNamespace = opening.params.dynamicTools?.[0];
+    assert.ok(dynamicNamespace?.type === "namespace");
+    if (dynamicNamespace?.type !== "namespace")
+      throw new Error("Expected the owned dynamic namespace");
+    assert.equal(dynamicNamespace.tools.length, 9);
+    for (const tool of dynamicNamespace.tools) {
+      const inputSchema = tool.inputSchema as {
+        properties?: { project_id?: { const?: unknown } };
+      };
+      assert.equal(
+        inputSchema.properties?.project_id?.const,
+        "dynamic-project",
+      );
+    }
+    await runtime.acceptThreadResponse({
+      thread: { id: "dynamic-thread", ephemeral: false },
+      model: policy.model,
+      modelProvider: "openai",
+      cwd: policy.cwd,
+      approvalPolicy: "never",
+      approvalsReviewer: "user",
+      sandbox: { type: "readOnly", networkAccess: false },
+    });
+
+    const resumed = await new ProjectThreadRuntime({
+      ...options,
+      generation: 2,
+      registry: await ProjectThreadRegistry.open(root),
+    }).openThreadRequest();
+    assert.equal(resumed.method, "thread/resume");
+    assert.equal(resumed.params.config.features.code_mode_only, true);
+    assert.equal(resumed.params.config.features.multi_agent, true);
+    assert.deepEqual(resumed.params.config.agents, {
+      enabled: true,
+      max_depth: 1,
+      default_subagent_model: policy.model,
+      default_subagent_reasoning_effort: policy.effort,
+    });
+    assert.equal("dynamicTools" in resumed.params, false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

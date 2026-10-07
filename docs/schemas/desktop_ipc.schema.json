@@ -49,6 +49,22 @@
     {
       "type": "object",
       "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
+        "channel": { "const": "projects:transcript-cut" },
+        "payload": { "$ref": "#/$defs/manualTranscriptCutRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
       "required": [
         "channel",
         "response"
@@ -429,6 +445,149 @@
         },
         "payload": {
           "$ref": "#/$defs/projectNavigation"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "const": "transcription:get"
+        },
+        "payload": {
+          "$ref": "#/$defs/transcriptionJobRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/transcriptionProjectView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "const": "transcription:start"
+        },
+        "payload": {
+          "$ref": "#/$defs/transcriptionProjectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/transcriptionProjectView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "const": "transcription:stop"
+        },
+        "payload": {
+          "$ref": "#/$defs/transcriptionStopRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/transcriptionProjectView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "response", "payload"],
+      "properties": {
+        "channel": { "const": "projects:verify-draft-integrity" },
+        "payload": { "$ref": "#/$defs/projectRequest" },
+        "response": {
+          "oneOf": [
+            { "$ref": "#/$defs/error" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ok", "value"],
+              "properties": {
+                "ok": { "const": true },
+                "value": { "$ref": "#/$defs/projectDraftIntegrityView" }
+              }
+            }
+          ]
         }
       }
     },
@@ -1066,6 +1225,62 @@
       "additionalProperties": false,
       "required": ["channel", "payload", "response"],
       "properties": {
+        "channel": { "const": "projects:manual-restore-range" },
+        "payload": { "$ref": "#/$defs/manualRestoreRangeRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "projects:transcript-correction"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualTranscriptCorrectionRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
         "channel": { "const": "projects:manual-undo" },
         "payload": { "$ref": "#/$defs/manualUndoRequest" },
         "response": { "oneOf": [
@@ -1308,6 +1523,203 @@
         }
       }
     },
+    "transcriptionProjectRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      },
+      "description": "Main binds local analysis to this active project and its verified immutable sources. No source path is accepted."
+    },
+    "transcriptionJobRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "job_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "job_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^transcription-[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            }
+          ]
+        }
+      },
+      "description": "Polling repeats the same job ID after a request timeout; null asks for the current or cached project state."
+    },
+    "transcriptionStopRequest": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/transcriptionJobRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "job_id": {
+              "type": "string",
+              "pattern": "^transcription-[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            }
+          }
+        }
+      ]
+    },
+    "transcriptionProjectView": {
+      "$ref": "transcription_project_view.schema.json"
+    },
+    "transcriptTextOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "transcript_id",
+        "word_id",
+        "original_text",
+        "replacement_text"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "transcript_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "word_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "original_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "replacement_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      }
+    },
+    "manualTranscriptCorrectionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "sourceId",
+        "transcriptId",
+        "wordId",
+        "expectedText",
+        "replacementText"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "transcriptId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "wordId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "expectedText": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "replacementText": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "description": "Manual text-only correction bound to one existing local transcript word and the exact committed draft head. Main verifies source/transcript/word identity and the effective prior text before committing through the shared history."
+    },
+    "manualTranscriptCutRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "sourceId",
+        "transcriptId",
+        "startWordId",
+        "endWordId"
+      ],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "sourceId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "transcriptId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "startWordId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "endWordId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }
+      },
+      "description": "Manual transcript-linked ripple cut bound to one path-free local source/transcript word range and the exact committed draft head. Main validates identity, order and one continuous visible clip mapping, then commits exact source/output times through the shared history."
+    },
     "projectView": {
       "type": "object",
       "additionalProperties": false,
@@ -1358,6 +1770,14 @@
           "type": "array", "minItems": 1, "maxItems": 4096,
           "items": { "$ref": "#/$defs/projectClipView" },
           "description": "Optional for older exchange fixtures. Runtime emits exact ordered committed clips and matches their source IDs to source or sources."
+        },
+        "transcriptEdits": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/transcriptTextOverride"
+          },
+          "description": "Optional for older exchange fixtures. Text-only corrections in the shared draft history; recorded audio remains unchanged."
         },
         "timeline": {
           "$ref": "#/$defs/projectTimelineView"
@@ -1818,7 +2238,8 @@
         "projectId",
         "messages",
         "activities",
-        "message"
+        "message",
+        "retryable"
       ],
       "properties": {
         "status": {
@@ -1869,6 +2290,10 @@
               "type": "null"
             }
           ]
+        },
+        "retryable": {
+          "type": "boolean",
+          "description": "True only after the authoritative server marks the active Codex turn failed; it permits an explicit user retry of the last submitted request."
         }
       },
       "allOf": [
@@ -1893,6 +2318,9 @@
               },
               "message": {
                 "type": "null"
+              },
+              "retryable": {
+                "const": false
               }
             }
           },
@@ -1900,6 +2328,33 @@
             "properties": {
               "projectId": {
                 "$ref": "#/$defs/codexThreadId"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "retryable": {
+                "const": true
+              }
+            },
+            "required": ["retryable"]
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "const": "ready"
+              },
+              "messages": {
+                "contains": {
+                  "properties": {
+                    "role": {
+                      "const": "user"
+                    }
+                  },
+                  "required": ["role"]
+                }
               }
             }
           }
@@ -2012,6 +2467,15 @@
         }
       }
     },
+    "projectDraftIntegrityView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["draft", "structuralCheckpointRecorded"],
+      "properties": {
+        "draft": { "$ref": "#/$defs/projectDraftView" },
+        "structuralCheckpointRecorded": { "type": "boolean" }
+      }
+    },
     "projectDraftView": {
       "type": "object",
       "additionalProperties": false,
@@ -2034,6 +2498,13 @@
         "clips": {
           "type": "array", "minItems": 1, "maxItems": 4096,
           "items": { "$ref": "#/$defs/projectClipView" }
+        },
+        "transcriptEdits": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/transcriptTextOverride"
+          }
         }
       },
       "description": "Path-free current draft identity and timeline. Runtime requires distinct project, base revision, draft, and timeline IDs."
@@ -2083,6 +2554,22 @@
         "endUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
       },
       "description": "Renderer sends an output-timeline half-open range and committed head. Main injects trusted manual authority."
+    },
+    "manualRestoreRangeRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "sourceId", "sourceStartUs", "sourceEndUs"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "sourceId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+        "sourceStartUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "sourceEndUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-greaterThan": "sourceStartUs" }
+      },
+      "description": "Renderer sends one exact missing half-open source-time interval and committed head. Runtime additionally requires sourceStartUs < sourceEndUs; main resolves the immutable baseline and injects manual authority."
     },
     "manualUndoRequest": {
       "type": "object", "additionalProperties": false,

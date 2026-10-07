@@ -27,16 +27,24 @@ await mkdir(join(cwd, ".agents/skills/fixture-guide"), { recursive: true });
 await mkdir(codexHome);
 const guidance =
   "---\nname: fixture-guide\ndescription: Explain the synthetic fixture without changing files.\n---\nRead-only synthetic guidance for runtime discovery.\n";
+const updatedGuidance =
+  "---\nname: fixture-guide\ndescription: Describe the refreshed synthetic fixture without changing files.\n---\nUpdated read-only synthetic guidance for runtime discovery.\n";
 await writeFile(skill, guidance);
+let skillsChangedNotifications = 0;
 const client = new CodexClient({
   executable,
   cwd,
   codexHome,
   environment: { PATH: process.env.PATH },
+  onSkillsChanged: () => {
+    skillsChangedNotifications++;
+  },
 });
 const hash = (value: Buffer) =>
   createHash("sha256").update(value).digest("hex");
 try {
+  let changedSkillRefreshedWhileConnected = false;
+  let runtimeSkillChangeNotificationObserved = false;
   const provenance = {
     version: CODEX_VERSION,
     executableHash: hash(await readFile(executable)),
@@ -61,9 +69,36 @@ try {
     await client.connect();
     assert.deepEqual(await client.account(), { status: "signed_out" });
     const skills = await client.skills();
-    assert.ok(
-      skills.some((entry) => entry.name === "fixture-guide" && entry.enabled),
+    const fixtureSkill = skills.find((entry) => entry.name === "fixture-guide");
+    assert.ok(fixtureSkill?.enabled);
+    assert.equal(
+      fixtureSkill.description,
+      attempt === 0
+        ? "Explain the synthetic fixture without changing files."
+        : "Describe the refreshed synthetic fixture without changing files.",
     );
+    if (attempt === 0) {
+      const notificationsBeforeChange = skillsChangedNotifications;
+      await writeFile(skill, updatedGuidance);
+      const refreshedSkills = await client.skills();
+      const refreshed = refreshedSkills.find(
+        (entry) => entry.name === "fixture-guide",
+      );
+      assert.ok(refreshed?.enabled);
+      assert.equal(
+        refreshed.description,
+        "Describe the refreshed synthetic fixture without changing files.",
+      );
+      changedSkillRefreshedWhileConnected = true;
+      const notificationDeadline = Date.now() + 5000;
+      while (
+        skillsChangedNotifications === notificationsBeforeChange &&
+        Date.now() < notificationDeadline
+      )
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      runtimeSkillChangeNotificationObserved =
+        skillsChangedNotifications > notificationsBeforeChange;
+    }
     await assert.rejects(
       client.models(),
       (error: unknown) =>
@@ -77,7 +112,7 @@ try {
     );
     await closing;
   }
-  assert.equal(await readFile(skill, "utf8"), guidance);
+  assert.equal(await readFile(skill, "utf8"), updatedGuidance);
   await writeFile(
     join(evidence, "result.json"),
     JSON.stringify(
@@ -89,8 +124,10 @@ try {
         initializedConnections: 2,
         freshAccount: "signed_out",
         realSkillDiscovery: true,
+        changedSkillRefreshedWhileConnected,
+        runtimeSkillChangeNotificationObserved,
         modelsRequireChatgptAccount: true,
-        fixtureUnchanged: true,
+        updatedFixtureUnchanged: true,
         hostCredentialsCopied: false,
         authenticated: false,
         nativeWindow: false,

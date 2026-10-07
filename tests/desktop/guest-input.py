@@ -1,10 +1,13 @@
 """Observe and operate only the isolated Linux X11 desktop, never host input."""
 import argparse
 import ctypes as c
+import configparser
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -13,8 +16,88 @@ import uuid
 
 def validate_runtime():
     if (sys.platform != 'linux' or not hasattr(os, 'getuid') or os.getuid() != 1000
-            or os.environ.get('DISPLAY') != ':99' or not Path('/.dockerenv').is_file()):
-        raise RuntimeError('Guest input requires Docker, UID 1000 and display :99')
+            or os.environ.get('DISPLAY') != ':99'):
+        raise RuntimeError('Guest input requires Docker or verified WSL2, Linux UID 1000, and display :99')
+    if Path('/.dockerenv').is_file():
+        return
+    if (os.environ.get('CODEX_VIDEO_EDIT_WSL_TEST') != '1'
+            or not os.environ.get('WSL_DISTRO_NAME', '').startswith('codex-video-edit-test')
+            or any(os.environ.get(key) for key in
+                   ('WSL_INTEROP', 'WSL2_GUI_APPS_ENABLED', 'WSLENV',
+                    'WAYLAND_DISPLAY', 'PULSE_SERVER'))):
+        raise RuntimeError('Guest input requires Docker or verified WSL2 with integration disabled')
+    if 'microsoft-standard-wsl2' not in Path('/proc/sys/kernel/osrelease').read_text().lower():
+        raise RuntimeError('Guest input requires Docker or a verified WSL2 kernel')
+    configuration = configparser.ConfigParser()
+    configuration.read('/etc/wsl.conf')
+    if (configuration.get('automount', 'enabled', fallback='true').lower() != 'false'
+            or configuration.get('interop', 'enabled', fallback='true').lower() != 'false'
+            or configuration.get('interop', 'appendWindowsPath', fallback='true').lower() != 'false'):
+        raise RuntimeError('Guest input requires Docker or WSL2 with automount and interop disabled')
+    for line in Path('/proc/mounts').read_text().splitlines():
+        fields = line.split()
+        if len(fields) < 3:
+            continue
+        mount_point = re.sub(r'\\040', ' ', fields[1])
+        if mount_point == '/mnt/wsl' and fields[2] == 'tmpfs':
+            resolver_dir = Path('/mnt/wsl')
+            resolver_dir_stat = resolver_dir.stat()
+            hosts_file = resolver_dir / 'hosts'
+            resolver_file = resolver_dir / 'resolv.conf'
+            hosts_stat = hosts_file.stat()
+            resolver_stat = resolver_file.stat()
+            if (resolver_dir_stat.st_uid != 0 or resolver_dir_stat.st_mode & 0o777 != 0o755
+                    or sorted(path.name for path in resolver_dir.iterdir()) != ['hosts', 'resolv.conf']
+                    or hosts_stat.st_uid != 0 or hosts_stat.st_mode & 0o777 != 0o644
+                    or resolver_stat.st_uid != 0 or resolver_stat.st_mode & 0o777 != 0o644):
+                raise RuntimeError('The private WSL resolver mount is invalid')
+            manifest = json.loads((Path(__file__).resolve().parents[2] / 'scripts/wsl-public-hosts.json').read_text())
+            allowed = set(manifest['hostnames'])
+            mapped = set()
+            for line in hosts_file.read_text().splitlines():
+                fields = line.split()
+                if not fields:
+                    continue
+                if fields[0] == '127.0.0.1':
+                    if fields[1:] != ['localhost']:
+                        raise RuntimeError('The private WSL hosts file is invalid')
+                elif fields[0] == '::1':
+                    if fields[1:] != ['localhost', 'ip6-localhost', 'ip6-loopback']:
+                        raise RuntimeError('The private WSL hosts file is invalid')
+                elif len(fields) == 2 and ipaddress.ip_address(fields[0]).is_global and fields[1] in allowed:
+                    mapped.add(fields[1])
+                else:
+                    raise RuntimeError('The private WSL hosts file is invalid')
+            if mapped != allowed or hosts_file.read_text() != Path('/etc/hosts').read_text():
+                raise RuntimeError('The private WSL hosts mapping is incomplete')
+            resolver_lines = [
+                line.strip()
+                for line in resolver_file.read_text().splitlines()
+                if line.strip() and not line.strip().startswith('#')
+            ]
+            if resolver_lines != ['nameserver 127.0.0.1', 'options timeout:1 attempts:1']:
+                raise RuntimeError('The private WSL resolver configuration is invalid')
+            if resolver_file.read_text() != Path('/etc/resolv.conf').read_text():
+                raise RuntimeError('The WSL resolver escaped the private test namespace')
+            continue
+        if mount_point == '/tmp/.X11-unix' and fields[2] == 'tmpfs':
+            x11_socket_dir = Path('/tmp/.X11-unix').stat()
+            if x11_socket_dir.st_uid != 0 or x11_socket_dir.st_mode & 0o1777 != 0o1777:
+                raise RuntimeError('The WSL X11 socket directory is not private')
+            continue
+        if (fields[2] == 'drvfs' or re.match(r'^/mnt/[a-z](?:/|$)', mount_point, re.I)
+                or mount_point == '/mnt/wsl' or mount_point.startswith('/mnt/wsl/')
+                or mount_point == '/mnt/wslg' or mount_point.startswith('/mnt/wslg/')
+                or mount_point == '/tmp/.X11-unix'):
+            raise RuntimeError('Guest input requires Docker or WSL2 with host, Docker, and WSLg mounts removed')
+    mount_pairs = {
+        (line.split()[1], line.split()[2])
+        for line in Path('/proc/mounts').read_text().splitlines()
+        if len(line.split()) >= 3
+    }
+    if {('/mnt/wsl', 'tmpfs'), ('/etc/hosts', 'tmpfs'),
+            ('/tmp/.X11-unix', 'tmpfs')} - mount_pairs:
+        raise RuntimeError('The private WSL resolver mount is unavailable')
 
 
 def main():

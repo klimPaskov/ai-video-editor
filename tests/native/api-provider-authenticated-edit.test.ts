@@ -361,6 +361,7 @@ try {
   await page.getByRole("button", { name: "Codex", exact: true }).click();
   await page.locator("#assistant-provider").selectOption(provider);
   await expect(page.locator("#api-turn-notice")).toBeVisible();
+  await expect(page.locator("#codex-context-notice")).toBeHidden();
   await page
     .getByRole("button", { name: "Open conversation", exact: true })
     .click();

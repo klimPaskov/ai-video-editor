@@ -1,0 +1,59 @@
+{
+  "channel": "projects:manual-restore-range",
+  "payload": {
+    "schema_version": "1.0",
+    "projectId": "ec68bd7a-79eb-4a96-9475-4db15df75d3a",
+    "draftId": "draft-bfddc982-903a-4570-8efc-27dc381b98b6",
+    "baseRevisionId": "a647be34-c87d-44eb-82fb-70d6afcbdc31",
+    "expectedSequence": 2,
+    "expectedTimelineSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sourceId": "d81632fb-4cde-4d40-a75d-679e22c15f2a",
+    "sourceStartUs": 500000,
+    "sourceEndUs": 1000000
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "projectId": "ec68bd7a-79eb-4a96-9475-4db15df75d3a",
+      "draft": {
+        "id": "draft-bfddc982-903a-4570-8efc-27dc381b98b6",
+        "baseRevisionId": "a647be34-c87d-44eb-82fb-70d6afcbdc31",
+        "sequence": 3,
+        "timelineSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "undoTransactionId": "manual-transaction-restore-003",
+        "redoTransactionId": null
+      },
+      "timeline": {
+        "id": "d0d743dc-b2af-4a60-8dd9-3cb7644a7ba4",
+        "durationUs": 1500000,
+        "frameRate": { "numerator": 60, "denominator": 1 }
+      },
+      "clips": [
+        {
+          "id": "restored-left",
+          "sourceId": "d81632fb-4cde-4d40-a75d-679e22c15f2a",
+          "timelineStartUs": 0,
+          "timelineEndUs": 500000,
+          "sourceStartUs": 0,
+          "sourceEndUs": 500000
+        },
+        {
+          "id": "restored-middle",
+          "sourceId": "d81632fb-4cde-4d40-a75d-679e22c15f2a",
+          "timelineStartUs": 500000,
+          "timelineEndUs": 1000000,
+          "sourceStartUs": 500000,
+          "sourceEndUs": 1000000
+        },
+        {
+          "id": "restored-right",
+          "sourceId": "d81632fb-4cde-4d40-a75d-679e22c15f2a",
+          "timelineStartUs": 1000000,
+          "timelineEndUs": 1500000,
+          "sourceStartUs": 1000000,
+          "sourceEndUs": 1500000
+        }
+      ]
+    }
+  }
+}

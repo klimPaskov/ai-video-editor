@@ -6,6 +6,7 @@ import test from "node:test";
 import { CodexProjectThreadClient } from "../../packages/codex-bridge/src/thread-client.ts";
 import { CodexThreadProtocolError } from "../../packages/codex-bridge/src/thread-protocol.ts";
 import { ProjectThreadRegistry } from "../../packages/codex-bridge/src/thread-registry.ts";
+import type { DynamicToolAccess } from "../../packages/codex-bridge/src/dynamic-tools.ts";
 import type {
   ThreadHistorySnapshot,
   ThreadStreamEvent,
@@ -24,6 +25,7 @@ async function fixture(
   dynamicToolInvoker?: (
     name: CodexVideoEditToolName,
     input: unknown,
+    access: DynamicToolAccess,
   ) => Promise<unknown>,
 ) {
   const parent = resolve("test-results", "codex-thread-client");
@@ -255,6 +257,344 @@ test("a dynamic binding resumes only with its host-tool boundary", async () => {
     assert.deepEqual(calls, ["thread/resume", "turn/start"]);
   } finally {
     await rm(first.root, { recursive: true, force: true });
+  }
+});
+
+test("native child dynamic calls require correlated lineage and are read-only", async () => {
+  const accessModes: DynamicToolAccess[] = [];
+  const value = await fixture(undefined, async (_name, _input, access) => {
+    accessModes.push(access);
+    return { status: "read" };
+  });
+  try {
+    await value.client.open();
+    value.setHandler(async (method) => {
+      assert.equal(method, "turn/start");
+      return turnResponse("parent-turn");
+    });
+    await value.client.startTurn({ text: "Inspect the active project" });
+    value.client.notification("item/started", {
+      threadId: "thread-1",
+      turnId: "parent-turn",
+      startedAtMs: 1,
+      item: {
+        type: "collabAgentToolCall",
+        id: "spawn-call",
+        tool: "spawnAgent",
+        status: "inProgress",
+        senderThreadId: "thread-1",
+        receiverThreadIds: ["child-1"],
+        prompt: null,
+        model: null,
+        reasoningEffort: null,
+        agentsStates: {},
+      },
+    });
+    value.client.notification("thread/started", {
+      thread: {
+        id: "child-1",
+      },
+    });
+    value.client.notification("turn/started", {
+      threadId: "child-1",
+      turn: { id: "child-turn", status: "inProgress", items: [] },
+    });
+
+    const read = (threadId: string, turnId: string, tool: string) =>
+      value.client.serverRequest({
+        id: `tool-${threadId}-${tool}`,
+        method: "item/tool/call",
+        params: {
+          threadId,
+          turnId,
+          callId: `call-${threadId}-${tool}`,
+          namespace: "codex_video_edit",
+          tool,
+          arguments: { schema_version: "1.0", project_id: "project-1" },
+        },
+        signal: new AbortController().signal,
+      });
+    const result = (await read(
+      "child-1",
+      "child-turn",
+      "project_get_summary",
+    )) as { success: boolean };
+    assert.equal(result.success, true);
+    assert.deepEqual(accessModes, ["native_child_read_only"]);
+    assert.equal(
+      value.calls.some(({ method }) => method === "thread/read"),
+      false,
+    );
+
+    const denied = (await read("child-1", "child-turn", "cut_trim_edge")) as {
+      success: boolean;
+      contentItems: Array<{ text: string }>;
+    };
+    assert.equal(denied.success, false);
+    assert.match(denied.contentItems[0]!.text, /tool_not_available/u);
+    assert.deepEqual(accessModes, ["native_child_read_only"]);
+  } finally {
+    await rm(value.root, { recursive: true, force: true });
+  }
+});
+
+test("V2 native child reads require parent-owned subagent activity", async () => {
+  const accessModes: DynamicToolAccess[] = [];
+  const value = await fixture(undefined, async (_name, _input, access) => {
+    accessModes.push(access);
+    return { status: "read" };
+  });
+  try {
+    await value.client.open();
+    value.setHandler(async (method) => {
+      assert.equal(method, "turn/start");
+      return turnResponse("parent-turn");
+    });
+    await value.client.startTurn({ text: "Inspect the active project" });
+    value.client.notification("item/started", {
+      threadId: "thread-1",
+      turnId: "parent-turn",
+      startedAtMs: 1,
+      item: {
+        type: "subAgentActivity",
+        id: "v2-spawn-call",
+        kind: "started",
+        agentThreadId: "child-1",
+        agentPath: "/private/child",
+      },
+    });
+    value.client.notification("turn/started", {
+      threadId: "child-1",
+      turn: { id: "child-turn", status: "inProgress", items: [] },
+    });
+    const request = (threadId: string, turnId: string) =>
+      value.client.serverRequest({
+        id: `v2-child-read-${threadId}`,
+        method: "item/tool/call",
+        params: {
+          threadId,
+          turnId,
+          callId: `v2-call-${threadId}`,
+          namespace: "codex_video_edit",
+          tool: "project_get_summary",
+          arguments: { schema_version: "1.0", project_id: "project-1" },
+        },
+        signal: new AbortController().signal,
+      });
+    const read = (await request("child-1", "child-turn")) as {
+      success: boolean;
+    };
+    assert.equal(read.success, true);
+    assert.deepEqual(accessModes, ["native_child_read_only"]);
+
+    value.client.notification("item/started", {
+      threadId: "child-1",
+      turnId: "child-turn",
+      startedAtMs: 2,
+      item: {
+        type: "subAgentActivity",
+        id: "nested-spawn-call",
+        kind: "started",
+        agentThreadId: "grandchild-1",
+        agentPath: "/private/grandchild",
+      },
+    });
+    assert.throws(
+      () => request("grandchild-1", "grandchild-turn"),
+      CodexThreadProtocolError,
+    );
+    assert.deepEqual(accessModes, ["native_child_read_only"]);
+  } finally {
+    await rm(value.root, { recursive: true, force: true });
+  }
+});
+
+test("completed native spawn results correlate the returned child thread", async () => {
+  const accessModes: DynamicToolAccess[] = [];
+  const value = await fixture(undefined, async (_name, _input, access) => {
+    accessModes.push(access);
+    return { status: "read" };
+  });
+  try {
+    await value.client.open();
+    let resolveStart!: (response: unknown) => void;
+    let startSubmitted!: () => void;
+    const submitted = new Promise<void>((resolve) => {
+      startSubmitted = resolve;
+    });
+    value.setHandler(async (method) => {
+      assert.equal(method, "turn/start");
+      startSubmitted();
+      return new Promise((resolve) => {
+        resolveStart = resolve;
+      });
+    });
+    const start = value.client.startTurn({
+      text: "Inspect the active project",
+    });
+    await submitted;
+    value.client.notification("thread/started", {
+      thread: {
+        id: "child-1",
+        parentThreadId: "thread-1",
+        ephemeral: false,
+      },
+    });
+    value.client.notification("turn/started", {
+      threadId: "thread-1",
+      turn: { id: "parent-turn", status: "inProgress", items: [] },
+    });
+    const spawn = (status: "inProgress" | "completed", receivers: string[]) =>
+      value.client.notification(
+        status === "inProgress" ? "item/started" : "item/completed",
+        {
+          threadId: "thread-1",
+          turnId: "parent-turn",
+          ...(status === "inProgress"
+            ? { startedAtMs: 1 }
+            : { completedAtMs: 2 }),
+          item: {
+            type: "collabAgentToolCall",
+            id: "spawn-call",
+            tool: "spawnAgent",
+            status,
+            senderThreadId: "thread-1",
+            receiverThreadIds: receivers,
+            prompt: null,
+            model: null,
+            reasoningEffort: null,
+            agentsStates: {},
+          },
+        },
+      );
+    spawn("inProgress", []);
+    value.client.notification("turn/started", {
+      threadId: "child-1",
+      turn: { id: "child-turn", status: "inProgress", items: [] },
+    });
+    spawn("completed", ["child-1"]);
+    const parentEventCount = value.events.length;
+    value.client.notification("item/started", {
+      threadId: "child-1",
+      turnId: "child-turn",
+      startedAtMs: 1,
+      item: { id: "child-message", type: "agentMessage" },
+    });
+    value.client.notification("item/agentMessage/delta", {
+      threadId: "child-1",
+      turnId: "child-turn",
+      itemId: "child-message",
+      delta: "Read-only result",
+    });
+    value.client.notification("item/completed", {
+      threadId: "child-1",
+      turnId: "child-turn",
+      completedAtMs: 2,
+      item: { id: "child-message", type: "agentMessage" },
+    });
+    assert.equal(value.events.length, parentEventCount);
+    const result = (await value.client.serverRequest({
+      id: "completed-spawn-child-read",
+      method: "item/tool/call",
+      params: {
+        threadId: "child-1",
+        turnId: "child-turn",
+        callId: "completed-spawn-child-read-call",
+        namespace: "codex_video_edit",
+        tool: "project_get_summary",
+        arguments: { schema_version: "1.0", project_id: "project-1" },
+      },
+      signal: new AbortController().signal,
+    })) as { success: boolean };
+    assert.equal(result.success, true);
+    assert.deepEqual(accessModes, ["native_child_read_only"]);
+    resolveStart(turnResponse("parent-turn"));
+    await start;
+  } finally {
+    await rm(value.root, { recursive: true, force: true });
+  }
+});
+
+test("native child reads remain correlated before the parent turn/start response", async () => {
+  const accessModes: DynamicToolAccess[] = [];
+  const value = await fixture(undefined, async (_name, _input, access) => {
+    accessModes.push(access);
+    return { status: "read" };
+  });
+  try {
+    await value.client.open();
+    let resolveStart!: (response: unknown) => void;
+    let startSubmitted!: () => void;
+    const submitted = new Promise<void>((resolve) => {
+      startSubmitted = resolve;
+    });
+    value.setHandler(async (method) => {
+      assert.equal(method, "turn/start");
+      startSubmitted();
+      return new Promise((resolve) => {
+        resolveStart = resolve;
+      });
+    });
+    const start = value.client.startTurn({ text: "Inspect this project" });
+    await submitted;
+    value.client.notification("item/started", {
+      threadId: "thread-1",
+      turnId: "parent-turn",
+      startedAtMs: 1,
+      item: {
+        type: "subAgentActivity",
+        id: "spawn-call",
+        kind: "started",
+        agentThreadId: "child-1",
+        agentPath: "/private/child",
+      },
+    });
+    value.client.notification("thread/started", {
+      thread: {
+        id: "child-1",
+        parentThreadId: "thread-1",
+        ephemeral: false,
+        source: {
+          subAgent: {
+            thread_spawn: {
+              parent_thread_id: "thread-1",
+              depth: 1,
+              agent_path: null,
+              agent_nickname: null,
+              agent_role: null,
+            },
+          },
+        },
+      },
+    });
+    value.client.notification("turn/started", {
+      threadId: "child-1",
+      turn: { id: "child-turn", status: "inProgress", items: [] },
+    });
+    const read = await value.client.serverRequest({
+      id: "early-child-read",
+      method: "item/tool/call",
+      params: {
+        threadId: "child-1",
+        turnId: "child-turn",
+        callId: "early-child-read-call",
+        namespace: "codex_video_edit",
+        tool: "project_get_summary",
+        arguments: { schema_version: "1.0", project_id: "project-1" },
+      },
+      signal: new AbortController().signal,
+    });
+    assert.deepEqual(read, {
+      contentItems: [
+        { type: "inputText", text: JSON.stringify({ status: "read" }) },
+      ],
+      success: true,
+    });
+    assert.deepEqual(accessModes, ["native_child_read_only"]);
+    resolveStart(turnResponse("parent-turn"));
+    await start;
+  } finally {
+    await rm(value.root, { recursive: true, force: true });
   }
 });
 
@@ -934,6 +1274,62 @@ test("unsupported or uncorrelated server requests fail closed", async () => {
         }),
       (error: unknown) =>
         error instanceof CodexThreadProtocolError && error.code === "forbidden",
+    );
+  } finally {
+    await rm(fixtureState.root, { recursive: true, force: true });
+  }
+});
+
+test("async user-input server requests are rejected without projecting questions", async () => {
+  const fixtureState = await fixture();
+  try {
+    await fixtureState.client.open();
+    fixtureState.setHandler(async () => turnResponse("turn-user-input"));
+    await fixtureState.client.startTurn({ text: "Inspect the draft" });
+    assert.throws(
+      () =>
+        fixtureState.client.serverRequest({
+          id: "request-user-input",
+          method: "item/tool/requestUserInput",
+          params: {
+            threadId: "thread-1",
+            turnId: "turn-user-input",
+            itemId: "user-input-call",
+            questions: [
+              {
+                id: "question-1",
+                header: "Confirm",
+                question: "private-test-user-question",
+                isOther: false,
+                isSecret: false,
+                options: [{ label: "Continue", description: "Fixture" }],
+              },
+            ],
+          },
+          signal: new AbortController().signal,
+        }),
+      (error: unknown) =>
+        error instanceof CodexThreadProtocolError && error.code === "forbidden",
+    );
+    assert.throws(
+      () =>
+        fixtureState.client.notification("item/agentMessage/delta", {
+          threadId: "thread-1",
+          turnId: "turn-user-input",
+          delta: "private-test-after-quarantine",
+        }),
+      (error: unknown) =>
+        error instanceof CodexThreadProtocolError && error.code === "forbidden",
+    );
+    assert.ok(
+      !JSON.stringify(fixtureState.events).includes(
+        "private-test-user-question",
+      ),
+    );
+    assert.ok(
+      !JSON.stringify(fixtureState.events).includes(
+        "private-test-after-quarantine",
+      ),
     );
   } finally {
     await rm(fixtureState.root, { recursive: true, force: true });
