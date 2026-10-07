@@ -121,7 +121,7 @@ function collectStrings(value: unknown, depth = 0): string[] {
 
 interface ToolSurfaceEvidence {
   route: "mcp" | "dynamic";
-  ownedToolCount: 9;
+  ownedToolCount: 12;
   nativeAgentToolCount: number;
   nestedV2ToolCount: number;
   clockToolCount: number;
@@ -330,7 +330,7 @@ async function verifyToolSurfaceRollout(options: {
       expectedAgentCount + expectedV2Count + expectedClockCount;
     const expectedOtherCount = 0;
     for (const [key, value] of [
-      ["ownedCount", 9],
+      ["ownedCount", 12],
       ["agentCount", expectedAgentCount],
       ["v2AgentCount", expectedV2Count],
       ["clockCount", expectedClockCount],
@@ -376,7 +376,7 @@ async function verifyToolSurfaceRollout(options: {
     mark("surface-audit-complete");
     return {
       route: options.toolRoute,
-      ownedToolCount: 9,
+      ownedToolCount: 12,
       nativeAgentToolCount: expectedAgentCount,
       nestedV2ToolCount: expectedV2Count,
       clockToolCount: expectedClockCount,

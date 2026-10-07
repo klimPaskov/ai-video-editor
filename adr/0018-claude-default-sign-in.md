@@ -30,3 +30,5 @@ The editor runs the user's own installed, unmodified Claude Code CLI. Anthropic'
 - Default: Claude is the first Settings provider section and the default assistant drawer route. Codex and the API-key providers are unchanged alternatives.
 
 Details, evidence and remaining gates are in `docs/48_CLAUDE_CONNECTION.md`.
+
+Addendum (2026-10-07): the guarded editor inventory grew from nine to twelve tools with `zoom.set`, `zoom.remove` and `speed.set`; the init inventory check derives from the same shared tool-name list. A fresh real-CLI init probe of the larger inventory is pending.

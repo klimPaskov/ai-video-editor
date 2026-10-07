@@ -159,10 +159,8 @@ import {
   invokeWithProjectDraftRefresh,
 } from "./project-runtime.ts";
 import type { ProjectDraftNotice } from "./project-runtime.ts";
-import {
-  sourceAt,
-  type ClipSpeed,
-} from "../../../packages/domain/src/speed.ts";
+import type { ClipSpeed } from "../../../packages/domain/src/speed.ts";
+import { zoomSourceRange } from "../../../packages/domain/src/zoom.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
 const page = `${origin}/index.html`;
@@ -1621,25 +1619,13 @@ async function start(): Promise<void> {
       : undefined;
     if (request.zoomId && !existing)
       throw new UserFacingError("That zoom was removed. Add it again.");
-    const clips = draft.timeline.clips;
-    const at = (us: number) =>
-      clips.find(
-        (clip) => us >= clip.timeline_start_us && us < clip.timeline_end_us,
-      );
-    const first = at(request.startUs);
-    const last = at(request.endUs - 1);
-    if (!existing && (!first || !last || first.source_id !== last.source_id))
+    const range =
+      existing ??
+      zoomSourceRange(draft.timeline.clips, request.startUs, request.endUs);
+    if (!range)
       throw new UserFacingError(
         "A zoom must stay within footage from one recording.",
       );
-    const sourceId = existing?.source_id ?? first!.source_id;
-    const sourceStartUs =
-      existing?.source_start_us ?? sourceAt(first!, request.startUs);
-    const sourceEndUs =
-      existing?.source_end_us ??
-      (request.endUs === last!.timeline_end_us
-        ? last!.source_end_us
-        : sourceAt(last!, request.endUs));
     try {
       const committed = await invokeWithProjectDraftRefresh({
         toolName: "zoom.set",
@@ -1665,9 +1651,9 @@ async function start(): Promise<void> {
                   zoom_id:
                     request.zoomId ??
                     `zoom-${randomUUID().replaceAll("-", "")}`,
-                  source_id: sourceId,
-                  source_start_us: sourceStartUs,
-                  source_end_us: sourceEndUs,
+                  source_id: range.source_id,
+                  source_start_us: range.source_start_us,
+                  source_end_us: range.source_end_us,
                   center_x: request.centerX,
                   center_y: request.centerY,
                   scale: request.scale,

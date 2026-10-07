@@ -40,6 +40,7 @@ The user can add a zoom block, drag its edges, move or resize the target rectang
 - **Motion.** Magnification eases in and out with smoothstep over at most 0.4 s (a third of a short zoom) at the zoom's real edges. The visible window is centred on the point and kept inside the frame. Preview and export use the same functions (`packages/domain/src/zoom.ts`).
 - **Export.** A per-frame FFmpeg `scale`/`crop` stage in the draft's own pixel format runs before burned-in captions and before short-clip reframing. Outside zooms the magnification is exactly 1 and frames pass through bit-identical, which media and packaged native tests verify; the lossless master is verified against the composed frames.
 - **Timeline.** Zoom blocks appear on the timeline strip with their strength.
+- **Assistants (2026-10-07).** Claude, Codex and the API providers can call the guarded `zoom.set` and `zoom.remove` tools (docs/30). They are the manual zoom's equivalents, not automatic zooms: the same output-to-source mapping (shared `zoomSourceRange`), limits, exact draft-head freshness, transaction engine and Undo, with the assistant's origin. Each assistant's draft summary lists zooms with their visible output ranges. The model cannot see frames, so the point comes from the user; tool descriptions limit zooms to briefly making a small on-screen detail readable. Covered by media tests; native assistant runs are pending.
 
 Not yet implemented: dragging zoom edges, target rectangles, follow-cursor mode and automatic zooms (P7-01).
 

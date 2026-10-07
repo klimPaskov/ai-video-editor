@@ -6,6 +6,7 @@ import {
   zoomAt,
   zoomFilter,
   zoomIntervals,
+  zoomSourceRange,
   zoomWindow,
   type ZoomEffect,
 } from "../../packages/domain/src/zoom.ts";
@@ -175,3 +176,40 @@ test(
     );
   },
 );
+
+test("an output range maps to one source's time through cuts and speed", () => {
+  const clip = (
+    sourceId: string,
+    sourceStart: number,
+    sourceEnd: number,
+    start: number,
+    end: number,
+    speed?: number,
+  ) => ({
+    source_id: sourceId,
+    source_start_us: sourceStart,
+    source_end_us: sourceEnd,
+    timeline_start_us: start,
+    timeline_end_us: end,
+    ...(speed ? { speed } : {}),
+  });
+  const clips = [
+    clip("source-a", 0, 1_000_000, 0, 1_000_000),
+    // A cut removed source [1 s, 2 s); the rest plays at 2x.
+    clip("source-a", 2_000_000, 4_000_000, 1_000_000, 2_000_000, 2),
+    clip("source-b", 0, 1_000_000, 2_000_000, 3_000_000),
+  ];
+  assert.deepEqual(zoomSourceRange(clips, 500_000, 1_500_000), {
+    source_id: "source-a",
+    source_start_us: 500_000,
+    source_end_us: 3_000_000,
+  });
+  // Ending exactly at a clip's end keeps that clip's exact source end.
+  assert.deepEqual(zoomSourceRange(clips, 1_000_000, 2_000_000), {
+    source_id: "source-a",
+    source_start_us: 2_000_000,
+    source_end_us: 4_000_000,
+  });
+  assert.equal(zoomSourceRange(clips, 1_500_000, 2_500_000), null);
+  assert.equal(zoomSourceRange(clips, 2_500_000, 3_000_001), null);
+});

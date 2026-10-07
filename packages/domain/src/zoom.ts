@@ -3,7 +3,7 @@
  * one magnifies a fixed point of the frame by `scale`, easing in at its
  * start and out at its end. The same math drives the preview and export.
  */
-import { viewTimelineAt } from "./speed.ts";
+import { sourceAt, viewTimelineAt } from "./speed.ts";
 
 export interface ZoomEffect {
   zoom_id: string;
@@ -125,6 +125,44 @@ export function assertZoomEffects(
         other.source_start_us < zoom.source_end_us
       )
         invalid();
+}
+
+/**
+ * Maps output range [startUs, endUs) to one source's time through the clip
+ * map: the clips under its first and last microsecond must show the same
+ * source. Returns null otherwise. The range may span cuts of that source.
+ */
+export function zoomSourceRange(
+  clips: readonly {
+    source_id: string;
+    source_start_us: number;
+    source_end_us: number;
+    timeline_start_us: number;
+    timeline_end_us: number;
+    speed?: number;
+  }[],
+  startUs: number,
+  endUs: number,
+): {
+  source_id: string;
+  source_start_us: number;
+  source_end_us: number;
+} | null {
+  const at = (us: number) =>
+    clips.find(
+      (clip) => us >= clip.timeline_start_us && us < clip.timeline_end_us,
+    );
+  const first = at(startUs);
+  const last = at(endUs - 1);
+  if (!first || !last || first.source_id !== last.source_id) return null;
+  return {
+    source_id: first.source_id,
+    source_start_us: sourceAt(first, startUs),
+    source_end_us:
+      endUs === last.timeline_end_us
+        ? last.source_end_us
+        : sourceAt(last, endUs),
+  };
 }
 
 /** Output-time pieces of each zoom that the clip map keeps visible. */

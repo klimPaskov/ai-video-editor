@@ -216,7 +216,9 @@ test("turn arguments disable built-in tools, settings and prompts", () => {
   assert.equal(value("--session-id"), "11111111-2222-4333-8444-555555555555");
   assert.equal(value("--effort"), "high");
   assert.ok(!args.includes("--resume"));
-  assert.equal(claudeEditorTools.length, 9);
+  assert.equal(claudeEditorTools.length, 12);
+  for (const name of ["zoom_set", "zoom_remove", "speed_set"])
+    assert.ok(claudeEditorTools.includes(`mcp__ai_video_editor__${name}`));
   for (const name of claudeEditorTools)
     assert.match(name, /^mcp__ai_video_editor__[a-z_]+$/u);
 });
@@ -318,6 +320,35 @@ test("projection streams text, tracks activity and completes", () => {
     kind: "completed",
     text: "Reading\n\nDone.",
   });
+});
+
+test("zoom and speed tools pass the inventory and count as pending edits", () => {
+  const turn = projection();
+  assert.equal(turn.handle(init()), true);
+  assert.equal(
+    turn.handle({
+      type: "assistant",
+      parent_tool_use_id: null,
+      message: {
+        content: ["zoom_set", "zoom_remove", "speed_set"].map((name, i) => ({
+          type: "tool_use",
+          id: `toolu_${i + 1}`,
+          name: `mcp__${claudeEditorServer}__${name}`,
+        })),
+      },
+    }),
+    true,
+  );
+  assert.equal(turn.violation, false);
+  assert.deepEqual(
+    turn.activities.map((item) => [item.label, item.mutating]),
+    [
+      ["Setting a zoom", true],
+      ["Removing a zoom", true],
+      ["Changing playback speed", true],
+    ],
+  );
+  assert.equal(turn.pendingMutation, true);
 });
 
 test("projection maps documented failures to fixed issues", () => {

@@ -212,24 +212,9 @@
       ]
     },
     {
-      "name": "zoom.add",
+      "name": "zoom.set",
       "mode": "mutation",
-      "description": "Add a purposeful zoom.",
-      "undoable": true,
-      "user_confirmation": "none",
-      "allowed_scope": "active_draft",
-      "input_schema": "generated from implementation types",
-      "output_schema": "generated from implementation types",
-      "forbidden_effects": [
-        "overwrite source",
-        "delete project",
-        "approve export"
-      ]
-    },
-    {
-      "name": "zoom.update",
-      "mode": "mutation",
-      "description": "Update zoom timing, target, scale, or easing.",
+      "description": "Set one zoom on a half-open output-time range of at least 0.5 s within one recording, with a frame-fraction point and scale 1.1-4; an existing zoom_id keeps its source range. Assistant-invoked equivalent of the manual zoom, not automatic zoom detection.",
       "undoable": true,
       "user_confirmation": "none",
       "allowed_scope": "active_draft",
@@ -244,7 +229,7 @@
     {
       "name": "zoom.remove",
       "mode": "mutation",
-      "description": "Remove a zoom operation.",
+      "description": "Remove one zoom by zoom_id with shared undo.",
       "undoable": true,
       "user_confirmation": "none",
       "allowed_scope": "active_draft",
@@ -257,39 +242,9 @@
       ]
     },
     {
-      "name": "speed.add",
+      "name": "speed.set",
       "mode": "mutation",
-      "description": "Add a bounded speed segment with explicit audio behavior.",
-      "undoable": true,
-      "user_confirmation": "none",
-      "allowed_scope": "active_draft",
-      "input_schema": "generated from implementation types",
-      "output_schema": "generated from implementation types",
-      "forbidden_effects": [
-        "overwrite source",
-        "delete project",
-        "approve export"
-      ]
-    },
-    {
-      "name": "speed.update",
-      "mode": "mutation",
-      "description": "Update a speed segment.",
-      "undoable": true,
-      "user_confirmation": "none",
-      "allowed_scope": "active_draft",
-      "input_schema": "generated from implementation types",
-      "output_schema": "generated from implementation types",
-      "forbidden_effects": [
-        "overwrite source",
-        "delete project",
-        "approve export"
-      ]
-    },
-    {
-      "name": "speed.remove",
-      "mode": "mutation",
-      "description": "Remove a speed segment.",
+      "description": "Set a half-open output-time range to speed 1, 2, 3, 4 or 8 (1 restores normal) with pitch-kept audio and shared undo. Assistant-invoked equivalent of the manual speed control, not automatic speed-range detection.",
       "undoable": true,
       "user_confirmation": "none",
       "allowed_scope": "active_draft",

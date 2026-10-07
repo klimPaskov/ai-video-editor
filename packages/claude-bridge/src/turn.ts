@@ -31,6 +31,9 @@ const activityLabels: Record<string, { label: string; mutating: boolean }> = {
   cut_delete_range: { label: "Cutting a range", mutating: true },
   cut_delete_ranges: { label: "Cutting ranges", mutating: true },
   cut_restore_range: { label: "Restoring a range", mutating: true },
+  zoom_set: { label: "Setting a zoom", mutating: true },
+  zoom_remove: { label: "Removing a zoom", mutating: true },
+  speed_set: { label: "Changing playback speed", mutating: true },
   timeline_undo: { label: "Undoing the last edit", mutating: true },
 };
 
