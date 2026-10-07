@@ -33,11 +33,12 @@ import {
 } from "../../packages/codex-bridge/src/transport.ts";
 import { buildCodexAppServerArguments } from "../../packages/codex-bridge/src/client.ts";
 import { buildExperimentalInitialize } from "../../packages/codex-bridge/src/thread-protocol.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux", "Requires isolated Linux guest");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 const configArgument = process.argv[3];
 assert.ok(executablePath && isAbsolute(executablePath));

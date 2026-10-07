@@ -13,11 +13,12 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron, expect } from "playwright/test";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 await access("/usr/bin/chromium");
 await access("/usr/bin/xdg-open");
 const executablePath = process.argv[2];

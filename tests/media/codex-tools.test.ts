@@ -779,6 +779,13 @@ test("inactive, stale, excess, path, source-mutation, and arbitrary tools fail c
     service.invoke("project.get_summary", readInput(other.project.project_id)),
     expectCode("inactive_project"),
   );
+  // A model that mistyped the ID is told the one project it may use.
+  await assert.rejects(
+    service.invoke("project.get_summary", readInput(other.project.project_id)),
+    (error: Error) =>
+      error.message ===
+      `That project is not the active project. The active project_id is "${active.project.project_id}".`,
+  );
   await assert.rejects(
     service.invoke("cut.trim_edge", trimInput(otherInitial.draft)),
     expectCode("inactive_project"),

@@ -27,6 +27,7 @@ import type { DesktopBridge } from "../../apps/desktop/src/bridge.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 import { ProjectStore } from "../../packages/project-store/src/store.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(
   process.platform,
@@ -36,7 +37,7 @@ assert.equal(
 assert.ok(process.getuid);
 assert.equal(process.getuid(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const suppliedExecutable = process.argv[2];
 assert.ok(
   suppliedExecutable && isAbsolute(suppliedExecutable),

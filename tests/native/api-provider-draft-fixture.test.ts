@@ -19,11 +19,12 @@ import {
 } from "../../packages/media-engine/src/lossless.ts";
 import { assertInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import type { DraftTransactionRecord } from "../../packages/domain/src/draft-transaction.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 if (!executablePath?.startsWith("/home/node/"))
   throw new Error("Packaged executable must stay inside the guest");

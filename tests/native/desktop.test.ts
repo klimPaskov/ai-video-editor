@@ -74,7 +74,12 @@ async function assertCanvasFrame(page: Page, frame: number): Promise<void> {
     expected[i] = expected[i + 2]!;
     expected[i + 2] = blue;
   }
-  assert.deepEqual(Buffer.from(actual.pixels), expected);
+  // Buffer.equals avoids assert's diff rendering, which takes tens of seconds
+  // for a mismatched frame and stalls polls that run during a live turn.
+  assert.ok(
+    Buffer.from(actual.pixels).equals(expected),
+    `Canvas does not show frame ${frame}`,
+  );
 }
 const audio = Buffer.alloc(72_000 * 2);
 for (let i = 0; i < 72_000; i++)

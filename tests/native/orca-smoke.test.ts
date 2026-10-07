@@ -19,12 +19,13 @@ import {
   sha256,
 } from "../../packages/media-engine/src/lossless.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
 assert.ok(process.env.DBUS_SESSION_BUS_ADDRESS, "Run beneath dbus-run-session");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 assert.ok(executablePath, "Packaged executable path required");
 assert.ok(isAbsolute(executablePath), "Packaged executable must be absolute");

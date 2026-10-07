@@ -14,13 +14,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron, expect } from "playwright/test";
 import type { ApiProviderId } from "../../packages/domain/src/api-providers.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
 assert.equal(process.env.XDG_CURRENT_DESKTOP, "GNOME");
 assert.ok(process.env.DBUS_SESSION_BUS_ADDRESS);
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 const privateKeyPath = process.argv[3];
 const providerArgument = process.argv.find((argument) =>

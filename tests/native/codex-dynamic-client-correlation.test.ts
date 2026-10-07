@@ -1,13 +1,14 @@
 /** Read-only live App Server check of the optional project-client host boundary. */
 import assert from "node:assert/strict";
-import { access, lstat, realpath, writeFile } from "node:fs/promises";
+import { lstat, realpath, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { CodexClient } from "../../packages/codex-bridge/src/client.ts";
 import { ProjectThreadRegistry } from "../../packages/codex-bridge/src/thread-registry.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executable = resolve(process.argv[2]!);
 const root = resolve(process.argv[3]!);
 assert.ok(

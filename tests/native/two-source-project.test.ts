@@ -7,6 +7,7 @@ import type { Page } from "playwright/test";
 import { assertTwoSourceInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(
   process.platform,
@@ -15,7 +16,7 @@ assert.equal(
 );
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 assert.ok(executablePath, "Packaged executable path is required");
 const root = resolve("test-results");

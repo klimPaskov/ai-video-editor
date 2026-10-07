@@ -1,7 +1,6 @@
 /** A paid, user-started API-provider fixture edit in packaged isolated Electron. */
 import assert from "node:assert/strict";
 import {
-  access,
   chmod,
   lstat,
   mkdtemp,
@@ -19,11 +18,12 @@ import {
   encodeVerifiedMaster,
   sha256,
 } from "../../packages/media-engine/src/lossless.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
 const privateKeyPath = process.argv[3];
 if (

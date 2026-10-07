@@ -1,7 +1,6 @@
 /** Offline and live stale-tool rejection after a real authenticated native edit. */
 import assert from "node:assert/strict";
 import {
-  access,
   chmod,
   mkdtemp,
   readFile,
@@ -28,11 +27,12 @@ import { sha256 } from "../../packages/media-engine/src/lossless.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { ProjectStore } from "../../packages/project-store/src/store.ts";
 import { DraftTransactionStore } from "../../packages/project-store/src/transactions.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux", "Requires isolated Linux guest");
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const suppliedEvidence = process.argv[2];
 const suppliedConfig = process.argv[3];
 const executablePath = process.argv[4];

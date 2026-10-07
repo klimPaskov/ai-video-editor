@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, lstat, realpath, writeFile } from "node:fs/promises";
+import { lstat, realpath, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { CodexStdioTransport } from "../../packages/codex-bridge/src/transport.ts";
 import { buildCodexAppServerArguments } from "../../packages/codex-bridge/src/client.ts";
@@ -9,10 +9,11 @@ import {
   buildThreadResumeRequest,
   buildTurnStartRequest,
 } from "../../packages/codex-bridge/src/thread-protocol.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executable = resolve(process.argv[2]!);
 const root = resolve(process.argv[3]!);
 assert.ok(

@@ -21,6 +21,7 @@ import {
   buildThreadResumeRequest,
   buildThreadStartRequest,
 } from "../../packages/codex-bridge/src/thread-protocol.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
@@ -247,6 +248,5 @@ try {
 }
 
 async function accessDocker(): Promise<void> {
-  const { access } = await import("node:fs/promises");
-  await access("/.dockerenv");
+  await assertNativeTestEnvironment();
 }

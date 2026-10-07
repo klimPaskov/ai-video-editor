@@ -177,7 +177,10 @@ for (const legacy of [false, true]) {
             .getImageData(0, 0, 96, 64).data,
         ),
       );
-    assert.deepEqual(Buffer.from(pixels), expectedPixels);
+    assert.ok(
+      Buffer.from(pixels).equals(expectedPixels),
+      "Canvas does not show the expected frame",
+    );
     assert.deepEqual(await readFile(baselinePath), baselineBytes);
     assert.deepEqual(await readFile(sourcePath), sourceBytes);
     assert.deepEqual(await readFile(managedPath), sourceBytes);

@@ -75,17 +75,28 @@ const messages: Record<CodexVideoEditToolErrorCode, string> = {
     "The editing service is unavailable. Reopen the project and try again.",
 };
 
+const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
+
 export class CodexVideoEditToolError extends Error {
   readonly code: CodexVideoEditToolErrorCode;
 
-  constructor(code: CodexVideoEditToolErrorCode) {
-    super(messages[code]);
+  /**
+   * `activeProjectId` lets a refused cross-project call name the one project
+   * the caller may use, so a model that mistyped the ID can correct itself.
+   */
+  constructor(code: CodexVideoEditToolErrorCode, activeProjectId?: string) {
+    super(
+      code === "inactive_project" &&
+        activeProjectId !== undefined &&
+        idPattern.test(activeProjectId)
+        ? `${messages[code]} The active project_id is "${activeProjectId}".`
+        : messages[code],
+    );
     this.name = "CodexVideoEditToolError";
     this.code = code;
   }
 }
 
-const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
 const hashPattern = /^[a-f0-9]{64}$/u;
 
 function reject(code: CodexVideoEditToolErrorCode): never {
@@ -146,7 +157,8 @@ function assertActiveProject(
   activeProjectId: string,
 ): asserts value is Record<string, unknown> & { project_id: string } {
   id(value.project_id);
-  if (value.project_id !== activeProjectId) reject("inactive_project");
+  if (value.project_id !== activeProjectId)
+    throw new CodexVideoEditToolError("inactive_project", activeProjectId);
 }
 
 function readRequest(value: unknown, activeProjectId: string): string {

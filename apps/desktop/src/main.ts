@@ -503,8 +503,40 @@ async function start(): Promise<void> {
     assertProjectList(value);
     return value;
   });
+  // A project with running work cannot lose focus: its turn's tools would
+  // otherwise resolve against another project's draft.
+  const assertProjectIdle = async (projectId: string): Promise<void> => {
+    if (transcription!.isRunning(projectId))
+      throw new UserFacingError(
+        "Stop local transcription before closing this project.",
+      );
+    if (
+      ["opening", "starting", "running", "interrupting"].includes(
+        codex!.getThread(projectId).status,
+      )
+    )
+      throw new UserFacingError(
+        "Stop the running Codex turn before leaving this project.",
+      );
+    if (claude!.busy(projectId))
+      throw new UserFacingError(
+        "Stop the running Claude turn before leaving this project.",
+      );
+    for (const provider of apiProviderIds) {
+      const turn = await apiThreads.get(projectId, provider);
+      if (turn.status === "running" || turn.status === "interrupting")
+        throw new UserFacingError(
+          "Stop the running provider turn before leaving this project.",
+        );
+    }
+  };
+  const assertCanLeaveActive = async (nextId?: string): Promise<void> => {
+    if (activeProjectId !== undefined && activeProjectId !== nextId)
+      await assertProjectIdle(activeProjectId);
+  };
   register(channels.projectCreate, async (request) => {
     assertProjectRequest(request);
+    await assertCanLeaveActive();
     const created = await projects.createFromMedia(request.id),
       value = await projectRuntime.view(created.project.project_id);
     activeProjectId = value.id;
@@ -512,6 +544,7 @@ async function start(): Promise<void> {
   });
   register(channels.projectCreateTwo, async (request) => {
     assertTwoSourceProjectRequest(request);
+    await assertCanLeaveActive();
     const created = await projects.createFromTwoMedia(
       request.firstId,
       request.secondId,
@@ -522,6 +555,7 @@ async function start(): Promise<void> {
   });
   register(channels.projectOpen, async (request) => {
     assertProjectRequest(request);
+    await assertCanLeaveActive(request.id);
     await projects.open(request.id);
     const value = await projectRuntime.view(request.id);
     activeProjectId = value.id;
@@ -530,29 +564,7 @@ async function start(): Promise<void> {
   register(channels.projectClose, async (request) => {
     assertProjectRequest(request);
     if (activeProjectId === request.id) {
-      if (transcription!.isRunning(request.id))
-        throw new UserFacingError(
-          "Stop local transcription before closing this project.",
-        );
-      if (
-        ["opening", "starting", "running", "interrupting"].includes(
-          codex!.getThread(request.id).status,
-        )
-      )
-        throw new UserFacingError(
-          "Stop the running Codex turn before leaving this project.",
-        );
-      if (claude!.busy(request.id))
-        throw new UserFacingError(
-          "Stop the running Claude turn before leaving this project.",
-        );
-      for (const provider of apiProviderIds) {
-        const turn = await apiThreads.get(request.id, provider);
-        if (turn.status === "running" || turn.status === "interrupting")
-          throw new UserFacingError(
-            "Stop the running provider turn before leaving this project.",
-          );
-      }
+      await assertProjectIdle(request.id);
       await codex!.closeThread(request.id);
       await claude!.closeThread(request.id);
       await Promise.all(

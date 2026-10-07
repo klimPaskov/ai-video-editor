@@ -1,13 +1,14 @@
 // Real App Server bootstrap test. This is not a native-window or authenticated edit test.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import {
   CodexClient,
   CODEX_VERSION,
 } from "../../packages/codex-bridge/src/client.ts";
 import { CodexTransportError } from "../../packages/codex-bridge/src/transport.ts";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 
 if (
   process.platform !== "linux" ||
@@ -15,7 +16,7 @@ if (
   process.env.DISPLAY !== ":99"
 )
   throw new Error("Requires the isolated Linux desktop guest.");
-await access("/.dockerenv");
+await assertNativeTestEnvironment();
 const executable = process.argv[2];
 assert.ok(executable && isAbsolute(executable));
 await mkdir(resolve("test-results"), { recursive: true });

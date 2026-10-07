@@ -148,11 +148,16 @@ function response(text: string, success: boolean): DynamicToolCallResponse {
 }
 
 function safeError(
-  code: CodexVideoEditToolError["code"],
+  value: CodexVideoEditToolError["code"] | CodexVideoEditToolError,
 ): DynamicToolCallResponse {
-  const error = new CodexVideoEditToolError(code);
+  // Only the service's own fixed messages (plus a validated project ID) reach
+  // the model; any other failure was already mapped to a fixed code.
+  const error =
+    value instanceof CodexVideoEditToolError
+      ? value
+      : new CodexVideoEditToolError(value);
   return response(
-    JSON.stringify({ error: { code, message: error.message } }),
+    JSON.stringify({ error: { code: error.code, message: error.message } }),
     false,
   );
 }
@@ -175,9 +180,7 @@ export async function invokeOwnedDynamicTool(
     return response(text, true);
   } catch (cause) {
     return safeError(
-      cause instanceof CodexVideoEditToolError
-        ? cause.code
-        : "service_unavailable",
+      cause instanceof CodexVideoEditToolError ? cause : "service_unavailable",
     );
   }
 }
