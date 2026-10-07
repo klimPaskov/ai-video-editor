@@ -496,8 +496,15 @@ function exited(child: ChildProcess): Promise<void> {
   return result;
 }
 
-async function writeChunk(target: Writable, chunk: Buffer): Promise<void> {
-  if (!target.write(chunk)) await once(target, "drain");
+async function writeChunk(
+  target: Writable,
+  chunk: Buffer,
+  signal?: AbortSignal,
+): Promise<void> {
+  // A killed reader may never drain or error (seen on Windows pipes), so a
+  // pending write must also end when the job stops.
+  if (!target.write(chunk))
+    await once(target, "drain", signal ? { signal } : undefined);
 }
 
 /** Streams a process's stdout into hash and optional sink; returns byte count. */
@@ -566,14 +573,24 @@ export async function exportDraft(
   if (signal?.aborted) throw new MediaError("CANCELLED", "Export cancelled.");
   const { video, audio } = plan.format;
   const children = new Set<ChildProcess>();
+  const closed: Promise<void>[] = [];
   const track = (child: ChildProcess) => {
     children.add(child);
-    child.once("close", () => children.delete(child));
+    closed.push(
+      new Promise<void>((resolveClose) =>
+        child.once("close", () => {
+          children.delete(child);
+          resolveClose();
+        }),
+      ),
+    );
     return child;
   };
   let cancelled = false;
+  const halt = new AbortController();
   const cancel = () => {
     cancelled = true;
+    halt.abort();
     for (const child of children) child.kill("SIGKILL");
   };
   signal?.addEventListener("abort", cancel, { once: true });
@@ -775,6 +792,7 @@ export async function exportDraft(
     const encoder = track(
       startProcess(executables.ffmpeg, encoderArgs, "pipe"),
     );
+    encoder.once("close", () => halt.abort());
     const encoded = exited(encoder);
     encoder.stdout?.resume();
     encoder.stdin!.on("error", () => undefined);
@@ -818,7 +836,7 @@ export async function exportDraft(
           written += chunk.length;
           if (written > expected) return;
           videoHash.update(chunk);
-          await writeChunk(encoder.stdin!, chunk);
+          await writeChunk(encoder.stdin!, chunk, halt.signal);
           const frames = Math.floor(written / plan.frameBytes);
           if (frames > reported) {
             progress("rendering", frames - reported);
@@ -1042,8 +1060,19 @@ export async function exportDraft(
   } catch (error) {
     return fail(error);
   } finally {
+    halt.abort();
     signal?.removeEventListener("abort", cancel);
     for (const child of children) child.kill("SIGKILL");
-    await rm(staging, { recursive: true, force: true }).catch(() => undefined);
+    // Windows keeps a killed process's files open until it has exited.
+    await Promise.race([
+      Promise.all(closed),
+      new Promise((resolveWait) => setTimeout(resolveWait, 10_000)),
+    ]);
+    await rm(staging, {
+      recursive: true,
+      force: true,
+      maxRetries: 20,
+      retryDelay: 100,
+    }).catch(() => undefined);
   }
 }
