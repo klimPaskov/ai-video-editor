@@ -22,7 +22,7 @@
       "command_or_method": "Required source review and official documentation/registry research; accepted ADRs reviewed",
       "evidence": [
         "research/P0_FOUNDATION.md",
-        "adr/0012-native-media-bootstrap-dependency.md"
+        "docs/adr/0012-native-media-bootstrap-dependency.md"
       ]
     },
     {

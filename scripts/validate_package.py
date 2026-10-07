@@ -35,9 +35,9 @@ def load_json(path: Path) -> object:
 
 
 required_paths = [
-    'GOAL_PROMPT.md', 'AGENTS.md', 'CLAUDE.md', 'HANDOFF_PROMPT.md', '.claude/settings.json',
-    'AUTHORITATIVE_ORDER.md', 'PLANNING_PACKAGE.md',
-    'WORKFLOW.md', 'TASKS.md', 'SUBAGENT_ROUTING.md', 'CHANGE_CONTROL.md',
+    'docs/development/GOAL_PROMPT.md', 'AGENTS.md', 'CLAUDE.md', 'docs/development/HANDOFF_PROMPT.md', '.claude/settings.json',
+    'docs/development/AUTHORITATIVE_ORDER.md', 'docs/development/PLANNING_PACKAGE.md',
+    'docs/development/WORKFLOW.md', 'docs/development/TASKS.md', 'docs/development/SUBAGENT_ROUTING.md', 'docs/development/CHANGE_CONTROL.md',
     'docs/workflow/active-phase.md', 'docs/00_SOURCE_BRIEF.md', 'docs/03_NATIVE_APP_ARCHITECTURE.md',
     'docs/08_CODEX_INTEGRATION.md', 'docs/09_MAGIC_WAND_AND_AUTOMATIONS.md',
     'docs/10_TIMELINE_EDITOR.md', 'docs/19_QA_AND_ACCEPTANCE.md',
@@ -51,7 +51,7 @@ for rel in required_paths:
         fail(f'Missing required file: {rel}')
 
 # Goal contract
-goal_path = ROOT / 'GOAL_PROMPT.md'
+goal_path = ROOT / 'docs/development/GOAL_PROMPT.md'
 if goal_path.exists():
     goal = goal_path.read_text(encoding='utf-8')
     goal_chars = len(goal)
@@ -135,7 +135,7 @@ for result_path in (ROOT / 'docs/workflow/results').glob('P*.json'):
         fail(f'Invalid accepted phase result {result_path.name}: {exc}')
 
 # Task IDs and phase prompt coverage
-tasks_path = ROOT / 'TASKS.md'
+tasks_path = ROOT / 'docs/development/TASKS.md'
 tasks_text = tasks_path.read_text(encoding='utf-8') if tasks_path.exists() else ''
 task_ids = re.findall(r'\bP(?:10|[0-9])-\d{2}\b', tasks_text)
 if len(task_ids) != len(set(task_ids)):

@@ -74,22 +74,21 @@ Expose only validated AI Video Editor project operations. Runtime Codex does not
 
 ADR 0017 sets the visible product name to AI Video Editor and the package/executable/local URL-scheme slug to `ai-video-editor`. Main chooses a prior per-user data directory when it exists, and otherwise creates the new-slug directory before readiness. It does not copy, merge or delete private projects during startup. The owned MCP server and dynamic-tool wire identities stay stable so stored Codex threads can reopen. The packaged native identity fixture is designed to check import and restart in both new and existing stores, with exact synthetic preview pixels and unchanged source/baseline data. That fixture has not yet been run for the identity slice.
 
-## Suggested repository layout
+## Repository layout
 
 ```text
-apps/desktop/              Electron main, preload, renderer
-packages/domain/           project and timeline models
-packages/project-store/    autosave, revisions, migrations
-packages/media-engine/     FFmpeg and transcription adapters
-packages/recorder/         capture and synchronization
-packages/codex-bridge/     app-server client and MCP tools
-packages/editor/           operations, history, snapping
-packages/ui/               design system and screens
-packages/test-fixtures/    deterministic media and fake devices
-docs/schemas/                   versioned contracts
-.agents/skills/                    Codex and implementation skills
-.codex/agents/                 bounded agent prompts
-docs/                      product and engineering specs
+apps/desktop/              Electron main, preload and renderer
+packages/domain/           project, timeline, edit and view contracts
+packages/project-store/    projects, drafts and the transaction journal
+packages/media-engine/     FFmpeg, playback copies, export and transcription
+packages/recorder/         screen and microphone capture
+packages/codex-tools/      guarded editor tools and the MCP server
+packages/codex-bridge/     Codex app-server client
+packages/claude-bridge/    Claude Code CLI turns and catalog
+packages/api-providers/    OpenAI, Gemini and DeepSeek clients
+tests/                     foundation, media and native tests
+docs/                      user guide, specifications and decisions
+.agents/skills/            implementation skills
 ```
 
 ## P1 project shell implementation

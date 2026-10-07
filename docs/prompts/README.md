@@ -11,4 +11,4 @@
 - `RESEARCH_REFRESH_PROMPT.md`: current-source refresh
 - `FINAL_RELEASE_AUDIT_PROMPT.md`: release evidence audit
 
-The concise entry point is root `GOAL_PROMPT.md`.
+The concise entry point is root `docs/development/GOAL_PROMPT.md`.

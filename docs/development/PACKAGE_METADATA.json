@@ -7,7 +7,7 @@
   "target": "Windows-first standalone Electron desktop application",
   "implementation_agent": "Claude continuation with independent engineering judgment; isolated native tests; Astra agents prohibited",
   "ai_provider_scope": "Claude account sign-in default required (unimplemented), with retained Codex subscription and OpenAI API, DeepSeek, Gemini API keys",
-  "goal_prompt_characters": 3988,
+  "goal_prompt_characters": 3943,
   "task_count": 77,
   "phase_count": 11,
   "screen_count": 13,

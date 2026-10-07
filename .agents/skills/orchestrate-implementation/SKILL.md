@@ -15,7 +15,7 @@ Starting or continuing any implementation session.
 2. Inspect `docs/workflow/results/`, repository state, tests, fixtures, and active phase.
 3. Find the first incomplete phase whose dependencies are complete.
 4. State exact task IDs and the smallest complete product result.
-5. Route bounded specialist work through `SUBAGENT_ROUTING.md`.
+5. Route bounded specialist work through `docs/development/SUBAGENT_ROUTING.md`.
 6. Add or update tests before treating code as complete.
 7. Launch and inspect the native app when UI or media behavior changes.
 8. Validate media outputs and schemas.

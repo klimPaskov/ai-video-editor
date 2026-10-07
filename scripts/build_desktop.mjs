@@ -18,7 +18,9 @@ import { resolve, join, relative, sep } from "node:path";
 import assert from "node:assert/strict";
 import { assertNativeTestEnvironment } from "./native-test-environment.ts";
 
-await assertNativeTestEnvironment();
+// Agents build only inside their isolated test environment. A person
+// building the app on their own computer passes --local.
+if (!process.argv.includes("--local")) await assertNativeTestEnvironment();
 const root = resolve(import.meta.dirname, "..");
 const evidence = join(root, "test-results");
 await mkdir(evidence, { recursive: true });

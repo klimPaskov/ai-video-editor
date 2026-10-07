@@ -1,4 +1,4 @@
-Build AI Video Editor as a new standalone desktop recorder and AI video editor in this repository. Read AGENTS.md, AUTHORITATIVE_ORDER.md, PLANNING_PACKAGE.md, WORKFLOW.md, TASKS.md, the active phase, accepted ADRs, contracts, relevant skills, and reference notes. Implement the first incomplete dependency-safe phase. Do not stop at plans or mockups.
+Build AI Video Editor as a new standalone desktop recorder and AI video editor in this repository. Read AGENTS.md and the files it lists, the active phase, accepted ADRs, contracts, relevant skills, and reference notes. Implement the first incomplete dependency-safe phase. Do not stop at plans or mockups.
 
 Create a public GitHub repository named ai-video-editor under the authenticated owner's account during P0. Verify any existing remote. Include the MIT licence, contribution guidance, and CI. Commit and push reviewed working slices throughout development. Never publish recordings, user projects, credentials, private test evidence, or bundled assets without permission. Report access blockers.
 

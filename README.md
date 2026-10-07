@@ -1,48 +1,83 @@
 # AI Video Editor
 
-A standalone desktop recorder and video editor with live Codex editing, a simple timeline, optional camera, captions, B-roll, automatic zooms, and lossless-first media handling.
+Record your screen, let AI make the first cut, polish it with simple tools, and export a lossless master, all in one desktop app.
 
-**Status: P0 and P1 are accepted; P2 real Codex integration is active. This is not yet a usable recorder or editor.** The actual packaged Electron shell imports immutable media, creates and reopens projects, and persists the five workflow stages. Its synthetic native checks passed in the isolated Linux desktop. [P0](docs/workflow/results/P0.json) and [P1](docs/workflow/results/P1.json) record their bounded acceptance. P2-P10 and the ordered user-video workflow remain incomplete.
+![The Edit step with a zoom and a sped-up part on the timeline](docs/images/edit.png)
 
-## Start
+AI Video Editor is a standalone desktop recorder and editor for screen recordings, tutorials, demos and talking-head videos. Every edit, whether you make it or an AI assistant does, goes into the same non-destructive draft with full Undo. Your original footage is never changed.
 
-Open this `ai-video-editor` folder as your working repository and give the implementation agent `GOAL_PROMPT.md`.
+> **Status:** early preview. The desktop app currently builds and runs on Linux with X11. Windows packaging and installers are in progress; macOS is not supported yet.
 
-For continuation in Claude, use [the handoff prompt](HANDOFF_PROMPT.md) and [Claude project instructions](CLAUDE.md). `.claude/` contains project skill and native-agent entry points. Claude is the default assistant: it runs through the user's installed Claude Code CLI with Anthropic's own browser sign-in ([design](docs/48_CLAUDE_CONNECTION.md)); signed-in native acceptance is still pending. Private machine context stays in ignored local data.
+## Features
 
-The agent starts with `AGENTS.md` and `TASKS.md`, builds the native app, and tests it inside its own isolated desktop environment. The public repository is [klimPaskov/ai-video-editor](https://github.com/klimPaskov/ai-video-editor). Source publication and native acceptance are tracked separately; see [P0 foundation](docs/46_P0_FOUNDATION.md).
+**Record**
+- Record the whole screen or a dragged area, with or without a microphone.
+- Countdown, pause and resume. Recordings are saved losslessly (FFV1 video, PCM audio).
+- If the app quits during a take, recording stops with it and the take can be recovered on the next launch.
 
-## Included
+**Auto Edit**
+- Local speech-to-text transcription (Whisper, runs on your device).
+- **Magic Edit** makes a safe first cut: long pauses, filler words and repeated takes, at a gentle, balanced or tight setting.
+- Captions from the transcript in three styles, with an .srt file or burned into the video.
+- Audio cleanup: even out loudness and reduce background noise.
 
-- Product, desktop architecture, recorder, editor, Codex, media, QA, and release specifications
-- Ordered phase prompts, reusable skills, specialist subagents, schemas, examples, and checklists
-- 20 original, separate native-app UI reference images: 10 current and 10 previous
-- Lossless-first policy, restrained interface rules, and open-source development requirements
+**Edit**
+- Trim, split, cut a marked range, or restore removed footage.
+- Zoom in on a detail by clicking the spot in the picture.
+- Speed up typing, loading or waiting at 2×, 3×, 4× or 8×, keeping the voice's pitch.
+- Correct transcript words and cut by selecting words.
+- Keyboard shortcuts, plus Undo and Redo for every change.
 
-Open `docs/references/index.html` locally to browse one full-size reference at a time. Read `docs/references/IMPLEMENTATION_NOTES.md` before copying any visual detail. No contact sheets or multi-screen collages are included.
+**AI assistant**
+- Ask an assistant to edit for you. It uses the same guarded tools as the manual controls, and every change can be undone.
+- Connect with your **Claude** account through Claude Code (the default), with **Codex** and a ChatGPT account, or with an OpenAI, Gemini or DeepSeek API key.
 
-## Implementation priorities
+**Export**
+- A verified lossless master (Matroska, FFV1 + PCM) by default, or a smaller MP4 when you choose it.
+- **Short clips:** find self-contained 15–60 second moments and export them as vertical, square or landscape videos with captions.
 
-`Record or Import -> Auto Edit -> Edit -> Review -> Export`
+## How it works
 
-Codex edits the live draft through the same reversible operations as the manual tools. Only the active step and relevant controls are shown. Lossless capture, intermediates, and master export are the default. Smaller previews and compressed sharing copies require an explicit quality choice.
+Each project moves through five steps. Only the current step's tools are shown.
 
-## Validation
+1. **Record or Import**: start a recording or bring in a video.
+2. **Auto Edit**: transcribe, run Magic Edit, set captions and audio.
+3. **Edit**: refine by hand or with the assistant.
+4. **Review**: watch the edit and verify the draft.
+5. **Export**: save the master or an MP4, or make short clips.
+
+| Home | New recording | Export |
+| --- | --- | --- |
+| ![Home](docs/images/home.png) | ![New recording](docs/images/record.png) | ![Export](docs/images/export.png) |
+
+## Getting started
+
+You need [Node.js](https://nodejs.org/) 24, Python 3.9 or later, and [FFmpeg](https://ffmpeg.org/) with `ffprobe` on your `PATH`.
 
 ```bash
+git clone https://github.com/klimPaskov/ai-video-editor.git
+cd ai-video-editor
 npm ci --ignore-scripts
-python -m pip install -r requirements-validation.txt
-npm run check
+npm run check          # type checks and the media test suite
 ```
 
-Prerequisites: Node 24.15 or later in the 24.x line, Python 3.9+, and FFmpeg/ffprobe on PATH. The single check command runs strict TypeScript, lint, formatting, Python foundation tests, synthetic media encode/decode comparisons, schemas, and reference validation. It does not launch a desktop window or touch capture devices. CI runs these checks on Windows and Linux; FFmpeg installed there is a test dependency and is not bundled for redistribution.
+The [getting started guide](docs/guide/getting-started.md) covers building the desktop app, first launch and connecting an AI assistant.
 
-Media fixtures are generated under ignored `test-results/`. The bounded P0 adapter verifies canonical raw samples up to 64 MiB per input, BT.709, and mono/stereo PCM. It rejects preview/analysis inputs and unsupported precision or HDR paths. These checks do not establish production capture, compositor, playback, or real-time throughput support.
+## Privacy
 
-Auto Edit currently supports a user-started local word-timed transcription and separate silence analysis. On first use, it downloads the pinned Whisper model weights into application-private storage; source audio stays on the device. Edit supports text-only word correction through the shared undo history. Transcript-linked cuts and Magic Wand editing are still in progress. Model weights are not committed or bundled.
+- Recordings, projects, transcripts and exports stay on your computer.
+- Transcription runs locally. Its model (about 76 MiB) is downloaded once, after you confirm.
+- Nothing is sent to an AI service until you ask the assistant something. The app then sends only the request and the project details the assistant reads, such as transcript excerpts and the edit timeline.
+- Claude sign-in happens in Anthropic's own browser page through Claude Code. The app never sees or stores your Claude credentials.
 
-The [isolated desktop setup](tests/desktop/README.md) runs native windows inside Docker and exposes only an authenticated loopback VNC connection. A native viewer displays the guest desktop; the product must never launch directly on the host. Separate from the infrastructure probe, the actual packaged product passed Playwright Electron checks and native source selection/Next frame inspection. Its frame path is limited to native-dimension BGRA full-range GBR BT.709 SDR within explicit bounds; other supported imports remain preserved with preview unavailable. This does not establish audio playback, Windows capture, installer support, Codex editing, or the user-video workflow.
+See [Privacy and data](docs/guide/privacy.md) for details.
 
-Before publishing, stage only reviewed source, run `npm run check:publication`, inspect the staged diff, and verify the pushed commit. `npm run phase:write -- path/to/result.json` accepts only complete, validated phase evidence tied to a published Git revision. Keep incomplete work under `docs/workflow/progress/`. See `VALIDATION_REPORT.md` for the planning package's historical checks and `docs/workflow/progress/` for implementation progress.
+## Documentation
 
-`MANIFEST.sha256` covers source files using LF-normalized text and exact binary bytes, so Git's platform line endings do not invalidate it. Regenerate with `python scripts/build_integrity_manifest.py` and verify with `python scripts/validate_delivery.py --check-integrity`. Reference-image hashes always compare exact original bytes.
+- [User guide](docs/guide/README.md): recording, editing, the AI assistant, export and short clips.
+- [Documentation index](docs/README.md): architecture, specifications and design decisions.
+- [Contributing](CONTRIBUTING.md): development setup, tests and pull requests.
+
+## License
+
+[MIT](LICENSE). Third-party components and their licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

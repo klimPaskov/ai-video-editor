@@ -4,12 +4,12 @@
 
 Before implementation, read:
 
-- `AUTHORITATIVE_ORDER.md`
-- `GOAL_PROMPT.md`
-- `PLANNING_PACKAGE.md`
-- `WORKFLOW.md`
-- `TASKS.md`
-- accepted files in `adr/`
+- `docs/development/AUTHORITATIVE_ORDER.md`
+- `docs/development/GOAL_PROMPT.md`
+- `docs/development/PLANNING_PACKAGE.md`
+- `docs/development/WORKFLOW.md`
+- `docs/development/TASKS.md`
+- accepted files in `docs/adr/`
 - the active prompt in `docs/workflow/active-phase.md`
 - relevant files in `.agents/skills/`
 - schemas touched by the phase
@@ -52,7 +52,7 @@ Run the `spec-sync` skill before completing a phase.
 
 ## Testing boundary
 
-Never launch the app on the user's host. Launch it in the agent's isolated desktop environment. Use Playwright Electron for deterministic automation and computer use for visual inspection of the actual native window. Use fake capture devices for repeatable tests and label any missing real hardware test honestly.
+Never launch the app on the user's host, and never use `npm run desktop:build:local` there; that opt-in is for people building the app on their own computer. Launch it in the agent's isolated desktop environment. Use Playwright Electron for deterministic automation and computer use for visual inspection of the actual native window. Use fake capture devices for repeatable tests and label any missing real hardware test honestly.
 
 ## Final workspace requirements
 

@@ -115,7 +115,9 @@ export function setupTimelineStrip(options: {
             ? `${count} · ${options.time(durationUs)} of ${options.time(originalUs)} kept`
             : `${count} · ${options.time(durationUs)}`
           : // Sped-up parts make the output shorter than the footage kept.
-            `${count} · ${options.time(durationUs)} long · ${options.time(keptUs)} of ${options.time(originalUs)} footage`;
+            originalUs > keptUs
+            ? `${count} · ${options.time(durationUs)} from ${options.time(keptUs)} of ${options.time(originalUs)} footage`
+            : `${count} · ${options.time(durationUs)} from ${options.time(originalUs)} footage`;
     }
     const layers: HTMLElement[] = [];
     const { inUs, outUs } = marks;

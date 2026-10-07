@@ -4,10 +4,10 @@ When files disagree, use this order:
 
 1. Current user instruction
 2. Accepted ADRs
-3. `GOAL_PROMPT.md`
-4. `PLANNING_PACKAGE.md`
-5. `WORKFLOW.md`
-6. `TASKS.md` and the active phase prompt
+3. `docs/development/GOAL_PROMPT.md`
+4. `docs/development/PLANNING_PACKAGE.md`
+5. `docs/development/WORKFLOW.md`
+6. `docs/development/TASKS.md` and the active phase prompt
 7. Feature and screen specifications
 8. Schemas and examples
 9. Skills and subagent prompts

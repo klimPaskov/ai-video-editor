@@ -23,6 +23,7 @@
     "phase:write": "python scripts/write_phase_result.py",
     "check:protocol": "python scripts/verify_codex_protocol.py",
     "desktop:build": "node scripts/build_desktop.mjs",
+    "desktop:build:local": "node scripts/build_desktop.mjs --local",
     "test:native": "node tests/native/desktop.test.ts"
   },
   "devDependencies": {

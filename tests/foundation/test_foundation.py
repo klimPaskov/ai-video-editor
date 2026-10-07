@@ -124,7 +124,8 @@ class PhaseResultTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         (self.root / 'docs/schemas').mkdir(parents=True)
         (self.root / 'docs/schemas/phase_result.schema.json').write_bytes((ROOT / 'docs/schemas/phase_result.schema.json').read_bytes())
-        (self.root / 'TASKS.md').write_text('- [ ] P0-01 Test\n- [ ] P1-01 Native\n')
+        (self.root / 'docs/development').mkdir(parents=True, exist_ok=True)
+        (self.root / 'docs/development/TASKS.md').write_text('- [ ] P0-01 Test\n- [ ] P1-01 Native\n')
         (self.root / 'evidence.txt').write_text('synthetic test evidence')
         self.result = {
             'schema_version': '1.0', 'phase_id': 'P0', 'status': 'complete',
