@@ -73,8 +73,10 @@ class PublicationTests(unittest.TestCase):
 
     def test_reference_binary_allowance_stays_in_moved_reference_tree(self):
         audit_blob('docs/references/screenshots/current/example.png', b'\x89PNG\x00', '100644')
+        audit_blob('docs/images/edit.png', b'\x89PNG\x00', '100644')
         for path in ('references/screenshots/current/example.png', 'docs/private/example.png',
-                     'docs/references/example.png', '.codex/agents/example.md'):
+                     'docs/references/example.png', '.codex/agents/example.md',
+                     'docs/images/clip.jpg', 'docs/images/nested/../edit.bin'):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 audit_blob(path, b'\x89PNG\x00', '100644')
 
