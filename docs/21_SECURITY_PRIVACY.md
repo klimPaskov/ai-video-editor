@@ -30,6 +30,8 @@ Also disable the pinned runtime's default-on `hooks`, shadow `skill_search`, and
 - Never capture keystrokes.
 - Avoid notification and secret exposure in fixtures and documentation.
 
+Recording IPC (2026-10-07): `recording:*` channels carry only opaque display and microphone ids chosen from the last device listing; main maps them to FFmpeg inputs and rejects unknown ids. Device names for FFmpeg, screen coordinates, take paths and FFmpeg output never reach the renderer, and errors are fixed messages. Recording starts only from an explicit Start after a visible countdown, cannot be dismissed while running, and the take is written under the app's data folder before import.
+
 ## AI data boundary
 
 - Explain which selected provider receives text, metadata, frames and instructions before first use.

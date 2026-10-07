@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import {
+  assertNativeTestEnvironment,
+  insideGuestWorkspace,
+} from "../../scripts/native-test-environment.ts";
 import type { Page } from "playwright/test";
 import { channels } from "../../apps/desktop/src/bridge.ts";
 import type {
@@ -23,10 +27,10 @@ assert.equal(
 );
 assert.equal(process.getuid?.(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
-await readFile("/.dockerenv");
+await assertNativeTestEnvironment();
 
 const executablePath = process.argv[2];
-if (!executablePath?.startsWith("/home/node/workspaces/"))
+if (!insideGuestWorkspace(executablePath))
   throw new Error("Packaged executable must be inside the isolated guest");
 const inspect = process.argv.includes("--inspect");
 const evidenceRoot = resolve("test-results");

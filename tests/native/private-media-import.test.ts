@@ -100,7 +100,7 @@ try {
       .not.toBe("loading");
     const preview = await page.locator("#frame").isVisible();
     if (preview) {
-      const dimensions = await page.locator("canvas").evaluate((node) => ({
+      const dimensions = await page.locator("#frame").evaluate((node) => ({
         width: (node as HTMLCanvasElement).width,
         height: (node as HTMLCanvasElement).height,
       }));

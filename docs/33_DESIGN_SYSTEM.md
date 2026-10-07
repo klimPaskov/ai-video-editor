@@ -55,6 +55,10 @@ The included current individual screenshots establish the dark palette and accen
 - restrained shadows and borders
 - motion between 120 and 240 ms for ordinary UI transitions
 
+Implemented tokens (2026-10-07, `apps/desktop/renderer/style.css`): background #0b0d13 with three surface steps, borders #252a39/#363d54, text #eceef4/#a4aabb/#767d92, one violet accent #6d4aff (white text 5.15:1; hover darkens to #5c3bef), red only for recording and destructive marks, green only for positive results. 8 px radii for controls, 10 to 14 px for panels, 36 px compact controls in toolbars and 40 px or more for primary actions. Icons are inline 24 px stroke SVGs injected from `data-icon` and hidden from assistive technology; every control keeps its text or aria-label. A system font stack (Inter or Segoe UI when installed) is used; no font is bundled.
+
+Decision (2026-10-07): item 3 of the window structure is revised. A compact read-only timeline strip is shown in every project step, not only Review, because trim, split, range marks, Magic Edit and assistant edits all change the draft and users need to see the result where they act. It stays one track high and carries no tools of its own.
+
 ## Typography
 
 Use a bundled licensed UI font or a system stack. Normal body text should remain readable at 100 percent scaling. Avoid long explanatory paragraphs in the product UI.

@@ -107,13 +107,13 @@ Acceptance: an imported fixture reopens and previews identically.
 
 ## P4: recording studio
 
-- [ ] P4-01 Capture display, window, and selected region.
-- [ ] P4-02 Capture microphone, optional system audio, and optional camera.
-- [ ] P4-03 Record sources separately against one monotonic clock and persist sync evidence.
-- [ ] P4-04 Implement countdown, pause, resume, stop, recovery, and global shortcuts.
+- [ ] P4-01 Capture display, window, and selected region. Display capture is implemented for Linux X11 and Windows through FFmpeg with a New recording dialog (docs/06); window and region capture, macOS and Wayland remain.
+- [ ] P4-02 Capture microphone, optional system audio, and optional camera. Microphone capture (PulseAudio, DirectShow) is implemented; system audio and camera remain.
+- [ ] P4-03 Record sources separately against one monotonic clock and persist sync evidence. Screen and microphone are aligned to the first video frame from FFmpeg wall-clock starts with exact samples, and each take keeps `session.json`; separate per-source files and device-latency compensation remain.
+- [ ] P4-04 Implement countdown, pause, resume, stop, recovery, and global shortcuts. Countdown, pause, resume and stop are implemented and natively tested with synthetic devices; crash recovery and global shortcuts remain.
 - [ ] P4-05 Implement scenes, teleprompter, retries, take history, and take selection.
 - [ ] P4-06 Capture consented pointer and click telemetry without recording keystrokes.
-- [ ] P4-07 Test with virtual media devices and label hardware gaps honestly.
+- [ ] P4-07 Test with virtual media devices and label hardware gaps honestly. Labelled synthetic devices drive `tests/media/recording-service.test.ts` and `tests/native/recording.test.ts`; no real screen or microphone run is claimed yet.
 
 Acceptance: a virtual-device scene becomes a synchronized editable project.
 

@@ -135,7 +135,7 @@ for (let frame = 0; frame < 3; frame++)
             256;
   }
 async function assertCanvasFrame(page: Page, frame: number): Promise<void> {
-  const actual = await page.locator("canvas").evaluate((node) => {
+  const actual = await page.locator("#frame").evaluate((node) => {
     const canvas = node as HTMLCanvasElement;
     return {
       width: canvas.width,

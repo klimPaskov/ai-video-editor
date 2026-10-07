@@ -17,6 +17,7 @@ import { CaptureSession } from "../../packages/recorder/src/session.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 import { probePresentationTiming } from "../../packages/media-engine/src/presentation-timing.ts";
 import { planExport } from "../../packages/media-engine/src/render.ts";
+import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 
 const display: DisplayTarget = {
   id: "1",
@@ -158,6 +159,9 @@ test(
       const finished = await session.stop();
       assert.equal(session.state().status, "finished");
       assert.ok(finished.frames >= 60, `frames ${finished.frames}`);
+      // A paced source drops at most a few frames, so the counters are
+      // meaningful evidence (an unpaced source reported thousands).
+      assert.ok(session.state().dropped * 4 < finished.frames);
       const probe = JSON.parse(
         (
           await runProcess({
@@ -241,6 +245,34 @@ test(
         numerator: 30,
         denominator: 1,
       });
+      // The take imports with an exact preview: B, G, R unchanged, opaque.
+      const library = new MediaLibrary(join(directory, "library"));
+      const media = await library.importFile(finished.path);
+      assert.equal(media.previewAvailable, true);
+      const frame = await library.frame(media.id, 0);
+      const bgr0 = (
+        await runProcess({
+          executable: "ffmpeg",
+          args: [
+            "-v",
+            "error",
+            "-i",
+            finished.path,
+            "-frames:v",
+            "1",
+            "-pix_fmt",
+            "bgr0",
+            "-f",
+            "rawvideo",
+            "pipe:1",
+          ],
+          maxOutputBytes: 160 * 90 * 4 + 1024,
+        })
+      ).stdout;
+      const rgba = Buffer.alloc(bgr0.length);
+      for (let i = 0; i < bgr0.length; i += 4)
+        rgba.set([bgr0[i + 2]!, bgr0[i + 1]!, bgr0[i]!, 255], i);
+      assert.ok(Buffer.from(frame.rgbaBase64, "base64").equals(rgba));
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

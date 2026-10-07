@@ -96,14 +96,15 @@ export function segmentArguments(request: SegmentRequest): string[] {
       break;
     case "test":
       // Labelled synthetic display for repeatable tests; never a real screen.
+      // "realtime" paces it like a capture device, so FFmpeg's
+      // duplicate/drop counters mean the same as for a real screen.
       video = [
-        "-re",
         "-use_wallclock_as_timestamps",
         "1",
         "-f",
         "lavfi",
         "-i",
-        `testsrc2=size=${width}x${height}:rate=${rate}`,
+        `testsrc2=size=${width}x${height}:rate=${rate},realtime`,
       ];
       break;
     case "darwin":
@@ -124,11 +125,10 @@ export function segmentArguments(request: SegmentRequest): string[] {
   if (microphone) {
     if (microphone.format === "test_tone")
       audio.push(
-        "-re",
         "-f",
         "lavfi",
         "-i",
-        `sine=frequency=440:sample_rate=${captureSampleRate}`,
+        `sine=frequency=440:sample_rate=${captureSampleRate},arealtime`,
       );
     else if (microphone.format === "dshow")
       audio.push("-f", "dshow", "-i", `audio=${microphone.device}`);

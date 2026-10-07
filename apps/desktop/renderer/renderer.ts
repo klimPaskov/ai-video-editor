@@ -1,8 +1,11 @@
 import { setupCodexSettings } from "./codex-settings.ts";
+import { iconElement, setupIcons } from "./icons.ts";
+import { setupTimelineStrip } from "./timeline-strip.ts";
 import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { setupExportPanel } from "./export-panel.ts";
 import { setupPlayback } from "./playback.ts";
 import { setupMagicPanel } from "./magic-panel.ts";
+import { setupRecordPanel } from "./record-panel.ts";
 import { reconcileProjectDraft } from "./project-draft.ts";
 import { pollTranscriptionView } from "./transcription-state.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
@@ -46,6 +49,7 @@ function element<T extends HTMLElement>(id: string): T {
   if (!value) throw new Error("Missing control");
   return value as T;
 }
+setupIcons();
 const home = element("home"),
   viewer = element("viewer"),
   back = element<HTMLButtonElement>("back");
@@ -273,16 +277,58 @@ function renderDraftIntegrityAction(): void {
   )
     clearDraftIntegrityResult();
   reviewActions.hidden = !visible;
+  renderReviewSummary(visible ? project : undefined);
   reviewActions.setAttribute("aria-busy", String(draftIntegrityPending));
   checkDraftIntegrityButton.disabled =
     !visible || navigating || draftIntegrityPending;
   checkDraftIntegrityButton.textContent = draftIntegrityPending
     ? "Checking…"
-    : "Check draft integrity";
+    : "Verify draft";
   draftIntegrityResult.textContent = draftIntegrityMessage ?? "";
   draftIntegrityResult.hidden = !visible || !draftIntegrityMessage;
   draftIntegrityError.textContent = draftIntegrityIssue ?? "";
   draftIntegrityError.hidden = !visible || !draftIntegrityIssue;
+}
+function renderReviewSummary(project: ProjectView | undefined): void {
+  const summary = element("review-summary");
+  if (!project?.clips) {
+    summary.replaceChildren();
+    return;
+  }
+  const originalUs = restoreSources(project).reduce(
+    (sum, source) => sum + source.durationUs,
+    0,
+  );
+  const editedUs = project.timeline.durationUs;
+  const stat = (label: string, value: string, name = "stat") => {
+    const item = document.createElement("div");
+    item.className = name;
+    const term = document.createElement("span");
+    term.textContent = label;
+    const amount = document.createElement("strong");
+    amount.textContent = value;
+    item.append(term, amount);
+    return item;
+  };
+  // Tenths keep Original - Edited consistent with Removed.
+  const tenths = (us: number) => {
+    const total = Math.round(us / 100_000);
+    return `${Math.floor(total / 600)}:${String(Math.floor((total % 600) / 10)).padStart(2, "0")}.${total % 10}`;
+  };
+  const items = [
+    stat("Original", tenths(originalUs)),
+    stat("Edited", tenths(editedUs)),
+    stat("Clips", String(project.clips.length)),
+  ];
+  if (originalUs > editedUs)
+    items.push(
+      stat(
+        "Removed",
+        `${((originalUs - editedUs) / 1_000_000).toFixed(1)} s`,
+        "stat saved",
+      ),
+    );
+  summary.replaceChildren(...items);
 }
 function transcriptionRunning(
   view: TranscriptionProjectView | undefined,
@@ -1166,7 +1212,25 @@ async function cutSelectedTranscriptWords(): Promise<void> {
     renderStage();
   }
 }
+const timelineStrip = setupTimelineStrip({
+  host: element("timeline-strip"),
+  seek: (us) => {
+    playback.stop();
+    requestFrame(us);
+  },
+  time,
+});
+function renderTimeline(): void {
+  const project = selected?.previewAvailable ? activeProject : undefined;
+  const currentMarks = !!project && markHead === currentHeadKey(project);
+  timelineStrip.render(project, {
+    inUs: currentMarks ? markInUs : undefined,
+    outUs: currentMarks ? markOutUs : undefined,
+  });
+  timelineStrip.playhead(Number(seek.value));
+}
 function renderEditTools(): void {
+  renderTimeline();
   const project = activeProject;
   if (project && restoreHead && restoreHead !== currentHeadKey(project)) {
     restoreHead = undefined;
@@ -1435,6 +1499,58 @@ function clearError(): void {
   error.hidden = true;
   error.textContent = "";
 }
+/** Whole-second duration for cards and summaries, e.g. 1:05 or 1:02:05. */
+function cardTime(value: number): string {
+  const total = Math.round(value / 1_000_000),
+    hours = Math.floor(total / 3600),
+    minutes = Math.floor((total % 3600) / 60),
+    seconds = String(total % 60).padStart(2, "0");
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}`
+    : `${minutes}:${seconds}`;
+}
+const thumbnails = new Map<string, Promise<MediaFrame | null>>();
+let thumbnailQueue: Promise<unknown> = Promise.resolve();
+/** Cosmetic card picture; failures leave the placeholder in place. */
+function thumbnail(mediaId: string, name: string): HTMLElement {
+  const box = document.createElement("span");
+  box.className = "thumb";
+  box.append(iconElement("film"));
+  let pending = thumbnails.get(mediaId);
+  if (!pending) {
+    pending = thumbnailQueue.then(async () => {
+      try {
+        const reply = await window.desktop.readThumbnail({ id: mediaId });
+        return reply.ok ? reply.value : null;
+      } catch {
+        return null;
+      }
+    });
+    thumbnailQueue = pending;
+    thumbnails.set(mediaId, pending);
+  }
+  void pending.then((frame) => {
+    if (!frame) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = frame.width;
+    canvas.height = frame.height;
+    canvas.setAttribute("aria-hidden", "true");
+    canvas.dataset.thumbnailFor = name;
+    canvas.getContext("2d")?.putImageData(
+      new ImageData(
+        Uint8ClampedArray.from(atob(frame.rgbaBase64), (character) =>
+          character.charCodeAt(0),
+        ),
+        frame.width,
+        frame.height,
+      ),
+      0,
+      0,
+    );
+    box.prepend(canvas);
+  });
+  return box;
+}
 function time(value: number): string {
   const seconds = value / 1_000_000;
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(3).padStart(6, "0")}`;
@@ -1454,11 +1570,20 @@ async function loadLibrary(): Promise<void> {
     for (const project of projects.value) {
       const row = document.createElement("li"),
         button = document.createElement("button"),
+        body = document.createElement("span"),
         name = document.createElement("span"),
         detail = document.createElement("small");
       name.textContent = project.name;
-      detail.textContent = `${time(project.timeline.durationUs)} · ${project.sources?.length ?? 1} source${project.sources ? "s" : ""} · ${stageLabels[project.stage]}`;
-      button.append(name, detail);
+      detail.textContent = [
+        cardTime(project.timeline.durationUs),
+        project.sources ? `${project.sources.length} sources` : undefined,
+        stageLabels[project.stage],
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      body.className = "card-body";
+      body.append(name, detail);
+      button.append(thumbnail(project.source.id, project.name), body);
       button.dataset.projectId = project.id;
       button.addEventListener("click", () => {
         void openProject(project.id, button);
@@ -1477,11 +1602,14 @@ async function loadLibrary(): Promise<void> {
   for (const media of reply.value) {
     const row = document.createElement("li"),
       button = document.createElement("button");
-    const name = document.createElement("span"),
+    const body = document.createElement("span"),
+      name = document.createElement("span"),
       detail = document.createElement("small");
     name.textContent = media.name;
-    detail.textContent = `${media.width} × ${media.height} · ${time(media.durationUs)}`;
-    button.append(name, detail);
+    detail.textContent = `${media.width}×${media.height} · ${cardTime(media.durationUs)}`;
+    body.className = "card-body";
+    body.append(name, detail);
+    button.append(thumbnail(media.id, media.name), body);
     button.dataset.mediaId = media.id;
     button.addEventListener("click", async () => {
       const previousProject = activeProject?.id;
@@ -1505,7 +1633,8 @@ async function loadLibrary(): Promise<void> {
       button.disabled = false;
     });
     const create = document.createElement("button");
-    create.className = "create-project";
+    create.className = "create-project ghost";
+    create.dataset.icon = "plus";
     create.textContent = "Create project";
     create.setAttribute("aria-label", `Create project from ${media.name}`);
     create.addEventListener("click", () => {
@@ -1530,6 +1659,7 @@ function select(media: MediaSummary): void {
   clearError();
   canvas.width = 0;
   canvas.height = 0;
+  canvas.parentElement!.classList.remove("loading");
   element("time").textContent = time(0);
   home.hidden = true;
   viewer.hidden = false;
@@ -1576,11 +1706,21 @@ function requestFrame(value: number): void {
   const message = element("preview-message");
   message.textContent = "Reading frame…";
   message.hidden = false;
-  canvas.hidden = true;
+  // Keep the last decoded frame on screen; the reading notice only appears
+  // as an overlay if the new frame is slow.
+  const showing = canvas.width > 0 && !canvas.hidden;
+  canvas.parentElement!.classList.toggle("loading", showing);
+  if (!showing) canvas.hidden = true;
   previous.disabled = requestedTime === 0;
   next.disabled = requestedTime >= Number(seek.max);
   renderEditTools();
   if (!decoding) void decodeFrames();
+}
+function previewFailed(): void {
+  canvas.hidden = true;
+  canvas.parentElement!.classList.remove("loading");
+  element("preview-message").textContent =
+    "Move the position control to retry this frame.";
 }
 async function decodeFrames(): Promise<void> {
   decoding = true;
@@ -1609,8 +1749,7 @@ async function decodeFrames(): Promise<void> {
           continue;
         if (!reply.ok) {
           showError(reply.message);
-          element("preview-message").textContent =
-            "Move the position control to retry this frame.";
+          previewFailed();
           continue;
         }
         if (reply.value.status === "stale") {
@@ -1639,8 +1778,7 @@ async function decodeFrames(): Promise<void> {
           continue;
         if (!reply.ok) {
           showError(reply.message);
-          element("preview-message").textContent =
-            "Move the position control to retry this frame.";
+          previewFailed();
           continue;
         }
         frame = reply.value;
@@ -1656,6 +1794,7 @@ async function decodeFrames(): Promise<void> {
         ?.putImageData(new ImageData(bytes, frame.width, frame.height), 0, 0);
       element("time").textContent = time(requested);
       canvas.hidden = false;
+      canvas.parentElement!.classList.remove("loading");
       element("preview-message").hidden = true;
     }
   } catch {
@@ -1734,6 +1873,12 @@ addFootageButton.addEventListener("click", async () => {
     appendProgress.hidden = true;
     renderStage();
   }
+});
+setupRecordPanel({
+  finished: async (media) => {
+    routeGeneration++;
+    await createProject(media);
+  },
 });
 element("cancel").addEventListener("click", () => {
   void window.desktop.cancelImport();
@@ -1818,12 +1963,13 @@ const playback = setupPlayback({
   show: (us) => {
     seek.value = String(Math.min(Number(seek.max), Math.max(0, us)));
     element("time").textContent = time(us);
+    timelineStrip.playhead(us);
     previous.disabled = us <= 0;
     next.disabled = us >= Number(seek.max);
   },
   stopped: (us) => requestFrame(us),
   changed: (playing) => {
-    playButton.textContent = playing ? "❚❚" : "▶";
+    playButton.dataset.icon = playing ? "pause" : "play";
     playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
     playButton.setAttribute("aria-pressed", String(playing));
   },

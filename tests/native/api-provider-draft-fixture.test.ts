@@ -128,7 +128,7 @@ await writeFile(
 );
 
 async function assertFrame(page: Page, frame: number): Promise<void> {
-  const actual = await page.locator("canvas").evaluate((node) => {
+  const actual = await page.locator("#frame").evaluate((node) => {
     const canvas = node as HTMLCanvasElement;
     return {
       width: canvas.width,
@@ -557,7 +557,7 @@ try {
   step = "trim-running";
   assert.equal((await thread()).status, "running");
   step = "trim-native-preview";
-  await page.locator("canvas").scrollIntoViewIfNeeded();
+  await page.locator("#frame").scrollIntoViewIfNeeded();
   const previewDeadline = Date.now() + 60000;
   let livePreviewObserved = false;
   do {

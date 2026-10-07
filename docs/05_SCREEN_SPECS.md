@@ -37,6 +37,8 @@ The current P1 slice adds Settings to the working import/library Home. Keyboard 
 
 The partial P3 two-source path offers Add footage on an unedited single-source project in Record or Import. The action uses the native picker, shows import/project progress, retains a successfully imported source if project creation fails, and opens the new combined project after commit. Home identifies the source count. Source details shows both ordered parts in one inspector; seeking across their join updates the native preview from committed clip mapping. The original project remains available. This is an import/preview affordance, not a continuous playback or export control.
 
+Implemented look (2026-10-07): two action tiles, **New recording** and **Import video**, then a Projects grid of cards with a small decoded picture, name, duration and current step, then a compact Media list with the same picture, size, duration and **Create project**. Card pictures come from `library:thumbnail`, a cosmetic 320 px decode that is never used for review or export; a source that cannot be decoded keeps a neutral placeholder. Card durations are whole seconds; the editor keeps millisecond positions.
+
 ## S03: capture setup
 
 Visible:
@@ -63,6 +65,8 @@ Visible:
 - microphone, system audio, and camera state
 
 No editor or diagnostics chrome is visible during capture.
+
+Implemented subset (2026-10-07): one modal dialog. Setup shows a screen choice (radio cards with resolution), a microphone menu and Start recording. Live shows a countdown, then a pulsing record dot with elapsed time, a single status line (Recording, Paused, missed-frame count, Saving) and Pause/Resume and Stop. Stop opens the new project in Record or Import. Scenes, teleprompter, camera, system audio and window/region choices are not implemented. See docs/06.
 
 ## S05: take review
 
@@ -125,6 +129,8 @@ The current P2 conversation slice implements the compact Codex drawer beside the
 
 The project preview shows current and total output time. Its frame and seek bounds come from the current committed draft head. A committed trim, split, cut or restore refreshes the ordered fragment map, remaps output time through retained immutable sources, and discards stale decoded pixels; split preserves total duration while cut and restore change it according to their interval. The Edit stage offers compact Trim start, Trim end, Split, Mark in, Mark out, Cut range, Restore source range, Clear, Undo and Redo actions around the preview. Trim and Split require an interior playhead position and are disabled at boundaries or during a pending save. Marks are output-time microseconds bound to the exact draft head; a changed head invalidates them so a later cut cannot use stale positions. Cut range needs a valid nonempty, non-whole-draft `[in, out)` interval and may cross a fragment or source join. It ripples remaining fragments while keeping all imported sources available in Source details. Restore source range accepts one exact missing half-open interval in a selected immutable source; main rejects visible overlap and reflows the remaining map. It does not infer missing content. Save failure stays actionable, and shared-history Undo may reverse a manual or assistant edit; Redo reapplies the latest undone transaction through the journal. Source library inspection remains clearly labelled as source position. Tagged 8-bit H.264/BT.709 imports can show converted display frames at native dimensions, with source seek positions resolved against presentation PTS instead of average frame rate. The two-source path crosses its join, but remains still-frame inspection without audio playback or master rendering.
 
+Project shell (2026-10-07), shared by all five steps: a top bar with the project name, the step selector as one segmented control (a menu below 820 px), the assistant toggle and an icon button for source details. Under the preview sits one player bar (previous frame, play, next frame, position slider, time) and a compact timeline strip: one block per visible clip in draft order, the current clip outlined, In/Out marks or the marked range, the playhead, and "N clips · kept of original". Clicking the strip seeks; the slider remains the keyboard control. The current step's tools sit in one panel below; the preview yields space to it and the panel scrolls only when the window is too short. While a new frame decodes the previous frame stays on screen and a small "Reading frame…" notice appears only if decoding is slow. Edit's tools are one icon toolbar (trim, split | undo, redo | mark in/out, cut range, clear | restore). Review shows Original, Edited, Clips and Removed (tenths of a second) next to **Verify draft**.
+
 ## S09: revision compare (Review stage)
 
 Visible:
@@ -138,11 +144,11 @@ Visible:
 
 ## S10: review and quality summary (Review stage; internal screen `qa`)
 
-The current Review shell offers one **Check draft integrity** action. Main re-reads the committed project, draft journal and managed-source measurements, then returns the validated draft head. If the current head ends in a main-owned manual edit group, the same explicit action may record a structural-only checkpoint with evidence derived from the validated reads. AI-origin groups cannot use that checkpoint path. The success message is limited to structure and managed-source integrity; it does not assess spoken meaning, rendered joins, playback, or whole-result review. A changed draft invalidates the displayed result. This check does not create an editorial pass checkpoint or enable export. The action and result hide while the Source inspector or Codex drawer is open, preserving the single-panel rule.
+The current Review shell shows original and edited duration, clip count and removed time, and offers one **Verify draft** action. Main re-reads the committed project, draft journal and managed-source measurements, then returns the validated draft head. If the current head ends in a main-owned manual edit group, the same explicit action may record a structural-only checkpoint with evidence derived from the validated reads. AI-origin groups cannot use that checkpoint path. The success message is limited to structure and managed-source integrity; it does not assess spoken meaning, rendered joins, playback, or whole-result review. A changed draft invalidates the displayed result. This check does not create an editorial pass checkpoint or enable export. The action and result hide while the Source inspector or Codex drawer is open, preserving the single-panel rule.
 
 The full editorial report exposes measured changes, unresolved cues and selective graphics suggestions at final-cut times. Each suggestion contains its complete prompt and remains distinct from an imported asset; viewing it never triggers generation or export. Keep this in the selected review surface or Codex drawer, respecting the single-panel rule. A pass checkpoint does not certify whole-result review.
 
-The remaining bullets below are target screen requirements. Only Check draft integrity is currently implemented in Review.
+The remaining bullets below are target screen requirements. Only the duration summary and Verify draft are currently implemented in Review.
 
 Visible:
 

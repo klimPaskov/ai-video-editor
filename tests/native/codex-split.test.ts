@@ -503,7 +503,7 @@ const launch = () =>
 let electron = await launch();
 let page: Page | undefined;
 async function canvasHash(active: Page): Promise<string | null> {
-  return active.locator("canvas").evaluate(async (node, pixelLimit) => {
+  return active.locator("#frame").evaluate(async (node, pixelLimit) => {
     const canvas = node as HTMLCanvasElement;
     if (!canvas.width || !canvas.height) return null;
     if (canvas.width * canvas.height > pixelLimit)

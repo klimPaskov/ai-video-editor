@@ -77,6 +77,7 @@ import {
   ipcMain,
   protocol,
   safeStorage,
+  screen,
   session,
   shell,
 } from "electron";
@@ -89,6 +90,8 @@ import path from "node:path";
 import { channels, assertEmptyRequest } from "./bridge.ts";
 import {
   assertFrameRequest,
+  assertThumbnail,
+  assertThumbnailRequest,
   assertMediaFrame,
   assertMediaList,
   assertMediaSummary,
@@ -107,6 +110,11 @@ import {
 } from "../../../packages/domain/src/export-view.ts";
 import { DesktopExports } from "./export.ts";
 import { DesktopMagicWand } from "./magic-wand.ts";
+import { DesktopRecorder, RecordingError } from "./recording.ts";
+import {
+  assertRecordingStartRequest,
+  assertRecordingView,
+} from "../../../packages/domain/src/recording-view.ts";
 import {
   assertMagicWandProjectRequest,
   assertMagicWandStartRequest,
@@ -141,11 +149,18 @@ let resolvePlaybackSource:
     ) => Promise<{ path: string; mime: string } | null>)
   | undefined;
 let servicesClosed = false;
+let recorder: DesktopRecorder | undefined;
 app.on("before-quit", (event) => {
   quitting = true;
   if (
     !servicesClosed &&
-    (codex || mcpBroker || claude || claudeBroker || transcription || exports)
+    (codex ||
+      mcpBroker ||
+      claude ||
+      claudeBroker ||
+      transcription ||
+      exports ||
+      recorder)
   ) {
     event.preventDefault();
     void Promise.allSettled([
@@ -156,6 +171,7 @@ app.on("before-quit", (event) => {
         .then(() => claudeBroker?.close()),
       Promise.resolve().then(() => transcription?.close()),
       Promise.resolve().then(() => exports?.close()),
+      Promise.resolve().then(() => recorder?.cancel()),
     ]).then(() => {
       servicesClosed = true;
       app.quit();
@@ -335,6 +351,73 @@ async function start(): Promise<void> {
   const projects = new ProjectStore(projectRoot, library);
   const drafts = new DraftTransactionStore(projectRoot, projects);
   const projectRuntime = new DesktopProjectRuntime(drafts, library);
+  recorder = new DesktopRecorder({
+    root: path.join(userData, "recordings"),
+    platform: process.platform,
+    env: process.env,
+    importFile: (file) => library.importFile(file),
+    displays: () =>
+      screen.getAllDisplays().map((display, index) => {
+        // Capture uses physical pixels; Windows maps per-monitor DPI itself.
+        const bounds =
+          process.platform === "win32"
+            ? screen.dipToScreenRect(null, display.bounds)
+            : {
+                x: Math.round(display.bounds.x * display.scaleFactor),
+                y: Math.round(display.bounds.y * display.scaleFactor),
+                width: Math.round(display.bounds.width * display.scaleFactor),
+                height: Math.round(display.bounds.height * display.scaleFactor),
+              };
+        return {
+          id: `display-${index + 1}`,
+          label:
+            display.label && display.label.length <= 200
+              ? display.label
+              : `Display ${index + 1}`,
+          ...bounds,
+          primary: display.id === screen.getPrimaryDisplay().id,
+        };
+      }),
+  });
+  const recording = async (work: () => Promise<unknown>) => {
+    try {
+      const value = await work();
+      assertRecordingView(value);
+      return value;
+    } catch (error) {
+      if (error instanceof RecordingError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  };
+  register(channels.recordingDevices, async (request) => {
+    assertEmptyRequest(request);
+    return recorder!.devices();
+  });
+  register(channels.recordingGet, async (request) => {
+    assertEmptyRequest(request);
+    return recording(async () => recorder!.get());
+  });
+  register(channels.recordingStart, async (request) => {
+    assertRecordingStartRequest(request);
+    return recording(() => recorder!.start(request));
+  });
+  register(channels.recordingPause, async (request) => {
+    assertEmptyRequest(request);
+    return recording(() => recorder!.pause());
+  });
+  register(channels.recordingResume, async (request) => {
+    assertEmptyRequest(request);
+    return recording(() => recorder!.resume());
+  });
+  register(channels.recordingStop, async (request) => {
+    assertEmptyRequest(request);
+    return recording(() => recorder!.stop());
+  });
+  register(channels.recordingCancel, async (request) => {
+    assertEmptyRequest(request);
+    return recording(() => recorder!.cancel());
+  });
   exports = new DesktopExports({
     drafts,
     recordRoot: path.join(userData, "exports"),
@@ -1019,6 +1102,20 @@ async function start(): Promise<void> {
       return value;
     } finally {
       frameRequests.delete(controller);
+    }
+  });
+  let thumbnailRequests = 0;
+  register(channels.thumbnail, async (request) => {
+    assertThumbnailRequest(request);
+    // Cards ask for one picture each; a small bound keeps FFmpeg use modest.
+    if (thumbnailRequests >= 4) throw new Error("Thumbnail queue is full");
+    thumbnailRequests++;
+    try {
+      const value = await library.thumbnail(request.id);
+      assertThumbnail(value);
+      return value;
+    } finally {
+      thumbnailRequests--;
     }
   });
   register(channels.projectFrame, async (request) => {

@@ -68,7 +68,7 @@ let electron = await _electron.launch({
 async function canvasBytes(page: Page): Promise<Buffer> {
   return Buffer.from(
     await page
-      .locator("canvas")
+      .locator("#frame")
       .evaluate((node) =>
         Array.from(
           (node as HTMLCanvasElement)

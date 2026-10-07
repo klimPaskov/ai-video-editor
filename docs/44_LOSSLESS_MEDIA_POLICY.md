@@ -34,6 +34,8 @@ Still-frame source seeking uses verified presentation PTS rather than an average
 
 Mono speech extraction, waveform reduction, and thumbnails are analysis-only derivatives. They may not become master audio or video inputs. If Electron cannot play the master codec, use a verified local decode/frame transport or ask for a clearly labelled playback proxy. Never silently substitute the proxy for the export source.
 
+Screen recordings (FFV1 `bgr0`, full range, sRGB) use the native RGB still-frame path: FFmpeg's explicit `scale,format=bgra` copies B, G and R unchanged and fills the unused byte with opaque alpha, which `tests/media/recorder.test.ts` and `tests/native/recording.test.ts` compare against an unconverted `bgr0` decode. Home card pictures are cosmetic 320 px decodes with default scaling and are never shown as review frames.
+
 ## Processing
 
 Preserve high precision through compositing. Test the actual decode, pixel transport, GPU or CPU composition, intermediate, and encoding path. An 8-bit browser canvas is not a valid silent fallback for higher-precision material.

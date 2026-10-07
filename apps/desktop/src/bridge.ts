@@ -16,6 +16,11 @@ import type {
   MagicWandView,
 } from "../../../packages/domain/src/magic-wand-view.ts";
 import type {
+  RecordingDevices,
+  RecordingStartRequest,
+  RecordingView,
+} from "../../../packages/domain/src/recording-view.ts";
+import type {
   ExportProjectRequest,
   ExportStartRequest,
   ExportView,
@@ -40,6 +45,7 @@ import type {
 } from "../../../packages/domain/src/project-view.ts";
 import type {
   FrameRequest,
+  ThumbnailRequest,
   MediaFrame,
   MediaSummary,
 } from "../../../packages/domain/src/library.ts";
@@ -136,6 +142,13 @@ export interface DesktopBridge {
   interruptCodexThread(
     request: CodexThreadProjectRequest,
   ): Promise<Reply<CodexThreadView>>;
+  getRecordingDevices(): Promise<Reply<RecordingDevices>>;
+  getRecording(): Promise<Reply<RecordingView>>;
+  startRecording(request: RecordingStartRequest): Promise<Reply<RecordingView>>;
+  pauseRecording(): Promise<Reply<RecordingView>>;
+  resumeRecording(): Promise<Reply<RecordingView>>;
+  stopRecording(): Promise<Reply<RecordingView>>;
+  cancelRecording(): Promise<Reply<RecordingView>>;
   getMagicWand(request: MagicWandProjectRequest): Promise<Reply<MagicWandView>>;
   startMagicWand(request: MagicWandStartRequest): Promise<Reply<MagicWandView>>;
   stopMagicWand(
@@ -187,9 +200,17 @@ export interface DesktopBridge {
   listMedia(): Promise<Reply<MediaSummary[]>>;
   importVideo(): Promise<Reply<MediaSummary | null>>;
   readFrame(request: FrameRequest): Promise<Reply<MediaFrame>>;
+  readThumbnail(request: ThumbnailRequest): Promise<Reply<MediaFrame>>;
   cancelImport(): Promise<Reply<null>>;
 }
 export const channels = Object.freeze({
+  recordingDevices: "recording:devices",
+  recordingGet: "recording:get",
+  recordingStart: "recording:start",
+  recordingPause: "recording:pause",
+  recordingResume: "recording:resume",
+  recordingStop: "recording:stop",
+  recordingCancel: "recording:cancel",
   magicGet: "magic:get",
   magicStart: "magic:start",
   magicStop: "magic:stop",
@@ -255,6 +276,7 @@ export const channels = Object.freeze({
   list: "library:list",
   import: "library:import",
   frame: "library:frame",
+  thumbnail: "library:thumbnail",
   cancel: "library:cancel",
 });
 export function assertEmptyRequest(value: unknown): void {

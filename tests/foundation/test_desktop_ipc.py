@@ -44,6 +44,39 @@ class DesktopIpcContractTests(unittest.TestCase):
                 exchange['payload'] = self.frame['payload']
             self.valid(exchange)
 
+    def test_thumbnail_is_small_and_requested_by_id_only(self):
+        payload = {'id': self.frame['payload']['id']}
+        picture = {'width': 2, 'height': 2, 'rgbaBase64': 'AAAAAAAAAAAAAAAAAAAAAA=='}
+        self.valid({'channel': 'library:thumbnail', 'payload': payload, 'response': {'ok': True, 'value': picture}})
+        self.valid({'channel': 'library:thumbnail', 'payload': payload, 'response': {'ok': False, 'message': 'No picture.'}})
+        for wrong in [{}, {'id': '../x'}, dict(payload, timeUs=0), dict(payload, path='/private/video.mkv')]:
+            self.invalid({'channel': 'library:thumbnail', 'payload': wrong, 'response': {'ok': True, 'value': picture}})
+        for size in [{'width': 321}, {'height': 1281}]:
+            self.invalid({'channel': 'library:thumbnail', 'payload': payload, 'response': {'ok': True, 'value': dict(picture, **size)}})
+
+    def test_recording_channels_use_opaque_ids_and_fixed_messages(self):
+        devices = {'displays': [{'id': 'display-1', 'label': 'Built-in display', 'width': 2560, 'height': 1600, 'primary': True}],
+                   'microphones': [{'id': 'pulse-1', 'label': 'USB microphone'}], 'message': None}
+        self.valid({'channel': 'recording:devices', 'response': {'ok': True, 'value': devices}})
+        for wrong in [dict(devices, displays=[dict(devices['displays'][0], x=0)]),
+                      dict(devices, microphones=[{'id': 'pulse-1', 'label': 'Mic', 'device': 'alsa_input.usb'}]),
+                      dict(devices, message='ffmpeg: x11grab failed')]:
+            self.invalid({'channel': 'recording:devices', 'response': {'ok': True, 'value': wrong}})
+        self.invalid({'channel': 'recording:devices', 'payload': {}, 'response': {'ok': True, 'value': devices}})
+        recording = {'status': 'recording', 'elapsedUs': 1000000, 'missedFrames': 0, 'media': None, 'message': None}
+        finished = dict(recording, status='finished', media=self.summary)
+        for channel in ['get', 'pause', 'resume', 'stop', 'cancel']:
+            self.valid({'channel': 'recording:' + channel, 'response': {'ok': True, 'value': recording}})
+        self.valid({'channel': 'recording:stop', 'response': {'ok': True, 'value': finished}})
+        self.invalid({'channel': 'recording:stop', 'response': {'ok': True, 'value': dict(finished, media=None)}})
+        self.invalid({'channel': 'recording:get', 'response': {'ok': True, 'value': dict(recording, media=self.summary)}})
+        self.invalid({'channel': 'recording:get', 'response': {'ok': True, 'value': dict(recording, path='/home/user/take.mkv')}})
+        start = {'schema_version': '1.0', 'display_id': 'display-1', 'microphone_id': None}
+        self.valid({'channel': 'recording:start', 'payload': start, 'response': {'ok': True, 'value': recording}})
+        self.valid({'channel': 'recording:start', 'payload': dict(start, microphone_id='pulse-1'), 'response': {'ok': False, 'message': 'A recording is already in progress.'}})
+        for wrong in [dict(start, display_id=':0.0+0,0 -i /etc/passwd'), dict(start, microphone_id='alsa input'), {'display_id': 'display-1'}]:
+            self.invalid({'channel': 'recording:start', 'payload': wrong, 'response': {'ok': True, 'value': recording}})
+
     def test_undefined_requests_are_absent_not_null_or_paths(self):
         for channel in ['list', 'import', 'cancel']:
             for payload in [None, {}, {'path': '/private/video.mkv'}]:

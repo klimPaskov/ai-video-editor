@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { constants } from "node:fs";
 import { access, lstat, readdir, readFile } from "node:fs/promises";
 import { isIPv4 } from "node:net";
+import { resolve, sep } from "node:path";
 
 export type NativeTestEnvironment = "docker" | "wsl2" | "cloud";
 
@@ -292,4 +293,9 @@ export async function assertNativeTestEnvironment(): Promise<NativeTestEnvironme
     await assertPrivateWslResolver();
   }
   return environment;
+}
+
+/** True when a path lies inside the guest's working copy (tests run from its root). */
+export function insideGuestWorkspace(path: string | undefined): path is string {
+  return !!path && resolve(path).startsWith(resolve(".") + sep);
 }

@@ -383,7 +383,7 @@ let electron = await launch();
 let page: Page | undefined;
 let readBeforeEditEvidence: ReadBeforeEditEvidence | undefined;
 async function canvasHash(active: Page): Promise<string | null> {
-  return active.locator("canvas").evaluate(async (node) => {
+  return active.locator("#frame").evaluate(async (node) => {
     const canvas = node as HTMLCanvasElement;
     if (!canvas.width || !canvas.height) return null;
     const pixels = canvas

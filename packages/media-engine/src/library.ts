@@ -17,8 +17,10 @@ import {
   assertMediaFrame,
   assertMediaList,
   assertMediaSummary,
+  assertThumbnail,
   maxFramePixels,
   mediaIdPattern,
+  thumbnailWidth,
 } from "../../domain/src/library.ts";
 import type { MediaFrame, MediaSummary } from "../../domain/src/library.ts";
 import { assertNotCancelled, publishFileWithoutOverwrite } from "./files.ts";
@@ -96,16 +98,21 @@ function previewProfile(
     width * height > maxFramePixels ||
     width > 8192 ||
     height > 8192 ||
-    probe.color_primaries !== "bt709" ||
-    probe.color_transfer !== "bt709"
+    probe.color_primaries !== "bt709"
   )
     return undefined;
+  // Full-range RGB is shown unchanged. Screen recordings are 8-bit RGB with
+  // no alpha (bgr0) tagged sRGB; their samples are exactly what the display
+  // produced, so the canvas shows them without conversion.
   if (
-    probe.pix_fmt === "bgra" &&
+    (probe.pix_fmt === "bgra" || probe.pix_fmt === "bgr0") &&
     probe.color_range === "pc" &&
-    probe.color_space === "gbr"
+    probe.color_space === "gbr" &&
+    (probe.color_transfer === "bt709" ||
+      probe.color_transfer === "iec61966-2-1")
   )
     return "native-bgra";
+  if (probe.color_transfer !== "bt709") return undefined;
   // This conversion is only for the 8-bit display transport. Canonical
   // rendering and master export must read the preserved YUV source instead.
   if (
@@ -194,6 +201,7 @@ export class MediaLibrary {
     string,
     Promise<PresentationTiming>
   >();
+  private readonly thumbnails = new Map<string, Promise<MediaFrame>>();
   constructor(
     root: string,
     options: { ffmpeg?: string; ffprobe?: string } = {},
@@ -571,7 +579,10 @@ export class MediaLibrary {
               "-vf",
               "scale=in_range=tv:out_range=pc:in_color_matrix=bt709:out_color_matrix=bt709:flags=accurate_rnd+full_chroma_int,format=bgra",
             ]
-          : []),
+          : (video as Record<string, unknown>).pix_fmt === "bgr0"
+            ? // Copies B, G and R unchanged and sets the unused byte to opaque.
+              ["-vf", "scale,format=bgra"]
+            : []),
         "-pix_fmt",
         "+bgra",
         "-f",
@@ -598,6 +609,85 @@ export class MediaLibrary {
       rgbaBase64: rgba.toString("base64"),
     };
     assertMediaFrame(frame);
+    return frame;
+  }
+  /**
+   * Small picture for library and project cards. It is cosmetic: FFmpeg's
+   * default conversion and scaling are used, so it is never shown as a
+   * review frame or used for rendering. Any decodable source qualifies.
+   */
+  async thumbnail(id: string, signal?: AbortSignal): Promise<MediaFrame> {
+    await this.initialize();
+    const entry = await this.entry(id);
+    const key = `${id}:${entry.source.sha256}`;
+    let pending = this.thumbnails.get(key);
+    if (!pending) {
+      pending = this.decodeThumbnail(entry, signal);
+      if (this.thumbnails.size >= 128)
+        this.thumbnails.delete(this.thumbnails.keys().next().value!);
+      this.thumbnails.set(key, pending);
+      void pending.catch(() => this.thumbnails.delete(key));
+    }
+    return pending;
+  }
+  private async decodeThumbnail(
+    entry: Entry,
+    signal?: AbortSignal,
+  ): Promise<MediaFrame> {
+    const { summary } = entry;
+    const width = Math.min(thumbnailWidth, summary.width);
+    const height = Math.max(
+      2,
+      Math.round((width * summary.height) / summary.width / 2) * 2,
+    );
+    // A frame a little way in avoids black lead-in frames.
+    const atUs = Math.min(1_000_000, Math.floor(summary.durationUs / 10));
+    const output = await runProcess({
+      executable: this.ffmpeg,
+      args: [
+        "-v",
+        "error",
+        "-nostdin",
+        "-protocol_whitelist",
+        "file",
+        "-format_whitelist",
+        "matroska,webm,mov,avi",
+        "-ss",
+        (atUs / 1_000_000).toFixed(6),
+        "-i",
+        join(this.root, "assets", entry.source.file),
+        "-map",
+        "0:v:0",
+        "-frames:v",
+        "1",
+        "-an",
+        "-sn",
+        "-dn",
+        "-threads",
+        "1",
+        "-vf",
+        `scale=${width}:${height}:flags=bicubic,format=rgba`,
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ],
+      maxOutputBytes: width * height * 4 + 64 * 1024,
+      ...(signal ? { signal } : {}),
+    });
+    if (output.stdout.length !== width * height * 4)
+      throw new MediaError(
+        "UNSUPPORTED_PROFILE",
+        "No thumbnail could be decoded for this source.",
+      );
+    // Cards are opaque; any source alpha is not meaningful there.
+    const rgba = Buffer.from(output.stdout);
+    for (let i = 3; i < rgba.length; i += 4) rgba[i] = 255;
+    const frame: MediaFrame = {
+      width,
+      height,
+      rgbaBase64: rgba.toString("base64"),
+    };
+    assertThumbnail(frame);
     return frame;
   }
 }

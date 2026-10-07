@@ -18,7 +18,10 @@ import { assertTwoSourceInitialProjectSnapshot } from "../../packages/domain/src
 import type { TranscriptionProjectView } from "../../packages/domain/src/transcription.ts";
 import { sha256 } from "../../packages/media-engine/src/lossless.ts";
 import { verifySpeechModelCache } from "../../packages/media-engine/src/transcription.ts";
-import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
+import {
+  assertNativeTestEnvironment,
+  insideGuestWorkspace,
+} from "../../scripts/native-test-environment.ts";
 
 await assertNativeTestEnvironment();
 
@@ -30,8 +33,8 @@ const executablePath = process.argv[2],
   reuseProject = process.argv.includes("--reuse-project");
 if (!executablePath || !configArgument)
   throw new Error("Packaged executable and private guest config are required");
-assert.ok(executablePath.startsWith("/home/node/workspaces/"));
-assert.ok(configArgument.startsWith("/home/node/workspaces/"));
+assert.ok(insideGuestWorkspace(executablePath));
+assert.ok(insideGuestWorkspace(configArgument));
 assert.equal(sourcePaths.length, 2, "Supply the two ordered guest video paths");
 for (const sourcePath of sourcePaths)
   assert.ok(sourcePath.startsWith("/home/node/"));

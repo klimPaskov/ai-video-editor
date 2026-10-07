@@ -21,6 +21,8 @@ Screen-reader evidence requires the actual reader's output. The Orca test image 
 
 Record the exact reader and AT-SPI versions, package hashes, test-source hash and runtime settings with each run. Orca 43.1 retained missed-announcement failures in the isolated guest. The separate unmodified Orca 50.2/AT-SPI 2.56.8 comparison must meet the same control-output assertions; a newer dependency or successful installation alone is not acceptance. Use the reader's supported version-specific startup and settings APIs, confirm settings through readback, and wait for monitor painting before taking visual evidence. This Linux smoke scope does not establish Windows screen-reader support.
 
+Production styling (2026-10-07) keeps the P1 guarantees: primary actions keep at least 4.5:1 contrast in normal and hover states, the current step and selected Settings section are underlined in forced-colors mode, focus rings are 2 px, all icons are aria-hidden, and reduced motion disables every animation (the slow-frame notice then appears without fading). `tests/native/accessibility.test.ts` and the scale checks in `tests/native/desktop.test.ts` pass on this styling.
+
 ## Captions
 
 Caption defaults should remain readable, safe from canvas edges, and editable. The app should warn when a user style becomes too small or low contrast.

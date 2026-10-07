@@ -136,7 +136,7 @@ await writeFile(
 );
 
 async function assertFrame(page: Page, frame: number): Promise<void> {
-  const actual = await page.locator("canvas").evaluate((node) => {
+  const actual = await page.locator("#frame").evaluate((node) => {
     const canvas = node as HTMLCanvasElement;
     return {
       width: canvas.width,

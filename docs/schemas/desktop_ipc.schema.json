@@ -7,6 +7,52 @@
     {
       "type": "object",
       "additionalProperties": false,
+      "required": ["channel", "response"],
+      "properties": {
+        "channel": { "const": "recording:devices" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/recordingDevices" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "response"],
+      "properties": {
+        "channel": { "enum": ["recording:get", "recording:pause", "recording:resume", "recording:stop", "recording:cancel"] },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/recordingView" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
+        "channel": { "const": "recording:start" },
+        "payload": { "$ref": "#/$defs/recordingStartRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/recordingView" } }
+          }
+        ] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
       "required": [
         "channel",
         "payload",
@@ -353,6 +399,22 @@
         "payload": {
           "$ref": "#/$defs/frameRequest"
         }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "payload", "response"],
+      "properties": {
+        "channel": { "const": "library:thumbnail" },
+        "payload": { "$ref": "#/$defs/thumbnailRequest" },
+        "response": { "oneOf": [
+          { "$ref": "#/$defs/error" },
+          { "type": "object", "additionalProperties": false,
+            "required": ["ok", "value"],
+            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/thumbnail" } }
+          }
+        ] }
       }
     },
     {
@@ -1758,6 +1820,112 @@
     }
   ],
   "$defs": {
+    "recordingDeviceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$"
+    },
+    "recordingLabel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "recordingMessage": {"anyOf": [{"type": "null"}, {"enum": ["Screen recording needs FFmpeg screen capture on this device.", "Screen recording needs an X11 session on Linux. Sign in with an X11 session to record.", "A recording is already in progress.", "The selected screen or microphone is no longer available.", "Recording could not start. Check screen and microphone permissions and try again.", "Recording stopped unexpectedly. The part recorded so far was kept.", "The recording could not be saved. Try recording again.", "Nothing was recorded."]}]},
+    "recordingDevices": {
+      "description": "Screens and microphones offered for recording. Ids are opaque; FFmpeg device names and coordinates stay in main.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["displays", "microphones", "message"],
+      "properties": {
+        "displays": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label", "width", "height", "primary"],
+            "properties": {
+              "id": { "$ref": "#/$defs/recordingDeviceId" },
+              "label": { "$ref": "#/$defs/recordingLabel" },
+              "width": { "type": "integer", "minimum": 0 },
+              "height": { "type": "integer", "minimum": 0 },
+              "primary": { "type": "boolean" }
+            }
+          }
+        },
+        "microphones": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label"],
+            "properties": {
+              "id": { "$ref": "#/$defs/recordingDeviceId" },
+              "label": { "$ref": "#/$defs/recordingLabel" }
+            }
+          }
+        },
+        "message": { "$ref": "#/$defs/recordingMessage" }
+      }
+    },
+    "recordingStartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "display_id", "microphone_id"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "display_id": { "$ref": "#/$defs/recordingDeviceId" },
+        "microphone_id": {
+          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/recordingDeviceId" }]
+        }
+      }
+    },
+    "recordingView": {
+      "description": "Recording state. media is the imported take and is present only when finished.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "elapsedUs", "missedFrames", "media", "message"],
+      "properties": {
+        "status": {
+          "enum": ["idle", "starting", "recording", "paused", "finishing", "finished", "failed"]
+        },
+        "elapsedUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "missedFrames": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "media": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/summary" }] },
+        "message": { "$ref": "#/$defs/recordingMessage" }
+      },
+      "if": { "properties": { "status": { "const": "finished" } } },
+      "then": { "properties": { "media": { "$ref": "#/$defs/summary" } } },
+      "else": { "properties": { "media": { "type": "null" } } }
+    },
+    "thumbnailRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      }
+    },
+    "thumbnail": {
+      "description": "Small cosmetic RGBA picture for library and project cards; never a review frame. Runtime also checks the exact base64 length and padding.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "rgbaBase64"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1, "maximum": 320 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 1280 },
+        "rgbaBase64": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 2184536,
+          "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+        }
+      }
+    },
     "magicWandProjectRequest": {
       "type": "object",
       "additionalProperties": false,

@@ -74,7 +74,7 @@ let electron = await _electron.launch({
   timeout: 30_000,
 });
 async function canvasBytes(page: Page): Promise<Buffer> {
-  const result = await page.locator("canvas").evaluate((node) => {
+  const result = await page.locator("#frame").evaluate((node) => {
     const canvas = node as HTMLCanvasElement;
     return {
       width: canvas.width,

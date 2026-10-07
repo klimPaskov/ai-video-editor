@@ -11,6 +11,11 @@ export interface FrameRequest {
   id: string;
   timeUs: number;
 }
+export interface ThumbnailRequest {
+  id: string;
+}
+/** Small cosmetic picture for library and project cards; never a review frame. */
+export const thumbnailWidth = 320;
 export interface MediaFrame {
   width: number;
   height: number;
@@ -80,6 +85,19 @@ export function assertFrameRequest(
     value.timeUs < 0
   )
     throw new Error("Invalid frame request.");
+}
+export function assertThumbnailRequest(
+  value: unknown,
+): asserts value is ThumbnailRequest {
+  record(value);
+  exact(value, ["id"]);
+  if (typeof value.id !== "string" || !mediaIdPattern.test(value.id))
+    throw new Error("Invalid thumbnail request.");
+}
+export function assertThumbnail(value: unknown): asserts value is MediaFrame {
+  assertMediaFrame(value);
+  if (value.width > thumbnailWidth || value.height > 4 * thumbnailWidth)
+    throw new Error("Invalid thumbnail size.");
 }
 export function assertMediaFrame(value: unknown): asserts value is MediaFrame {
   record(value);

@@ -27,7 +27,10 @@ import { sha256 } from "../../packages/media-engine/src/lossless.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { ProjectStore } from "../../packages/project-store/src/store.ts";
 import { DraftTransactionStore } from "../../packages/project-store/src/transactions.ts";
-import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
+import {
+  assertNativeTestEnvironment,
+  insideGuestWorkspace,
+} from "../../scripts/native-test-environment.ts";
 
 assert.equal(process.platform, "linux", "Requires isolated Linux guest");
 assert.equal(process.getuid?.(), 1000);
@@ -38,7 +41,7 @@ const suppliedConfig = process.argv[3];
 const executablePath = process.argv[4];
 assert.ok(suppliedEvidence && suppliedConfig && executablePath);
 assert.equal(resolve(executablePath), executablePath);
-assert.ok(executablePath.startsWith("/home/node/workspaces/"));
+assert.ok(insideGuestWorkspace(executablePath));
 const evidence = await realpath(suppliedEvidence);
 const configRoot = await realpath(suppliedConfig);
 assert.equal(evidence, resolve(suppliedEvidence));

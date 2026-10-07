@@ -169,7 +169,7 @@ for (const legacy of [false, true]) {
         .getByRole("button", { name: "Edit", exact: true }),
     ).toHaveAttribute("aria-current", "step");
     const pixels = await page
-      .locator("canvas")
+      .locator("#frame")
       .evaluate((node) =>
         Array.from(
           (node as HTMLCanvasElement)

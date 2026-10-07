@@ -34,6 +34,11 @@ import {
   assertMagicWandView,
 } from "../../../packages/domain/src/magic-wand-view.ts";
 import {
+  assertRecordingDevices,
+  assertRecordingStartRequest,
+  assertRecordingView,
+} from "../../../packages/domain/src/recording-view.ts";
+import {
   assertExportProjectRequest,
   assertExportStartRequest,
   assertExportView,
@@ -62,6 +67,8 @@ import { channels } from "./bridge.ts";
 import type { DesktopBridge, Reply } from "./bridge.ts";
 import {
   assertFrameRequest,
+  assertThumbnail,
+  assertThumbnailRequest,
   assertMediaFrame,
   assertMediaList,
   assertMediaSummary,
@@ -242,6 +249,22 @@ const bridge: DesktopBridge = {
       assertCodexThreadView,
     );
   },
+  getRecordingDevices: () =>
+    invoke(channels.recordingDevices, undefined, assertRecordingDevices),
+  getRecording: () =>
+    invoke(channels.recordingGet, undefined, assertRecordingView),
+  startRecording: (request) => {
+    assertRecordingStartRequest(request);
+    return invoke(channels.recordingStart, request, assertRecordingView);
+  },
+  pauseRecording: () =>
+    invoke(channels.recordingPause, undefined, assertRecordingView),
+  resumeRecording: () =>
+    invoke(channels.recordingResume, undefined, assertRecordingView),
+  stopRecording: () =>
+    invoke(channels.recordingStop, undefined, assertRecordingView),
+  cancelRecording: () =>
+    invoke(channels.recordingCancel, undefined, assertRecordingView),
   getMagicWand: (request) => {
     assertMagicWandProjectRequest(request);
     return invoke(channels.magicGet, request, assertMagicWandView);
@@ -390,6 +413,10 @@ const bridge: DesktopBridge = {
   readFrame: (request) => {
     assertFrameRequest(request);
     return invoke(channels.frame, request, assertMediaFrame);
+  },
+  readThumbnail: (request) => {
+    assertThumbnailRequest(request);
+    return invoke(channels.thumbnail, request, assertThumbnail);
   },
   cancelImport: () =>
     invoke(channels.cancel, undefined, (value) => {

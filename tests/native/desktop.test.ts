@@ -53,7 +53,7 @@ for (let frame = 0; frame < 3; frame++)
             256;
   }
 async function assertCanvasFrame(page: Page, frame: number): Promise<void> {
-  const actual = await page.locator("canvas").evaluate((node) => {
+  const actual = await page.locator("#frame").evaluate((node) => {
     const canvas = node as HTMLCanvasElement;
     return {
       width: canvas.width,
@@ -277,7 +277,7 @@ try {
       join(projectFolder, "project.json"),
     ),
     integrityButton = window.getByRole("button", {
-      name: "Check draft integrity",
+      name: "Verify draft",
       exact: true,
     }),
     managedSourcePath = baseline.source.managed_path,
@@ -617,7 +617,7 @@ try {
     .toBe(1.25);
   await expect(
     window.locator(`#projects [data-project-id="${project.id}"] small`),
-  ).toHaveText("0:01.000 · 1 source · Review");
+  ).toHaveText("0:01 · Review");
   await window.locator(`#projects [data-project-id="${project.id}"]`).click();
   await expect(window.locator("#frame")).toBeVisible();
   await expect(window.locator("#time")).toHaveText("0:00.000");
