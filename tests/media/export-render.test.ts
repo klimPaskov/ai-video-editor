@@ -519,3 +519,74 @@ test(
     }
   },
 );
+
+test(
+  "30 fps Matroska with millisecond timestamps exports exactly at its nominal rate",
+  { timeout: 180_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-mkv30-"));
+    try {
+      const input = await source(directory, "screen.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=30:duration=3",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=500:sample_rate=48000:duration=3",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgr0",
+        "-c:a",
+        "pcm_s16le",
+        "-shortest",
+      ]);
+      // The container rounds 1/30 s to 33/34 ms steps.
+      assert.equal(input.timing.variableCadence, true);
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 1_010_000,
+            sourceEndUs: 2_300_000,
+          },
+        ],
+        [input],
+      );
+      assert.deepEqual(plan.format.video.frameRate, {
+        numerator: 30,
+        denominator: 1,
+      });
+      assert.deepEqual(
+        plan.clips.map((clip) => [
+          clip.firstFrame,
+          clip.frameCount,
+          clip.firstSample,
+          clip.sampleCount,
+        ]),
+        [[31, 38, 31 * 1600, 38 * 1600]],
+      );
+      const full = await fullDecode(input, "bgr0", "s16le");
+      const frame = rawFrameBytes("bgr0", 160, 90);
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: join(directory, "out.mkv"),
+        replace: false,
+      });
+      assert.equal(
+        evidence.canonicalVideoSha256,
+        sha(full.video.subarray(31 * frame, 69 * frame)),
+      );
+      assert.equal(
+        evidence.canonicalAudioSha256,
+        sha(full.audio!.subarray(31 * 1600 * 2, 69 * 1600 * 2)),
+      );
+      assert.equal(evidence.samplesEqual, true);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

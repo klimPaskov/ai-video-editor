@@ -36,4 +36,6 @@ Cancellation preserves the project and earlier exports. Incomplete staging outpu
 
 Evidence: `tests/media/export-render.test.ts` compares the master of a cut, reordered two-source H.264/AAC draft (including a clip that needs a seek) against an independent full decode without seeking, covers BGRA/16-bit PCM, the MP4 copy, refused mixed and variable-rate sources, replacement rules and cancellation. The packaged native test `tests/native/export.test.ts` imports a tagged H.264/AAC file, cuts a range, exports the master and the MP4 through the Export step, verifies the master against an independent decode, cancels a running export and checks the source is unchanged; it passed in the cloud VM on 2026-10-07 with screenshots reviewed.
 
-Not yet implemented: caption sidecars, mixed-format working-format conversion, variable frame rate, HDR transforms, export of zoom/speed/layout/caption effects, and a final thumbnail on the result.
+Constant-rate sources whose container rounds timestamps (Matroska stores milliseconds, so 30 fps has 33/34 ms steps) are accepted when every frame lies within one tick (at least 1 ms) of `index / rate`; frame and sample positions then come from the exact nominal rate (`tests/media/export-render.test.ts`).
+
+Not yet implemented: caption sidecars, mixed-format working-format conversion, truly variable frame rate, HDR transforms, export of zoom/speed/layout/caption effects, and a final thumbnail on the result.

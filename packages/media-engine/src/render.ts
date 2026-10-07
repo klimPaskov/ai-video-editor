@@ -223,6 +223,46 @@ function colorTag(value: unknown): string | undefined {
     : undefined;
 }
 
+function rationalOf(value: unknown): Rational | null {
+  const match =
+    typeof value === "string" ? /^(\d+)\/(\d+)$/u.exec(value) : null;
+  if (!match) return null;
+  const n = BigInt(match[1]!);
+  const d = BigInt(match[2]!);
+  if (n <= 0n || d <= 0n) return null;
+  const g = gcd(n, d);
+  return { numerator: Number(n / g), denominator: Number(d / g) };
+}
+
+/**
+ * The source's constant frame rate. Containers with coarse clocks (Matroska
+ * stores milliseconds) round 30 fps to 33/34 ms steps, so a source counts as
+ * constant-rate when every frame is within one tick (at least 1 ms) of
+ * `index / rate`; frame and sample positions then use the exact rate.
+ */
+export function nominalFrameRate(
+  video: Record<string, unknown>,
+  timing: PresentationTiming,
+): Rational {
+  const { pts, timeBaseNumerator: tbn, timeBaseDenominator: tbd } = timing;
+  if (pts.length < 1 || pts[0] !== 0)
+    unsupported("This video's frame timing cannot be verified.");
+  let rate = rationalOf(video.r_frame_rate) ?? rationalOf(video.avg_frame_rate);
+  if (!rate || rate.numerator / rate.denominator > 1000) {
+    const ticks = pts.length > 1 ? pts[1]! - pts[0]! : timing.lastDurationTicks;
+    if (!ticks || ticks <= 0)
+      unsupported("This video's frame timing cannot be verified.");
+    rate = rationalOf(`${tbd}/${tbn * ticks}`);
+  }
+  if (!rate) unsupported("This video's frame timing cannot be verified.");
+  const tolerance = Math.max(tbn / tbd, 0.001) + 1e-9;
+  const frameSeconds = rate.denominator / rate.numerator;
+  for (let index = 0; index < pts.length; index++)
+    if (Math.abs((pts[index]! * tbn) / tbd - index * frameSeconds) > tolerance)
+      unsupported("Variable frame rate video cannot be exported yet.");
+  return rate;
+}
+
 /** Exact working format of one source, or an explicit unsupported error. */
 export function workingFormat(
   probe: Record<string, unknown>,
@@ -269,19 +309,7 @@ export function workingFormat(
       ))
   )
     unsupported("Rotated video cannot be exported yet.");
-  if (timing.variableCadence || timing.pts.length < 1)
-    unsupported("Variable frame rate video cannot be exported yet.");
-  const frameTicks =
-    timing.pts.length > 1
-      ? timing.pts[1]! - timing.pts[0]!
-      : timing.lastDurationTicks;
-  if (!frameTicks || frameTicks <= 0)
-    unsupported("This video's frame timing cannot be verified.");
-  // fps = den / (num * ticks)
-  const n = BigInt(timing.timeBaseDenominator);
-  const d = BigInt(timing.timeBaseNumerator) * BigInt(frameTicks);
-  const g = gcd(n, d);
-  const frameRate = { numerator: Number(n / g), denominator: Number(d / g) };
+  const frameRate = nominalFrameRate(video, timing);
   const audioStream = all.find((stream) => stream.codec_type === "audio");
   let audio: WorkingAudioFormat | null = null;
   if (audioStream) {
@@ -380,47 +408,26 @@ export function planExport(
       clip.sourceEndUs <= clip.sourceStartUs
     )
       unsupported("A clip has an invalid source range.");
-    const {
-      pts,
-      timeBaseNumerator: num,
-      timeBaseDenominator: den,
-    } = source.timing;
-    const scale = BigInt(num) * 1_000_000n;
-    const atOrAfter = (us: number) => {
-      // First frame index whose presentation time is >= us.
-      const target = BigInt(us) * BigInt(den);
-      let low = 0;
-      let high = pts.length;
-      while (low < high) {
-        const middle = (low + high) >> 1;
-        if (BigInt(pts[middle]!) * scale >= target) high = middle;
-        else low = middle + 1;
-      }
-      return low;
-    };
-    const firstFrame = atOrAfter(clip.sourceStartUs);
-    const endFrame = atOrAfter(clip.sourceEndUs);
+    // Frame i is presented at exactly i / rate (see nominalFrameRate).
+    const fn = BigInt(first.video.frameRate.numerator);
+    const fd = BigInt(first.video.frameRate.denominator);
+    const frames = source.timing.pts.length;
+    const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
+    const frameAt = (us: number) =>
+      Math.min(frames, Number(ceilDiv(BigInt(us) * fn, fd * 1_000_000n)));
+    const firstFrame = frameAt(clip.sourceStartUs);
+    const endFrame = frameAt(clip.sourceEndUs);
     const count = endFrame - firstFrame;
     if (count <= 0) continue;
-    const frameTicks =
-      pts.length > 1 ? pts[1]! - pts[0]! : source.timing.lastDurationTicks!;
-    const startTicks = BigInt(pts[firstFrame]!);
-    const endTicks =
-      endFrame < pts.length
-        ? BigInt(pts[endFrame]!)
-        : BigInt(pts[pts.length - 1]!) + BigInt(frameTicks);
-    const seconds = (ticks: bigint) =>
-      Number(ticks * BigInt(num)) / Number(den);
-    const half = (frameTicks * num) / den / 2;
-    const trimStartSeconds = Math.max(0, seconds(startTicks) - half);
-    const trimEndSeconds = seconds(endTicks) - half;
+    const frameSeconds = Number(fd) / Number(fn);
+    const trimStartSeconds = Math.max(0, (firstFrame - 0.5) * frameSeconds);
+    const trimEndSeconds = (endFrame - 0.5) * frameSeconds;
     let firstSample = 0;
     let samples = 0;
     if (first.audio) {
       const rate = BigInt(first.audio.sampleRate);
-      const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
-      const a = ceilDiv(startTicks * BigInt(num) * rate, BigInt(den));
-      const b = ceilDiv(endTicks * BigInt(num) * rate, BigInt(den));
+      const a = ceilDiv(BigInt(firstFrame) * fd * rate, fn);
+      const b = ceilDiv(BigInt(endFrame) * fd * rate, fn);
       firstSample = Number(a);
       samples = Number(b - a);
     }
