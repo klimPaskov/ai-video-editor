@@ -2,20 +2,29 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to create and publish, e.g. v0.1.0"
+        required: true
 permissions:
   contents: write
 jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
           cache: npm
-      - name: Check release notes
-        run: test -f "docs/releases/${GITHUB_REF_NAME}.md"
+      - name: Check the version and release notes
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test -f "docs/releases/${TAG}.md"
       - run: npm ci --ignore-scripts
       - name: Build the Linux app
         run: npm run desktop:build:local
@@ -29,7 +38,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" release/* \
-            --title "AI Video Editor ${GITHUB_REF_NAME#v}" \
-            --notes-file "docs/releases/${GITHUB_REF_NAME}.md" \
-            --prerelease --verify-tag
+          # A tag push already has the tag; an on-demand run creates it here.
+          gh release create "$TAG" release/* \
+            --target "$GITHUB_SHA" \
+            --title "AI Video Editor ${TAG#v}" \
+            --notes-file "docs/releases/${TAG}.md" \
+            --prerelease
