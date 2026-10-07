@@ -1,12 +1,14 @@
 import type { CodexView } from "../../../packages/domain/src/codex-view.ts";
 import type { Reply } from "../src/bridge.ts";
 import { setupProviderSettings } from "./provider-settings.ts";
+import { setupClaudeSettings } from "./claude-settings.ts";
 
 export function setupCodexSettings(dialog: HTMLDialogElement): () => void {
   const element = <T extends HTMLElement = HTMLElement>(id: string) =>
     document.getElementById(id)! as T;
   const panel = element("codex-settings");
   const providerSettings = setupProviderSettings(dialog);
+  const claudeSettings = setupClaudeSettings(dialog);
   let epoch = 0;
   let pending = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -327,12 +329,14 @@ export function setupCodexSettings(dialog: HTMLDialogElement): () => void {
         );
     },
   );
-  function section(selected: "appearance" | "codex" | "api"): void {
+  function section(selected: "appearance" | "claude" | "codex" | "api"): void {
     stop();
     clearDeviceCode();
     providerSettings.deactivate();
+    claudeSettings.deactivate();
     pending = false;
     panel.hidden = selected !== "codex";
+    element("claude-settings").hidden = selected !== "claude";
     element("api-provider-settings").hidden = selected !== "api";
     element("appearance-settings").hidden = selected !== "appearance";
     element("appearance-actions").hidden = selected !== "appearance";
@@ -340,6 +344,10 @@ export function setupCodexSettings(dialog: HTMLDialogElement): () => void {
     element("settings-appearance").setAttribute(
       "aria-pressed",
       String(selected === "appearance"),
+    );
+    element("settings-claude").setAttribute(
+      "aria-pressed",
+      String(selected === "claude"),
     );
     element("settings-codex").setAttribute(
       "aria-pressed",
@@ -354,10 +362,12 @@ export function setupCodexSettings(dialog: HTMLDialogElement): () => void {
       void refresh();
     }
     if (selected === "api") providerSettings.activate();
+    if (selected === "claude") claudeSettings.activate();
   }
   element("settings-appearance").addEventListener("click", () =>
     section("appearance"),
   );
+  element("settings-claude").addEventListener("click", () => section("claude"));
   element("settings-codex").addEventListener("click", () => section("codex"));
   element("settings-api-providers").addEventListener("click", () =>
     section("api"),

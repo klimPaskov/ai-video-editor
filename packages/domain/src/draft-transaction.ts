@@ -14,7 +14,8 @@ import {
 export type DraftTimeline = InitialProjectSnapshot["timeline"] & {
   transcript_edits?: TranscriptTextOverride[];
 };
-export type DraftOrigin = "manual" | "codex" | "api_provider" | "magic_wand";
+export type DraftOrigin =
+  "manual" | "codex" | "claude" | "api_provider" | "magic_wand";
 export type DraftPassKind =
   | "manual"
   | "spoken_cut"

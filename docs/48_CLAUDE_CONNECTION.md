@@ -1,0 +1,54 @@
+# Claude connection
+
+Decision record and implementation contract for ADR 0018. Claude is the default assistant route; Codex and the fixed API-key providers remain supported alternatives.
+
+## Supported basis
+
+Anthropic's published terms were checked on 2026-10-04 (Claude Code "Legal and compliance" and "Authentication"; Agent SDK overview):
+
+- Third-party developers may not offer Claude.ai login in their own applications, route requests through Free/Pro/Max credentials on users' behalf, or collect, store or intermediate Claude.ai credentials or session tokens. Sign-in must complete through Anthropic's own flow.
+- The same terms do not prevent an end user from signing in to the **unmodified Claude Code binary** with their own Claude subscription when a product runs Claude Code. Running Claude Code in a product requires the Commercial Terms, an unmodified binary, no removal of its built-in authentication methods, and each end user authenticating with their own credentials so usage is billed to them.
+- Agent SDK-based products are directed to API-key authentication. The editor therefore does **not** embed the Agent SDK, does not implement OAuth, and does not accept or copy any Claude token.
+
+Chosen design: the editor runs the user's own installed Claude Code CLI as a child process. Sign-in is `claude auth login --claudeai`, which opens Anthropic's browser page and receives Anthropic's callback itself. The app reads only the documented `claude auth status` JSON and the CLI's model catalog. It never reads Claude Code's credential store and never writes to its code prompt. Distributors remain responsible for accepting Anthropic's terms; Anthropic may change or enforce these rules, and its sales contact is the authority for edge cases. The UI states in plain text that Claude runs through Claude Code and does not use Claude Code branding as a product or feature name.
+
+Claude Code is not bundled: it is proprietary, auto-updating software that the user installs from Anthropic. When it is missing, Settings shows **Get Claude Code** (Anthropic's setup page) and **Check again**.
+
+## Runtime
+
+- Discovery (main only): `PATH`, then the documented native-installer and npm locations (`~/.local/bin/claude`, `%USERPROFILE%\.local\bin\claude.exe`, the npm global package binary). The renderer cannot choose the executable. A candidate must print `<version> (Claude Code)`; versions older than 2.1.268 are rejected as outdated. Acceptance probes used 2.1.285.
+- Every child runs with a dedicated `CLAUDE_CONFIG_DIR` under the app's user data (`claude/claude-code`) and an empty working directory (`claude/workspace`). The user's own Claude Code profile, settings, hooks, plugins, memory and sessions are not mixed with editor turns, so a first sign-in in the app is separate from a terminal sign-in.
+- The child environment keeps ordinary OS, display and proxy variables only. Anthropic credential variables (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`) and Claude Code overrides are not inherited, so a turn cannot silently switch to environment API billing. Claude Code's own sign-in methods remain intact, including Console sign-in. The app sets `DISABLE_AUTOUPDATER`, `CLAUDE_CODE_DISABLE_CLAUDE_MDS`, `CLAUDE_CODE_DISABLE_AUTO_MEMORY`, `DISABLE_TELEMETRY` and `DISABLE_ERROR_REPORTING`.
+- Model discovery sends one stream-json `initialize` control request with no user message, so it starts no model turn. The response's live catalog (for example Default, Opus, Fable, Sonnet, Haiku) and effort levels populate Settings. Descriptions are trimmed to the model name because the CLI appends API list prices that do not apply to subscription use. A fresh preference uses the CLI's account-recommended `default`; an explicit choice is remembered and revalidated against the live catalog after restart.
+- Billing label comes from `authMethod`: `claude.ai` is a Claude subscription; `api_key`/`api_key_helper` is Anthropic Console API billing and the drawer shows a paid-turn notice. Every turn starts only from an explicit Send.
+
+## Turns and tool confinement
+
+Each user turn is one `claude -p` process with stream-json input and output:
+
+```
+--tools "" --strict-mcp-config --mcp-config <per-turn file> --setting-sources ""
+--disable-slash-commands --permission-mode dontAsk --permission-prompts none
+--allowedTools <the nine editor tools> --model <selection> [--effort <level>]
+--max-turns 24 --system-prompt <editor instructions> (--session-id | --resume) <uuid>
+```
+
+- The only MCP server is the packaged `ai-video-editor-mcp.cjs`, reached through a Claude-only broker with its own endpoint and token. Tools appear as `mcp__ai_video_editor__project_get_summary`, `…timeline_get_summary`, `…transcript_get_range`, `…cut_trim_edge`, `…cut_split`, `…cut_delete_range`, `…cut_delete_ranges`, `…cut_restore_range` and `…timeline_undo`. The per-turn config file is private (mode 600) and deleted when the turn ends.
+- The authoritative `system/init` event must report exactly those nine tools, one connected `ai_video_editor` server, `dontAsk`, the expected session, and no skills or slash commands. Any mismatch, or any `tool_use` outside the allowlist, stops the process and records the fixed tools issue. On 2.1.285 the init inventory was verified to contain exactly the nine tools; a canary project hook, skill and agent above the working directory were not loaded with `--setting-sources ""`. `--safe-mode` was rejected because it also removes `--mcp-config` servers.
+- Every Claude mutation goes through the shared validated transaction engine with origin `claude`: expected sequence/hash, durable journal, committed-state projection and the same Undo/Redo history as manual, Codex, API-provider and Magic Wand edits.
+- Streaming text comes from `stream_event` text deltas; activity labels come from tool use and results. Subagent traffic is ignored; no Agent tool is offered.
+- Stop sends the stream-json `interrupt` control request, then stops the process if it does not finish. A stopped or failed turn shows a fixed message; a turn that ended while a mutating tool call was pending reports an uncertain outcome.
+- Conversation continuity uses the CLI session (`--session-id` on the first turn, `--resume` afterwards). The app stores only a bounded path-free projection (user text and final assistant text, at most 48 messages) per project under `claude/threads`, mode 600. If a session cannot be resumed, the next message starts a new session and the user is told.
+- Raw CLI output, errors, costs, paths, account email and tokens never reach the renderer. Failures map to the fixed messages in `packages/domain/src/claude-view.ts`.
+
+## UI
+
+- Settings lists Appearance, Claude, Codex, API providers. Claude shows status, one disclosure while not signed in, **Sign in with Claude**, **Open sign-in page** (only while Claude Code's sign-in is waiting; validated Anthropic HTTPS page), **Cancel sign-in**, **Sign out**, **Get Claude Code**, **Check again**, and Default model/Effort when signed in.
+- The assistant drawer button and provider list default to Claude. Opening the conversation requires Claude Code, sign-in and a model, each with a fixed actionable message. The Claude context notice replaces the Codex notice; the API-billing notice appears only for Console sign-in.
+
+## Evidence
+
+- Host: unit tests for status/version/catalog/URL parsing, environment stripping, argument construction, init/tool-use enforcement, failure mapping, stop/uncertain/resume handling, and a desktop-service flow using a clearly labeled test double of the CLI (`tests/media/support/fake-claude-code.ts`, never packaged). Contract tests check the IPC schema against the domain constants and reject credential, path, raw-error and price leakage. Transaction tests cover the `claude` origin with shared manual Undo.
+- Isolated WSL2 guest, packaged Linux Electron, official Claude Code 2.1.285 (`tests/native/claude-connection.test.ts`): runtime detection, signed-out Settings, sign-in started by the real CLI opening `claude.com` in the guest browser stub, Open sign-in page limited to `claude.com`, cancellation back to signed out with no credential file, Claude as the default drawer route and its sign-in gate, unchanged source. The packaged desktop smoke also verifies the Claude default and the retained Codex/API drawer paths. A guest probe drove the production `ClaudeTurn` and catalog reader against the same binary signed out: the full turn argument vector was accepted, init enforcement passed with the packaged MCP server connected, the signed-out turn mapped to the sign-in issue, an existing session resumed, a missing session mapped to the resume issue, an early Stop mapped to stopped, and the catalog listed Default, Opus, Fable, Sonnet and Haiku without a model turn.
+
+Not yet established: a completed real Claude account sign-in, signed-in model catalog, a real Claude edit/Undo/Stop/restart, Windows packaging and the user-footage workflow. The same native test runs those checks with `--hold-sign-in` (the user completes Anthropic's sign-in) or `--require-signed-in` against that private profile. No Claude credential has been copied or seeded, and none may be.

@@ -27,7 +27,7 @@ Do not stop at planning. Do not replace the product with a browser app, static m
 - The app is a standalone Electron desktop app.
 - Browser use is for research only.
 - The renderer loads packaged local content only.
-- Claude account sign-in is the required default AI connection under ADR 0018; its supported implementation remains open and unverified. Real Codex app-server and the existing API-key providers remain supported alternatives.
+- Claude account sign-in is the default AI connection under ADR 0018, implemented through the user's unmodified Claude Code CLI (`docs/48_CLAUDE_CONNECTION.md`); never handle, copy or seed Claude credentials. Signed-in acceptance is pending. Real Codex app-server and the existing API-key providers remain supported alternatives.
 - Source media is immutable.
 - AI and manual edits target the same non-destructive draft timeline.
 - Every edit is undoable until revision commit.

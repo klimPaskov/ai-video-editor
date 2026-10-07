@@ -48,7 +48,7 @@ Windows 10 and 11 x64. Architecture and project contracts must avoid blocking a 
 - captions, text, images, local B-roll, music, and sound
 - audio cleanup and loudness handling
 - preview, undo, autosave, revisions, QA, lossless master export, and optional sharing exports
-- supported Claude account sign-in as the default AI connection, with integration/model decisions open under ADR 0018
+- supported Claude account sign-in as the default AI connection through the user's Claude Code CLI (ADR 0018)
 - retained real Codex login, model selection, chat, skills, and guarded editing tools
 - explicit OpenAI API and DeepSeek key connections, provider model discovery and guarded editing through the same draft history
 

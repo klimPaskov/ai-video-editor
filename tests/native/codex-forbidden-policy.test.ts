@@ -337,7 +337,8 @@ try {
   assert.equal(projectSourceHash, sourceHash);
 
   mark("open-project-thread");
-  await page.getByRole("button", { name: "Codex", exact: true }).click();
+  await page.locator("#codex-drawer-button").click();
+  await page.locator("#assistant-provider").selectOption("codex");
   await page
     .getByRole("button", { name: "Open conversation", exact: true })
     .click();

@@ -12,6 +12,11 @@
     "cas-bridge.xethub.hf.co",
     "auth.openai.com",
     "api.openai.com",
-    "chatgpt.com"
+    "chatgpt.com",
+    "api.anthropic.com",
+    "claude.ai",
+    "claude.com",
+    "platform.claude.com",
+    "console.anthropic.com"
   ]
 }

@@ -1065,3 +1065,51 @@ test("transcript.get_range returns bounded path-free source words and stable pag
     expectCode("invalid_request"),
   );
 });
+
+test("Claude-origin split and undo are attributed in the shared journal", async () => {
+  const { root, active, drafts } = await fixture();
+  const claude = new CodexVideoEditToolService(
+    active.project.project_id,
+    drafts,
+    "claude",
+  );
+  const initial = await drafts.snapshot(active.project.project_id);
+  const applied = (await claude.invoke(
+    "cut.split",
+    splitInput(initial.draft),
+  )) as {
+    transaction_id: string;
+    draft: { draft_sequence: number; clips: unknown[] };
+  };
+  assert.equal(applied.draft.clips.length, 2);
+  const current = await drafts.snapshot(active.project.project_id);
+  await claude.invoke("timeline.undo", {
+    schema_version: "1.0",
+    request_id: "claude-undo-001",
+    project_id: active.project.project_id,
+    draft_id: current.draft.draft_id,
+    base_revision_id: current.draft.base_revision_id,
+    expected_sequence: current.draft.draft_sequence,
+    expected_timeline_sha256: current.draft.timeline_sha256,
+    target_transaction_id: applied.transaction_id,
+    reason: "Restore the clip before the split.",
+  });
+  const journal = join(
+    root,
+    "projects",
+    active.project.project_id,
+    "draft",
+    "journal",
+  );
+  const origins = await Promise.all(
+    (await readdir(journal)).map(
+      async (name) =>
+        (
+          JSON.parse(await readFile(join(journal, name), "utf8")) as {
+            origin: string;
+          }
+        ).origin,
+    ),
+  );
+  assert.deepEqual(origins, ["claude", "claude"]);
+});

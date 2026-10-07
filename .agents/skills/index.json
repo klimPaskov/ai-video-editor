@@ -45,6 +45,17 @@
       ]
     },
     {
+      "name": "claude-code-connection",
+      "path": ".agents/skills/claude-code-connection/SKILL.md",
+      "description": "Maintain the default Claude connection through the user's Claude Code CLI.",
+      "phases": [
+        "P2",
+        "P5",
+        "P6",
+        "P10"
+      ]
+    },
+    {
       "name": "codex-app-server",
       "path": ".agents/skills/codex-app-server/SKILL.md",
       "description": "Integrate real Codex app-server threads, events, auth, and tools.",

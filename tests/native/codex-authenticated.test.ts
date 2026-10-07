@@ -384,7 +384,8 @@ try {
     return result.value;
   }
   async function openDrawer(): Promise<void> {
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
+    await page.locator("#codex-drawer-button").click();
+    await page.locator("#assistant-provider").selectOption("codex");
     await page
       .getByRole("button", { name: "Open conversation", exact: true })
       .click();
@@ -833,7 +834,8 @@ try {
   await assertCanvasFrame(page, 0);
   mark("inflight-committed-mutation-send");
   if (await page.locator("#codex-drawer").isHidden())
-    await page.getByRole("button", { name: "Codex", exact: true }).click();
+    await page.locator("#codex-drawer-button").click();
+  await page.locator("#assistant-provider").selectOption("codex");
   await expect(page.locator("#codex-thread-input")).toBeVisible();
   const inFlightMutationPrompt =
     "Use the guarded editor tools to read the active draft and trim exactly 250000 microseconds from the END of its sole clip. Apply exactly one end-trim transaction. The current draft is 1.5 seconds and must become 1.25 seconds. After the trim, read the current draft twelve times sequentially without changing it, then reply briefly. Do not make any other edits.";

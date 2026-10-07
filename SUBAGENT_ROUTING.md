@@ -7,6 +7,7 @@ The main agent owns phase selection, integration, final judgment, and evidence. 
 | Current product and technical research | `researcher` | `research-product` |
 | Flow, visual hierarchy, and simple screens | `ux-designer` | `simple-desktop-ui` |
 | Electron process and IPC design | `desktop-architect` | `native-electron` |
+| Claude connection through the user's Claude Code CLI | `codex-bridge-engineer` (Claude: `ai-provider-engineer`) with `security-reviewer` | `claude-code-connection`, `security-privacy`, `timeline-editor` |
 | Codex protocol, auth, threads, and tools | `codex-bridge-engineer` | `codex-app-server`, `timeline-editor` |
 | OpenAI API, DeepSeek and Gemini API fixed-endpoint adapters, model discovery and guarded output | `codex-bridge-engineer` with `security-reviewer` | `codex-app-server`, `security-privacy`, `timeline-editor` |
 | Screen, audio, camera, and sync capture | `recording-engineer` | `recording-capture` |
@@ -20,7 +21,7 @@ The main agent owns phase selection, integration, final judgment, and evidence. 
 
 ## Claude continuation
 
-Native Claude role definitions live in `.claude/agents/`, with canonical skill adapters in `.claude/skills/`. The main Claude implementer chooses useful delegation and engineering decisions; the role table is guidance, not a required team. `ai-provider-engineer` covers the new Claude-default requirement and retained provider paths. Earlier `.codex/agents/` role notes remain reference material.
+Native Claude role definitions live in `.claude/agents/`, with canonical skill adapters in `.claude/skills/`. The main Claude implementer chooses useful delegation and engineering decisions; the role table is guidance, not a required team. `ai-provider-engineer` covers the Claude connection (`claude-code-connection` skill) and retained provider paths. Earlier `.codex/agents/` role notes remain reference material.
 
 ## Routing rules
 

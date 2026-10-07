@@ -398,5 +398,52 @@ class DesktopIpcContractTests(unittest.TestCase):
         bad_checkpoint['response']['value']['structuralCheckpointRecorded'] = 'yes'
         self.invalid(bad_checkpoint)
 
+    def test_claude_channels_expose_no_credentials_paths_or_prices(self):
+        thread = json.loads(
+            (ROOT / 'docs/examples/desktop_ipc_claude.example.json').read_text(encoding='utf-8')
+        )
+        self.valid(thread)
+        for key, value in [('token', 'sk-ant-secret'), ('sessionId', '11111111-2222-4333-8444-555555555555')]:
+            leaked = deepcopy(thread)
+            leaked['response']['value'][key] = value
+            self.invalid(leaked)
+        raw = deepcopy(thread)
+        raw['response']['value']['message'] = 'Not logged in · Please run /login'
+        self.invalid(raw)
+        ready = deepcopy(thread)
+        ready['response']['value']['status'] = 'ready'
+        self.invalid(ready)
+        bad_payload = deepcopy(thread)
+        bad_payload['payload']['cwd'] = '/home/user/project'
+        self.invalid(bad_payload)
+        signed_in = {
+            'status': 'signed_in',
+            'version': '2.1.285',
+            'account': {'billing': 'subscription', 'plan': 'max'},
+            'signInPageAvailable': False,
+            'models': [{'value': 'default', 'label': 'Default (recommended)', 'detail': 'Opus 5.5', 'efforts': ['high']}],
+            'selection': {'model': 'default', 'effort': None},
+            'message': None,
+        }
+        self.valid({'channel': 'claude:get', 'response': {'ok': True, 'value': signed_in}})
+        self.valid({'channel': 'claude:select', 'payload': {'model': 'sonnet', 'effort': 'high'},
+                    'response': {'ok': True, 'value': signed_in}})
+        self.valid({'channel': 'claude:install-guide', 'response': {'ok': True, 'value': None}})
+        for key, value in [('email', 'person@example.com'), ('executable', '/usr/bin/claude')]:
+            leaked = deepcopy(signed_in)
+            leaked[key] = value
+            self.invalid({'channel': 'claude:get', 'response': {'ok': True, 'value': leaked}})
+        priced = deepcopy(signed_in)
+        priced['models'][0]['detail'] = 'Opus 5.5 · $4/$20 per Mtok'
+        self.invalid({'channel': 'claude:get', 'response': {'ok': True, 'value': priced}})
+        signed_out = dict(signed_in, status='signed_out')
+        self.invalid({'channel': 'claude:get', 'response': {'ok': True, 'value': signed_out}})
+        signed_out.update(account=None, models=[], selection=None)
+        self.valid({'channel': 'claude:get', 'response': {'ok': True, 'value': signed_out}})
+        self.invalid({'channel': 'claude:sign-in', 'payload': {'code': '1234'},
+                      'response': {'ok': True, 'value': signed_out}})
+        self.invalid({'channel': 'claude:select', 'payload': {'model': 'default', 'effort': 'ultra'},
+                      'response': {'ok': True, 'value': signed_in}})
+
 if __name__ == '__main__':
     unittest.main()

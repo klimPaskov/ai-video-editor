@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ai-video-editor.local/schemas/desktop_ipc.schema.json",
-  "title": "Desktop library, project, preferences, Codex and API provider IPC exchange",
+  "title": "Desktop library, project, preferences, Claude, Codex and API provider IPC exchange",
   "description": "Contract documentation envelope for a native IPC request and response. Electron channel and request are separate arguments at runtime; absent payload represents undefined, never null. No source filesystem path crosses this boundary. Runtime also validates trusted main-frame sender and source-specific seek bounds.",
   "oneOf": [
     {
@@ -1337,6 +1337,209 @@
                 },
                 "value": {
                   "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "enum": [
+            "claude:get",
+            "claude:check",
+            "claude:sign-in",
+            "claude:open-sign-in",
+            "claude:cancel-sign-in",
+            "claude:sign-out"
+          ]
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/claudeView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "const": "claude:select"
+        },
+        "payload": {
+          "$ref": "#/$defs/claudeSelection"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/claudeView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "claude:install-guide"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "type": "null"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "enum": [
+            "claude-thread:get",
+            "claude-thread:open",
+            "claude-thread:interrupt"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/claudeThreadProjectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/claudeThreadView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "const": "claude-thread:send"
+        },
+        "payload": {
+          "$ref": "#/$defs/claudeThreadSendRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/claudeThreadView"
                 }
               }
             }
@@ -2692,6 +2895,461 @@
             },
             "draft": {
               "$ref": "#/$defs/projectDraftView"
+            }
+          }
+        }
+      ]
+    },
+    "claudeSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "effort"
+      ],
+      "properties": {
+        "model": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:[\\]-]{0,127}$"
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "claudeView": {
+      "type": "object",
+      "description": "Credential-free Claude connection state. Sign-in runs in the user's unmodified Claude Code CLI; no token, email, path or price is exposed.",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "version",
+        "account",
+        "signInPageAvailable",
+        "models",
+        "selection",
+        "message"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "checking",
+            "unavailable",
+            "signed_out",
+            "signing_in",
+            "signed_in",
+            "error"
+          ]
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^\\d{1,4}\\.\\d{1,4}\\.\\d{1,6}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "account": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "billing",
+                "plan"
+              ],
+              "properties": {
+                "billing": {
+                  "enum": [
+                    "subscription",
+                    "api",
+                    "other"
+                  ]
+                },
+                "plan": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,31}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "signInPageAvailable": {
+          "type": "boolean"
+        },
+        "models": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value",
+              "label",
+              "detail",
+              "efforts"
+            ],
+            "properties": {
+              "value": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:[\\]-]{0,127}$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "detail": {
+                "type": "string",
+                "maxLength": 160,
+                "not": {
+                  "pattern": "\\$"
+                }
+              },
+              "efforts": {
+                "type": "array",
+                "maxItems": 5,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/claudeSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "enum": [
+            null,
+            "Claude Code was not found. Install it from Anthropic, then choose Check again.",
+            "This Claude Code version is too old. Update Claude Code, then choose Check again.",
+            "Claude Code could not be started. Check the installation, then choose Check again.",
+            "Claude sign-in status could not be read. Choose Check again.",
+            "Sign-in did not finish. Choose Sign in with Claude to try again.",
+            "Claude models could not be loaded. Choose Check again to refresh them.",
+            "Choose a model offered by your Claude account.",
+            "Claude settings could not be saved. Check local storage and try again."
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "signed_in"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "account": {
+                "type": "object"
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "account": {
+                "type": "null"
+              },
+              "models": {
+                "maxItems": 0
+              },
+              "selection": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "not": {
+                  "const": "signing_in"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "signInPageAvailable": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "claudeThreadProjectRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "$ref": "#/$defs/codexThreadId"
+        }
+      }
+    },
+    "claudeThreadSendRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "text"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "$ref": "#/$defs/codexThreadId"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        }
+      }
+    },
+    "claudeThreadView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "projectId",
+        "messages",
+        "activities",
+        "streaming",
+        "billing",
+        "message"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "closed",
+            "ready",
+            "running",
+            "interrupting",
+            "failed"
+          ]
+        },
+        "projectId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/codexThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "messages": {
+          "type": "array",
+          "maxItems": 48,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "role",
+              "text"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/codexThreadId"
+              },
+              "role": {
+                "enum": [
+                  "user",
+                  "assistant"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32768
+              }
+            }
+          }
+        },
+        "activities": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "complete"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/codexThreadId"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "complete": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "streaming": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32768
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "billing": {
+          "anyOf": [
+            {
+              "enum": [
+                "subscription",
+                "api",
+                "other"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "enum": [
+            null,
+            "Sign in to Claude in Settings to continue.",
+            "Choose a Claude model in Settings to continue.",
+            "Your Claude usage limit was reached. Wait for it to reset, then send again.",
+            "Claude account access is unavailable. Check your Claude account, then send again.",
+            "The selected Claude model is unavailable. Choose another model in Settings.",
+            "Claude could not complete this turn. Send again to retry.",
+            "Claude stopped after reaching the step limit. Review the draft before continuing.",
+            "This turn stopped. Review the current draft before sending again.",
+            "The edit may have been saved. Reopen the project before sending again.",
+            "Claude did not start with the editor's restricted tools. Update the app or Claude Code, then try again.",
+            "The earlier Claude conversation could not be resumed. Your next message starts a new conversation.",
+            "The conversation could not be saved. Check local storage and reopen the project."
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "closed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "projectId": {
+                "type": "null"
+              },
+              "messages": {
+                "maxItems": 0
+              },
+              "activities": {
+                "maxItems": 0
+              },
+              "streaming": {
+                "type": "null"
+              },
+              "billing": {
+                "type": "null"
+              },
+              "message": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "projectId": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "closed",
+                  "ready",
+                  "failed"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "streaming": {
+                "type": "null"
+              }
             }
           }
         }

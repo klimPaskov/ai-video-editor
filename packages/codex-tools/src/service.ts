@@ -30,7 +30,12 @@ type DraftTransactions = {
   undoCodex(value: unknown): Promise<DraftCommitResult>;
   applyApiProvider?(value: unknown): Promise<DraftCommitResult>;
   undoApiProvider?(value: unknown): Promise<DraftCommitResult>;
+  applyClaude?(value: unknown): Promise<DraftCommitResult>;
+  undoClaude?(value: unknown): Promise<DraftCommitResult>;
 };
+
+/** The assistant route that main attributes each guarded transaction to. */
+export type ToolEditOrigin = "codex" | "claude" | "api_provider";
 
 type TranscriptReader = (
   projectId: string,
@@ -240,13 +245,13 @@ function mapError(error: unknown): never {
 export class CodexVideoEditToolService {
   private readonly activeProjectId: string;
   private readonly drafts: DraftTransactions;
-  private readonly origin: "codex" | "api_provider";
+  private readonly origin: ToolEditOrigin;
   private readonly transcriptReader: TranscriptReader | undefined;
 
   constructor(
     activeProjectId: string,
     drafts: DraftTransactions,
-    origin: "codex" | "api_provider" = "codex",
+    origin: ToolEditOrigin = "codex",
     transcriptReader?: TranscriptReader,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
@@ -254,6 +259,24 @@ export class CodexVideoEditToolService {
     this.drafts = drafts;
     this.origin = origin;
     this.transcriptReader = transcriptReader;
+  }
+
+  private applier():
+    ((value: unknown) => Promise<DraftCommitResult>) | undefined {
+    if (this.origin === "api_provider")
+      return this.drafts.applyApiProvider?.bind(this.drafts);
+    if (this.origin === "claude")
+      return this.drafts.applyClaude?.bind(this.drafts);
+    return this.drafts.applyCodex.bind(this.drafts);
+  }
+
+  private undoer():
+    ((value: unknown) => Promise<DraftCommitResult>) | undefined {
+    if (this.origin === "api_provider")
+      return this.drafts.undoApiProvider?.bind(this.drafts);
+    if (this.origin === "claude")
+      return this.drafts.undoClaude?.bind(this.drafts);
+    return this.drafts.undoCodex.bind(this.drafts);
   }
 
   async invoke(name: unknown, input: unknown): Promise<unknown> {
@@ -460,10 +483,7 @@ export class CodexVideoEditToolService {
     integer(request.timeline_position_us, 1);
     if (request.edge !== "start" && request.edge !== "end")
       reject("invalid_request");
-    const apply =
-      this.origin === "api_provider"
-        ? this.drafts.applyApiProvider?.bind(this.drafts)
-        : this.drafts.applyCodex.bind(this.drafts);
+    const apply = this.applier();
     if (!apply) reject("service_unavailable");
     const result = await apply({
       schema_version: "1.0",
@@ -508,10 +528,7 @@ export class CodexVideoEditToolService {
     id(request.pass_group_id);
     id(request.clip_id);
     integer(request.timeline_position_us, 1);
-    const apply =
-      this.origin === "api_provider"
-        ? this.drafts.applyApiProvider?.bind(this.drafts)
-        : this.drafts.applyCodex.bind(this.drafts);
+    const apply = this.applier();
     if (!apply) reject("service_unavailable");
     const result = await apply({
       schema_version: "1.0",
@@ -556,10 +573,7 @@ export class CodexVideoEditToolService {
     integer(request.start_us);
     integer(request.end_us, 1);
     if (request.start_us >= request.end_us) reject("invalid_request");
-    const apply =
-      this.origin === "api_provider"
-        ? this.drafts.applyApiProvider?.bind(this.drafts)
-        : this.drafts.applyCodex.bind(this.drafts);
+    const apply = this.applier();
     if (!apply) reject("service_unavailable");
     const result = await apply({
       schema_version: "1.0",
@@ -623,10 +637,7 @@ export class CodexVideoEditToolService {
         end_us: range.end_us,
       };
     });
-    const apply =
-      this.origin === "api_provider"
-        ? this.drafts.applyApiProvider?.bind(this.drafts)
-        : this.drafts.applyCodex.bind(this.drafts);
+    const apply = this.applier();
     if (!apply) reject("service_unavailable");
     const result = await apply({
       schema_version: "1.0",
@@ -668,10 +679,7 @@ export class CodexVideoEditToolService {
     integer(request.source_end_us, 1);
     if (request.source_start_us >= request.source_end_us)
       reject("invalid_request");
-    const apply =
-      this.origin === "api_provider"
-        ? this.drafts.applyApiProvider?.bind(this.drafts)
-        : this.drafts.applyCodex.bind(this.drafts);
+    const apply = this.applier();
     if (!apply) reject("service_unavailable");
     const result = await apply({
       schema_version: "1.0",
@@ -709,10 +717,7 @@ export class CodexVideoEditToolService {
     ]);
     freshness(request, this.activeProjectId);
     id(request.target_transaction_id);
-    const undo =
-      this.origin === "api_provider"
-        ? this.drafts.undoApiProvider?.bind(this.drafts)
-        : this.drafts.undoCodex.bind(this.drafts);
+    const undo = this.undoer();
     if (!undo) reject("service_unavailable");
     const result = await undo({
       schema_version: "1.0",

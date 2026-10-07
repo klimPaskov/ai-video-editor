@@ -2,6 +2,13 @@ import {
   assertCodexView,
   assertCodexSelection,
 } from "../../../packages/domain/src/codex-view.ts";
+import {
+  assertClaudeSelection,
+  assertClaudeThreadProjectRequest,
+  assertClaudeThreadSendRequest,
+  assertClaudeThreadView,
+  assertClaudeView,
+} from "../../../packages/domain/src/claude-view.ts";
 import { assertDeviceLoginDetails } from "../../../packages/domain/src/codex-device-login.ts";
 import {
   assertApiProviderConnectRequest,
@@ -149,6 +156,44 @@ const bridge: DesktopBridge = {
       channels.apiProvidersSelectModel,
       request,
       assertApiProvidersView,
+    );
+  },
+  getClaude: () => invoke(channels.claudeGet, undefined, assertClaudeView),
+  checkClaude: () => invoke(channels.claudeCheck, undefined, assertClaudeView),
+  signInClaude: () =>
+    invoke(channels.claudeSignIn, undefined, assertClaudeView),
+  openClaudeSignInPage: () =>
+    invoke(channels.claudeOpenSignIn, undefined, assertClaudeView),
+  cancelClaudeSignIn: () =>
+    invoke(channels.claudeCancelSignIn, undefined, assertClaudeView),
+  signOutClaude: () =>
+    invoke(channels.claudeSignOut, undefined, assertClaudeView),
+  selectClaudeModel: (value) => {
+    assertClaudeSelection(value);
+    return invoke(channels.claudeSelect, value, assertClaudeView);
+  },
+  openClaudeInstallGuide: () =>
+    invoke(channels.claudeInstallGuide, undefined, (value) => {
+      if (value !== null) throw new Error("Invalid install guide response");
+    }),
+  getClaudeThread: (request) => {
+    assertClaudeThreadProjectRequest(request);
+    return invoke(channels.claudeThreadGet, request, assertClaudeThreadView);
+  },
+  openClaudeThread: (request) => {
+    assertClaudeThreadProjectRequest(request);
+    return invoke(channels.claudeThreadOpen, request, assertClaudeThreadView);
+  },
+  sendClaudeThread: (request) => {
+    assertClaudeThreadSendRequest(request);
+    return invoke(channels.claudeThreadSend, request, assertClaudeThreadView);
+  },
+  interruptClaudeThread: (request) => {
+    assertClaudeThreadProjectRequest(request);
+    return invoke(
+      channels.claudeThreadInterrupt,
+      request,
+      assertClaudeThreadView,
     );
   },
   getCodex: () => invoke(channels.codexGet, undefined, assertCodexView),
