@@ -1,0 +1,67 @@
+{
+  "channel": "projects:manual-graphic",
+  "payload": {
+    "schema_version": "1.0",
+    "projectId": "ec68bd7a-79eb-4a96-9475-4db15df75d3a",
+    "draftId": "draft-bfddc982-903a-4570-8efc-27dc381b98b6",
+    "baseRevisionId": "a647be34-c87d-44eb-82fb-70d6afcbdc31",
+    "expectedSequence": 0,
+    "expectedTimelineSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "graphicId": null,
+    "name": "Title card",
+    "startUs": 0,
+    "durationUs": 3000000,
+    "layer": 0,
+    "html": "<h1 class=\"t\">Weekly review</h1>",
+    "css": ".t { position: absolute; left: 120px; bottom: 120px; color: white; animation: rise 500ms ease-out both } @keyframes rise { from { opacity: 0; transform: translateY(30px) } }"
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "projectId": "ec68bd7a-79eb-4a96-9475-4db15df75d3a",
+      "draft": {
+        "id": "draft-bfddc982-903a-4570-8efc-27dc381b98b6",
+        "baseRevisionId": "a647be34-c87d-44eb-82fb-70d6afcbdc31",
+        "sequence": 1,
+        "timelineSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "undoTransactionId": "manual-transaction-1",
+        "redoTransactionId": null
+      },
+      "timeline": {
+        "id": "d0d743dc-b2af-4a60-8dd9-3cb7644a7ba4",
+        "durationUs": 800000,
+        "frameRate": {
+          "numerator": 60,
+          "denominator": 1
+        }
+      },
+      "clips": [
+        {
+          "id": "8ae27d25-c778-4d2c-9678-6be65c0ca717",
+          "sourceId": "d81632fb-4cde-4d40-a75d-679e22c15f2a",
+          "timelineStartUs": 0,
+          "timelineEndUs": 200000,
+          "sourceStartUs": 0,
+          "sourceEndUs": 200000
+        },
+        {
+          "id": "clip-4f1c2b8d9e0a7b6c5d4e3f2a1b0c9d8e",
+          "sourceId": "d81632fb-4cde-4d40-a75d-679e22c15f2a",
+          "timelineStartUs": 200000,
+          "timelineEndUs": 400000,
+          "sourceStartUs": 200000,
+          "sourceEndUs": 600000,
+          "speed": 2
+        },
+        {
+          "id": "clip-9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d",
+          "sourceId": "d81632fb-4cde-4d40-a75d-679e22c15f2a",
+          "timelineStartUs": 400000,
+          "timelineEndUs": 800000,
+          "sourceStartUs": 600000,
+          "sourceEndUs": 1000000
+        }
+      ]
+    }
+  }
+}

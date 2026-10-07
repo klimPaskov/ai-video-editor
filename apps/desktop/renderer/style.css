@@ -927,6 +927,26 @@ dd {
   inset: 0;
   pointer-events: none;
 }
+.timeline-graphics {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.timeline-graphic {
+  position: absolute;
+  bottom: 2px;
+  height: 12px;
+  padding: 0 4px;
+  overflow: hidden;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: #e0458f;
+  border-radius: 3px;
+}
 .timeline-zoom {
   position: absolute;
   top: 2px;
@@ -1028,6 +1048,7 @@ dd {
 }
 .zoom-hint {
   position: absolute;
+  z-index: 3;
   top: 12px;
   left: 50%;
   margin: 0;
@@ -1284,8 +1305,17 @@ dd {
   margin: 0;
   accent-color: var(--accent);
 }
+.graphics-stage {
+  position: absolute;
+  z-index: 1;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+  color-scheme: dark;
+}
 .caption-overlay {
   position: absolute;
+  z-index: 2;
   display: flex;
   justify-content: center;
   pointer-events: none;

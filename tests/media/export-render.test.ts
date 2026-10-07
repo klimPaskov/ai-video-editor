@@ -605,6 +605,24 @@ test(
   },
 );
 
+/** An FFV1 BGRA graphics segment: an opaque red box on transparency. */
+async function redBoxTrack(path: string, frames: number): Promise<void> {
+  await ffmpeg([
+    "-f",
+    "lavfi",
+    "-i",
+    // drawbox leaves alpha at 0 on BGRA, so the box is overlaid instead.
+    "color=c=black@0.0:s=160x90:r=30:d=1,format=bgra[bg];color=c=red:s=40x40:r=30:d=1,format=bgra[box];[bg][box]overlay=10:10:format=rgb",
+    "-frames:v",
+    String(frames),
+    "-c:v",
+    "ffv1",
+    "-pix_fmt",
+    "bgra",
+    path,
+  ]);
+}
+
 test(
   "burned-in captions change only the frames they cover and stay verified",
   { timeout: 120_000 },
@@ -1111,6 +1129,167 @@ test(
           .subarray(0, 48_000 * 2)
           .equals(sourceAudio.subarray(0, 48_000 * 2)),
       );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "a graphics track is drawn only on its frames in a verified master",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-graphics-"));
+    try {
+      const input = await source(directory, "screen.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=30:duration=1",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "rgb",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+      ]);
+      const first = join(directory, "graphics-000.mkv");
+      const second = join(directory, "graphics-001.mkv");
+      await redBoxTrack(first, 3);
+      await redBoxTrack(second, 4);
+      const segments = [
+        { path: first, startFrame: 5, frameCount: 3 },
+        { path: second, startFrame: 20, frameCount: 4 },
+      ];
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 0,
+            sourceEndUs: 1_000_000,
+          },
+        ],
+        [input],
+      );
+      const output = join(directory, "graphics master.mkv");
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: output,
+        replace: false,
+        compose: {
+          filter: "",
+          graphics: { segments },
+          width: 160,
+          height: 90,
+          pixelFormat: "bgra",
+        },
+      });
+      assert.equal(evidence.samplesEqual, true);
+      const frameBytes = rawFrameBytes("bgra", 160, 90);
+      const original = (await fullDecode(input, "bgra", null)).video;
+      const exported = await ffmpeg([
+        "-i",
+        output,
+        "-c:v",
+        "rawvideo",
+        "-pix_fmt",
+        "bgra",
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ]);
+      const changed: number[] = [];
+      for (let frame = 0; frame < 30; frame++) {
+        const range = [frame * frameBytes, (frame + 1) * frameBytes] as const;
+        if (!exported.subarray(...range).equals(original.subarray(...range)))
+          changed.push(frame);
+      }
+      assert.deepEqual(changed, [5, 6, 7, 20, 21, 22, 23]);
+      const pixel = (frame: number, x: number, y: number) => [
+        ...exported.subarray(
+          frame * frameBytes + (y * 160 + x) * 4,
+          frame * frameBytes + (y * 160 + x) * 4 + 4,
+        ),
+      ];
+      assert.deepEqual(pixel(21, 30, 30), [0, 0, 255, 255]);
+      // Outside the box the frame is the source's own.
+      const at = 21 * frameBytes + (80 * 160 + 120) * 4;
+      assert.ok(
+        exported.subarray(at, at + 4).equals(original.subarray(at, at + 4)),
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "graphics on 4:2:0 video change only their frames",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-graphics-yuv-"));
+    try {
+      const input = await source(directory, "talk.mp4", h264Args(1, 330));
+      const first = join(directory, "graphics-000.mkv");
+      const second = join(directory, "graphics-001.mkv");
+      await redBoxTrack(first, 3);
+      await redBoxTrack(second, 4);
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 0,
+            sourceEndUs: 1_000_000,
+          },
+        ],
+        [input],
+      );
+      const output = join(directory, "graphics.mkv.out.mkv");
+      await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: output,
+        replace: false,
+        compose: {
+          filter: "",
+          graphics: {
+            segments: [
+              { path: first, startFrame: 5, frameCount: 3 },
+              { path: second, startFrame: 20, frameCount: 4 },
+            ],
+          },
+          width: 160,
+          height: 90,
+          pixelFormat: "yuv420p",
+        },
+      });
+      const frameBytes = rawFrameBytes("yuv420p", 160, 90);
+      const original = (await fullDecode(input, "yuv420p", null)).video;
+      const exported = await ffmpeg([
+        "-i",
+        output,
+        "-c:v",
+        "rawvideo",
+        "-pix_fmt",
+        "yuv420p",
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ]);
+      const changed: number[] = [];
+      for (let frame = 0; frame < 30; frame++) {
+        const range = [frame * frameBytes, (frame + 1) * frameBytes] as const;
+        if (!exported.subarray(...range).equals(original.subarray(...range)))
+          changed.push(frame);
+      }
+      assert.deepEqual(changed, [5, 6, 7, 20, 21, 22, 23]);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

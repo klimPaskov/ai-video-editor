@@ -41,4 +41,12 @@ The full-edit mode gives the assistant a written playbook (`docs/prompts/FULL_AI
 
 ## Status
 
-Planned and in progress. Implemented parts are listed in their own sections below as they land.
+In progress. Implemented parts are listed below as they land.
+
+## Implemented: graphics rendering (2026-10-07)
+
+- **Stage.** `stage.html` is served with its own Content Security Policy (inline styles and `data:` images only; no scripts, network, frames or forms). `stage-control.ts` keeps one shadow root per graphic and seeks each graphic's CSS animations to the time since it started. It reports whether the picture can have changed, so unchanged frames are reused.
+- **Preview.** A transparent, pointer-transparent iframe of the stage sits over the displayed picture, scaled from the output size, above zooms and below captions. The timeline strip shows each graphic as a labelled block.
+- **Export.** In main, an offscreen window renders the stage frame by frame at the output size. Captures are premultiplied BGRA. Frames with graphics are grouped into segments (gaps under 2 s are joined with transparent frames), and each segment is encoded losslessly (FFV1). The compositor overlays each segment after zooms and before captions; for short clips, before reframing. The overlay runs in the video's own layout (`yuv420`, `yuv422`, `yuv444`, their 10-bit forms, or RGB), so frames without graphics stay bit-identical. Videos at other precisions are refused with a clear message. Each segment's overlay draws only while it has frames, because the overlay's frame counter in `enable` expressions proved unreliable.
+- **Editing.** `projects:manual-graphic` and `projects:manual-graphic-remove` add, replace and remove a graphic at an output time; main anchors it to the source moment shown there.
+- **Evidence.** `tests/media/graphics.test.ts`, the graphics cases in `tests/media/draft-transactions.test.ts` and `tests/media/export-render.test.ts` (BGRA and 4:2:0: only the segments' frames change and the drawn box is correct), and packaged `tests/native/graphics.test.ts` (unsafe content refused, preview shows the seeked graphic, timeline block, verified master with exactly the 45 frames under the graphic changed and the box in place, Undo).

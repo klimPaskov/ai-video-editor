@@ -64,6 +64,8 @@ import type {
   ManualZoomRequest,
   ManualZoomRemoveRequest,
   ManualSpeedRequest,
+  ManualGraphicRequest,
+  ManualGraphicRemoveRequest,
   ManualRestoreRangeRequest,
   ManualTranscriptCorrectionRequest,
   ManualTranscriptCutRequest,
@@ -171,6 +173,12 @@ export interface DesktopBridge {
   ): Promise<Reply<CodexThreadView>>;
   getPlayback(request: PlaybackProjectRequest): Promise<Reply<PlaybackView>>;
   applyManualZoom(request: ManualZoomRequest): Promise<Reply<ProjectDraftView>>;
+  applyManualGraphic(
+    request: ManualGraphicRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  removeManualGraphic(
+    request: ManualGraphicRemoveRequest,
+  ): Promise<Reply<ProjectDraftView>>;
   applyManualSpeed(
     request: ManualSpeedRequest,
   ): Promise<Reply<ProjectDraftView>>;
@@ -268,6 +276,8 @@ export const channels = Object.freeze({
   projectManualZoom: "projects:manual-zoom",
   projectManualZoomRemove: "projects:manual-zoom-remove",
   projectManualSpeed: "projects:manual-speed",
+  projectManualGraphic: "projects:manual-graphic",
+  projectManualGraphicRemove: "projects:manual-graphic-remove",
   audioGet: "audio:get",
   audioSet: "audio:set",
   shortsGet: "shorts:get",

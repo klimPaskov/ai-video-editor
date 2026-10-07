@@ -1,6 +1,11 @@
 import { assertZoomEffect, zoomLimits, type ZoomEffect } from "./zoom.ts";
 import { isClipSpeed, speedLength } from "./speed.ts";
 import {
+  assertGraphicEffect,
+  graphicLimits,
+  type GraphicEffect,
+} from "./graphics.ts";
+import {
   assertMediaFrame,
   assertMediaSummary,
   mediaIdPattern,
@@ -69,6 +74,7 @@ export interface ProjectDraftView {
   transcriptEdits?: TranscriptTextOverride[];
   /** Zoom effects anchored to source time. */
   zooms?: ZoomEffect[];
+  graphics?: GraphicEffect[];
 }
 export interface ProjectDraftIntegrityView {
   draft: ProjectDraftView;
@@ -146,6 +152,34 @@ export interface ManualZoomRequest {
   centerX: number;
   centerY: number;
   scale: number;
+}
+/**
+ * Adds a graphic at output time `startUs`, or replaces graphic `graphicId`.
+ * Main anchors it to the source moment shown at `startUs`.
+ */
+export interface ManualGraphicRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  graphicId: string | null;
+  name: string;
+  startUs: number;
+  durationUs: number;
+  layer: number;
+  html: string;
+  css: string;
+}
+export interface ManualGraphicRemoveRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  graphicId: string;
 }
 /** Plays output interval [startUs, endUs) at `speed` (1 is normal speed). */
 export interface ManualSpeedRequest {
@@ -397,6 +431,55 @@ export function assertManualZoomRequest(
   )
     invalid();
 }
+export function assertManualGraphicRequest(
+  value: unknown,
+): asserts value is ManualGraphicRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "graphicId",
+    "name",
+    "startUs",
+    "durationUs",
+    "layer",
+    "html",
+    "css",
+  ]);
+  assertManualHead(value);
+  if (value.graphicId !== null) opaqueId(value.graphicId);
+  integer(value.startUs);
+  // The rest is checked as a graphic, with a placeholder anchor.
+  assertGraphicEffect({
+    graphic_id:
+      typeof value.graphicId === "string" ? value.graphicId : "graphic-new",
+    name: value.name,
+    source_id: "source-check",
+    source_us: 0,
+    duration_us: value.durationUs,
+    layer: value.layer,
+    html: value.html,
+    css: value.css,
+  });
+}
+export function assertManualGraphicRemoveRequest(
+  value: unknown,
+): asserts value is ManualGraphicRemoveRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "graphicId",
+  ]);
+  assertManualHead(value);
+  opaqueId(value.graphicId);
+}
 export function assertManualSpeedRequest(
   value: unknown,
 ): asserts value is ManualSpeedRequest {
@@ -584,6 +667,11 @@ export function assertProjectDraftView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "zooms");
+  const hasGraphics =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "graphics");
   exact(value, [
     "projectId",
     "draft",
@@ -591,6 +679,7 @@ export function assertProjectDraftView(
     ...(hasClips ? ["clips"] : []),
     ...(hasTranscriptEdits ? ["transcriptEdits"] : []),
     ...(hasZooms ? ["zooms"] : []),
+    ...(hasGraphics ? ["graphics"] : []),
   ]);
   id(value.projectId);
   exact(value.draft, [
@@ -686,6 +775,18 @@ export function assertProjectDraftView(
   }
   if (hasTranscriptEdits) assertTranscriptTextOverrides(value.transcriptEdits);
   if (hasZooms) assertViewZooms(value.zooms);
+  if (hasGraphics) assertViewGraphics(value.graphics);
+}
+function assertViewGraphics(value: unknown): void {
+  if (!Array.isArray(value) || value.length > graphicLimits.maxGraphics)
+    invalid();
+  for (const graphic of value) assertGraphicEffect(graphic);
+  const graphics = value as GraphicEffect[];
+  if (
+    new Set(graphics.map((graphic) => graphic.graphic_id)).size !==
+    graphics.length
+  )
+    invalid();
 }
 function assertViewZooms(value: unknown): void {
   if (!Array.isArray(value) || value.length > zoomLimits.maxZooms) invalid();
@@ -741,12 +842,18 @@ export function assertProjectView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "zooms");
+  const hasGraphics =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "graphics");
   exact(value, [
     ...keys,
     ...(hasSources ? ["sources"] : []),
     ...(hasClips ? ["clips"] : []),
     ...(hasTranscriptEdits ? ["transcriptEdits"] : []),
     ...(hasZooms ? ["zooms"] : []),
+    ...(hasGraphics ? ["graphics"] : []),
   ]);
   id(value.id);
   id(value.revisionId);
@@ -783,6 +890,7 @@ export function assertProjectView(
     ...(hasClips ? { clips: value.clips } : {}),
     ...(hasTranscriptEdits ? { transcriptEdits: value.transcriptEdits } : {}),
     ...(hasZooms ? { zooms: value.zooms } : {}),
+    ...(hasGraphics ? { graphics: value.graphics } : {}),
   };
   assertProjectDraftView(draftView);
   if (hasTranscriptEdits)
