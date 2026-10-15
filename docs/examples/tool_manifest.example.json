@@ -240,6 +240,21 @@
         "delete project",
         "approve export"
       ]
+    },
+    {
+      "name": "media.get_frames",
+      "mode": "read",
+      "description": "Render 1–3 small JPEG pictures of the active draft at output times through the export compositor (zooms, motion graphics, captions as shown) so an assistant can check its work; analysis only, never part of the master.",
+      "undoable": false,
+      "user_confirmation": "none",
+      "allowed_scope": "bounded_media",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
     }
   ]
 }

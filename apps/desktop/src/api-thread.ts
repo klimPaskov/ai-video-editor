@@ -44,8 +44,12 @@ const maxToolCalls = 8;
 const maxToolBytes = 64 * 1024;
 const messageId = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
 
+// Chat Completions tool messages carry text only, so the picture tool is not
+// offered to the API providers.
 const tools = new Map(
-  codexVideoEditMcpTools.map((tool) => [tool.name.replaceAll(".", "_"), tool]),
+  codexVideoEditMcpTools
+    .filter((tool) => tool.name !== "media.get_frames")
+    .map((tool) => [tool.name.replaceAll(".", "_"), tool]),
 );
 const definitions: ApiToolDefinition[] = [...tools.entries()].map(
   ([name, tool]) => ({

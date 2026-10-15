@@ -1,4 +1,5 @@
 import type { DynamicToolCallParams } from "./generated/v2/DynamicToolCallParams.ts";
+import { splitFrameResult } from "../../codex-tools/src/frames.ts";
 import type { DynamicToolCallResponse } from "./generated/v2/DynamicToolCallResponse.ts";
 import type { DynamicToolSpec } from "./generated/v2/DynamicToolSpec.ts";
 import type { JsonValue } from "./generated/serde_json/JsonValue.ts";
@@ -35,6 +36,7 @@ const dynamicNames: Record<CodexVideoEditToolName, string> = {
   "graphics.remove": "graphics_remove",
   "captions.configure": "captions_configure",
   "audio.configure": "audio_configure",
+  "media.get_frames": "media_get_frames",
 };
 const internalNames = new Map(
   Object.entries(dynamicNames).map(([internal, wire]) => [
@@ -181,6 +183,23 @@ export async function invokeOwnedDynamicTool(
 ): Promise<DynamicToolCallResponse> {
   try {
     const value = await invoke(call.name, call.arguments, access);
+    const pictures =
+      call.name === "media.get_frames" ? splitFrameResult(value) : null;
+    if (pictures) {
+      const text = JSON.stringify(pictures.metadata);
+      if (Buffer.byteLength(text) > MAX_OUTPUT_BYTES)
+        return safeError("outcome_unknown");
+      return {
+        contentItems: [
+          { type: "inputText", text },
+          ...pictures.images.map((image) => ({
+            type: "inputImage" as const,
+            imageUrl: `data:${image.mimeType};base64,${image.data}`,
+          })),
+        ],
+        success: true,
+      };
+    }
     const text = JSON.stringify(value);
     if (typeof text !== "string" || Buffer.byteLength(text) > MAX_OUTPUT_BYTES)
       return safeError("outcome_unknown");

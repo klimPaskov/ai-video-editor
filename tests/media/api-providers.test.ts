@@ -450,11 +450,14 @@ test("every guarded editor tool definition reaches each provider request", async
       return json(completion);
     },
   });
-  const tools = codexVideoEditMcpTools.map((tool) => ({
-    name: tool.name.replaceAll(".", "_"),
-    description: tool.description,
-    parameters: tool.inputSchema as unknown as Record<string, unknown>,
-  }));
+  // The picture tool is not offered to API providers (text-only tool results).
+  const tools = codexVideoEditMcpTools
+    .filter((tool) => tool.name !== "media.get_frames")
+    .map((tool) => ({
+      name: tool.name.replaceAll(".", "_"),
+      description: tool.description,
+      parameters: tool.inputSchema as unknown as Record<string, unknown>,
+    }));
   assert.equal(tools.length, 16);
   for (const provider of ["openai", "deepseek", "gemini"] as const)
     await client.complete(provider, key, {

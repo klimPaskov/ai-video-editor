@@ -136,6 +136,7 @@ test("packaged MCP protocol lists only reviewed tools and forwards a bounded cal
         "graphics.remove",
         "captions.configure",
         "audio.configure",
+        "media.get_frames",
       ],
     );
     const graphic = tools.find((tool) => tool.name === "graphics.set");
@@ -799,4 +800,79 @@ test("App Server startup accepts only the reviewed owned MCP schemas", () => {
     () => codexClientInternals.validateOwnedMcpStatus(changed),
     CodexTransportError,
   );
+});
+
+test("rendered pictures reach Claude and Codex MCP clients as image content", async () => {
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64");
+  const state = await fixture(async (name) => {
+    assert.equal(name, "media.get_frames");
+    return {
+      schema_version: "1.0",
+      project_id: "project-1",
+      draft_sequence: 3,
+      timeline_sha256: "a".repeat(64),
+      frames: [
+        {
+          time_us: 500_000,
+          width: 960,
+          height: 540,
+          mime_type: "image/jpeg",
+          data_base64: jpeg,
+        },
+      ],
+    };
+  });
+  const rpc = await childFor(state.runtime);
+  try {
+    await rpc.request({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: "2025-06-18" },
+    });
+    const called = await rpc.request({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "media.get_frames",
+        arguments: {
+          schema_version: "1.0",
+          project_id: "project-1",
+          times_us: [500_000],
+        },
+      },
+    });
+    const result = called.result as {
+      isError: boolean;
+      content: Array<Record<string, unknown>>;
+      structuredContent?: unknown;
+    };
+    assert.equal(result.isError, false);
+    assert.equal(result.structuredContent, undefined);
+    assert.equal(result.content.length, 2);
+    assert.equal(result.content[0]!.type, "text");
+    const metadata = JSON.parse(result.content[0]!.text as string) as {
+      frames: Array<Record<string, unknown>>;
+    };
+    assert.deepEqual(metadata.frames, [
+      {
+        time_us: 500_000,
+        width: 960,
+        height: 540,
+        mime_type: "image/jpeg",
+        image_index: 0,
+      },
+    ]);
+    assert.doesNotMatch(result.content[0]!.text as string, /data_base64/u);
+    assert.deepEqual(result.content[1], {
+      type: "image",
+      data: jpeg,
+      mimeType: "image/jpeg",
+    });
+  } finally {
+    await rpc.close();
+    await state.broker.close();
+    await rm(state.root, { recursive: true, force: true });
+  }
 });

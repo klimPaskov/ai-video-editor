@@ -38,6 +38,7 @@ const activityLabels: Record<string, { label: string; mutating: boolean }> = {
   graphics_remove: { label: "Removing a graphic", mutating: true },
   captions_configure: { label: "Setting captions", mutating: true },
   audio_configure: { label: "Setting audio", mutating: true },
+  media_get_frames: { label: "Looking at the edit", mutating: false },
   timeline_undo: { label: "Undoing the last edit", mutating: true },
 };
 

@@ -52,7 +52,7 @@ import {
 } from "../../../packages/media-engine/src/render.ts";
 import type { DraftProjectReadResult } from "../../../packages/project-store/src/transactions.ts";
 
-type DraftReader = {
+export type DraftReader = {
   snapshotWithProject(projectId: string): Promise<DraftProjectReadResult>;
 };
 

@@ -1777,3 +1777,78 @@ test("captions.configure and audio.configure set undoable draft choices", async 
     ],
   );
 });
+
+test("media.get_frames validates times and returns the renderer's pictures", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const requests: Array<[string, number[], number]> = [];
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64");
+  const renderer = async (id: string, times: number[], width: number) => {
+    requests.push([id, times, width]);
+    return times.map((time) => ({
+      timeUs: time,
+      width,
+      height: Math.round((width * 9) / 16),
+      mimeType: "image/jpeg" as const,
+      dataBase64: jpeg,
+    }));
+  };
+  const claude = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    renderer,
+  );
+  const input = { schema_version: "1.0", project_id: projectId };
+  for (const invalid of [
+    { times_us: [] },
+    { times_us: [0, 1, 2, 3] },
+    { times_us: [0.5] },
+    { times_us: [-1] },
+    { times_us: [1_000_000] },
+    { times_us: [0], max_width: 100 },
+    { times_us: [0], max_width: 4000 },
+    { times_us: [0], path: "frame.png" },
+  ])
+    await assert.rejects(
+      claude.invoke("media.get_frames", { ...input, ...invalid }),
+      expectCode("invalid_request"),
+    );
+  assert.deepEqual(requests, []);
+  const result = (await claude.invoke("media.get_frames", {
+    ...input,
+    times_us: [0, 500_000],
+    max_width: 640,
+  })) as { draft_sequence: number; frames: Array<Record<string, unknown>> };
+  assert.deepEqual(requests, [[projectId, [0, 500_000], 640]]);
+  assert.equal(result.draft_sequence, 0);
+  assert.deepEqual(result.frames[1], {
+    time_us: 500_000,
+    width: 640,
+    height: 360,
+    mime_type: "image/jpeg",
+    data_base64: jpeg,
+  });
+  await assert.rejects(
+    new CodexVideoEditToolService(projectId, drafts, "claude").invoke(
+      "media.get_frames",
+      { ...input, times_us: [0] },
+    ),
+    expectCode("tool_not_available"),
+  );
+  await assert.rejects(
+    new CodexVideoEditToolService(
+      projectId,
+      drafts,
+      "claude",
+      undefined,
+      async () => {
+        throw new Error("private ffmpeg detail");
+      },
+    ).invoke("media.get_frames", { ...input, times_us: [0] }),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "frame_unavailable" &&
+      !error.message.includes("ffmpeg"),
+  );
+});

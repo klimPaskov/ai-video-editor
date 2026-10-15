@@ -165,6 +165,7 @@ import type { ClipSpeed } from "../../../packages/domain/src/speed.ts";
 import { zoomSourceRange } from "../../../packages/domain/src/zoom.ts";
 import { graphicAnchor } from "../../../packages/domain/src/graphics.ts";
 import { renderGraphicsTrack } from "./graphics-render.ts";
+import { renderDraftFrames } from "./frame-render.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
 const page = `${origin}/index.html`;
@@ -983,6 +984,28 @@ async function start(): Promise<void> {
     if (!window || window.isDestroyed()) return;
     window.webContents.send(channels.projectDraftChanged, notice);
   };
+  // Rendered pictures for media.get_frames, through the export compositor.
+  // One render at a time keeps offscreen graphics and FFmpeg work bounded.
+  let frameQueue: Promise<unknown> = Promise.resolve();
+  const renderFramesForTool = (
+    projectId: string,
+    timesUs: number[],
+    maxWidth: number,
+  ) => {
+    const work = frameQueue.then(() =>
+      renderDraftFrames({
+        drafts,
+        projectId,
+        timesUs,
+        maxWidth,
+        captions: () => draftCaptions(projectId),
+        renderGraphics: (request) =>
+          renderGraphicsTrack(request, `${origin}/stage.html`),
+      }),
+    );
+    frameQueue = work.catch(() => undefined);
+    return work;
+  };
   const invokeCodexTool = async (
     name: unknown,
     input: unknown,
@@ -1006,6 +1029,7 @@ async function start(): Promise<void> {
           drafts,
           "codex",
           readTranscriptForTool,
+          renderFramesForTool,
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
@@ -1086,6 +1110,7 @@ async function start(): Promise<void> {
           drafts,
           "claude",
           readTranscriptForTool,
+          renderFramesForTool,
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,

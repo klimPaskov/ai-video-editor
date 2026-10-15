@@ -78,6 +78,7 @@ class WorkflowContractsTests(unittest.TestCase):
                         "graphics.remove",
                         "captions.configure",
                         "audio.configure",
+                        "media.get_frames",
                     ],
                 )
                 self.assertNotIn("export.prepare", by_name)

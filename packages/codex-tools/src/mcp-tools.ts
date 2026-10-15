@@ -456,4 +456,31 @@ export const codexVideoEditMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: codexVideoEditToolNames[16],
+    description:
+      "See the edit: render 1–3 pictures of the active draft at output times (microseconds), exactly as export draws them with zooms, motion graphics and captions (when captions are on). Use it to check a graphic's text, placement and timing, a zoom's target, or that captions stay clear, before moving on. Pictures are small JPEGs for review (max_width 320–1280, default 960); they are never part of the video.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "times_us"],
+      properties: {
+        schema_version: { const: "1.0" },
+        project_id: id,
+        times_us: {
+          type: "array",
+          minItems: 1,
+          maxItems: 3,
+          items: { type: "integer", minimum: 0 },
+        },
+        max_width: { type: "integer", minimum: 320, maximum: 1280 },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ] as const;

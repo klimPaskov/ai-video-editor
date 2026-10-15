@@ -15,6 +15,7 @@ import {
   zoomLimits,
   zoomSourceRange,
 } from "../../domain/src/zoom.ts";
+import { frameToolLimits } from "./frames.ts";
 import {
   assertGraphicContent,
   GraphicContentError,
@@ -41,7 +42,23 @@ export const codexVideoEditToolNames = [
   "graphics.remove",
   "captions.configure",
   "audio.configure",
+  "media.get_frames",
 ] as const;
+
+/** Rendered pictures of the edit; the app renders, the tool only validates. */
+export type FrameRenderer = (
+  projectId: string,
+  timesUs: number[],
+  maxWidth: number,
+) => Promise<
+  {
+    timeUs: number;
+    width: number;
+    height: number;
+    mimeType: "image/jpeg";
+    dataBase64: string;
+  }[]
+>;
 
 export type CodexVideoEditToolName = (typeof codexVideoEditToolNames)[number];
 
@@ -79,6 +96,7 @@ export type CodexVideoEditToolErrorCode =
   | "outcome_unknown"
   | "transcript_unavailable"
   | "graphic_rejected"
+  | "frame_unavailable"
   | "service_unavailable";
 
 const messages: Record<CodexVideoEditToolErrorCode, string> = {
@@ -96,6 +114,8 @@ const messages: Record<CodexVideoEditToolErrorCode, string> = {
     "The edit may have been saved. Reopen the project before retrying.",
   transcript_unavailable:
     "A completed local transcript is not available for that source and range.",
+  frame_unavailable:
+    "The frames could not be rendered. Use 1–3 output times inside the edit and try again.",
   graphic_rejected:
     "The graphic was rejected. Use inline HTML and CSS without scripts, forms, embedded documents or network resources.",
   service_unavailable:
@@ -369,18 +389,21 @@ export class CodexVideoEditToolService {
   private readonly drafts: DraftTransactions;
   private readonly origin: ToolEditOrigin;
   private readonly transcriptReader: TranscriptReader | undefined;
+  private readonly frameRenderer: FrameRenderer | undefined;
 
   constructor(
     activeProjectId: string,
     drafts: DraftTransactions,
     origin: ToolEditOrigin = "codex",
     transcriptReader?: TranscriptReader,
+    frameRenderer?: FrameRenderer,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
     this.drafts = drafts;
     this.origin = origin;
     this.transcriptReader = transcriptReader;
+    this.frameRenderer = frameRenderer;
   }
 
   private applier():
@@ -439,6 +462,8 @@ export class CodexVideoEditToolService {
           return await this.configureCaptions(input);
         case "audio.configure":
           return await this.configureAudio(input);
+        case "media.get_frames":
+          return await this.getFrames(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -1175,6 +1200,60 @@ export class CodexVideoEditToolService {
       position: request.position,
       burnIn: request.burn_in,
     });
+  }
+
+  /** Rendered pictures of the current edit at output times; reads only. */
+  private async getFrames(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      ["schema_version", "project_id", "times_us"],
+      ["max_width"],
+    );
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    const times = request.times_us;
+    if (
+      !Array.isArray(times) ||
+      times.length < 1 ||
+      times.length > frameToolLimits.maxFrames ||
+      times.some((time) => !Number.isSafeInteger(time) || time < 0)
+    )
+      reject("invalid_request");
+    let maxWidth: number = frameToolLimits.defaultWidth;
+    if (request.max_width !== undefined) {
+      integer(request.max_width, frameToolLimits.minWidth);
+      if (request.max_width > frameToolLimits.maxWidth)
+        reject("invalid_request");
+      maxWidth = request.max_width;
+    }
+    if (!this.frameRenderer) reject("tool_not_available");
+    const { draft } = await this.drafts.snapshot(this.activeProjectId);
+    if (times.some((time) => (time as number) >= draft.timeline.duration_us))
+      reject("invalid_request");
+    let frames: Awaited<ReturnType<FrameRenderer>>;
+    try {
+      frames = await this.frameRenderer(
+        this.activeProjectId,
+        times as number[],
+        maxWidth,
+      );
+    } catch {
+      reject("frame_unavailable");
+    }
+    return {
+      schema_version: "1.0",
+      project_id: this.activeProjectId,
+      draft_sequence: draft.draft_sequence,
+      timeline_sha256: draft.timeline_sha256,
+      // Pictures include zooms, motion graphics and captions as shown.
+      frames: frames.map((frame) => ({
+        time_us: frame.timeUs,
+        width: frame.width,
+        height: frame.height,
+        mime_type: frame.mimeType,
+        data_base64: frame.dataBase64,
+      })),
+    };
   }
 
   private async configureAudio(input: unknown): Promise<unknown> {

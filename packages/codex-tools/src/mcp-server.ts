@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { connect } from "node:net";
 import { appIdentity } from "../../domain/src/app-identity.ts";
 import { codexVideoEditMcpTools } from "./mcp-tools.ts";
+import { splitFrameResult } from "./frames.ts";
 
 const MAX_FRAME_BYTES = 1024 * 1024;
 const endpoint = process.env.AI_VIDEO_EDITOR_MCP_ENDPOINT;
@@ -145,6 +146,24 @@ async function request(message: Record<string, unknown>): Promise<void> {
       return error(message.id, -32602, "Invalid parameters");
     try {
       const result = await invokeBroker(params.name, params.arguments);
+      const pictures =
+        params.name === "media.get_frames" ? splitFrameResult(result) : null;
+      if (pictures)
+        return write({
+          jsonrpc: "2.0",
+          id: message.id,
+          result: {
+            content: [
+              { type: "text", text: JSON.stringify(pictures.metadata) },
+              ...pictures.images.map((image) => ({
+                type: "image",
+                data: image.data,
+                mimeType: image.mimeType,
+              })),
+            ],
+            isError: false,
+          },
+        });
       return write({
         jsonrpc: "2.0",
         id: message.id,
