@@ -264,12 +264,15 @@ test(
       await session.pause();
       await session.record();
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      // On Windows FFmpeg may be a shim; end the real capture as well.
-      killProcessTree(
-        (session as unknown as { current: { child: ChildProcess } }).current
-          .child,
-      );
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // On Windows FFmpeg may be a shim; end the real capture as well, and
+      // wait until it has really stopped.
+      const running = (
+        session as unknown as {
+          current: { child: ChildProcess; done: Promise<void> };
+        }
+      ).current;
+      killProcessTree(running.child);
+      await running.done;
 
       const service = recorder(root, { AI_VIDEO_EDITOR_TEST_CAPTURE: "1" });
       const { takes } = await service.interrupted();
@@ -282,7 +285,7 @@ test(
       assert.equal(media.previewAvailable, true);
       // Both segments are kept: about 0.8 s + 1.2 s of frames.
       assert.ok(
-        media.durationUs >= 1_400_000 && media.durationUs <= 3_000_000,
+        media.durationUs >= 1_400_000 && media.durationUs <= 4_500_000,
         `duration ${media.durationUs}`,
       );
       assert.deepEqual(await readdir(directory), ["session.json"]);

@@ -10,7 +10,16 @@ import {
   defaultAudioSettings,
   type AudioSettings,
 } from "../../../packages/domain/src/audio-settings.ts";
-import { access, mkdir, open, rename, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  open,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   assertExportView,
@@ -28,6 +37,11 @@ import {
   zoomIntervals,
   type ZoomInterval,
 } from "../../../packages/domain/src/zoom.ts";
+import {
+  graphicIntervals,
+  type GraphicInterval,
+} from "../../../packages/domain/src/graphics.ts";
+import type { GraphicsRenderRequest, GraphicsTrack } from "./graphics-track.ts";
 import { probePresentationTiming } from "../../../packages/media-engine/src/presentation-timing.ts";
 import {
   exportDraft,
@@ -63,6 +77,13 @@ export interface DesktopExportOptions {
   ) => Promise<{ cues: CaptionCue[]; settings: CaptionSettings } | null>;
   /** Audio cleanup chosen for the project. */
   audio?: (projectId: string) => Promise<AudioSettings>;
+  /**
+   * Renders motion graphics into a lossless track (Electron offscreen
+   * rendering in the app). Without it, drafts with graphics cannot export.
+   */
+  renderGraphics?: (
+    request: GraphicsRenderRequest,
+  ) => Promise<GraphicsTrack | null>;
 }
 
 interface Job {
@@ -74,6 +95,7 @@ interface Job {
   captions: { cues: CaptionCue[]; settings: CaptionSettings } | null;
   audio: AudioSettings;
   zooms: ZoomInterval[];
+  graphics: GraphicInterval[];
 }
 
 const unsupportedSet = new Set<string>(exportUnsupported);
@@ -102,6 +124,8 @@ export async function planDraft(
   snapshot: DraftProjectReadResult;
   /** The draft's zooms in the exported output's own time. */
   zooms: ZoomInterval[];
+  /** The draft's graphics in the exported output's own time. */
+  graphics: GraphicInterval[];
 }> {
   const snapshot = await drafts.snapshotWithProject(projectId);
   const project = snapshot.project;
@@ -126,6 +150,22 @@ export async function planDraft(
   const zooms = window
     ? windowZoomIntervals(allZooms, window.startUs, window.endUs)
     : allZooms;
+  const allGraphics = graphicIntervals(
+    snapshot.draft.timeline.graphics ?? [],
+    mapped,
+    snapshot.draft.timeline.duration_us,
+  );
+  const graphics = window
+    ? allGraphics
+        .filter(
+          (item) => item.endUs > window.startUs && item.startUs < window.endUs,
+        )
+        .map((item) => ({
+          ...item,
+          startUs: item.startUs - window.startUs,
+          endUs: item.endUs - window.startUs,
+        }))
+    : allGraphics;
   const clips = window
     ? draftWindowClips(mapped, window.startUs, window.endUs)
     : ordered.map((clip) => ({
@@ -156,7 +196,7 @@ export async function planDraft(
       ),
     });
   }
-  return { plan: planExport(clips, exportSources), snapshot, zooms };
+  return { plan: planExport(clips, exportSources), snapshot, zooms, graphics };
 }
 
 /**
@@ -166,15 +206,17 @@ export async function planDraft(
 function composition(
   job: Job,
   video: { width: number; height: number; pixelFormat: string },
+  graphics: GraphicsTrack | null,
 ): { compose: ExportComposition } | Record<string, never> {
   const filter = zoomFilter(job.zooms, video.width, video.height);
   const ass = job.captions?.settings.burnIn
     ? toAss(job.captions.cues, job.captions.settings, video.width, video.height)
     : undefined;
-  if (filter === null && ass === undefined) return {};
+  if (filter === null && ass === undefined && !graphics) return {};
   return {
     compose: {
       filter: filter ?? "",
+      ...(graphics ? { graphics } : {}),
       ...(ass !== undefined ? { ass } : {}),
       width: video.width,
       height: video.height,
@@ -236,7 +278,7 @@ export class DesktopExports {
       this.fail(projectId, profile, error);
       return this.get(projectId);
     }
-    const { plan, snapshot, zooms } = draft;
+    const { plan, snapshot, zooms, graphics } = draft;
     const project = snapshot.project;
     const extension = profile === "lossless_master" ? ".mkv" : ".mp4";
     const suffix = profile === "lossless_master" ? "master" : "share";
@@ -274,6 +316,7 @@ export class DesktopExports {
       audio,
       captions: captions && captions.cues.length ? captions : null,
       zooms,
+      graphics,
       projectId,
       profile,
       controller,
@@ -300,7 +343,36 @@ export class DesktopExports {
     replace: boolean,
   ): Promise<void> {
     let evidence: ExportEvidence;
+    let scratch: string | null = null;
     try {
+      // Graphics are rendered first, then composed over the frames.
+      let graphics: GraphicsTrack | null = null;
+      if (job.graphics.length) {
+        if (!this.options.renderGraphics)
+          throw new MediaError("UNSUPPORTED_PROFILE", exportIssues.failed);
+        scratch = await mkdtemp(
+          path.join(tmpdir(), "ai-video-editor-graphics-"),
+        );
+        graphics = await this.options.renderGraphics({
+          intervals: job.graphics,
+          width: plan.format.video.width,
+          height: plan.format.video.height,
+          frameRate: plan.format.video.frameRate,
+          frameCount: plan.frameCount,
+          directory: scratch,
+          ffmpeg: this.options.ffmpeg ?? "ffmpeg",
+          signal: job.controller.signal,
+          onProgress: (fraction) => {
+            if (this.job !== job || this.view.status !== "running") return;
+            this.set({
+              ...this.view,
+              phase: "rendering",
+              fraction: Math.round(fraction * 250) / 1000,
+            });
+          },
+        });
+      }
+      const share = graphics ? 0.75 : 1;
       evidence = await exportDraft({
         plan,
         profile: job.profile,
@@ -312,13 +384,14 @@ export class DesktopExports {
         },
         signal: job.controller.signal,
         audioCleanup: job.audio,
-        ...composition(job, plan.format.video),
+        ...composition(job, plan.format.video, graphics),
         onProgress: (progress) => {
           if (this.job !== job || this.view.status !== "running") return;
           this.set({
             ...this.view,
             phase: progress.phase,
-            fraction: Math.round(progress.fraction * 1000) / 1000,
+            fraction:
+              Math.round((1 - share + progress.fraction * share) * 1000) / 1000,
           });
         },
       });
@@ -328,6 +401,8 @@ export class DesktopExports {
         this.fail(job.projectId, job.profile, error);
       }
       return;
+    } finally {
+      if (scratch) await rm(scratch, { recursive: true, force: true });
     }
     let message: string | null = null;
     try {

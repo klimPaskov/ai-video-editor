@@ -1,4 +1,5 @@
 import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
+import type { GraphicInterval } from "../../../packages/domain/src/graphics.ts";
 import type { ZoomInterval } from "../../../packages/domain/src/zoom.ts";
 
 /**
@@ -20,6 +21,7 @@ export function setupTimelineStrip(options: {
     project: ProjectView | undefined,
     marks: TimelineMarks,
     zooms?: readonly ZoomInterval[],
+    graphics?: readonly GraphicInterval[],
   ): void;
   playhead(us: number): void;
 } {
@@ -28,6 +30,7 @@ export function setupTimelineStrip(options: {
   const clips = host.querySelector<HTMLElement>(".timeline-clips")!;
   const markLayer = host.querySelector<HTMLElement>(".timeline-marks")!;
   const zoomLayer = host.querySelector<HTMLElement>(".timeline-zooms")!;
+  const graphicLayer = host.querySelector<HTMLElement>(".timeline-graphics")!;
   const head = host.querySelector<HTMLElement>(".timeline-playhead")!;
   const summary = host.querySelector<HTMLElement>(".timeline-summary")!;
   let durationUs = 0;
@@ -65,6 +68,7 @@ export function setupTimelineStrip(options: {
     project: ProjectView | undefined,
     marks: TimelineMarks,
     zooms: readonly ZoomInterval[] = [],
+    graphics: readonly GraphicInterval[] = [],
   ): void {
     current = project;
     host.hidden = !project?.clips;
@@ -136,6 +140,17 @@ export function setupTimelineStrip(options: {
       if (outUs !== undefined) layers.push(box(outUs, outUs, "timeline-mark"));
     }
     markLayer.replaceChildren(...layers);
+    graphicLayer.replaceChildren(
+      ...graphics.map((graphic) => {
+        const bar = document.createElement("div");
+        bar.className = "timeline-graphic";
+        bar.style.left = `calc(4px + (100% - 8px) * ${graphic.startUs / Math.max(1, durationUs)})`;
+        bar.style.width = `calc((100% - 8px) * ${(graphic.endUs - graphic.startUs) / Math.max(1, durationUs)})`;
+        bar.textContent = graphic.name;
+        bar.title = graphic.name;
+        return bar;
+      }),
+    );
     zoomLayer.replaceChildren(
       ...zooms.map((zoom) => {
         const bar = document.createElement("div");

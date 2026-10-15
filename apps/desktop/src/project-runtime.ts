@@ -78,6 +78,7 @@ export function committedDraftView(result: DraftReadResult): ProjectDraftView {
     })),
     transcriptEdits: structuredClone(draft.timeline.transcript_edits ?? []),
     zooms: structuredClone(draft.timeline.zooms ?? []),
+    graphics: structuredClone(draft.timeline.graphics ?? []),
   };
   assertProjectDraftView(value);
   return value;
@@ -104,6 +105,8 @@ export async function invokeWithProjectDraftRefresh<T>(options: {
     options.toolName === "zoom.set" ||
     options.toolName === "zoom.remove" ||
     options.toolName === "speed.set" ||
+    options.toolName === "graphics.set" ||
+    options.toolName === "graphics.remove" ||
     options.toolName === "timeline.undo" ||
     options.toolName === "timeline.redo";
   try {
@@ -173,6 +176,7 @@ export class DesktopProjectRuntime {
       source: summaries[0]!,
       transcriptEdits: draft.transcriptEdits ?? [],
       zooms: draft.zooms ?? [],
+      graphics: draft.graphics ?? [],
       ...(snapshot.schema_version === "1.1" ? { sources: summaries } : {}),
       timeline: draft.timeline,
       clips: draft.clips!,

@@ -1,0 +1,31 @@
+/* The graphics stage: transparent, exactly the output size. */
+:root {
+  color-scheme: dark;
+  background: transparent;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+}
+#stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  transform-origin: 0 0;
+  font-family:
+    Inter,
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  color: #fff;
+}
+#stage > section {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}

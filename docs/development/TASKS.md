@@ -201,8 +201,8 @@ Acceptance: a finished video yields reviewed, captioned short clips without leav
 
 ## P12: full AI edit (user requirement 2026-10-07)
 
-- [ ] P12-01 Motion graphics as HTML/CSS fragments anchored to source moments, stored in the draft with validation, transactions, Undo and replay (ADR 0019, docs/50). The data model, content-safety validation, placement through cuts and speed, store tests and schemas are implemented; preview and export rendering remain.
-- [ ] P12-02 Render graphics identically in the preview (stage page in an iframe) and export (offscreen capture, lossless intermediate, compositor overlay), leaving frames without graphics bit-identical.
+- [ ] P12-01 Motion graphics as HTML/CSS fragments anchored to source moments, stored in the draft with validation, transactions, Undo and replay (ADR 0019, docs/50). The data model, content-safety validation, placement through cuts and speed, store tests and schemas are implemented.
+- [x] P12-02 Render graphics identically in the preview (stage page in an iframe) and export (offscreen capture, lossless intermediate, compositor overlay), leaving frames without graphics bit-identical. Implemented and natively tested (docs/50).
 - [ ] P12-03 Assistant tools: `graphics.set`, `graphics.remove`, `media.get_frames` (rendered pictures), `captions.configure`, `audio.configure`.
 - [ ] P12-04 Full AI edit mode: brief, editing playbook, one long assistant run as one undoable pass, progress, Stop, summary and Polish.
 - [ ] P12-05 External agents can connect to the running app's MCP server with a per-user token.

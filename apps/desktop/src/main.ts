@@ -60,6 +60,8 @@ import {
   assertManualZoomRequest,
   assertManualZoomRemoveRequest,
   assertManualSpeedRequest,
+  assertManualGraphicRequest,
+  assertManualGraphicRemoveRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualTranscriptCutRequest,
@@ -161,6 +163,8 @@ import {
 import type { ProjectDraftNotice } from "./project-runtime.ts";
 import type { ClipSpeed } from "../../../packages/domain/src/speed.ts";
 import { zoomSourceRange } from "../../../packages/domain/src/zoom.ts";
+import { graphicAnchor } from "../../../packages/domain/src/graphics.ts";
+import { renderGraphicsTrack } from "./graphics-render.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
 const page = `${origin}/index.html`;
@@ -428,6 +432,8 @@ async function start(): Promise<void> {
     ["/region.html", ["region.html", "text/html; charset=utf-8"]],
     ["/region.js", ["region.js", "text/javascript; charset=utf-8"]],
     ["/region.css", ["region.css", "text/css; charset=utf-8"]],
+    ["/stage.html", ["stage.html", "text/html; charset=utf-8"]],
+    ["/stage.css", ["stage.css", "text/css; charset=utf-8"]],
   ]);
   // Fail before opening a product window if any required packaged resource is absent.
   const preload = await readFile(path.join(app.getAppPath(), "preload.cjs"));
@@ -455,7 +461,11 @@ async function start(): Promise<void> {
       headers: {
         "Content-Type": asset.mime,
         "Content-Security-Policy":
-          "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'",
+          url.pathname === "/stage.html"
+            ? // Graphics: their own inline styles and data: images; no
+              // scripts, network, frames, forms or navigation.
+              "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+            : "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'",
       },
     });
   });
@@ -529,6 +539,8 @@ async function start(): Promise<void> {
   };
   shortClips = new DesktopShortClips({
     root: path.join(userData, "short-clips"),
+    renderGraphics: (request) =>
+      renderGraphicsTrack(request, `${origin}/stage.html`),
     drafts,
     draftWords: async (projectId) => {
       const project = await projectRuntime.view(projectId);
@@ -727,6 +739,8 @@ async function start(): Promise<void> {
     return recording(() => recorder!.cancel());
   });
   exports = new DesktopExports({
+    renderGraphics: (request) =>
+      renderGraphicsTrack(request, `${origin}/stage.html`),
     captions: draftCaptions,
     audio: (projectId) => audioSettings.get(projectId),
     drafts,
@@ -1673,6 +1687,99 @@ async function start(): Promise<void> {
       throw error;
     }
   });
+  register(channels.projectManualGraphic, async (request) => {
+    assertManualGraphicRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    const { draft } = await drafts.snapshotWithProject(request.projectId);
+    if (
+      draft.draft_sequence !== request.expectedSequence ||
+      draft.timeline_sha256 !== request.expectedTimelineSha256
+    )
+      throw new UserFacingError("The draft changed. Try again.");
+    const anchor = graphicAnchor(draft.timeline.clips, request.startUs);
+    if (!anchor)
+      throw new UserFacingError(
+        "Choose a time inside the edit for the graphic.",
+      );
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "graphics.set",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "graphics" },
+            reason: request.graphicId ? "Change a graphic." : "Add a graphic.",
+            operations: [
+              {
+                type: "set_graphic",
+                graphic: {
+                  graphic_id:
+                    request.graphicId ??
+                    `graphic-${randomUUID().replaceAll("-", "")}`,
+                  name: request.name,
+                  source_id: anchor.source_id,
+                  source_us: anchor.source_us,
+                  duration_us: request.durationUs,
+                  layer: request.layer,
+                  html: request.html,
+                  css: request.css,
+                },
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.projectManualGraphicRemove, async (request) => {
+    assertManualGraphicRemoveRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "graphics.remove",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "graphics" },
+            reason: "Remove a graphic.",
+            operations: [
+              { type: "remove_graphic", graphic_id: request.graphicId },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
   register(channels.projectManualSpeed, async (request) => {
     assertManualSpeedRequest(request);
     if (activeProjectId !== request.projectId)
@@ -2098,6 +2205,11 @@ async function start(): Promise<void> {
   window.removeMenu();
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
+  // The only frame is the graphics stage; nothing may navigate it away.
+  window.webContents.on("will-frame-navigate", (event) => {
+    if (!event.isMainFrame && event.url !== `${origin}/stage.html`)
+      event.preventDefault();
+  });
   window.webContents.on("will-attach-webview", (event) =>
     event.preventDefault(),
   );

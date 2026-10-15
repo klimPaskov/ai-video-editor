@@ -78,6 +78,8 @@ import {
   assertManualZoomRequest,
   assertManualZoomRemoveRequest,
   assertManualSpeedRequest,
+  assertManualGraphicRequest,
+  assertManualGraphicRemoveRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualTranscriptCutRequest,
@@ -279,6 +281,22 @@ const bridge: DesktopBridge = {
   getPlayback: (request) => {
     assertPlaybackProjectRequest(request);
     return invoke(channels.playbackGet, request, assertPlaybackView);
+  },
+  applyManualGraphic: (request) => {
+    assertManualGraphicRequest(request);
+    return invoke(
+      channels.projectManualGraphic,
+      request,
+      assertProjectDraftView,
+    );
+  },
+  removeManualGraphic: (request) => {
+    assertManualGraphicRemoveRequest(request);
+    return invoke(
+      channels.projectManualGraphicRemove,
+      request,
+      assertProjectDraftView,
+    );
   },
   applyManualSpeed: (request) => {
     assertManualSpeedRequest(request);

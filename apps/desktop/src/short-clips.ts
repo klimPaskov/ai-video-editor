@@ -1,4 +1,12 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AudioSettings } from "../../../packages/domain/src/audio-settings.ts";
 import {
@@ -23,6 +31,7 @@ import {
 } from "../../../packages/domain/src/short-clips-view.ts";
 import { exportDraft } from "../../../packages/media-engine/src/render.ts";
 import { planDraft } from "./export.ts";
+import type { GraphicsRenderRequest, GraphicsTrack } from "./graphics-track.ts";
 import { zoomFilter } from "../../../packages/domain/src/zoom.ts";
 import type { DraftProjectReadResult } from "../../../packages/project-store/src/transactions.ts";
 
@@ -47,6 +56,10 @@ export interface ShortClipsOptions {
   chooseDestination(defaultPath: string): Promise<string | null>;
   ffmpeg?: string;
   ffprobe?: string;
+  /** Renders motion graphics into a lossless track (see export). */
+  renderGraphics?: (
+    request: GraphicsRenderRequest,
+  ) => Promise<GraphicsTrack | null>;
 }
 
 interface Stored {
@@ -205,7 +218,7 @@ export class DesktopShortClips {
     if (!chosen) return this.view(projectId);
     const outputPath =
       path.extname(chosen).toLowerCase() === ".mp4" ? chosen : `${chosen}.mp4`;
-    const { plan, zooms } = await planDraft(
+    const { plan, zooms, graphics } = await planDraft(
       this.options.drafts,
       this.options.ffprobe ?? "ffprobe",
       projectId,
@@ -244,47 +257,75 @@ export class DesktopShortClips {
       message: null,
     };
     this.job = job;
-    void exportDraft({
-      plan,
-      profile: "smaller_mp4",
-      outputPath,
-      // The save dialog asked before replacing an existing file.
-      replace: true,
-      signal: controller.signal,
-      audioCleanup: await this.options.audioSettings(projectId),
-      compose: {
-        // Zooms apply to the full frame first, then the frame is reframed.
-        filter: [
-          zoomFilter(zooms, plan.format.video.width, plan.format.video.height),
-          reframeFilter(request.format, request.framing, request.position),
-        ]
-          .filter(Boolean)
-          .join(","),
-        ...(ass !== undefined ? { ass } : {}),
-        width,
-        height,
-        pixelFormat: "yuv420p",
-        color: {
-          range: "tv",
-          space: "bt709",
-          primaries: "bt709",
-          transfer: "bt709",
-        },
-      },
-      executables: {
-        ffmpeg: this.options.ffmpeg ?? "ffmpeg",
-        ffprobe: this.options.ffprobe ?? "ffprobe",
-      },
-      onProgress: (progress) => {
-        if (this.job === job)
-          job.fraction = Math.round(progress.fraction * 1000) / 1000;
-      },
-    }).then(
-      () => {
+    const audioCleanup = await this.options.audioSettings(projectId);
+    void (async () => {
+      let scratch: string | null = null;
+      try {
+        // Graphics are drawn at the recording's size, before reframing.
+        let track: GraphicsTrack | null = null;
+        if (graphics.length) {
+          if (!this.options.renderGraphics)
+            throw new ShortClipError(shortIssues.failed);
+          scratch = await mkdtemp(
+            path.join(tmpdir(), "ai-video-editor-graphics-"),
+          );
+          track = await this.options.renderGraphics({
+            intervals: graphics,
+            width: plan.format.video.width,
+            height: plan.format.video.height,
+            frameRate: plan.format.video.frameRate,
+            frameCount: plan.frameCount,
+            directory: scratch,
+            ffmpeg: this.options.ffmpeg ?? "ffmpeg",
+            signal: controller.signal,
+          });
+        }
+        await exportDraft({
+          plan,
+          profile: "smaller_mp4",
+          outputPath,
+          // The save dialog asked before replacing an existing file.
+          replace: true,
+          signal: controller.signal,
+          audioCleanup,
+          compose: {
+            // Zooms apply to the full frame first, then graphics are drawn,
+            // then the frame is reframed.
+            filter:
+              zoomFilter(
+                zooms,
+                plan.format.video.width,
+                plan.format.video.height,
+              ) ?? "",
+            ...(track ? { graphics: track } : {}),
+            after: reframeFilter(
+              request.format,
+              request.framing,
+              request.position,
+            ),
+            ...(ass !== undefined ? { ass } : {}),
+            width,
+            height,
+            pixelFormat: "yuv420p",
+            color: {
+              range: "tv",
+              space: "bt709",
+              primaries: "bt709",
+              transfer: "bt709",
+            },
+          },
+          executables: {
+            ffmpeg: this.options.ffmpeg ?? "ffmpeg",
+            ffprobe: this.options.ffprobe ?? "ffprobe",
+          },
+          onProgress: (progress) => {
+            if (this.job === job)
+              job.fraction = Math.round(progress.fraction * 1000) / 1000;
+          },
+        });
         if (this.job === job)
           this.job = { ...job, status: "completed", fraction: null };
-      },
-      () => {
+      } catch {
         if (this.job === job)
           this.job = {
             ...job,
@@ -293,8 +334,10 @@ export class DesktopShortClips {
             fileName: null,
             message: controller.signal.aborted ? null : shortIssues.failed,
           };
-      },
-    );
+      } finally {
+        if (scratch) await rm(scratch, { recursive: true, force: true });
+      }
+    })();
     return this.view(projectId);
   }
 
