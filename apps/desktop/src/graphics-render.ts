@@ -90,6 +90,11 @@ export async function renderGraphicsTrack(
           `__sync(document, __state, ${us})`,
         )) as boolean;
         if (changed || !previous) {
+          // Let the page lay out and paint the new state before capturing;
+          // otherwise a graphic's first frame captures the previous picture.
+          await window.webContents.executeJavaScript(
+            "new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(0))))",
+          );
           window.webContents.invalidate();
           const image = await window.webContents.capturePage();
           const size = image.getSize();

@@ -213,7 +213,28 @@ try {
   assert.ok(top);
   await page.screenshot({ path: join(evidence, "captions-highlight-top.png") });
 
+  // Caption choices are draft edits: Undo and Redo change them, and the card
+  // follows the draft.
+  step = "undo-caption-choice";
+  const sequence = async () => {
+    const reply = await page.evaluate(() => window.desktop.listProjects());
+    return reply.ok ? reply.value[0]!.draft.sequence : -1;
+  };
+  await expect.poll(sequence).toBe(3);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.locator("#undo-edit").click();
+  await expect.poll(sequence).toBe(4);
+  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await expect(page.locator("#captions-position")).toHaveValue("bottom");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.locator("#redo-edit").click();
+  await expect.poll(sequence).toBe(5);
+  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await expect(page.locator("#captions-position")).toHaveValue("top");
+  result.captionChoiceUndoRedo = true;
+
   step = "cut";
+  const beforeCut = await sequence();
   // Cut the target word's whole span; its caption text must disappear.
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await seekTo(target.start_us);
@@ -221,12 +242,7 @@ try {
   await seekTo(target.end_us);
   await page.locator("#mark-out").click();
   await page.locator("#cut-range").click();
-  await expect
-    .poll(async () => {
-      const reply = await page.evaluate(() => window.desktop.listProjects());
-      return reply.ok ? reply.value[0]!.draft.sequence : -1;
-    })
-    .toBe(1);
+  await expect.poll(sequence).toBe(beforeCut + 1);
   await seekTo(target.start_us);
   await expect(overlay).toBeVisible();
   const afterCut = (await overlay.textContent()) ?? "";

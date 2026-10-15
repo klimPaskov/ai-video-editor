@@ -66,3 +66,12 @@ In progress. Implemented parts are listed below as they land.
 
 - `media.get_frames` renders 1–3 pictures at output times through the export compositor (zooms, graphics via the offscreen stage, captions as previewed) into one-frame lossless masters in a private scratch folder and returns small JPEGs (analysis only). Claude gets MCP image content and Codex `inputImage` items. The instructions now ask Claude and Codex to look before finishing and to find zoom targets from a picture.
 - Evidence: `tests/media/frame-render.test.ts` renders a real fixture through FFmpeg (unzoomed frame matches the source within JPEG error, a zoom and a caption change the picture, width scaling, out-of-range time refused; a dumped zoomed, captioned frame was visually checked), `tests/media/codex-tools.test.ts` (validation and errors), and transport tests for MCP image content and Codex input images. Graphics in pictures need the packaged app's offscreen renderer and are not covered by a host test.
+
+## Native verification in Docker (2026-10-15)
+
+The project's isolated Docker guest (`scripts/desktop_environment.py`: unprivileged UID 1000, dropped capabilities, reviewed seccomp profile, no host mounts, Xvfb) was rebuilt after the earlier WSL guest was removed from the machine. Packaged Linux Electron passed the desktop, graphics, captions, export, short-clips, zoom, speed, Magic Edit, playback and app-identity native tests.
+
+- The graphics run found a real defect: a graphic's first frame was captured before the offscreen page painted it, so frame 30 of the fixture lacked the title. It had passed before only because FFmpeg's premultiplied rounding altered that frame anyway. The renderer now waits for two animation frames after a change before capturing; all 45 graphic frames are drawn and every other frame stays bit-identical.
+- The captions test now also turns a caption choice back with Undo and forward with Redo from the Edit step and checks that the Auto Edit card follows the draft.
+
+Not covered: an assistant (Claude or Codex) adding a graphic or using `media.get_frames` in the packaged app, and Windows packaging.
