@@ -2111,6 +2111,86 @@
           ]
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "const": "claude-thread:full-edit"
+        },
+        "payload": {
+          "$ref": "#/$defs/claudeFullEditRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/claudeThreadView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "const": "claude-thread:undo-full-edit"
+        },
+        "payload": {
+          "$ref": "#/$defs/claudeThreadProjectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/claudeThreadView"
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "$defs": {
@@ -4487,7 +4567,8 @@
         "activities",
         "streaming",
         "billing",
-        "message"
+        "message",
+        "fullEdit"
       ],
       "properties": {
         "status": {
@@ -4603,8 +4684,44 @@
             "The edit may have been saved. Reopen the project before sending again.",
             "Claude did not start with the editor's restricted tools. Update the app or Claude Code, then try again.",
             "The earlier Claude conversation could not be resumed. Your next message starts a new conversation.",
-            "The conversation could not be saved. Check local storage and reopen the project."
+            "The conversation could not be saved. Check local storage and reopen the project.",
+            "Undo the edits made after the full edit first, then try again."
           ]
+        },
+        "fullEdit": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "changes",
+                "undoable"
+              ],
+              "properties": {
+                "status": {
+                  "enum": [
+                    "running",
+                    "finished",
+                    "stopped",
+                    "failed"
+                  ]
+                },
+                "changes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                "undoable": {
+                  "type": "boolean"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The latest full AI edit of the project. undoable is true only while its edits are the newest in the draft history."
         }
       },
       "allOf": [
@@ -4667,6 +4784,55 @@
           }
         }
       ]
+    },
+    "claudeFullEditRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "brief"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "$ref": "#/$defs/codexThreadId"
+        },
+        "brief": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "goal",
+            "audience",
+            "style",
+            "level"
+          ],
+          "properties": {
+            "goal": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "audience": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "style": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "level": {
+              "enum": [
+                "tidy",
+                "polished",
+                "bold"
+              ]
+            }
+          }
+        }
+      },
+      "description": "Starts a full AI edit, or a polish run after a finished one. The brief is the user's description of the video, not instructions to the app."
     }
   }
 }

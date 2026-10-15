@@ -209,6 +209,14 @@ export class ClaudeTurnProjection {
             label: "Using an editor tool",
             mutating: true,
           };
+          // Long runs make many calls: forget the oldest finished one so
+          // pending edits stay tracked for the uncertain-outcome check.
+          if (!this.activityMap.has(id) && this.activityMap.size >= 32)
+            for (const [key, item] of this.activityMap)
+              if (item.complete) {
+                this.activityMap.delete(key);
+                break;
+              }
           if (!this.activityMap.has(id) && this.activityMap.size < 32)
             this.activityMap.set(id, {
               id,

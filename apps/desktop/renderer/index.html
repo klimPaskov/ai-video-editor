@@ -150,6 +150,40 @@
               model calls; source audio and video stay on this device.
             </p>
             <button id="open-codex-thread">Open conversation</button>
+            <details id="claude-full-edit" hidden>
+              <summary>Edit the whole video</summary>
+              <form id="claude-full-edit-form">
+                <label for="full-edit-goal">What it is for</label>
+                <input
+                  id="full-edit-goal"
+                  type="text"
+                  maxlength="300"
+                  placeholder="A short product update for customers"
+                />
+                <label for="full-edit-audience">Who watches it</label>
+                <input id="full-edit-audience" type="text" maxlength="300" />
+                <label for="full-edit-style">Style</label>
+                <input
+                  id="full-edit-style"
+                  type="text"
+                  maxlength="300"
+                  placeholder="Calm and clean"
+                />
+                <label for="full-edit-level">How far to go</label>
+                <select id="full-edit-level">
+                  <option value="tidy">Tidy</option>
+                  <option value="polished" selected>Polished</option>
+                  <option value="bold">Bold</option>
+                </select>
+                <button type="submit" id="start-full-edit" class="primary">
+                  Edit with Claude
+                </button>
+              </form>
+            </details>
+            <div id="full-edit-result" hidden>
+              <span id="full-edit-changes"></span>
+              <button type="button" id="undo-full-edit">Undo all</button>
+            </div>
             <form id="codex-thread-form" hidden>
               <label for="codex-thread-input" class="visually-hidden"
                 >Request an edit</label

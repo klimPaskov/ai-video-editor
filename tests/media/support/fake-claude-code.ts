@@ -12,6 +12,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 
 const root = process.env.CLAUDE_CONFIG_DIR ?? "";
 const statePath = join(root, "fake-state.json");
@@ -46,6 +48,126 @@ const flag = (name: string) => {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : undefined;
 };
+
+/**
+ * Scripted assistant for native tests: drives the real editor MCP server named
+ * in --mcp-config the way a model would (read, add a graphic, look at it) and
+ * reports each call in the stream, so the packaged app runs the whole path
+ * without a model or an account.
+ */
+async function scriptedFullEdit(
+  allowed: string[],
+  assistant: (content: unknown[], error?: string) => void,
+  result: (ok: boolean, extra?: Record<string, unknown>) => void,
+  base: Record<string, unknown>,
+): Promise<void> {
+  const config = JSON.parse(readFileSync(flag("--mcp-config")!, "utf8")) as {
+    mcpServers: Record<
+      string,
+      { command: string; args: string[]; env: Record<string, string> }
+    >;
+  };
+  const [serverName, server] = Object.entries(config.mcpServers)[0]!;
+  const projectId = /The active project_id is "([^"]+)"/u.exec(
+    flag("--system-prompt") ?? "",
+  )?.[1];
+  if (!projectId) throw new Error("no project id in the system prompt");
+  const child = spawn(server.command, server.args, {
+    env: { ...process.env, ...server.env },
+    stdio: ["pipe", "pipe", "ignore"],
+  });
+  const lines = createInterface({ input: child.stdout });
+  const pending = new Map<number, (value: Record<string, unknown>) => void>();
+  lines.on("line", (line) => {
+    const reply = JSON.parse(line) as Record<string, unknown>;
+    pending.get(reply.id as number)?.(reply);
+  });
+  let next = 0;
+  const rpc = (method: string, params: unknown) =>
+    new Promise<Record<string, unknown>>((resolve) => {
+      const id = ++next;
+      pending.set(id, resolve);
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`,
+      );
+    });
+  await rpc("initialize", { protocolVersion: "2025-06-18" });
+  const call = async (name: string, input: Record<string, unknown>) => {
+    const wire = `mcp__${serverName}__${name.replaceAll(".", "_")}`;
+    if (!allowed.includes(wire)) throw new Error(`not allowed: ${wire}`);
+    const id = `toolu_${next + 1}`;
+    assistant([{ type: "tool_use", id, name: wire, input }]);
+    const reply = (await rpc("tools/call", { name, arguments: input }))
+      .result as { content: Array<Record<string, unknown>>; isError: boolean };
+    out({
+      type: "user",
+      ...base,
+      message: {
+        role: "user",
+        content: [
+          { type: "tool_result", tool_use_id: id, content: reply.content },
+        ],
+      },
+    });
+    if (reply.isError) throw new Error(`${name} failed`);
+    return reply.content;
+  };
+  const summary = JSON.parse(
+    (
+      await call("timeline.get_summary", {
+        schema_version: "1.0",
+        project_id: projectId,
+      })
+    )[0]!.text as string,
+  ) as Record<string, unknown>;
+  const head = {
+    schema_version: "1.0",
+    request_id: `scripted-${Date.now()}`,
+    project_id: projectId,
+    draft_id: summary.draft_id,
+    base_revision_id: summary.base_revision_id,
+    expected_sequence: summary.draft_sequence,
+    expected_timeline_sha256: summary.timeline_sha256,
+    reason: "Add an opening title.",
+  };
+  await call("graphics.set", {
+    ...head,
+    pass_group_id: "scripted-graphics",
+    start_us: 0,
+    duration_us: 1_000_000,
+    name: "Opening title",
+    layer: 1,
+    html: '<h1 class="t">Scripted title</h1>',
+    css: ".t { position: absolute; left: 24px; top: 24px; margin: 0; font: 700 28px sans-serif; color: #fff; background: rgb(30 90 200); padding: 6px 12px }",
+  });
+  const pictures = await call("media.get_frames", {
+    schema_version: "1.0",
+    project_id: projectId,
+    times_us: [500_000],
+    max_width: 320,
+  });
+  const image = pictures.find((item) => item.type === "image");
+  appendFileSync(
+    logPath,
+    `${JSON.stringify({
+      scriptedPicture: {
+        mimeType: image?.mimeType ?? null,
+        bytes:
+          typeof image?.data === "string"
+            ? Buffer.from(image.data, "base64").length
+            : 0,
+      },
+    })}\n`,
+  );
+  if (typeof image?.data === "string")
+    writeFileSync(
+      join(root, "scripted-picture.jpg"),
+      Buffer.from(image.data, "base64"),
+    );
+  child.stdin.end();
+  assistant([{ type: "text", text: "Added an opening title and checked it." }]);
+  result(true);
+}
 
 if (args[0] === "--version") {
   process.stdout.write("2.1.285 (Claude Code)\n");
@@ -240,6 +362,22 @@ if (args[0] === "--version") {
           });
           assistant([{ type: "text", text: "Split the clip." }]);
           result(true);
+        } else if (kind === "scripted_full_edit") {
+          void scriptedFullEdit(allowed, assistant, result, base).catch(
+            (error: unknown) => {
+              appendFileSync(
+                logPath,
+                `${JSON.stringify({ scriptedError: String(error).slice(0, 200) })}\n`,
+              );
+              result(false);
+            },
+          );
+        } else if (kind === "slow_reply") {
+          // Lets a test record commits while the turn is still running.
+          setTimeout(() => {
+            assistant([{ type: "text", text: "Edited the video." }]);
+            result(true);
+          }, 600);
         } else {
           for (const text of ["Hel", "lo"])
             out({

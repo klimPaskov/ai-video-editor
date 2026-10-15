@@ -33,6 +33,7 @@ import {
   claudeTurnArguments,
 } from "../../packages/claude-bridge/src/turn.ts";
 import {
+  assertClaudeFullEditRequest,
   assertClaudeThreadView,
   assertClaudeView,
   claudeIssues,
@@ -421,8 +422,13 @@ async function waitFor<T>(
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function harness(root: string, missing = false) {
+async function harness(
+  root: string,
+  missing = false,
+  history?: ConstructorParameters<typeof DesktopClaude>[1]["history"],
+) {
   return new DesktopClaude(root, {
+    ...(history ? { history } : {}),
     platform: process.platform,
     env: {
       ...process.env,
@@ -737,6 +743,7 @@ test("domain assertions reject leaked or inconsistent Claude state", () => {
     streaming: null,
     billing: null,
     message: null,
+    fullEdit: null,
   };
   assertClaudeThreadView(closed);
   for (const bad of [
@@ -746,4 +753,145 @@ test("domain assertions reject leaked or inconsistent Claude state", () => {
     { ...closed, sessionId: "11111111-2222-4333-8444-555555555555" },
   ])
     assert.throws(() => assertClaudeThreadView(bad), JSON.stringify(bad));
+});
+
+test("a full edit runs with the playbook, records its edits and undoes them together", async () => {
+  const root = await mkdtemp(join(tmpdir(), "claude-full-edit-"));
+  const config = join(root, "claude", "claude-code");
+  // The draft history: newest applied transaction last.
+  const applied: string[] = ["manual-before"];
+  const undone: string[] = [];
+  const history = {
+    newest: async () => applied.at(-1) ?? null,
+    undo: async (_project: string, id: string) => {
+      assert.equal(applied.at(-1), id);
+      applied.pop();
+      undone.push(id);
+    },
+  };
+  try {
+    const claude = await harness(root, false, history);
+    await claude.check();
+    await claude.signIn();
+    await waitFor(
+      () => claude.get(),
+      (v) => v.status === "signed_in",
+      "sign-in",
+    );
+    const project = "project-full-001";
+    await claude.openThread(project);
+    await writeFile(
+      join(config, "fake-scenario.json"),
+      JSON.stringify({ kind: "slow_reply" }),
+    );
+    const brief = {
+      goal: "Weekly update",
+      audience: "",
+      style: "Calm",
+      level: "polished" as const,
+    };
+    let view = await claude.startFullEdit(project, brief);
+    assertClaudeThreadView(view);
+    assert.equal(view.status, "running");
+    assert.deepEqual(view.fullEdit, {
+      status: "running",
+      changes: 0,
+      undoable: false,
+    });
+    assert.equal(
+      view.messages.at(-1)?.text,
+      "Edit with Claude · Polished · Weekly update",
+    );
+    // Main reports what the run's tools committed; other ids are ignored.
+    for (const id of ["claude-tx-1", "claude-tx-2", "claude-tx-1", "../bad"]) {
+      claude.recordCommit(project, id);
+      if (id.startsWith("claude") && !applied.includes(id)) applied.push(id);
+    }
+    view = await waitFor(
+      () => claude.getThreadWithHistory(project),
+      (v) => v.status === "ready",
+      "full edit",
+    );
+    assert.deepEqual(view.fullEdit, {
+      status: "finished",
+      changes: 2,
+      undoable: true,
+    });
+    const args = (await readFile(join(config, "fake-log.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { args: string[] })
+      .filter((entry) => entry.args.includes("--max-turns"))
+      .at(-1)!.args;
+    assert.equal(args[args.indexOf("--max-turns") + 1], "150");
+    assert.match(
+      args[args.indexOf("--system-prompt") + 1]!,
+      /Full edit playbook/u,
+    );
+    // Outside a full edit nothing is recorded.
+    claude.recordCommit(project, "claude-tx-later");
+    assert.equal(
+      (await claude.getThreadWithHistory(project)).fullEdit?.changes,
+      2,
+    );
+
+    // A later manual edit on top blocks Undo all until it is undone.
+    applied.push("manual-after");
+    view = await claude.getThreadWithHistory(project);
+    assert.equal(view.fullEdit?.undoable, false);
+    view = await claude.undoFullEdit(project);
+    assert.equal(view.message, claudeThreadIssues.undoLater);
+    assert.deepEqual(undone, []);
+    applied.pop();
+    view = await claude.undoFullEdit(project);
+    assert.deepEqual(undone, ["claude-tx-2", "claude-tx-1"]);
+    assert.deepEqual(applied, ["manual-before"]);
+    assert.deepEqual(view.fullEdit, {
+      status: "finished",
+      changes: 0,
+      undoable: false,
+    });
+    assert.equal(view.message, null);
+
+    // The next run is a polish run, and the record survives a restart.
+    view = await claude.startFullEdit(project, { ...brief, level: "tidy" });
+    assert.equal(
+      view.messages.at(-1)?.text,
+      "Polish with Claude · Tidy · Weekly update",
+    );
+    await waitFor(
+      () => claude.getThreadWithHistory(project),
+      (v) => v.status === "ready",
+      "polish",
+    );
+    await claude.closeThread(project);
+    const reopened = await (
+      await harness(root, false, history)
+    ).openThread(project);
+    assert.equal(reopened.fullEdit?.status, "finished");
+    await claude.close();
+  } finally {
+    await rm(root, {
+      recursive: true,
+      force: true,
+      maxRetries: 20,
+      retryDelay: 100,
+    });
+  }
+});
+
+test("a full edit request rejects an oversized or unknown brief", () => {
+  const request = {
+    schema_version: "1.0",
+    project_id: "project-001",
+    brief: { goal: "", audience: "", style: "", level: "polished" },
+  };
+  assertClaudeFullEditRequest(request);
+  for (const bad of [
+    { ...request, brief: { ...request.brief, level: "wild" } },
+    { ...request, brief: { ...request.brief, goal: "x".repeat(301) } },
+    { ...request, brief: { ...request.brief, extra: "" } },
+    { ...request, project_id: "../p" },
+  ])
+    assert.throws(() => assertClaudeFullEditRequest(bad));
 });

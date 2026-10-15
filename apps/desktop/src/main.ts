@@ -1,6 +1,7 @@
 import { DesktopCodex } from "./codex.ts";
 import { ClaudeUserError, DesktopClaude } from "./claude.ts";
 import {
+  assertClaudeFullEditRequest,
   assertClaudeThreadProjectRequest,
   assertClaudeThreadSendRequest,
   assertClaudeThreadView,
@@ -1100,7 +1101,7 @@ async function start(): Promise<void> {
   const invokeClaudeTool = async (name: unknown, input: unknown) => {
     if (!activeProjectId) throw new CodexVideoEditToolError("inactive_project");
     const projectId = activeProjectId;
-    return invokeWithProjectDraftRefresh({
+    const value = await invokeWithProjectDraftRefresh({
       toolName: name,
       projectId,
       activeProjectId: () => activeProjectId,
@@ -1115,6 +1116,17 @@ async function start(): Promise<void> {
       drafts,
       notify: publishDraftNotice,
     });
+    // A full edit's Undo all needs every transaction its tools committed.
+    if (
+      value &&
+      typeof value === "object" &&
+      (value as { status?: unknown }).status === "committed"
+    )
+      claude?.recordCommit(
+        projectId,
+        (value as { transaction_id?: unknown }).transaction_id,
+      );
+    return value;
   };
   claudeBroker = await CodexMcpBroker.open(
     path.join(userData, "claude-mcp-runtime"),
@@ -1129,6 +1141,32 @@ async function start(): Promise<void> {
     env: process.env,
     openExternal: (url) => shell.openExternal(url),
     mcpRuntime: () => claudeMcpRuntime,
+    history: {
+      newest: async (projectId) =>
+        (await drafts.snapshot(projectId)).undo_transaction_id,
+      undo: async (projectId, transactionId) => {
+        const { draft } = await drafts.snapshot(projectId);
+        await invokeWithProjectDraftRefresh({
+          toolName: "timeline.undo",
+          projectId,
+          activeProjectId: () => activeProjectId,
+          drafts,
+          notify: publishDraftNotice,
+          work: () =>
+            drafts.undoManual({
+              schema_version: "1.0",
+              request_id: randomUUID(),
+              project_id: projectId,
+              draft_id: draft.draft_id,
+              base_revision_id: draft.base_revision_id,
+              expected_sequence: draft.draft_sequence,
+              expected_timeline_sha256: draft.timeline_sha256,
+              target_transaction_id: transactionId,
+              reason: "Undo the full AI edit.",
+            }),
+        });
+      },
+    },
   });
   const apiClient = new ApiProviderClient();
   const apiProviders = new DesktopApiProviders(
@@ -1432,9 +1470,32 @@ async function start(): Promise<void> {
   register(channels.claudeThreadGet, async (request) => {
     assertClaudeThreadProjectRequest(request);
     await activeCodexProject(request.project_id);
-    const value = claude!.getThread(request.project_id);
+    const value = await claude!.getThreadWithHistory(request.project_id);
     assertClaudeThreadView(value);
     return value;
+  });
+  register(channels.claudeFullEditStart, async (request) => {
+    assertClaudeFullEditRequest(request);
+    await activeCodexProject(request.project_id);
+    const value = await claude!.startFullEdit(
+      request.project_id,
+      request.brief,
+    );
+    assertClaudeThreadView(value);
+    return value;
+  });
+  register(channels.claudeFullEditUndo, async (request) => {
+    assertClaudeThreadProjectRequest(request);
+    await activeCodexProject(request.project_id);
+    try {
+      const value = await claude!.undoFullEdit(request.project_id);
+      assertClaudeThreadView(value);
+      return value;
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
   });
   register(channels.claudeThreadOpen, async (request) => {
     assertClaudeThreadProjectRequest(request);

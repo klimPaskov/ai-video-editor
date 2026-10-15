@@ -9,6 +9,7 @@ import {
   claudeIssues,
   claudeThreadIssues,
   maxClaudeThreadMessages,
+  type ClaudeFullEditBrief,
   type ClaudeSelection,
   type ClaudeThreadView,
   type ClaudeView,
@@ -27,6 +28,11 @@ import {
   type ClaudeRuntime,
 } from "../../../packages/claude-bridge/src/cli.ts";
 import { ClaudeTurn } from "../../../packages/claude-bridge/src/turn.ts";
+import {
+  fullEditLabel,
+  fullEditPlaybook,
+  fullEditRequest,
+} from "./full-edit-playbook.ts";
 import { codexVideoEditToolNames } from "../../../packages/codex-tools/src/service.ts";
 import type { CodexMcpRuntime } from "../../../packages/codex-tools/src/broker.ts";
 
@@ -62,6 +68,12 @@ type ThreadMessage = ClaudeThreadView["messages"][number];
 /** A fixed, user-facing refusal that main may show unchanged. */
 export class ClaudeUserError extends Error {}
 
+interface StoredFullEdit {
+  status: "running" | "finished" | "stopped" | "failed";
+  /** Transactions the run's tools committed and Undo all has not reverted. */
+  transactionIds: string[];
+}
+
 interface StoredThread {
   schema_version: "1.0";
   projectId: string;
@@ -70,19 +82,36 @@ interface StoredThread {
   status: "ready" | "failed";
   messages: ThreadMessage[];
   message: string | null;
+  /** Absent in files written before full edits existed. */
+  fullEdit?: StoredFullEdit | null;
 }
 
 interface Session {
   stored: StoredThread;
   view: ClaudeThreadView;
   turn: ClaudeTurn | null;
+  /** True while the running turn is a full edit whose commits are recorded. */
+  fullEditRunning: boolean;
 }
+
+/** Draft history access for a full edit's Undo all; main supplies it. */
+export interface ClaudeDraftHistory {
+  /** The newest applied transaction, or null when nothing can be undone. */
+  newest(projectId: string): Promise<string | null>;
+  /** Undoes exactly that newest transaction as a manual edit. */
+  undo(projectId: string, transactionId: string): Promise<void>;
+}
+
+const fullEditMaxTurns = 150;
+const transactionIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
 
 export interface DesktopClaudeOptions {
   platform: NodeJS.Platform;
   env: NodeJS.ProcessEnv;
   openExternal: (url: string) => Promise<void>;
   mcpRuntime: () => CodexMcpRuntime;
+  /** Draft history for Undo all; without it a full edit cannot be undone. */
+  history?: ClaudeDraftHistory;
   /** Test seam; production resolves the user's installed Claude Code. */
   resolveRuntime?: (input: {
     cwd: string;
@@ -527,8 +556,10 @@ export class DesktopClaude {
         streaming: null,
         billing: null,
         message: record.message as string | null,
+        fullEdit: null,
       };
       assertClaudeThreadView(view);
+      const fullEdit = DesktopClaude.storedFullEdit(record.fullEdit);
       if (
         record.schema_version !== "1.0" ||
         record.projectId !== projectId ||
@@ -546,6 +577,7 @@ export class DesktopClaude {
         status: view.status,
         messages: view.messages,
         message: view.message,
+        fullEdit,
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
@@ -557,14 +589,77 @@ export class DesktopClaude {
         status: "ready",
         messages: [],
         message: null,
+        fullEdit: null,
       };
     }
   }
 
-  private threadView(session: Session): ClaudeThreadView {
+  private static storedFullEdit(value: unknown): StoredFullEdit | null {
+    if (value === undefined || value === null) return null;
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new Error("Invalid conversation file");
+    const run = value as Record<string, unknown>;
+    if (
+      !["running", "finished", "stopped", "failed"].includes(
+        run.status as string,
+      ) ||
+      !Array.isArray(run.transactionIds) ||
+      run.transactionIds.length > 10_000 ||
+      run.transactionIds.some(
+        (id) => typeof id !== "string" || !transactionIdPattern.test(id),
+      )
+    )
+      throw new Error("Invalid conversation file");
+    // A run that was going when the app closed ended there.
+    return {
+      status:
+        run.status === "running"
+          ? "stopped"
+          : (run.status as StoredFullEdit["status"]),
+      transactionIds: [...(run.transactionIds as string[])],
+    };
+  }
+
+  /** The run's projection; `undoable` needs the draft head. */
+  private fullEditView(
+    session: Session,
+    newest: string | null | undefined,
+  ): ClaudeThreadView["fullEdit"] {
+    const run = session.stored.fullEdit;
+    if (!run) return null;
+    const changes = run.transactionIds.length;
+    return {
+      status: session.fullEditRunning ? "running" : run.status,
+      changes,
+      undoable:
+        !session.fullEditRunning &&
+        changes > 0 &&
+        newest !== undefined &&
+        newest !== null &&
+        run.transactionIds.includes(newest),
+    };
+  }
+
+  private threadView(
+    session: Session,
+    newest?: string | null,
+  ): ClaudeThreadView {
     const copy = structuredClone(session.view);
+    copy.fullEdit = this.fullEditView(session, newest);
     assertClaudeThreadView(copy);
     return copy;
+  }
+
+  /** The thread with `fullEdit.undoable` checked against the draft head. */
+  async getThreadWithHistory(projectId: string): Promise<ClaudeThreadView> {
+    const session = this.sessions.get(projectId);
+    if (!session) return DesktopClaude.closedThread();
+    let newest: string | null | undefined;
+    if (session.stored.fullEdit?.transactionIds.length && this.options.history)
+      newest = await this.options.history
+        .newest(projectId)
+        .catch(() => undefined);
+    return this.threadView(session, newest);
   }
 
   private static closedThread(): ClaudeThreadView {
@@ -576,6 +671,7 @@ export class DesktopClaude {
       streaming: null,
       billing: null,
       message: null,
+      fullEdit: null,
     };
   }
 
@@ -595,6 +691,7 @@ export class DesktopClaude {
     const session: Session = {
       stored,
       turn: null,
+      fullEditRunning: false,
       view: {
         status: stored.status,
         projectId,
@@ -603,10 +700,11 @@ export class DesktopClaude {
         streaming: null,
         billing: this.view.account?.billing ?? null,
         message: stored.message,
+        fullEdit: null,
       },
     };
     this.sessions.set(projectId, session);
-    return this.threadView(session);
+    return this.getThreadWithHistory(projectId);
   }
 
   private async writeMcpConfig(): Promise<string> {
@@ -633,6 +731,81 @@ export class DesktopClaude {
   }
 
   async sendThread(projectId: string, text: string): Promise<ClaudeThreadView> {
+    const session = this.readySession(projectId);
+    if (typeof text !== "string" || !text.trim() || text.length > 16 * 1024)
+      throw new ClaudeUserError("Enter a message of up to 16,384 characters.");
+    return this.startTurn(session, {
+      shown: text,
+      text: text.trim(),
+      systemPrompt: claudeEditorInstructions(session.stored.projectId),
+      maxTurns,
+      fullEdit: false,
+    });
+  }
+
+  /**
+   * Starts a full AI edit (or a polish run after a finished one): one long
+   * run with the editing playbook. Its committed edits are recorded so Undo
+   * all can revert them together while they are the newest in the draft.
+   */
+  async startFullEdit(
+    projectId: string,
+    brief: ClaudeFullEditBrief,
+  ): Promise<ClaudeThreadView> {
+    const session = this.readySession(projectId);
+    const polish = session.stored.fullEdit?.status === "finished";
+    return this.startTurn(session, {
+      shown: fullEditLabel(brief, polish),
+      text: fullEditRequest(brief, polish),
+      systemPrompt: `${claudeEditorInstructions(projectId)}\n\n${fullEditPlaybook}`,
+      maxTurns: fullEditMaxTurns,
+      fullEdit: true,
+    });
+  }
+
+  /** Main reports each committed Claude transaction during a turn. */
+  recordCommit(projectId: string, transactionId: unknown): void {
+    const session = this.sessions.get(projectId);
+    const run = session?.stored.fullEdit;
+    if (
+      !session?.fullEditRunning ||
+      !run ||
+      typeof transactionId !== "string" ||
+      !transactionIdPattern.test(transactionId) ||
+      run.transactionIds.includes(transactionId) ||
+      run.transactionIds.length >= 10_000
+    )
+      return;
+    run.transactionIds.push(transactionId);
+  }
+
+  /** Reverts the run's edits, newest first, while they are the newest. */
+  async undoFullEdit(projectId: string): Promise<ClaudeThreadView> {
+    const session = this.sessions.get(projectId);
+    const run = session?.stored.fullEdit;
+    const history = this.options.history;
+    if (!session || session.turn || !run || !history)
+      throw new ClaudeUserError("There is no full edit to undo.");
+    let undone = 0;
+    for (;;) {
+      const newest = await history.newest(projectId);
+      if (!newest || !run.transactionIds.includes(newest)) break;
+      await history.undo(projectId, newest);
+      run.transactionIds = run.transactionIds.filter((id) => id !== newest);
+      undone++;
+    }
+    if (undone === 0 && run.transactionIds.length > 0) {
+      session.view.message = claudeThreadIssues.undoLater;
+      return this.getThreadWithHistory(projectId);
+    }
+    // What is left was already undone another way or lies under later edits.
+    run.transactionIds = [];
+    session.view.message = null;
+    await this.persist(session);
+    return this.getThreadWithHistory(projectId);
+  }
+
+  private readySession(projectId: string): Session {
     const session = this.sessions.get(projectId);
     if (
       !session ||
@@ -640,8 +813,20 @@ export class DesktopClaude {
       (session.view.status !== "ready" && session.view.status !== "failed")
     )
       throw new ClaudeUserError("Open the Claude conversation before sending.");
-    if (typeof text !== "string" || !text.trim() || text.length > 16 * 1024)
-      throw new ClaudeUserError("Enter a message of up to 16,384 characters.");
+    return session;
+  }
+
+  private async startTurn(
+    session: Session,
+    input: {
+      shown: string;
+      text: string;
+      systemPrompt: string;
+      maxTurns: number;
+      fullEdit: boolean;
+    },
+  ): Promise<ClaudeThreadView> {
+    const text = input.shown;
     const selection = this.view.selection;
     const runtime = this.runtime;
     const issue =
@@ -668,6 +853,10 @@ export class DesktopClaude {
       session.view.message = issue;
       await this.persist(session);
       return this.threadView(session);
+    }
+    if (input.fullEdit) {
+      session.stored.fullEdit = { status: "running", transactionIds: [] };
+      session.fullEditRunning = true;
     }
     session.view.status = "running";
     session.view.message = null;
@@ -705,11 +894,11 @@ export class DesktopClaude {
         allowedTools: claudeEditorTools,
         model: selection.model,
         effort: selection.effort,
-        systemPrompt: claudeEditorInstructions(projectId),
+        systemPrompt: input.systemPrompt,
         sessionId: session.stored.sessionId,
         resume,
-        text: text.trim(),
-        maxTurns,
+        text: input.text,
+        maxTurns: input.maxTurns,
         onUpdate: () => {
           if (session.turn !== turn) return;
           session.view.streaming = turn.projection.streaming;
@@ -723,6 +912,9 @@ export class DesktopClaude {
       session.view.status = "failed";
       session.view.streaming = null;
       session.view.message = claudeThreadIssues.failed;
+      if (input.fullEdit && session.stored.fullEdit)
+        session.stored.fullEdit.status = "failed";
+      session.fullEditRunning = false;
       await this.persist(session);
       return this.threadView(session);
     }
@@ -749,6 +941,14 @@ export class DesktopClaude {
       session.view.status = outcome.kind === "completed" ? "ready" : "failed";
       session.view.message =
         outcome.kind === "completed" ? null : claudeThreadIssues[outcome.issue];
+      if (input.fullEdit && session.stored.fullEdit)
+        session.stored.fullEdit.status =
+          outcome.kind === "completed"
+            ? "finished"
+            : outcome.issue === "stopped" || outcome.issue === "uncertain"
+              ? "stopped"
+              : "failed";
+      session.fullEditRunning = false;
       session.turn = null;
       if (outcome.kind === "failed" && outcome.issue === "signIn")
         void this.refresh();

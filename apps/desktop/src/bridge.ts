@@ -96,6 +96,7 @@ import type {
 } from "../../../packages/domain/src/transcription.ts";
 
 import type {
+  ClaudeFullEditRequest,
   ClaudeSelection,
   ClaudeThreadProjectRequest,
   ClaudeThreadSendRequest,
@@ -122,6 +123,12 @@ export interface DesktopBridge {
     request: ClaudeThreadSendRequest,
   ): Promise<Reply<ClaudeThreadView>>;
   interruptClaudeThread(
+    request: ClaudeThreadProjectRequest,
+  ): Promise<Reply<ClaudeThreadView>>;
+  startClaudeFullEdit(
+    request: ClaudeFullEditRequest,
+  ): Promise<Reply<ClaudeThreadView>>;
+  undoClaudeFullEdit(
     request: ClaudeThreadProjectRequest,
   ): Promise<Reply<ClaudeThreadView>>;
   getApiThread(request: ApiThreadProjectRequest): Promise<Reply<ApiThreadView>>;
@@ -318,6 +325,8 @@ export const channels = Object.freeze({
   claudeThreadOpen: "claude-thread:open",
   claudeThreadSend: "claude-thread:send",
   claudeThreadInterrupt: "claude-thread:interrupt",
+  claudeFullEditStart: "claude-thread:full-edit",
+  claudeFullEditUndo: "claude-thread:undo-full-edit",
   apiThreadGet: "api-thread:get",
   apiThreadOpen: "api-thread:open",
   apiThreadSend: "api-thread:send",

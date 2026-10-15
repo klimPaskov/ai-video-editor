@@ -716,6 +716,30 @@ dd {
   color: var(--accent-text);
   font-size: 13px;
 }
+#claude-full-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#claude-full-edit-form label {
+  font-size: 12px;
+  color: var(--text-2);
+}
+#claude-full-edit-form button {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+#full-edit-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+#full-edit-result[hidden] {
+  display: none;
+}
 #codex-thread-messages {
   flex: 1 0 120px;
   min-height: 120px;

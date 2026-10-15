@@ -3138,6 +3138,7 @@ function renderClaudeThread(view: ClaudeThreadView): void {
   }
   activity.hidden = activity.childElementCount === 0;
   element("claude-api-notice").hidden = view.billing !== "api";
+  renderFullEdit(view);
   element<HTMLButtonElement>("open-codex-thread").hidden =
     view.status !== "closed";
   element<HTMLFormElement>("codex-thread-form").hidden =
@@ -3159,6 +3160,27 @@ function renderClaudeThread(view: ClaudeThreadView): void {
   issue.hidden = !issue.textContent;
   if (nextIssue && revealIssue) issue.scrollIntoView({ block: "nearest" });
   messages.scrollTop = messages.scrollHeight;
+}
+/** The whole-video edit controls under the Claude conversation. */
+function renderFullEdit(view: ClaudeThreadView): void {
+  const idle = view.status === "ready" || view.status === "failed";
+  const section = element<HTMLDetailsElement>("claude-full-edit");
+  section.hidden = !claudeSelected() || !idle;
+  element("start-full-edit").textContent =
+    view.fullEdit?.status === "finished"
+      ? "Polish with Claude"
+      : "Edit with Claude";
+  const run = view.fullEdit;
+  const result = element("full-edit-result");
+  result.hidden = !claudeSelected() || !idle || !run || run.changes === 0;
+  element("full-edit-changes").textContent = run
+    ? `Full edit: ${run.changes} ${run.changes === 1 ? "change" : "changes"}`
+    : "";
+  const undo = element<HTMLButtonElement>("undo-full-edit");
+  undo.hidden = !run?.undoable;
+  undo.disabled = !run?.undoable;
+  if (view.status === "running" && run?.status === "running")
+    element("codex-thread-status").textContent = "Claude is editing the video…";
 }
 function renderAssistantReply(
   route: string,
@@ -3189,11 +3211,70 @@ assistantProvider.addEventListener("change", () => {
   clearAssistantDisplay();
   if (!codexDrawer.hidden) void pollCodex(++codexPollGeneration);
 });
+element<HTMLFormElement>("claude-full-edit-form").addEventListener(
+  "submit",
+  async (event) => {
+    event.preventDefault();
+    const project = activeProject;
+    if (
+      !project ||
+      !claudeSelected() ||
+      (claudeThreadView?.status !== "ready" &&
+        claudeThreadView?.status !== "failed")
+    )
+      return;
+    const value = (id: string) => element<HTMLInputElement>(id).value.trim();
+    const reply = await window.desktop.startClaudeFullEdit({
+      schema_version: "1.0",
+      project_id: project.id,
+      brief: {
+        goal: value("full-edit-goal"),
+        audience: value("full-edit-audience"),
+        style: value("full-edit-style"),
+        level: element<HTMLSelectElement>("full-edit-level").value as
+          "tidy" | "polished" | "bold",
+      },
+    });
+    if (activeProject?.id !== project.id || !claudeSelected()) return;
+    if (reply.ok) {
+      element<HTMLDetailsElement>("claude-full-edit").open = false;
+      renderClaudeThread(reply.value);
+    } else {
+      const issue = element("codex-thread-error");
+      issue.textContent = reply.message;
+      issue.hidden = false;
+    }
+  },
+);
+element<HTMLButtonElement>("undo-full-edit").addEventListener(
+  "click",
+  async () => {
+    const project = activeProject;
+    if (!project || !claudeSelected() || !claudeThreadView?.fullEdit?.undoable)
+      return;
+    const button = element<HTMLButtonElement>("undo-full-edit");
+    button.disabled = true;
+    const reply = await window.desktop.undoClaudeFullEdit({
+      schema_version: "1.0",
+      project_id: project.id,
+    });
+    if (activeProject?.id !== project.id || !claudeSelected()) return;
+    if (reply.ok) renderClaudeThread(reply.value);
+    else {
+      button.disabled = false;
+      const issue = element("codex-thread-error");
+      issue.textContent = reply.message;
+      issue.hidden = false;
+    }
+  },
+);
 function syncAssistantNotices(): void {
   element("api-turn-notice").hidden = selectedApiProvider() === null;
   element("codex-context-notice").hidden = assistantRoute() !== "codex";
   element("claude-context-notice").hidden = !claudeSelected();
   element("claude-api-notice").hidden = true;
+  element("claude-full-edit").hidden = true;
+  element("full-edit-result").hidden = true;
 }
 function setCodexDrawer(open: boolean): void {
   codexDrawer.hidden = !open;
@@ -3303,6 +3384,7 @@ element("open-codex-thread").addEventListener("click", async () => {
         streaming: null,
         billing: null,
         message: null,
+        fullEdit: null,
       });
     else if (provider)
       renderApiThread({

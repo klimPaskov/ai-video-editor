@@ -3,6 +3,7 @@ import {
   assertCodexSelection,
 } from "../../../packages/domain/src/codex-view.ts";
 import {
+  assertClaudeFullEditRequest,
   assertClaudeSelection,
   assertClaudeThreadProjectRequest,
   assertClaudeThreadSendRequest,
@@ -239,6 +240,18 @@ const bridge: DesktopBridge = {
       request,
       assertClaudeThreadView,
     );
+  },
+  startClaudeFullEdit: (request) => {
+    assertClaudeFullEditRequest(request);
+    return invoke(
+      channels.claudeFullEditStart,
+      request,
+      assertClaudeThreadView,
+    );
+  },
+  undoClaudeFullEdit: (request) => {
+    assertClaudeThreadProjectRequest(request);
+    return invoke(channels.claudeFullEditUndo, request, assertClaudeThreadView);
   },
   getCodex: () => invoke(channels.codexGet, undefined, assertCodexView),
   reconnectCodex: () =>
