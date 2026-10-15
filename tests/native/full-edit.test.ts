@@ -248,9 +248,11 @@ try {
   await expect(page.locator(".timeline-graphic")).toHaveCount(0, {
     timeout: 30_000,
   });
+  // Everything is undone, so the next run is a fresh full edit.
   await expect
-    .poll(async () => (await thread()).fullEdit?.changes, { timeout: 30_000 })
-    .toBe(0);
+    .poll(async () => (await thread()).fullEdit, { timeout: 30_000 })
+    .toBe(null);
+  await expect(page.locator("#start-full-edit")).toHaveText("Edit with Claude");
   const after = await records();
   assert.deepEqual(after.at(-1) && [after.at(-1)!.origin, after.at(-1)!.kind], [
     "manual",

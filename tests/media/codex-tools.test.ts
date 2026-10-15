@@ -1851,4 +1851,19 @@ test("media.get_frames validates times and returns the renderer's pictures", asy
       (error as CodexVideoEditToolError).code === "frame_unavailable" &&
       !error.message.includes("ffmpeg"),
   );
+  // An edit that lands while the pictures render makes them stale.
+  await assert.rejects(
+    new CodexVideoEditToolService(
+      projectId,
+      drafts,
+      "claude",
+      undefined,
+      async (id, times, width) => {
+        const snapshot = await drafts.snapshot(projectId);
+        await claude.invoke("cut.split", splitInput(snapshot.draft));
+        return renderer(id, times, width);
+      },
+    ).invoke("media.get_frames", { ...input, times_us: [0] }),
+    expectCode("stale_draft"),
+  );
 });

@@ -1241,6 +1241,15 @@ export class CodexVideoEditToolService {
     } catch {
       reject("frame_unavailable");
     }
+    // The pictures are of the reported state only if nothing changed while
+    // they were rendered (rendering waits behind other picture requests).
+    const after = (await this.drafts.snapshot(this.activeProjectId)).draft;
+    if (
+      after.draft_id !== draft.draft_id ||
+      after.draft_sequence !== draft.draft_sequence ||
+      after.timeline_sha256 !== draft.timeline_sha256
+    )
+      reject("stale_draft");
     return {
       schema_version: "1.0",
       project_id: this.activeProjectId,
