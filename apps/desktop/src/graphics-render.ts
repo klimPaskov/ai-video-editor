@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { syncStage } from "../renderer/stage-control.ts";
 import {
   graphicsSegments,
+  unpremultiplyBgra,
   type GraphicsRenderRequest,
   type GraphicsTrack,
 } from "./graphics-track.ts";
@@ -99,7 +100,7 @@ export async function renderGraphicsTrack(
             bitmap.length !== width * height * 4
           )
             throw new Error("The graphics could not be rendered at full size.");
-          previous = bitmap;
+          previous = unpremultiplyBgra(bitmap);
         }
         await write(encoder, previous);
         done++;

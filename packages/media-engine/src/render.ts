@@ -637,7 +637,7 @@ export interface ExportComposition {
   filter: string;
   /**
    * Motion graphics drawn over the frames after `filter`: per segment, an
-   * FFV1 BGRA file with premultiplied alpha holding exactly the frames
+   * FFV1 BGRA file with straight alpha holding exactly the frames
    * [startFrame, startFrame + frameCount). Frames outside the segments are
    * not touched.
    */
@@ -1142,7 +1142,7 @@ export async function exportDraft(
         for (const [index, segment] of graphics.segments.entries()) {
           chains.push(
             `[${index + 1}:v]${graphicsTiming(segment.startFrame, video.frameRate)}[gfx${index}]`,
-            `[${label}][gfx${index}]overlay=0:0:format=${format}:alpha=premultiplied:repeatlast=0:eof_action=pass[drawn${index}]`,
+            `[${label}][gfx${index}]overlay=0:0:format=${format}:alpha=straight:repeatlast=0:eof_action=pass[drawn${index}]`,
           );
           label = `drawn${index}`;
         }

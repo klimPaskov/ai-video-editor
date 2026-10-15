@@ -1136,6 +1136,124 @@ test(
 );
 
 test(
+  "semi-transparent graphics blend with straight alpha within one step",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-graphics-alpha-"));
+    try {
+      const input = await source(directory, "screen.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=64x36:rate=30:duration=0.2",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "rgb",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+      ]);
+      // Straight-alpha BGRA: columns cycle through opaque, transparent and
+      // partial alpha so every blend case is checked against exact math.
+      const alphas = [255, 0, 1, 64, 128, 200, 254];
+      const frameBytes = rawFrameBytes("bgra", 64, 36);
+      const graphic = Buffer.alloc(frameBytes * 2);
+      for (let pixel = 0; pixel < 64 * 36 * 2; pixel++) {
+        const alpha = alphas[(pixel % 64) % alphas.length]!;
+        graphic.set([30, 160, 250, alpha], pixel * 4);
+      }
+      const raw = join(directory, "graphic.bgra");
+      await writeFile(raw, graphic);
+      const segment = join(directory, "graphics-000.mkv");
+      await ffmpeg([
+        "-f",
+        "rawvideo",
+        "-pixel_format",
+        "bgra",
+        "-video_size",
+        "64x36",
+        "-framerate",
+        "30",
+        "-i",
+        raw,
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        segment,
+      ]);
+      const plan = planExport(
+        [{ sourceId: input.sourceId, sourceStartUs: 0, sourceEndUs: 200_000 }],
+        [input],
+      );
+      const output = join(directory, "alpha master.mkv");
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: output,
+        replace: false,
+        compose: {
+          filter: "",
+          graphics: {
+            segments: [{ path: segment, startFrame: 2, frameCount: 2 }],
+          },
+          width: 64,
+          height: 36,
+          pixelFormat: "bgra",
+        },
+      });
+      assert.equal(evidence.samplesEqual, true);
+      const original = (await fullDecode(input, "bgra", null)).video;
+      const exported = await ffmpeg([
+        "-i",
+        output,
+        "-c:v",
+        "rawvideo",
+        "-pix_fmt",
+        "bgra",
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ]);
+      let worst = 0;
+      for (const frame of [2, 3]) {
+        for (let pixel = 0; pixel < 64 * 36; pixel++) {
+          const at = frame * frameBytes + pixel * 4;
+          const alpha = alphas[(pixel % 64) % alphas.length]!;
+          for (let channel = 0; channel < 3; channel++) {
+            const under = original[at + channel]!;
+            const over =
+              graphic[(frame - 2) * frameBytes + pixel * 4 + channel]!;
+            const ideal = (over * alpha + under * (255 - alpha)) / 255;
+            const actual = exported[at + channel]!;
+            if (alpha === 255) assert.equal(actual, over);
+            else if (alpha === 0) assert.equal(actual, under);
+            else worst = Math.max(worst, Math.abs(actual - ideal));
+          }
+        }
+      }
+      assert.ok(worst <= 1, `blend error ${worst}`);
+      for (const frame of [0, 1, 4, 5])
+        assert.ok(
+          exported
+            .subarray(frame * frameBytes, (frame + 1) * frameBytes)
+            .equals(
+              original.subarray(frame * frameBytes, (frame + 1) * frameBytes),
+            ),
+        );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
   "a graphics track is drawn only on its frames in a verified master",
   { timeout: 120_000 },
   async () => {
