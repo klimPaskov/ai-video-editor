@@ -342,7 +342,7 @@ export const codexVideoEditMcpTools = [
   {
     name: codexVideoEditToolNames[12],
     description:
-      "Add or replace a motion graphic (title card, lower third, callout, label or transition) drawn over the video and under captions, as one undoable transaction. start_us is an output time; the graphic is anchored to the source moment shown there, so it follows later cuts, and stays duration_us on screen (0.1–600 s). html is one HTML fragment and css its stylesheet (each at most 64 KiB) for a transparent stage the size of the video, with --stage-width, --stage-height and safe-area custom properties. CSS animations start when the graphic starts and are seeked frame-exactly in preview and export. No scripts, event handlers, forms, embedded documents, audio/video elements or network resources; images must be inline SVG or data: URLs. Keep text inside the safe area, on screen long enough to read, and clear of captions and important footage. With graphic_id the existing graphic is replaced. Higher layer draws on top (0–99).",
+      "Add or replace a motion graphic (title card, lower third, callout, label or transition) drawn over the video and under captions, as one undoable transaction. start_us is an output time; the graphic is anchored to the source moment shown there, so it follows later cuts, and stays duration_us on screen (0.1–600 s). html is one HTML fragment and css its stylesheet (each at most 24 KiB) for a transparent stage the size of the video, with --stage-width, --stage-height and safe-area custom properties. CSS animations start when the graphic starts and are seeked frame-exactly in preview and export. No scripts, event handlers, forms, embedded documents, audio/video elements or network resources; images must be inline SVG or data: URLs. Keep text inside the safe area, on screen long enough to read, and clear of captions and important footage. With graphic_id the existing graphic is replaced. Higher layer draws on top (0–99).",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -364,8 +364,8 @@ export const codexVideoEditMcpTools = [
         duration_us: { type: "integer", minimum: 100000, maximum: 600000000 },
         name: { type: "string", minLength: 1, maxLength: 80 },
         layer: { type: "integer", minimum: 0, maximum: 99 },
-        html: { type: "string", maxLength: 65536 },
-        css: { type: "string", maxLength: 65536 },
+        html: { type: "string", maxLength: 24576 },
+        css: { type: "string", maxLength: 24576 },
       },
     },
     annotations: {
@@ -459,7 +459,7 @@ export const codexVideoEditMcpTools = [
   {
     name: codexVideoEditToolNames[16],
     description:
-      "See the edit: render 1–3 pictures of the active draft at output times (microseconds), exactly as export draws them with zooms, motion graphics and captions (when captions are on). Use it to check a graphic's text, placement and timing, a zoom's target, or that captions stay clear, before moving on. Pictures are small JPEGs for review (max_width 320–1280, default 960); they are never part of the video.",
+      "See the edit: render 1–3 pictures of the active draft at output times (microseconds), exactly as export draws them with zooms, motion graphics and captions (when captions are on). Use it to check a graphic's text, placement and timing, a zoom's target, or that captions stay clear, before moving on. Pictures are small JPEGs for review (max_width sets the longer side, 320–1280 pixels, default 960); they are never part of the video.",
     inputSchema: {
       type: "object",
       additionalProperties: false,

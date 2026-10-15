@@ -70,7 +70,12 @@ export class ClaudeUserError extends Error {}
 
 interface StoredFullEdit {
   status: "running" | "finished" | "stopped" | "failed";
-  /** Transactions the run's tools committed and Undo all has not reverted. */
+  /** Identifies the latest run; late commits are attributed by it. */
+  runId: string;
+  /**
+   * Transactions full-edit runs committed (a polish run adds to them) that
+   * Undo all has not reverted, oldest first.
+   */
   transactionIds: string[];
 }
 
@@ -92,6 +97,11 @@ interface Session {
   turn: ClaudeTurn | null;
   /** True while the running turn is a full edit whose commits are recorded. */
   fullEditRunning: boolean;
+  /** True while Undo all is reverting the run's edits. */
+  undoing: boolean;
+  /** Settles after a finished turn's bookkeeping has been saved. */
+  settled: Promise<void>;
+  saveTimer: ReturnType<typeof setTimeout> | null;
 }
 
 /** Draft history access for a full edit's Undo all; main supplies it. */
@@ -610,12 +620,17 @@ export class DesktopClaude {
       )
     )
       throw new Error("Invalid conversation file");
+    const runId =
+      typeof run.runId === "string" && transactionIdPattern.test(run.runId)
+        ? run.runId
+        : randomUUID();
     // A run that was going when the app closed ended there.
     return {
       status:
         run.status === "running"
           ? "stopped"
           : (run.status as StoredFullEdit["status"]),
+      runId,
       transactionIds: [...(run.transactionIds as string[])],
     };
   }
@@ -692,6 +707,9 @@ export class DesktopClaude {
       stored,
       turn: null,
       fullEditRunning: false,
+      undoing: false,
+      settled: Promise.resolve(),
+      saveTimer: null,
       view: {
         status: stored.status,
         projectId,
@@ -763,13 +781,39 @@ export class DesktopClaude {
     });
   }
 
-  /** Main reports each committed Claude transaction during a turn. */
-  recordCommit(projectId: string, transactionId: unknown): void {
+  /**
+   * The running full edit's token, captured by main when a Claude tool call
+   * starts, so a commit that lands after Stop still counts for its run.
+   */
+  fullEditRun(projectId: string): string | null {
+    const session = this.sessions.get(projectId);
+    return session?.fullEditRunning
+      ? (session.stored.fullEdit?.runId ?? null)
+      : null;
+  }
+
+  /** True when the transaction belongs to the project's full edits. */
+  fullEditIncludes(projectId: string, transactionId: unknown): boolean {
+    const run = this.sessions.get(projectId)?.stored.fullEdit;
+    return (
+      typeof transactionId === "string" &&
+      Boolean(run?.transactionIds.includes(transactionId))
+    );
+  }
+
+  /** Main reports an applied edit from a full-edit tool call. */
+  recordCommit(
+    projectId: string,
+    transactionId: unknown,
+    runId: string | null,
+  ): void {
     const session = this.sessions.get(projectId);
     const run = session?.stored.fullEdit;
     if (
-      !session?.fullEditRunning ||
+      !session ||
       !run ||
+      !runId ||
+      run.runId !== runId ||
       typeof transactionId !== "string" ||
       !transactionIdPattern.test(transactionId) ||
       run.transactionIds.includes(transactionId) ||
@@ -777,6 +821,25 @@ export class DesktopClaude {
     )
       return;
     run.transactionIds.push(transactionId);
+    this.saveSoon(session);
+  }
+
+  /** Main reports that a full-edit tool call undid one of the run's edits. */
+  recordUndo(projectId: string, targetId: unknown, runId: string | null): void {
+    const session = this.sessions.get(projectId);
+    const run = session?.stored.fullEdit;
+    if (!session || !run || !runId || run.runId !== runId) return;
+    run.transactionIds = run.transactionIds.filter((id) => id !== targetId);
+    this.saveSoon(session);
+  }
+
+  /** Keeps the run's record on disk while it works, without a write per edit. */
+  private saveSoon(session: Session): void {
+    if (session.saveTimer) return;
+    session.saveTimer = setTimeout(() => {
+      session.saveTimer = null;
+      void this.saveThread(session.stored).catch(() => undefined);
+    }, 500);
   }
 
   /** Reverts the run's edits, newest first, while they are the newest. */
@@ -784,24 +847,30 @@ export class DesktopClaude {
     const session = this.sessions.get(projectId);
     const run = session?.stored.fullEdit;
     const history = this.options.history;
-    if (!session || session.turn || !run || !history)
+    if (!session || session.turn || session.undoing || !run || !history)
       throw new ClaudeUserError("There is no full edit to undo.");
+    session.undoing = true;
     let undone = 0;
-    for (;;) {
-      const newest = await history.newest(projectId);
-      if (!newest || !run.transactionIds.includes(newest)) break;
-      await history.undo(projectId, newest);
-      run.transactionIds = run.transactionIds.filter((id) => id !== newest);
-      undone++;
+    try {
+      for (;;) {
+        const newest = await history.newest(projectId);
+        if (!newest || !run.transactionIds.includes(newest)) break;
+        await history.undo(projectId, newest);
+        run.transactionIds = run.transactionIds.filter((id) => id !== newest);
+        undone++;
+      }
+      if (undone === 0 && run.transactionIds.length > 0) {
+        session.view.message = claudeThreadIssues.undoLater;
+        return await this.getThreadWithHistory(projectId);
+      }
+      // What is left was already undone another way or lies under later
+      // edits; the next run starts as a fresh full edit.
+      session.stored.fullEdit = null;
+      session.view.message = null;
+    } finally {
+      session.undoing = false;
+      await this.persist(session);
     }
-    if (undone === 0 && run.transactionIds.length > 0) {
-      session.view.message = claudeThreadIssues.undoLater;
-      return this.getThreadWithHistory(projectId);
-    }
-    // What is left was already undone another way or lies under later edits.
-    run.transactionIds = [];
-    session.view.message = null;
-    await this.persist(session);
     return this.getThreadWithHistory(projectId);
   }
 
@@ -810,6 +879,7 @@ export class DesktopClaude {
     if (
       !session ||
       session.turn ||
+      session.undoing ||
       (session.view.status !== "ready" && session.view.status !== "failed")
     )
       throw new ClaudeUserError("Open the Claude conversation before sending.");
@@ -855,7 +925,12 @@ export class DesktopClaude {
       return this.threadView(session);
     }
     if (input.fullEdit) {
-      session.stored.fullEdit = { status: "running", transactionIds: [] };
+      // A polish run keeps the earlier runs' edits so Undo all covers both.
+      session.stored.fullEdit = {
+        status: "running",
+        runId: randomUUID(),
+        transactionIds: [...(session.stored.fullEdit?.transactionIds ?? [])],
+      };
       session.fullEditRunning = true;
     }
     session.view.status = "running";
@@ -919,7 +994,7 @@ export class DesktopClaude {
       return this.threadView(session);
     }
     session.turn = turn;
-    void turn.done.then(async (outcome) => {
+    session.settled = turn.done.then(async (outcome) => {
       await rm(mcpConfigPath, { force: true }).catch(() => undefined);
       if (turn.projection.ready) session.stored.started = true;
       if (outcome.kind === "failed" && outcome.issue === "resume") {
@@ -952,6 +1027,8 @@ export class DesktopClaude {
       session.turn = null;
       if (outcome.kind === "failed" && outcome.issue === "signIn")
         void this.refresh();
+      if (session.saveTimer) clearTimeout(session.saveTimer);
+      session.saveTimer = null;
       await this.persist(session);
     });
     return this.threadView(session);
@@ -1005,7 +1082,8 @@ export class DesktopClaude {
     for (const session of this.sessions.values())
       if (session.turn) {
         session.turn.interrupt();
-        pending.push(session.turn.done);
+        // Wait for the turn's bookkeeping (a full edit's record) to be saved.
+        pending.push(session.settled);
       }
     await Promise.race([
       Promise.all(pending),

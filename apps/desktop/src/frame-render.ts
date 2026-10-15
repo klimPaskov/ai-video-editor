@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -50,8 +50,9 @@ export interface FrameRenderOptions {
 
 export class FrameRenderError extends Error {}
 
-function jpegSize(width: number, height: number, maxWidth: number) {
-  const scale = Math.min(1, maxWidth / width);
+/** Scales so the longer side fits `maxSide` (portrait video stays small too). */
+function jpegSize(width: number, height: number, maxSide: number) {
+  const scale = Math.min(1, maxSide / Math.max(width, height));
   // Even dimensions keep the JPEG encoder's chroma layout simple.
   const outWidth = Math.max(2, Math.round((width * scale) / 2) * 2);
   const outHeight = Math.max(2, Math.round((height * scale) / 2) * 2);
@@ -90,14 +91,23 @@ export async function renderDraftFrames(
         throw new FrameRenderError("time");
       const startUs = Math.max(0, Math.min(requested, durationUs - frameUs));
       const endUs = Math.min(durationUs, startUs + frameUs);
-      const { plan, zooms, graphics } = await planDraft(
+      const planned = await planDraft(
         options.drafts,
         ffprobe,
         options.projectId,
         { startUs, endUs },
       );
+      const { zooms, graphics } = planned;
+      // Pictures need no sound: a video-only plan avoids decoding each
+      // source's audio from its start for every frame.
+      const plan = {
+        ...planned.plan,
+        format: { ...planned.plan.format, audio: null },
+        sampleCount: 0,
+      };
       const video = plan.format.video;
       const directory = path.join(scratch, `frame-${index}`);
+      await mkdir(directory, { recursive: true });
       let track: GraphicsTrack | null = null;
       if (graphics.length) {
         if (!options.renderGraphics) throw new FrameRenderError("graphics");
@@ -107,7 +117,7 @@ export async function renderDraftFrames(
           height: video.height,
           frameRate: video.frameRate,
           frameCount: plan.frameCount,
-          directory: scratch,
+          directory,
           ffmpeg,
           ...(options.signal ? { signal: options.signal } : {}),
         });
@@ -125,7 +135,7 @@ export async function renderDraftFrames(
         ? toAss(cues, captions!.settings, video.width, video.height)
         : undefined;
       const filter = zoomFilter(zooms, video.width, video.height);
-      const master = `${directory}.mkv`;
+      const master = path.join(directory, "frame.mkv");
       await exportDraft({
         plan,
         profile: "lossless_master",
@@ -152,7 +162,9 @@ export async function renderDraftFrames(
         options.maxWidth,
       );
       let jpeg: Buffer | null = null;
-      // Lower the quality until the picture fits what is left of the budget.
+      // Each remaining picture gets an equal share of what is left, so an
+      // early detailed frame cannot starve the last one.
+      const share = Math.floor(budget / (options.timesUs.length - index));
       for (const quality of [4, 7, 12, 20]) {
         const result = await runProcess({
           executable: ffmpeg,
@@ -180,7 +192,7 @@ export async function renderDraftFrames(
           ...(options.signal ? { signal: options.signal } : {}),
         });
         const encoded = Math.ceil(result.stdout.length / 3) * 4;
-        if (result.stdout.length && encoded <= budget) {
+        if (result.stdout.length && encoded <= share) {
           jpeg = result.stdout;
           budget -= encoded;
           break;

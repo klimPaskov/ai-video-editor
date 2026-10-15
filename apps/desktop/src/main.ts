@@ -1101,6 +1101,21 @@ async function start(): Promise<void> {
   const invokeClaudeTool = async (name: unknown, input: unknown) => {
     if (!activeProjectId) throw new CodexVideoEditToolError("inactive_project");
     const projectId = activeProjectId;
+    // Captured before the call so an edit that lands after Stop still
+    // belongs to its full edit.
+    const run = claude?.fullEditRun(projectId) ?? null;
+    const target =
+      input && typeof input === "object"
+        ? (input as { target_transaction_id?: unknown }).target_transaction_id
+        : undefined;
+    // During a full edit Claude may only undo its own edits, so Undo all can
+    // always restore what was there before the run.
+    if (
+      run &&
+      name === "timeline.undo" &&
+      !claude!.fullEditIncludes(projectId, target)
+    )
+      throw new CodexVideoEditToolError("edit_conflict");
     const value = await invokeWithProjectDraftRefresh({
       toolName: name,
       projectId,
@@ -1116,16 +1131,21 @@ async function start(): Promise<void> {
       drafts,
       notify: publishDraftNotice,
     });
-    // A full edit's Undo all needs every transaction its tools committed.
+    // A full edit's Undo all needs every edit its tools applied.
     if (
+      run &&
       value &&
       typeof value === "object" &&
       (value as { status?: unknown }).status === "committed"
-    )
-      claude?.recordCommit(
-        projectId,
-        (value as { transaction_id?: unknown }).transaction_id,
-      );
+    ) {
+      if (name === "timeline.undo") claude?.recordUndo(projectId, target, run);
+      else
+        claude?.recordCommit(
+          projectId,
+          (value as { transaction_id?: unknown }).transaction_id,
+          run,
+        );
+    }
     return value;
   };
   claudeBroker = await CodexMcpBroker.open(

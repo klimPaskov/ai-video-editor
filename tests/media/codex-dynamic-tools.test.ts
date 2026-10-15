@@ -90,7 +90,7 @@ test("foreign, malformed and oversized host calls never reach the editor", () =>
     { ...valid, callId: "" },
     { ...valid, extra: "outside contract" },
     { ...valid, arguments: ["unexpected"] },
-    { ...valid, arguments: { body: "x".repeat(17 * 1024) } },
+    { ...valid, arguments: { body: "x".repeat(65 * 1024) } },
   ];
   for (const value of invalid)
     assert.throws(

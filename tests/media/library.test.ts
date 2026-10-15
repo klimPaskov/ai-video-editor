@@ -228,6 +228,17 @@ test("tagged H.264/AAC imports byte-identically and decodes deterministic displa
   assert.deepEqual(await readFile(verified.managedPath), sourceBytes);
   assert.deepEqual(await readFile(source), sourceBytes);
   assert.deepEqual(await new MediaLibrary(libraryRoot).list(), [summary]);
+  // A repeat read uses the remembered verification; a same-size change to the
+  // managed bytes is still caught.
+  assert.deepEqual(await library.verifiedSource(summary.id), verified);
+  const changed = Buffer.from(sourceBytes);
+  changed[changed.length - 1] = changed[changed.length - 1]! ^ 0xff;
+  const { chmod: chmodFile } = await import("node:fs/promises");
+  await chmodFile(verified.managedPath, 0o600).catch(() => undefined);
+  await writeFile(verified.managedPath, changed);
+  await assert.rejects(library.verifiedSource(summary.id), /changed/u);
+  await writeFile(verified.managedPath, sourceBytes);
+  assert.deepEqual(await library.verifiedSource(summary.id), verified);
   const frames = [];
   for (const timeUs of [0, 500_000, 1_000_000]) {
     const frame = await library.frame(summary.id, timeUs);

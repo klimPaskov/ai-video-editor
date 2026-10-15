@@ -1,4 +1,14 @@
 /** Shared by the tool service and the transports; imports nothing heavy. */
+/**
+ * Assistant-authored graphics stay well inside every route's argument limit
+ * (Codex host tools 64 KiB, API tool calls 64 KiB); the draft itself allows
+ * larger graphics from the manual editor.
+ */
+export const assistantGraphicLimits = Object.freeze({
+  maxHtmlBytes: 24 * 1024,
+  maxCssBytes: 24 * 1024,
+});
+
 export const frameToolLimits = Object.freeze({
   maxFrames: 3,
   minWidth: 320,

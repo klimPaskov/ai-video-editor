@@ -230,3 +230,94 @@ test(
     }
   },
 );
+
+test(
+  "several pictures with graphics each get their own graphics track",
+  { timeout: 300_000 },
+  async () => {
+    const { root, active, drafts } = await fixture();
+    const projectId = active.project.project_id;
+    try {
+      const snapshot = await drafts.snapshot(projectId);
+      await drafts.applyManual({
+        schema_version: "1.0",
+        request_id: "frames-graphic-001",
+        project_id: projectId,
+        draft_id: snapshot.draft.draft_id,
+        base_revision_id: snapshot.draft.base_revision_id,
+        expected_sequence: snapshot.draft.draft_sequence,
+        expected_timeline_sha256: snapshot.draft.timeline_sha256,
+        pass_group: { pass_group_id: "frames-graphics", kind: "graphics" },
+        reason: "Add a title.",
+        operations: [
+          {
+            type: "set_graphic",
+            graphic: {
+              graphic_id: "graphic-frames-001",
+              name: "Title",
+              source_id: active.source.source_id,
+              source_us: 0,
+              duration_us: 900_000,
+              layer: 0,
+              html: "<div>Title</div>",
+              css: "div { color: white }",
+            },
+          },
+        ],
+      });
+      const directories: string[] = [];
+      // Like the app's offscreen renderer: a fixed file name in the given folder.
+      const renderGraphics = async (request: {
+        directory: string;
+        width: number;
+        height: number;
+        frameCount: number;
+      }) => {
+        directories.push(request.directory);
+        const path = join(request.directory, "graphics-000.mkv");
+        await runProcess({
+          executable: "ffmpeg",
+          args: [
+            "-v",
+            "error",
+            "-nostdin",
+            "-f",
+            "lavfi",
+            "-i",
+            `color=c=red:s=${request.width}x${request.height}:r=30,format=bgra`,
+            "-frames:v",
+            String(request.frameCount),
+            "-c:v",
+            "ffv1",
+            "-pix_fmt",
+            "bgra",
+            path,
+          ],
+        });
+        return {
+          segments: [{ startFrame: 0, frameCount: request.frameCount, path }],
+        };
+      };
+      const frames = await renderDraftFrames({
+        drafts,
+        projectId,
+        timesUs: [200_000, 600_000],
+        maxWidth: 320,
+        captions: async () => null,
+        renderGraphics: renderGraphics as never,
+      });
+      assert.equal(frames.length, 2);
+      assert.equal(new Set(directories).size, 2);
+      // The opaque red graphic covers each picture.
+      const pixels = await decode(root, frames[1]!.dataBase64, "graphic");
+      assert.ok(pixels[0]! > 200 && pixels[1]! < 60 && pixels[2]! < 60);
+    } finally {
+      await rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 200,
+      });
+    }
+  },
+);

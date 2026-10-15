@@ -802,11 +802,14 @@ test("a full edit runs with the playbook, records its edits and undoes them toge
       view.messages.at(-1)?.text,
       "Edit with Claude · Polished · Weekly update",
     );
-    // Main reports what the run's tools committed; other ids are ignored.
+    // Main reports what the run's tools applied, by the run's token.
+    const first = claude.fullEditRun(project);
+    assert.ok(first);
     for (const id of ["claude-tx-1", "claude-tx-2", "claude-tx-1", "../bad"]) {
-      claude.recordCommit(project, id);
+      claude.recordCommit(project, id, first);
       if (id.startsWith("claude") && !applied.includes(id)) applied.push(id);
     }
+    claude.recordCommit(project, "claude-other", "another-run");
     view = await waitFor(
       () => claude.getThreadWithHistory(project),
       (v) => v.status === "ready",
@@ -817,6 +820,7 @@ test("a full edit runs with the playbook, records its edits and undoes them toge
       changes: 2,
       undoable: true,
     });
+    assert.equal(claude.fullEditRun(project), null);
     const args = (await readFile(join(config, "fake-log.jsonl"), "utf8"))
       .trim()
       .split("\n")
@@ -828,12 +832,52 @@ test("a full edit runs with the playbook, records its edits and undoes them toge
       args[args.indexOf("--system-prompt") + 1]!,
       /Full edit playbook/u,
     );
+    // The record is on disk, not only in memory.
+    const stored = JSON.parse(
+      await readFile(
+        join(root, "claude", "threads", `${project}.json`),
+        "utf8",
+      ),
+    ) as { fullEdit: { transactionIds: string[] } };
+    assert.deepEqual(stored.fullEdit.transactionIds, [
+      "claude-tx-1",
+      "claude-tx-2",
+    ]);
     // Outside a full edit nothing is recorded.
-    claude.recordCommit(project, "claude-tx-later");
+    claude.recordCommit(project, "claude-tx-later", null);
     assert.equal(
       (await claude.getThreadWithHistory(project)).fullEdit?.changes,
       2,
     );
+
+    // A polish run adds to the earlier run; an edit Claude undid itself is
+    // forgotten, and a commit that lands after the run still counts.
+    view = await claude.startFullEdit(project, { ...brief, level: "tidy" });
+    assert.equal(
+      view.messages.at(-1)?.text,
+      "Polish with Claude · Tidy · Weekly update",
+    );
+    const polish = claude.fullEditRun(project);
+    assert.ok(polish && polish !== first);
+    claude.recordCommit(project, "claude-tx-3", polish);
+    claude.recordUndo(project, "claude-tx-3", polish);
+    claude.recordCommit(project, "claude-tx-4", polish);
+    applied.push("claude-tx-4");
+    view = await waitFor(
+      () => claude.getThreadWithHistory(project),
+      (v) => v.status === "ready",
+      "polish",
+    );
+    claude.recordCommit(project, "claude-tx-5", polish);
+    applied.push("claude-tx-5");
+    view = await claude.getThreadWithHistory(project);
+    assert.deepEqual(view.fullEdit, {
+      status: "finished",
+      changes: 4,
+      undoable: true,
+    });
+    assert.ok(claude.fullEditIncludes(project, "claude-tx-2"));
+    assert.ok(!claude.fullEditIncludes(project, "manual-before"));
 
     // A later manual edit on top blocks Undo all until it is undone.
     applied.push("manual-after");
@@ -844,31 +888,32 @@ test("a full edit runs with the playbook, records its edits and undoes them toge
     assert.deepEqual(undone, []);
     applied.pop();
     view = await claude.undoFullEdit(project);
-    assert.deepEqual(undone, ["claude-tx-2", "claude-tx-1"]);
+    assert.deepEqual(undone, [
+      "claude-tx-5",
+      "claude-tx-4",
+      "claude-tx-2",
+      "claude-tx-1",
+    ]);
     assert.deepEqual(applied, ["manual-before"]);
-    assert.deepEqual(view.fullEdit, {
-      status: "finished",
-      changes: 0,
-      undoable: false,
-    });
+    // Everything is undone: the next run is a fresh full edit again.
+    assert.equal(view.fullEdit, null);
     assert.equal(view.message, null);
-
-    // The next run is a polish run, and the record survives a restart.
-    view = await claude.startFullEdit(project, { ...brief, level: "tidy" });
+    view = await claude.startFullEdit(project, brief);
     assert.equal(
       view.messages.at(-1)?.text,
-      "Polish with Claude · Tidy · Weekly update",
+      "Edit with Claude · Polished · Weekly update",
     );
     await waitFor(
       () => claude.getThreadWithHistory(project),
       (v) => v.status === "ready",
-      "polish",
+      "fresh run",
     );
     await claude.closeThread(project);
     const reopened = await (
       await harness(root, false, history)
     ).openThread(project);
     assert.equal(reopened.fullEdit?.status, "finished");
+    assert.equal(reopened.fullEdit?.changes, 0);
     await claude.close();
   } finally {
     await rm(root, {

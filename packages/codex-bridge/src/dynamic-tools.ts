@@ -14,7 +14,8 @@ export const CODEX_EDITOR_NAMESPACE = "codex_video_edit";
 export type DynamicToolAccess = "project_editor" | "native_child_read_only";
 export const nativeChildReadOnlyToolNames: ReadonlySet<CodexVideoEditToolName> =
   new Set(["project.get_summary", "timeline.get_summary"]);
-const MAX_INPUT_BYTES = 16 * 1024;
+// Covers the largest reviewed input (a 24 KiB + 24 KiB graphic) with room.
+const MAX_INPUT_BYTES = 64 * 1024;
 const MAX_OUTPUT_BYTES = 256 * 1024;
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u;
 

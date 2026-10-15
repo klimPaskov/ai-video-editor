@@ -1597,7 +1597,7 @@ test("graphics.set anchors a validated graphic, explains unsafe content, and sha
     { layer: 100 },
     { name: "" },
     { start_us: 5_000_000 },
-    { css: "x".repeat(65_537) },
+    { css: "x".repeat(24_577) },
     { origin: "manual" },
   ])
     await assert.rejects(

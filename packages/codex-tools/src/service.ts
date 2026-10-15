@@ -15,7 +15,7 @@ import {
   zoomLimits,
   zoomSourceRange,
 } from "../../domain/src/zoom.ts";
-import { frameToolLimits } from "./frames.ts";
+import { assistantGraphicLimits, frameToolLimits } from "./frames.ts";
 import {
   assertGraphicContent,
   GraphicContentError,
@@ -1042,8 +1042,9 @@ export class CodexVideoEditToolService {
       typeof request.html !== "string" ||
       typeof request.css !== "string" ||
       new TextEncoder().encode(request.html).length >
-        graphicLimits.maxHtmlBytes ||
-      new TextEncoder().encode(request.css).length > graphicLimits.maxCssBytes
+        assistantGraphicLimits.maxHtmlBytes ||
+      new TextEncoder().encode(request.css).length >
+        assistantGraphicLimits.maxCssBytes
     )
       reject("invalid_request");
     try {
