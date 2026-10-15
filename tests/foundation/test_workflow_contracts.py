@@ -74,6 +74,8 @@ class WorkflowContractsTests(unittest.TestCase):
                         "zoom.set",
                         "zoom.remove",
                         "speed.set",
+                        "graphics.set",
+                        "graphics.remove",
                     ],
                 )
                 self.assertNotIn("export.prepare", by_name)

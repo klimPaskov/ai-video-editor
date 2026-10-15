@@ -31,6 +31,8 @@ const dynamicNames: Record<CodexVideoEditToolName, string> = {
   "zoom.set": "zoom_set",
   "zoom.remove": "zoom_remove",
   "speed.set": "speed_set",
+  "graphics.set": "graphics_set",
+  "graphics.remove": "graphics_remove",
 };
 const internalNames = new Map(
   Object.entries(dynamicNames).map(([internal, wire]) => [

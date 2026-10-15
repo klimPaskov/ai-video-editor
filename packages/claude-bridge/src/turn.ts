@@ -34,6 +34,8 @@ const activityLabels: Record<string, { label: string; mutating: boolean }> = {
   zoom_set: { label: "Setting a zoom", mutating: true },
   zoom_remove: { label: "Removing a zoom", mutating: true },
   speed_set: { label: "Changing playback speed", mutating: true },
+  graphics_set: { label: "Adding a graphic", mutating: true },
+  graphics_remove: { label: "Removing a graphic", mutating: true },
   timeline_undo: { label: "Undoing the last edit", mutating: true },
 };
 

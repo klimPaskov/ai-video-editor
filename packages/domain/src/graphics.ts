@@ -95,6 +95,12 @@ const forbidden: readonly [RegExp, string][] = [
   ],
 ];
 
+/** Every reason `assertGraphicContent` can give; safe to show to an author. */
+export const graphicContentReasons: ReadonlySet<string> = new Set([
+  ...forbidden.map(([, reason]) => reason),
+  "CSS cannot contain </style>.",
+]);
+
 /** Throws `GraphicContentError` with a reason if the content is unsafe. */
 export function assertGraphicContent(html: string, css: string): void {
   for (const [pattern, reason] of forbidden)

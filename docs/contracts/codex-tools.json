@@ -257,6 +257,36 @@
       ]
     },
     {
+      "name": "graphics.set",
+      "mode": "mutation",
+      "description": "Add or replace one HTML/CSS motion graphic anchored to the source moment at an output time, validated for content safety (no scripts, forms, embedded documents or network resources), with shared undo.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "graphics.remove",
+      "mode": "mutation",
+      "description": "Remove one motion graphic by ID with shared undo.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
       "name": "captions.configure",
       "mode": "mutation",
       "description": "Apply caption style settings.",

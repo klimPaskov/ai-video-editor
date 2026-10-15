@@ -132,8 +132,24 @@ test("packaged MCP protocol lists only reviewed tools and forwards a bounded cal
         "zoom.set",
         "zoom.remove",
         "speed.set",
+        "graphics.set",
+        "graphics.remove",
       ],
     );
+    const graphic = tools.find((tool) => tool.name === "graphics.set");
+    assert.ok(graphic);
+    for (const field of [
+      "start_us",
+      "duration_us",
+      "name",
+      "layer",
+      "html",
+      "css",
+    ])
+      assert.ok(graphic.inputSchema.required.includes(field));
+    assert.ok(!graphic.inputSchema.required.includes("graphic_id"));
+    const ungraphic = tools.find((tool) => tool.name === "graphics.remove");
+    assert.ok(ungraphic?.inputSchema.required.includes("graphic_id"));
     const zoom = tools.find((tool) => tool.name === "zoom.set");
     assert.ok(zoom);
     assert.equal(zoom.inputSchema.additionalProperties, false);
@@ -147,7 +163,7 @@ test("packaged MCP protocol lists only reviewed tools and forwards a bounded cal
       assert.ok(speed.inputSchema.required.includes(field));
     const unzoom = tools.find((tool) => tool.name === "zoom.remove");
     assert.ok(unzoom?.inputSchema.required.includes("zoom_id"));
-    for (const tool of [zoom, speed, unzoom!])
+    for (const tool of [zoom, speed, unzoom!, graphic, ungraphic!])
       assert.ok(!Object.hasOwn(tool.inputSchema.properties, "origin"));
     const transcript = tools.find(
       (tool) => tool.name === "transcript.get_range",

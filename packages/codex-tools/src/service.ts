@@ -15,6 +15,14 @@ import {
   zoomLimits,
   zoomSourceRange,
 } from "../../domain/src/zoom.ts";
+import {
+  assertGraphicContent,
+  GraphicContentError,
+  graphicAnchor,
+  graphicContentReasons,
+  graphicIntervals,
+  graphicLimits,
+} from "../../domain/src/graphics.ts";
 
 export const codexVideoEditToolNames = [
   "project.get_summary",
@@ -29,6 +37,8 @@ export const codexVideoEditToolNames = [
   "zoom.set",
   "zoom.remove",
   "speed.set",
+  "graphics.set",
+  "graphics.remove",
 ] as const;
 
 export type CodexVideoEditToolName = (typeof codexVideoEditToolNames)[number];
@@ -66,6 +76,7 @@ export type CodexVideoEditToolErrorCode =
   | "storage_unavailable"
   | "outcome_unknown"
   | "transcript_unavailable"
+  | "graphic_rejected"
   | "service_unavailable";
 
 const messages: Record<CodexVideoEditToolErrorCode, string> = {
@@ -83,6 +94,8 @@ const messages: Record<CodexVideoEditToolErrorCode, string> = {
     "The edit may have been saved. Reopen the project before retrying.",
   transcript_unavailable:
     "A completed local transcript is not available for that source and range.",
+  graphic_rejected:
+    "The graphic was rejected. Use inline HTML and CSS without scripts, forms, embedded documents or network resources.",
   service_unavailable:
     "The editing service is unavailable. Reopen the project and try again.",
 };
@@ -96,13 +109,22 @@ export class CodexVideoEditToolError extends Error {
    * `activeProjectId` lets a refused cross-project call name the one project
    * the caller may use, so a model that mistyped the ID can correct itself.
    */
-  constructor(code: CodexVideoEditToolErrorCode, activeProjectId?: string) {
+  constructor(
+    code: CodexVideoEditToolErrorCode,
+    activeProjectId?: string,
+    graphicReason?: string,
+  ) {
     super(
       code === "inactive_project" &&
         activeProjectId !== undefined &&
         idPattern.test(activeProjectId)
         ? `${messages[code]} The active project_id is "${activeProjectId}".`
-        : messages[code],
+        : // Only the validator's own fixed reasons are echoed to the model.
+          code === "graphic_rejected" &&
+            graphicReason !== undefined &&
+            graphicContentReasons.has(graphicReason)
+          ? `${messages[code]} ${graphicReason}`
+          : messages[code],
     );
     this.name = "CodexVideoEditToolError";
     this.code = code;
@@ -210,16 +232,19 @@ function freshness(
 
 function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
   const zooms = draft.timeline.zooms ?? [];
-  const visible = zoomIntervals(
-    zooms,
-    draft.timeline.clips.map((clip) => ({
-      sourceId: clip.source_id,
-      timelineStartUs: clip.timeline_start_us,
-      timelineEndUs: clip.timeline_end_us,
-      sourceStartUs: clip.source_start_us,
-      sourceEndUs: clip.source_end_us,
-      ...(clip.speed ? { speed: clip.speed } : {}),
-    })),
+  const clipMap = draft.timeline.clips.map((clip) => ({
+    sourceId: clip.source_id,
+    timelineStartUs: clip.timeline_start_us,
+    timelineEndUs: clip.timeline_end_us,
+    sourceStartUs: clip.source_start_us,
+    sourceEndUs: clip.source_end_us,
+    ...(clip.speed ? { speed: clip.speed } : {}),
+  }));
+  const visible = zoomIntervals(zooms, clipMap);
+  const placedGraphics = graphicIntervals(
+    draft.timeline.graphics ?? [],
+    clipMap,
+    draft.timeline.duration_us,
   );
   return {
     schema_version: "1.0" as const,
@@ -265,6 +290,25 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
     })),
     zoom_ids: [...draft.timeline.zoom_ids],
     speed_ids: [...draft.timeline.speed_ids],
+    graphics: (draft.timeline.graphics ?? []).map((graphic) => {
+      const placed = placedGraphics.find(
+        (interval) => interval.graphicId === graphic.graphic_id,
+      );
+      return {
+        graphic_id: graphic.graphic_id,
+        name: graphic.name,
+        layer: graphic.layer,
+        duration_us: graphic.duration_us,
+        source_id: graphic.source_id,
+        source_us: graphic.source_us,
+        // Null when the anchor moment was cut away and the graphic is hidden.
+        timeline_range: placed
+          ? { start_us: placed.startUs, end_us: placed.endUs }
+          : null,
+        html_bytes: new TextEncoder().encode(graphic.html).length,
+        css_bytes: new TextEncoder().encode(graphic.css).length,
+      };
+    }),
     undo_transaction_id: undoId,
   };
 }
@@ -373,6 +417,10 @@ export class CodexVideoEditToolService {
           return await this.removeZoom(input);
         case "speed.set":
           return await this.setSpeed(input);
+        case "graphics.set":
+          return await this.setGraphic(input);
+        case "graphics.remove":
+          return await this.removeGraphic(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -901,6 +949,155 @@ export class CodexVideoEditToolService {
       operations: [{ type: "remove_zoom", zoom_id: request.zoom_id }],
     });
     return safeMutation(result, "Zoom removed from the active draft.");
+  }
+
+  /**
+   * Same semantics as the manual graphic: `start_us` is an output time that
+   * main anchors to the source moment shown there, so the graphic follows
+   * later cuts. With graphic_id the graphic is replaced in place.
+   */
+  private async setGraphic(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      [
+        "schema_version",
+        "request_id",
+        "project_id",
+        "draft_id",
+        "base_revision_id",
+        "expected_sequence",
+        "expected_timeline_sha256",
+        "pass_group_id",
+        "reason",
+        "start_us",
+        "duration_us",
+        "name",
+        "layer",
+        "html",
+        "css",
+      ],
+      ["graphic_id"],
+    );
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    let graphicId: string | null = null;
+    if (request.graphic_id !== undefined) {
+      id(request.graphic_id);
+      graphicId = request.graphic_id;
+    }
+    integer(request.start_us);
+    integer(request.duration_us, graphicLimits.minDurationUs);
+    if (request.duration_us > graphicLimits.maxDurationUs)
+      reject("invalid_request");
+    integer(request.layer);
+    if (request.layer > graphicLimits.maxLayer) reject("invalid_request");
+    if (
+      typeof request.name !== "string" ||
+      !request.name.trim() ||
+      request.name.length > graphicLimits.maxNameChars ||
+      /[\u0000-\u001f\u007f]/u.test(request.name) ||
+      typeof request.html !== "string" ||
+      typeof request.css !== "string" ||
+      new TextEncoder().encode(request.html).length >
+        graphicLimits.maxHtmlBytes ||
+      new TextEncoder().encode(request.css).length > graphicLimits.maxCssBytes
+    )
+      reject("invalid_request");
+    try {
+      assertGraphicContent(request.html, request.css);
+    } catch (error) {
+      if (error instanceof GraphicContentError)
+        throw new CodexVideoEditToolError(
+          "graphic_rejected",
+          undefined,
+          error.message,
+        );
+      throw error;
+    }
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    // Anchor against the exact head the caller read; the commit re-checks it.
+    const { draft } = await this.drafts.snapshot(this.activeProjectId);
+    if (
+      draft.draft_id !== request.draft_id ||
+      draft.base_revision_id !== request.base_revision_id ||
+      draft.draft_sequence !== request.expected_sequence ||
+      draft.timeline_sha256 !== request.expected_timeline_sha256
+    )
+      reject("stale_draft");
+    if (
+      graphicId !== null &&
+      !draft.timeline.graphics?.some((item) => item.graphic_id === graphicId)
+    )
+      reject("edit_conflict");
+    const anchor = graphicAnchor(draft.timeline.clips, request.start_us);
+    if (!anchor) reject("invalid_request");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "graphics" },
+      reason: request.reason,
+      operations: [
+        {
+          type: "set_graphic",
+          graphic: {
+            graphic_id:
+              graphicId ?? `graphic-${randomUUID().replaceAll("-", "")}`,
+            name: request.name.trim(),
+            source_id: anchor.source_id,
+            source_us: anchor.source_us,
+            duration_us: request.duration_us,
+            layer: request.layer,
+            html: request.html,
+            css: request.css,
+          },
+        },
+      ],
+    });
+    return safeMutation(
+      result,
+      graphicId === null
+        ? "Graphic added to the active draft."
+        : "Graphic replaced on the active draft.",
+    );
+  }
+
+  private async removeGraphic(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "graphic_id",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    id(request.graphic_id);
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "graphics" },
+      reason: request.reason,
+      operations: [{ type: "remove_graphic", graphic_id: request.graphic_id }],
+    });
+    return safeMutation(result, "Graphic removed from the active draft.");
   }
 
   private async setSpeed(input: unknown): Promise<unknown> {

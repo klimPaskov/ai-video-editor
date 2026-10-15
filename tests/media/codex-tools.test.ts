@@ -1547,3 +1547,159 @@ test("zoom.set refuses a range that spans footage from two recordings", async ()
   );
   assert.equal(applied, 1);
 });
+
+type GraphicSummary = {
+  graphic_id: string;
+  name: string;
+  layer: number;
+  duration_us: number;
+  source_id: string;
+  source_us: number;
+  timeline_range: { start_us: number; end_us: number } | null;
+  html_bytes: number;
+  css_bytes: number;
+};
+
+function graphicInput(snapshot: Snapshot, requestId: string) {
+  return {
+    ...head(snapshot, requestId),
+    pass_group_id: "assistant-graphics-001",
+    start_us: 200_000,
+    duration_us: 500_000,
+    name: "Title card",
+    layer: 1,
+    html: '<div class="title">Hello</div>',
+    css: ".title { color: white; animation: in 400ms ease-out both; } @keyframes in { from { opacity: 0 } }",
+  };
+}
+
+test("graphics.set anchors a validated graphic, explains unsafe content, and shares Undo", async () => {
+  const { root, source, active, drafts, service } = await fixture();
+  const projectId = active.project.project_id;
+  const sourceBefore = await readFile(source);
+  const claude = new CodexVideoEditToolService(projectId, drafts, "claude");
+  for (const [html, reason] of [
+    ["<script>alert(1)</script>", "Scripts are not allowed in graphics."],
+    ['<img src="https://example.com/a.png">', "Graphics cannot load anything"],
+    ["<div onclick=x>hi</div>", "Event handler attributes are not allowed"],
+  ] as const)
+    await assert.rejects(
+      claude.invoke("graphics.set", {
+        ...graphicInput(await drafts.snapshot(projectId), "graphic-bad-001"),
+        html,
+      }),
+      (error: Error) =>
+        (error as CodexVideoEditToolError).code === "graphic_rejected" &&
+        error.message.includes(reason),
+    );
+  for (const invalid of [
+    { duration_us: 99_999 },
+    { layer: 100 },
+    { name: "" },
+    { start_us: 5_000_000 },
+    { css: "x".repeat(65_537) },
+    { origin: "manual" },
+  ])
+    await assert.rejects(
+      claude.invoke("graphics.set", {
+        ...graphicInput(await drafts.snapshot(projectId), "graphic-bad-002"),
+        ...invalid,
+      }),
+      expectCode("invalid_request"),
+    );
+  const added = (await claude.invoke(
+    "graphics.set",
+    graphicInput(await drafts.snapshot(projectId), "graphic-set-001"),
+  )) as ToolCommit;
+  const graphics = (added.draft as unknown as { graphics: GraphicSummary[] })
+    .graphics;
+  assert.equal(graphics.length, 1);
+  const graphic = graphics[0]!;
+  assert.deepEqual(
+    { ...graphic, graphic_id: "" },
+    {
+      graphic_id: "",
+      name: "Title card",
+      layer: 1,
+      duration_us: 500_000,
+      source_id: active.source.source_id,
+      source_us: 200_000,
+      timeline_range: { start_us: 200_000, end_us: 700_000 },
+      html_bytes: Buffer.byteLength(
+        graphicInput(await drafts.snapshot(projectId), "x").html,
+      ),
+      css_bytes: Buffer.byteLength(
+        graphicInput(await drafts.snapshot(projectId), "x").css,
+      ),
+    },
+  );
+  // A stale head is refused before anything is written.
+  await assert.rejects(
+    claude.invoke(
+      "graphics.set",
+      graphicInput(
+        {
+          draft: {
+            ...(await drafts.snapshot(projectId)).draft,
+            draft_sequence: 0,
+          },
+        } as Snapshot,
+        "graphic-stale-001",
+      ),
+    ),
+    expectCode("stale_draft"),
+  );
+  await assert.rejects(
+    claude.invoke("graphics.set", {
+      ...graphicInput(await drafts.snapshot(projectId), "graphic-missing-001"),
+      graphic_id: "graphic-does-not-exist",
+    }),
+    expectCode("edit_conflict"),
+  );
+  const replaced = (await claude.invoke("graphics.set", {
+    ...graphicInput(await drafts.snapshot(projectId), "graphic-replace-001"),
+    graphic_id: graphic.graphic_id,
+    name: "Lower third",
+    start_us: 0,
+  })) as ToolCommit;
+  const after = (replaced.draft as unknown as { graphics: GraphicSummary[] })
+    .graphics;
+  assert.deepEqual(
+    after.map((item) => [item.graphic_id, item.name, item.source_us]),
+    [[graphic.graphic_id, "Lower third", 0]],
+  );
+  // The summary lists it through timeline.get_summary as well.
+  const summary = (await claude.invoke("timeline.get_summary", {
+    schema_version: "1.0",
+    project_id: projectId,
+  })) as { graphics: GraphicSummary[] };
+  assert.equal(summary.graphics[0]?.name, "Lower third");
+  const removed = (await claude.invoke("graphics.remove", {
+    ...head(await drafts.snapshot(projectId), "graphic-remove-001"),
+    pass_group_id: "assistant-graphics-002",
+    graphic_id: graphic.graphic_id,
+  })) as ToolCommit;
+  assert.deepEqual(
+    (removed.draft as unknown as { graphics: GraphicSummary[] }).graphics,
+    [],
+  );
+  const restored = (await service.invoke("timeline.undo", {
+    ...head(await drafts.snapshot(projectId), "graphic-undo-001"),
+    target_transaction_id: removed.transaction_id,
+  })) as ToolCommit;
+  assert.equal(
+    (restored.draft as unknown as { graphics: GraphicSummary[] }).graphics[0]
+      ?.name,
+    "Lower third",
+  );
+  assert.deepEqual(
+    (await journalRecords(root, projectId)).map(journalSummary),
+    [
+      ["claude", "apply", "graphics", "graphic"],
+      ["claude", "apply", "graphics", "graphic"],
+      ["claude", "apply", "graphics", "graphic"],
+      ["codex", "undo", null, null],
+    ],
+  );
+  assert.deepEqual(await readFile(source), sourceBefore);
+});
