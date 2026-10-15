@@ -55,3 +55,9 @@ In progress. Implemented parts are listed below as they land.
 
 - `graphics.set` / `graphics.remove` are guarded editor tools for Claude, Codex (MCP and host-defined) and the API providers (docs/30). Main anchors `start_us` to the source moment shown there, validates content before commit and returns the validator's fixed reason (`graphic_rejected`) so the model can correct its markup. Each call is one `graphics` pass-group transaction with shared Undo; the draft summary lists graphics without their markup.
 - Evidence: `tests/media/codex-tools.test.ts` (unsafe content reasons, limits, anchoring, stale head, replace, remove, shared Undo and journal origins), inventory tests for every route, and a signed-out real-CLI init probe (Claude Code 2.1.292, Windows) that reported exactly the fourteen tools. No packaged native run of an assistant adding a graphic exists yet; the assistant still cannot see rendered frames (`media.get_frames`).
+
+## Implemented: undoable caption and audio choices (2026-10-15)
+
+- The Auto Edit caption and audio choices are now draft data (`timeline.captions`, `timeline.audio`) changed by single-operation `set_captions`/`set_audio` transactions, so they share Undo, Redo and journal replay with every other edit, which a full AI edit's "Undo all" needs. The existing `captions:*`/`audio:*` IPC keeps its shape; main commits a manual transaction and the cards re-read the choice when the draft head changes. Drafts without their own choice use the per-project choice saved by earlier versions (read only) or the default.
+- `captions.configure` and `audio.configure` expose the same choices to Claude, Codex and the API providers.
+- Evidence: `tests/media/draft-transactions.test.ts` (apply, no-op conflict, invalid values, Undo back to no own choice, Redo, reopen replay), `tests/media/codex-tools.test.ts`, inventory tests and a signed-out real-CLI init probe of the sixteen tools. No packaged native run of the changed cards exists yet.

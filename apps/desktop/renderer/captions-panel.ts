@@ -42,6 +42,7 @@ export function setupCaptions(options: { preview: HTMLElement }): {
   const burnIn = element<HTMLInputElement>("captions-burn-in");
   const note = element("captions-note");
   let projectId: string | undefined;
+  let draftSequence: number | undefined;
   let settings: CaptionSettings = { ...defaultCaptionSettings };
   let cues: CaptionCue[] = [];
   let key = "";
@@ -78,6 +79,18 @@ export function setupCaptions(options: { preview: HTMLElement }): {
     if (stored?.ok) settings = stored.value;
     if (transcript?.ok) fetched = transcript.value;
     key = "";
+    controls();
+    position(lastPosition);
+  }
+
+  /** Re-reads the draft's caption choices after the draft head changes. */
+  async function refreshSettings(id: string): Promise<void> {
+    const attempt = saving;
+    const stored = await window.desktop
+      .getCaptionSettings({ schema_version: "1.0", project_id: id })
+      .catch(() => null);
+    if (projectId !== id || attempt !== saving || !stored?.ok) return;
+    settings = stored.value;
     controls();
     position(lastPosition);
   }
@@ -193,6 +206,7 @@ export function setupCaptions(options: { preview: HTMLElement }): {
     render(project, transcription, positionUs) {
       if (project?.id !== projectId) {
         projectId = project?.id;
+        draftSequence = project?.draft.sequence;
         fetched = undefined;
         cues = [];
         key = "";
@@ -200,6 +214,10 @@ export function setupCaptions(options: { preview: HTMLElement }): {
         if (projectId) void load(projectId);
       }
       if (!project) return;
+      if (project.draft.sequence !== draftSequence) {
+        draftSequence = project.draft.sequence;
+        void refreshSettings(project.id);
+      }
       const view =
         transcription && transcription.project_id === project.id
           ? transcription

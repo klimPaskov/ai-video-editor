@@ -396,4 +396,64 @@ export const codexVideoEditMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: codexVideoEditToolNames[14],
+    description:
+      "Set the draft's caption choices (the same as the Auto Edit captions card) as one undoable transaction. Captions are always derived from the transcript; this only turns them on or off and chooses style (plain, highlight or minimal), size (small, medium or large), position (bottom or top) and whether export burns them into the picture (burn_in) as well as writing an .srt. Pass every field; the timeline summary's captions shows the current choice (null: the project's earlier choice or the default applies).",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "enabled",
+        "style",
+        "size",
+        "position",
+        "burn_in",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        enabled: { type: "boolean" },
+        style: { enum: ["plain", "highlight", "minimal"] },
+        size: { enum: ["small", "medium", "large"] },
+        position: { enum: ["bottom", "top"] },
+        burn_in: { type: "boolean" },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[15],
+    description:
+      "Set the draft's export audio treatment (the same as the Auto Edit audio card) as one undoable transaction: normalize evens loudness to -16 LUFS; denoise reduces steady background noise. Sources are never changed. Pass both fields.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "normalize",
+        "denoise",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        normalize: { type: "boolean" },
+        denoise: { type: "boolean" },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ] as const;

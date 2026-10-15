@@ -37,7 +37,7 @@ Default capture and master audio are PCM matching the source or canonical mix re
 
 ## Audio cleanup (2026-10-07)
 
-The Audio card in Auto Edit offers two per-project choices, stored with `audio:get`/`audio:set` and applied only when exporting (main export and short clips); sources are never changed and preview playback is not processed.
+The Audio card in Auto Edit offers two choices, read and set with `audio:get`/`audio:set` and applied only when exporting (main export and short clips); sources are never changed and preview playback is not processed. Since 2026-10-15 the choices are part of the draft (`timeline.audio`, a `set_audio` transaction), so changing them is undoable with every other edit and assistants can set them with `audio.configure`. A draft without its own choice still uses the per-project choice saved by earlier versions (read only) or the default; the card re-reads the choice whenever the draft head changes.
 
 - **Reduce background noise** runs FFmpeg's spectral denoiser (`afftdn`, 12 dB reduction, noise floor tracking) for steady hiss and hum.
 - **Even out volume** measures the whole draft with `loudnorm` and then applies the measured correction (linear where the true-peak ceiling allows) to -16 LUFS integrated with a -1.5 dBTP ceiling, a common level for spoken online video.

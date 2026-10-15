@@ -134,6 +134,8 @@ test("packaged MCP protocol lists only reviewed tools and forwards a bounded cal
         "speed.set",
         "graphics.set",
         "graphics.remove",
+        "captions.configure",
+        "audio.configure",
       ],
     );
     const graphic = tools.find((tool) => tool.name === "graphics.set");

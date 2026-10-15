@@ -63,7 +63,9 @@
           { "$ref": "#/$defs/transcript_edit_operation" },
           { "$ref": "#/$defs/zoom_operation" },
           { "$ref": "#/$defs/speed_operation" },
-          { "$ref": "#/$defs/graphic_operation" }
+          { "$ref": "#/$defs/graphic_operation" },
+          { "$ref": "#/$defs/captions_operation" },
+          { "$ref": "#/$defs/audio_operation" }
         ]
       }
     },
@@ -122,6 +124,36 @@
         "properties": {
           "operations": {
             "contains": { "$ref": "#/$defs/graphic_operation" }
+          }
+        },
+        "required": ["operations"]
+      },
+      "then": {
+        "properties": {
+          "operations": { "minItems": 1, "maxItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operations": {
+            "contains": { "$ref": "#/$defs/captions_operation" }
+          }
+        },
+        "required": ["operations"]
+      },
+      "then": {
+        "properties": {
+          "operations": { "minItems": 1, "maxItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operations": {
+            "contains": { "$ref": "#/$defs/audio_operation" }
           }
         },
         "required": ["operations"]
@@ -419,6 +451,52 @@
         }
       },
       "description": "One user-selected contiguous half-open source word range mapped to the current output timeline. It shares ripple-delete's reversible clip-map inverse and records its transcript and word identity."
+    },
+    "captions_operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "operation_type", "before", "after", "inverse"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "operation_id": { "$ref": "#/$defs/id" },
+        "operation_type": { "const": "captions" },
+        "before": { "oneOf": [{ "$ref": "timeline.schema.json#/$defs/caption_settings" }, { "type": "null" }] },
+        "after": { "$ref": "timeline.schema.json#/$defs/caption_settings" },
+        "inverse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "captions", "expected_after_sha256"],
+          "properties": {
+            "type": { "const": "restore_captions" },
+            "captions": { "oneOf": [{ "$ref": "timeline.schema.json#/$defs/caption_settings" }, { "type": "null" }] },
+            "expected_after_sha256": { "$ref": "#/$defs/hash" }
+          }
+        }
+      },
+      "description": "Replaces the draft's caption choices (null before means the draft had none of its own). It is the only operation in its transaction; undo restores the previous timeline, so the clip map is unchanged."
+    },
+    "audio_operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "operation_type", "before", "after", "inverse"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "operation_id": { "$ref": "#/$defs/id" },
+        "operation_type": { "const": "audio" },
+        "before": { "oneOf": [{ "$ref": "timeline.schema.json#/$defs/audio_settings" }, { "type": "null" }] },
+        "after": { "$ref": "timeline.schema.json#/$defs/audio_settings" },
+        "inverse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "audio", "expected_after_sha256"],
+          "properties": {
+            "type": { "const": "restore_audio" },
+            "audio": { "oneOf": [{ "$ref": "timeline.schema.json#/$defs/audio_settings" }, { "type": "null" }] },
+            "expected_after_sha256": { "$ref": "#/$defs/hash" }
+          }
+        }
+      },
+      "description": "Replaces the draft's export audio treatment, like captions_operation."
     },
     "graphic_operation": {
       "type": "object",

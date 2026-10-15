@@ -1271,7 +1271,7 @@ function refreshZoom(us = Number(seek.value)): void {
 }
 function refreshCaptions(): void {
   refreshZoom();
-  audioPanel.render(activeProject?.id);
+  audioPanel.render(activeProject?.id, activeProject?.draft.sequence);
   captions.render(
     selected?.previewAvailable ? activeProject : undefined,
     transcriptionView,

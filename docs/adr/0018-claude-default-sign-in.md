@@ -33,4 +33,4 @@ Details, evidence and remaining gates are in `docs/48_CLAUDE_CONNECTION.md`.
 
 Addendum (2026-10-07): the guarded editor inventory grew from nine to twelve tools with `zoom.set`, `zoom.remove` and `speed.set`; the init inventory check derives from the same shared tool-name list. A real-CLI init probe of the larger inventory later passed (see the 2026-10-15 addendum).
 
-Addendum (2026-10-15): `graphics.set` and `graphics.remove` raise the inventory to fourteen tools; the init check and allowlist still derive from the shared list. Signed-out Claude Code 2.1.292 on Windows reported exactly those fourteen tools through the production turn code.
+Addendum (2026-10-15): `graphics.set` and `graphics.remove` raise the inventory to fourteen tools; the init check and allowlist still derive from the shared list. Signed-out Claude Code 2.1.292 on Windows reported exactly those fourteen tools through the production turn code. `captions.configure` and `audio.configure` later raised it to sixteen; a fresh signed-out real-CLI probe confirmed the sixteen-tool inventory.

@@ -289,7 +289,7 @@
     {
       "name": "captions.configure",
       "mode": "mutation",
-      "description": "Apply caption style settings.",
+      "description": "Set the draft's caption choices (on, style, size, position, burn-in) with shared undo; caption text stays derived from the transcript.",
       "undoable": true,
       "user_confirmation": "none",
       "allowed_scope": "active_draft",
@@ -379,7 +379,7 @@
     {
       "name": "audio.configure",
       "mode": "mutation",
-      "description": "Apply bounded cleanup, gain, fades, music, or ducking.",
+      "description": "Set the draft's export audio treatment (loudness normalisation, noise reduction) with shared undo; sources are unchanged.",
       "undoable": true,
       "user_confirmation": "none",
       "allowed_scope": "active_draft",

@@ -1703,3 +1703,77 @@ test("graphics.set anchors a validated graphic, explains unsafe content, and sha
   );
   assert.deepEqual(await readFile(source), sourceBefore);
 });
+
+test("captions.configure and audio.configure set undoable draft choices", async () => {
+  const { root, active, drafts, service } = await fixture();
+  const projectId = active.project.project_id;
+  const claude = new CodexVideoEditToolService(projectId, drafts, "claude");
+  const summary = async () =>
+    (await claude.invoke("timeline.get_summary", {
+      schema_version: "1.0",
+      project_id: projectId,
+    })) as { captions: unknown; audio: unknown };
+  assert.deepEqual(await summary(), {
+    ...(await summary()),
+    captions: null,
+    audio: null,
+  });
+  const captions = {
+    pass_group_id: "assistant-captions-001",
+    enabled: true,
+    style: "highlight",
+    size: "large",
+    position: "bottom",
+    burn_in: true,
+  };
+  for (const invalid of [
+    { style: "neon" },
+    { burn_in: "yes" },
+    { burnIn: true },
+    { enabled: undefined },
+  ])
+    await assert.rejects(
+      claude.invoke("captions.configure", {
+        ...head(await drafts.snapshot(projectId), "captions-bad-001"),
+        ...captions,
+        ...invalid,
+      }),
+      expectCode("invalid_request"),
+    );
+  const set = (await claude.invoke("captions.configure", {
+    ...head(await drafts.snapshot(projectId), "captions-set-001"),
+    ...captions,
+  })) as ToolCommit & { draft: { captions: unknown } };
+  assert.deepEqual(set.draft.captions, {
+    enabled: true,
+    style: "highlight",
+    size: "large",
+    position: "bottom",
+    burn_in: true,
+  });
+  const again = (await claude.invoke("captions.configure", {
+    ...head(await drafts.snapshot(projectId), "captions-set-002"),
+    ...captions,
+  })) as { status: string };
+  assert.equal(again.status, "unchanged");
+  const audio = (await claude.invoke("audio.configure", {
+    ...head(await drafts.snapshot(projectId), "audio-set-001"),
+    pass_group_id: "assistant-audio-001",
+    normalize: true,
+    denoise: true,
+  })) as ToolCommit & { draft: { audio: unknown } };
+  assert.deepEqual(audio.draft.audio, { normalize: true, denoise: true });
+  const undone = (await service.invoke("timeline.undo", {
+    ...head(await drafts.snapshot(projectId), "audio-undo-001"),
+    target_transaction_id: audio.transaction_id,
+  })) as ToolCommit & { draft: { audio: unknown } };
+  assert.equal(undone.draft.audio, null);
+  assert.deepEqual(
+    (await journalRecords(root, projectId)).map(journalSummary),
+    [
+      ["claude", "apply", "captions", "captions"],
+      ["claude", "apply", "audio", "audio"],
+      ["codex", "undo", null, null],
+    ],
+  );
+});

@@ -20,6 +20,8 @@ import {
   assertGraphicEffects,
   type GraphicEffect,
 } from "./graphics.ts";
+import { assertCaptionSettings, type CaptionSettings } from "./captions.ts";
+import { assertAudioSettings, type AudioSettings } from "./audio-settings.ts";
 type ProjectBaseline = InitialProjectSnapshot | TwoSourceInitialProjectSnapshot;
 import {
   canonicalSha256,
@@ -33,6 +35,13 @@ export type DraftTimeline = InitialProjectSnapshot["timeline"] & {
   zooms?: ZoomEffect[];
   /** Motion graphics anchored to source moments; absent means none. */
   graphics?: GraphicEffect[];
+  /**
+   * Caption choices for this draft. Absent means the project's earlier
+   * per-project choice (or the default) still applies.
+   */
+  captions?: CaptionSettings;
+  /** Export audio treatment for this draft; absent works like `captions`. */
+  audio?: AudioSettings;
 };
 export type DraftOrigin =
   "manual" | "codex" | "claude" | "api_provider" | "magic_wand";
@@ -118,6 +127,18 @@ export interface RemoveGraphicIntent {
   graphic_id: string;
 }
 
+/** Replaces the draft's caption choices. */
+export interface SetCaptionsIntent {
+  type: "set_captions";
+  captions: CaptionSettings;
+}
+
+/** Replaces the draft's export audio treatment. */
+export interface SetAudioIntent {
+  type: "set_audio";
+  audio: AudioSettings;
+}
+
 export interface RemoveZoomIntent {
   type: "remove_zoom";
   zoom_id: string;
@@ -132,6 +153,8 @@ export interface SetSpeedIntent {
 }
 
 export type DraftEditIntent =
+  | SetCaptionsIntent
+  | SetAudioIntent
   | SetGraphicIntent
   | RemoveGraphicIntent
   | SetSpeedIntent
@@ -360,7 +383,36 @@ export interface GraphicOperationRecord {
   };
 }
 
+export interface CaptionsOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "captions";
+  /** Null when the draft had no caption choices of its own. */
+  before: CaptionSettings | null;
+  after: CaptionSettings;
+  inverse: {
+    type: "restore_captions";
+    captions: CaptionSettings | null;
+    expected_after_sha256: string;
+  };
+}
+
+export interface AudioOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "audio";
+  before: AudioSettings | null;
+  after: AudioSettings;
+  inverse: {
+    type: "restore_audio";
+    audio: AudioSettings | null;
+    expected_after_sha256: string;
+  };
+}
+
 export type DraftOperationRecord =
+  | CaptionsOperationRecord
+  | AudioOperationRecord
   | GraphicOperationRecord
   | SpeedOperationRecord
   | ZoomOperationRecord
@@ -596,8 +648,10 @@ export function assertDraftTimeline(
       "speed_ids",
       "created_at",
     ],
-    ["transcript_edits", "zooms", "graphics"],
+    ["transcript_edits", "zooms", "graphics", "captions", "audio"],
   );
+  if (Object.hasOwn(value, "captions")) assertCaptionSettings(value.captions);
+  if (Object.hasOwn(value, "audio")) assertAudioSettings(value.audio);
   if (Object.hasOwn(value, "zooms"))
     assertZoomEffects(value.zooms, baseline.clips);
   if (Object.hasOwn(value, "graphics"))
@@ -758,6 +812,18 @@ export function assertApplyDraftTransactionRequest(
         !isClipSpeed(operation.speed)
       )
         invalid();
+      continue;
+    }
+    if (operation?.type === "set_captions") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "captions"]);
+      assertCaptionSettings(operation.captions);
+      continue;
+    }
+    if (operation?.type === "set_audio") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "audio"]);
+      assertAudioSettings(operation.audio);
       continue;
     }
     if (operation?.type === "set_graphic") {

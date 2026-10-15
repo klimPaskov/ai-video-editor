@@ -39,6 +39,8 @@ export const codexVideoEditToolNames = [
   "speed.set",
   "graphics.set",
   "graphics.remove",
+  "captions.configure",
+  "audio.configure",
 ] as const;
 
 export type CodexVideoEditToolName = (typeof codexVideoEditToolNames)[number];
@@ -290,6 +292,18 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
     })),
     zoom_ids: [...draft.timeline.zoom_ids],
     speed_ids: [...draft.timeline.speed_ids],
+    // Null: the draft has no choice of its own; the project's earlier
+    // per-project choice or the default applies until one is set.
+    captions: draft.timeline.captions
+      ? {
+          enabled: draft.timeline.captions.enabled,
+          style: draft.timeline.captions.style,
+          size: draft.timeline.captions.size,
+          position: draft.timeline.captions.position,
+          burn_in: draft.timeline.captions.burnIn,
+        }
+      : null,
+    audio: draft.timeline.audio ? { ...draft.timeline.audio } : null,
     graphics: (draft.timeline.graphics ?? []).map((graphic) => {
       const placed = placedGraphics.find(
         (interval) => interval.graphicId === graphic.graphic_id,
@@ -421,6 +435,10 @@ export class CodexVideoEditToolService {
           return await this.setGraphic(input);
         case "graphics.remove":
           return await this.removeGraphic(input);
+        case "captions.configure":
+          return await this.configureCaptions(input);
+        case "audio.configure":
+          return await this.configureAudio(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -1065,6 +1083,125 @@ export class CodexVideoEditToolService {
         ? "Graphic added to the active draft."
         : "Graphic replaced on the active draft.",
     );
+  }
+
+  private async presentation(
+    request: Record<string, unknown>,
+    kind: "captions" | "audio",
+    settings: Record<string, unknown>,
+  ): Promise<unknown> {
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const { draft, undo_transaction_id } = await this.drafts.snapshot(
+      this.activeProjectId,
+    );
+    if (
+      draft.draft_id !== request.draft_id ||
+      draft.base_revision_id !== request.base_revision_id ||
+      draft.draft_sequence !== request.expected_sequence ||
+      draft.timeline_sha256 !== request.expected_timeline_sha256
+    )
+      reject("stale_draft");
+    const current = (
+      kind === "captions" ? draft.timeline.captions : draft.timeline.audio
+    ) as Record<string, unknown> | undefined;
+    if (
+      current &&
+      Object.keys(settings).every((key) => current[key] === settings[key])
+    )
+      return {
+        status: "unchanged" as const,
+        draft: safeDraft(draft, undo_transaction_id),
+        summary:
+          kind === "captions"
+            ? "Captions already use these choices."
+            : "Audio already uses these choices.",
+      };
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind },
+      reason: request.reason,
+      operations: [
+        kind === "captions"
+          ? { type: "set_captions", captions: settings }
+          : { type: "set_audio", audio: settings },
+      ],
+    });
+    return safeMutation(
+      result,
+      kind === "captions"
+        ? "Caption choices changed on the active draft."
+        : "Audio treatment changed on the active draft.",
+    );
+  }
+
+  private async configureCaptions(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "enabled",
+      "style",
+      "size",
+      "position",
+      "burn_in",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    if (
+      typeof request.enabled !== "boolean" ||
+      typeof request.burn_in !== "boolean" ||
+      !["plain", "highlight", "minimal"].includes(request.style as string) ||
+      !["small", "medium", "large"].includes(request.size as string) ||
+      !["bottom", "top"].includes(request.position as string)
+    )
+      reject("invalid_request");
+    return this.presentation(request, "captions", {
+      enabled: request.enabled,
+      style: request.style,
+      size: request.size,
+      position: request.position,
+      burnIn: request.burn_in,
+    });
+  }
+
+  private async configureAudio(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "normalize",
+      "denoise",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    if (
+      typeof request.normalize !== "boolean" ||
+      typeof request.denoise !== "boolean"
+    )
+      reject("invalid_request");
+    return this.presentation(request, "audio", {
+      normalize: request.normalize,
+      denoise: request.denoise,
+    });
   }
 
   private async removeGraphic(input: unknown): Promise<unknown> {

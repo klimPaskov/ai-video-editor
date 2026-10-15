@@ -2102,3 +2102,117 @@ test("graphics are reversible draft edits that survive reopen", async () => {
   assert.deepEqual(reopened.draft, undone.draft);
   assert.deepEqual(await readFile(source), sourceBytes);
 });
+
+test("caption and audio choices are undoable draft edits that survive reopen", async () => {
+  const { projects, projectStore, baseline } = await fixture();
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  assert.equal(initial.timeline.captions, undefined);
+  const captions = {
+    enabled: true,
+    style: "highlight" as const,
+    size: "large" as const,
+    position: "bottom" as const,
+    burnIn: true,
+  };
+  const on = await store.applyClaude(
+    trim(initial, {
+      request_id: "request-captions-001",
+      pass_group: { pass_group_id: "pass-captions-001", kind: "captions" },
+      reason: "Turn captions on.",
+      operations: [{ type: "set_captions", captions }],
+    }),
+  );
+  assert.equal(on.transaction.origin, "claude");
+  assert.deepEqual(on.transaction.operations[0], {
+    schema_version: "1.0",
+    operation_id: on.transaction.operations[0]!.operation_id,
+    operation_type: "captions",
+    before: null,
+    after: captions,
+    inverse: {
+      type: "restore_captions",
+      captions: null,
+      expected_after_sha256: (
+        on.transaction.operations[0] as {
+          inverse: { expected_after_sha256: string };
+        }
+      ).inverse.expected_after_sha256,
+    },
+  });
+  assert.deepEqual(on.draft.timeline.captions, captions);
+  // Setting the same choice again is a conflict, not an empty edit.
+  await assert.rejects(
+    async () =>
+      store.applyManual(
+        trim(on.draft, {
+          request_id: "request-captions-002",
+          pass_group: { pass_group_id: "pass-captions-002", kind: "captions" },
+          operations: [{ type: "set_captions", captions }],
+        }),
+      ),
+    code("conflict"),
+  );
+  for (const bad of [
+    { ...captions, style: "neon" },
+    { ...captions, extra: true },
+  ])
+    await assert.rejects(async () =>
+      store.applyManual(
+        trim(on.draft, {
+          request_id: `request-captions-bad-${JSON.stringify(bad).length}`,
+          pass_group: { pass_group_id: "pass-captions-003", kind: "captions" },
+          operations: [{ type: "set_captions", captions: bad as never }],
+        }),
+      ),
+    );
+  const audio = await store.applyManual(
+    trim(on.draft, {
+      request_id: "request-audio-001",
+      pass_group: { pass_group_id: "pass-audio-001", kind: "audio" },
+      reason: "Even out loudness.",
+      operations: [
+        { type: "set_audio", audio: { normalize: true, denoise: false } },
+      ],
+    }),
+  );
+  assert.deepEqual(audio.draft.timeline.audio, {
+    normalize: true,
+    denoise: false,
+  });
+  assert.equal(audio.draft.timeline.duration_us, initial.timeline.duration_us);
+  assert.deepEqual(audio.draft.timeline.clips, initial.timeline.clips);
+  const undoneAudio = await store.undoManual(
+    undo(
+      audio.draft,
+      audio.transaction.transaction_id,
+      "request-audio-undo-001",
+    ),
+  );
+  assert.equal(undoneAudio.draft.timeline.audio, undefined);
+  const undoneCaptions = await store.undoManual(
+    undo(
+      undoneAudio.draft,
+      on.transaction.transaction_id,
+      "request-captions-undo-001",
+    ),
+  );
+  assert.equal(undoneCaptions.draft.timeline.captions, undefined);
+  const redone = await store.redoManual(
+    redo(
+      undoneCaptions.draft,
+      undoneCaptions.transaction.transaction_id,
+      "request-captions-redo-001",
+    ),
+  );
+  assert.deepEqual(redone.draft.timeline.captions, captions);
+  const reopened = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopened.draft, redone.draft);
+});

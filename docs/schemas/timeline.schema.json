@@ -255,6 +255,14 @@
       "items": { "$ref": "#/$defs/graphic_effect" },
       "description": "Draft motion graphics. Omitted when the draft has none."
     },
+    "captions": {
+      "$ref": "#/$defs/caption_settings",
+      "description": "The draft's caption choices. Omitted until the first change; the project's earlier per-project choice or the default applies until then."
+    },
+    "audio": {
+      "$ref": "#/$defs/audio_settings",
+      "description": "The draft's export audio treatment. Omitted until the first change, like captions."
+    },
     "zooms": {
       "type": "array",
       "maxItems": 256,
@@ -271,6 +279,27 @@
     }
   },
   "$defs": {
+    "caption_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "style", "size", "position", "burnIn"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "style": { "enum": ["plain", "highlight", "minimal"] },
+        "size": { "enum": ["small", "medium", "large"] },
+        "position": { "enum": ["bottom", "top"] },
+        "burnIn": { "type": "boolean" }
+      }
+    },
+    "audio_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalize", "denoise"],
+      "properties": {
+        "normalize": { "type": "boolean" },
+        "denoise": { "type": "boolean" }
+      }
+    },
     "graphic_effect": {
       "type": "object",
       "additionalProperties": false,

@@ -455,7 +455,7 @@ test("every guarded editor tool definition reaches each provider request", async
     description: tool.description,
     parameters: tool.inputSchema as unknown as Record<string, unknown>,
   }));
-  assert.equal(tools.length, 14);
+  assert.equal(tools.length, 16);
   for (const provider of ["openai", "deepseek", "gemini"] as const)
     await client.complete(provider, key, {
       model: "test-model",

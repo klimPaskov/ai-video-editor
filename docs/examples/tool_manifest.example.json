@@ -210,6 +210,36 @@
         "delete project",
         "approve export"
       ]
+    },
+    {
+      "name": "captions.configure",
+      "mode": "mutation",
+      "description": "Set the draft's caption choices (on, style, size, position, burn-in) with shared undo; caption text stays derived from the transcript.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "audio.configure",
+      "mode": "mutation",
+      "description": "Set the draft's export audio treatment (loudness normalisation, noise reduction) with shared undo; sources are unchanged.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
     }
   ]
 }

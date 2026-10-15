@@ -508,19 +508,83 @@ async function start(): Promise<void> {
     assertAudioSettings,
     defaultAudioSettings,
   );
+  // Caption and audio choices are part of the draft, so they share Undo with
+  // every other edit. Projects whose draft has none yet keep the per-project
+  // choice saved by earlier versions (read only) until the first change.
+  const sameSettings = (a: object, b: object) =>
+    Object.keys(a).length === Object.keys(b).length &&
+    Object.entries(a).every(
+      ([key, value]) => (b as Record<string, unknown>)[key] === value,
+    );
+  const effectiveCaptions = async (projectId: string) =>
+    (await drafts.snapshot(projectId)).draft.timeline.captions ??
+    (await captionSettings.get(projectId));
+  const effectiveAudio = async (projectId: string) =>
+    (await drafts.snapshot(projectId)).draft.timeline.audio ??
+    (await audioSettings.get(projectId));
+  const setDraftPresentation = async <T extends object>(
+    projectId: string,
+    kind: "captions" | "audio",
+    settings: T,
+  ): Promise<T> => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { draft } = await drafts.snapshot(projectId);
+      const current =
+        kind === "captions"
+          ? await effectiveCaptions(projectId)
+          : await effectiveAudio(projectId);
+      if (sameSettings(current, settings)) return settings;
+      try {
+        await invokeWithProjectDraftRefresh({
+          toolName:
+            kind === "captions" ? "captions.configure" : "audio.configure",
+          projectId,
+          activeProjectId: () => activeProjectId,
+          drafts,
+          notify: publishDraftNotice,
+          work: () =>
+            drafts.applyManual({
+              schema_version: "1.0",
+              request_id: randomUUID(),
+              project_id: projectId,
+              draft_id: draft.draft_id,
+              base_revision_id: draft.base_revision_id,
+              expected_sequence: draft.draft_sequence,
+              expected_timeline_sha256: draft.timeline_sha256,
+              pass_group: { pass_group_id: randomUUID(), kind },
+              reason:
+                kind === "captions" ? "Change captions." : "Change audio.",
+              operations: [
+                kind === "captions"
+                  ? { type: "set_captions", captions: settings as never }
+                  : { type: "set_audio", audio: settings as never },
+              ],
+            }),
+        });
+        return settings;
+      } catch (error) {
+        if (error instanceof DraftTransactionError && error.code === "stale")
+          continue;
+        if (error instanceof DraftTransactionError)
+          throw new UserFacingError(error.message);
+        throw error;
+      }
+    }
+    throw new UserFacingError("The draft changed. Try again.");
+  };
   register(channels.audioGet, async (request) => {
     assertAudioSettingsRequest(request);
-    return audioSettings.get(request.project_id);
+    return effectiveAudio(request.project_id);
   });
   register(channels.audioSet, async (request) => {
     assertAudioSettingsUpdate(request);
     if (activeProjectId !== request.project_id)
       throw new UserFacingError("Open this project before changing audio.");
-    return audioSettings.set(request.project_id, request.settings);
+    return setDraftPresentation(request.project_id, "audio", request.settings);
   });
   /** Captions for the current draft when they are on and a transcript exists. */
   const draftCaptions = async (projectId: string) => {
-    const settings = await captionSettings.get(projectId);
+    const settings = await effectiveCaptions(projectId);
     if (!settings.enabled) return null;
     const view = await transcription!.get({
       schema_version: "1.0",
@@ -561,8 +625,8 @@ async function start(): Promise<void> {
         timelineSha256: project.draft.timelineSha256,
       };
     },
-    captionSettings: (projectId) => captionSettings.get(projectId),
-    audioSettings: (projectId) => audioSettings.get(projectId),
+    captionSettings: effectiveCaptions,
+    audioSettings: effectiveAudio,
     defaultDirectory: () => app.getPath("videos"),
     chooseDestination: async (defaultPath) => {
       if (!window) return null;
@@ -618,13 +682,17 @@ async function start(): Promise<void> {
   });
   register(channels.captionsGet, async (request) => {
     assertCaptionSettingsRequest(request);
-    return captionSettings.get(request.project_id);
+    return effectiveCaptions(request.project_id);
   });
   register(channels.captionsSet, async (request) => {
     assertCaptionSettingsUpdate(request);
     if (activeProjectId !== request.project_id)
       throw new UserFacingError("Open this project before changing captions.");
-    return captionSettings.set(request.project_id, request.settings);
+    return setDraftPresentation(
+      request.project_id,
+      "captions",
+      request.settings,
+    );
   });
   recorder = new DesktopRecorder({
     root: path.join(userData, "recordings"),
@@ -742,7 +810,7 @@ async function start(): Promise<void> {
     renderGraphics: (request) =>
       renderGraphicsTrack(request, `${origin}/stage.html`),
     captions: draftCaptions,
-    audio: (projectId) => audioSettings.get(projectId),
+    audio: effectiveAudio,
     drafts,
     recordRoot: path.join(userData, "exports"),
     defaultDirectory: () => app.getPath("videos"),
