@@ -553,12 +553,10 @@ export class MediaLibrary {
         "UNSUPPORTED_PROFILE",
         "This source is preserved, but its preview color or precision path is not yet verified.",
       );
-    const path = join(this.root, "assets", entry.source.file);
-    if ((await hash(path, signal)) !== entry.source.sha256)
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "The managed source has changed.",
-      );
+    // Verified once per file identity; re-hashing a long recording for every
+    // preview frame cost about as much as decoding the frame.
+    const path = (await this.verifiedSource(id)).managedPath;
+    signal?.throwIfAborted();
     const timingKey = `${id}:${entry.source.sha256}`;
     let timing = this.presentationTimings.get(timingKey);
     if (!timing) {

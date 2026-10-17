@@ -55,6 +55,27 @@ declare global {
     desktop: DesktopBridge;
   }
 }
+/**
+ * Pixel bytes of a frame. A preview frame is tens of megabytes of base64, so
+ * the built-in decoder is used where Chromium has it.
+ */
+function framePixels(base64: string): Uint8ClampedArray<ArrayBuffer> {
+  const native = (
+    Uint8Array as unknown as {
+      fromBase64?: (text: string) => Uint8Array<ArrayBuffer>;
+    }
+  ).fromBase64;
+  if (native) {
+    const bytes = native(base64);
+    return new Uint8ClampedArray(bytes.buffer, bytes.byteOffset, bytes.length);
+  }
+  const text = atob(base64);
+  const bytes = new Uint8ClampedArray(text.length);
+  for (let index = 0; index < text.length; index++)
+    bytes[index] = text.charCodeAt(index);
+  return bytes;
+}
+
 function element<T extends HTMLElement>(id: string): T {
   const value = document.getElementById(id);
   if (!value) throw new Error("Missing control");
@@ -1648,17 +1669,13 @@ function thumbnail(mediaId: string, name: string): HTMLElement {
     canvas.height = frame.height;
     canvas.setAttribute("aria-hidden", "true");
     canvas.dataset.thumbnailFor = name;
-    canvas.getContext("2d")?.putImageData(
-      new ImageData(
-        Uint8ClampedArray.from(atob(frame.rgbaBase64), (character) =>
-          character.charCodeAt(0),
-        ),
-        frame.width,
-        frame.height,
-      ),
-      0,
-      0,
-    );
+    canvas
+      .getContext("2d")
+      ?.putImageData(
+        new ImageData(framePixels(frame.rgbaBase64), frame.width, frame.height),
+        0,
+        0,
+      );
     box.prepend(canvas);
   });
   return box;
@@ -1895,10 +1912,7 @@ async function decodeFrames(): Promise<void> {
         }
         frame = reply.value;
       }
-      const bytes = Uint8ClampedArray.from(
-        atob(frame.rgbaBase64),
-        (character) => character.charCodeAt(0),
-      );
+      const bytes = framePixels(frame.rgbaBase64);
       canvas.width = frame.width;
       canvas.height = frame.height;
       canvas

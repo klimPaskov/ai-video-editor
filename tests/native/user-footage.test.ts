@@ -276,6 +276,16 @@ try {
     Math.round(current.timeline.durationUs * 0.75),
   );
   await frameShown(page, "seek");
+  // A second seek in the same recording, after its one-time verification.
+  await page.evaluate(
+    (us) => {
+      const seek = document.querySelector<HTMLInputElement>("#seek")!;
+      seek.value = String(us);
+      seek.dispatchEvent(new Event("input"));
+    },
+    Math.round(current.timeline.durationUs * 0.8),
+  );
+  await frameShown(page, "seekAgain");
   result.previewFrameMs = frameWaits;
   await page.screenshot({ path: join(evidence, "edit.png") });
 
