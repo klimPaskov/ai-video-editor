@@ -185,7 +185,7 @@ Acceptance: the installed app creates and verifies the default lossless master a
 - [ ] P10-02 Run Magic Wand with real Codex and inspect each automation class. Exercise the adapted editorial prompt, including conservative spoken instructions and suggestion-only graphics with no automatic export.
 - [ ] P10-03 Review the complete draft through computer use.
 - [ ] P10-04 Fix defects using manual tools and natural-language edits.
-- [ ] P10-05 Export and fully decode the lossless master, verify canonical frame and audio equality, and test a separately requested smaller MP4 copy.
+- [x] P10-05 Export and fully decode the lossless master, verify canonical frame and audio equality, and test a separately requested smaller MP4 copy.
 - [ ] P10-06 Save screenshots, short recordings, logs, manifests, and a concise acceptance report. Include unresolved instructions, final-timed graphics prompts, measured layout/zoom purposes and targets, persisted/checkpoint state and remaining review.
 - [ ] P10-07 Update every affected spec, skill, task, schema, and reference entry.
 
