@@ -89,6 +89,7 @@ import {
   assertProjectRequest,
   assertTwoSourceProjectRequest,
   assertProjectNavigation,
+  assertProjectRename,
   assertProjectView,
   assertProjectList,
 } from "../../../packages/domain/src/project-view.ts";
@@ -464,6 +465,16 @@ const bridge: DesktopBridge = {
   navigateProject: (request) => {
     assertProjectNavigation(request);
     return invoke(channels.projectNavigate, request, assertProjectView);
+  },
+  renameProject: (request) => {
+    assertProjectRename(request);
+    return invoke(channels.projectRename, request, assertProjectView);
+  },
+  deleteProject: (request) => {
+    assertProjectRequest(request);
+    return invoke(channels.projectDelete, request, (value) => {
+      if (value !== null) throw new Error("Invalid response");
+    });
   },
   verifyDraftIntegrity: (request) => {
     assertProjectRequest(request);

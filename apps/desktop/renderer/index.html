@@ -847,6 +847,49 @@
         </div>
       </form>
     </dialog>
+    <dialog id="project-dialog" aria-labelledby="project-dialog-title">
+      <form id="project-form">
+        <div class="panel-header">
+          <h2 id="project-dialog-title">Project</h2>
+          <button
+            type="button"
+            id="project-dialog-close"
+            class="icon-button"
+            data-icon="close"
+            aria-label="Close project options"
+          ></button>
+        </div>
+        <div id="project-rename-view">
+          <label class="field-label" for="project-name">Name</label>
+          <input
+            type="text"
+            id="project-name"
+            maxlength="160"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <div class="dialog-actions project-actions">
+            <button type="button" id="project-delete" class="ghost danger">
+              Delete project…</button
+            ><span class="source-bar-spacer"></span
+            ><button type="button" id="project-cancel">Cancel</button
+            ><button type="submit" class="primary" id="project-save">
+              Save
+            </button>
+          </div>
+        </div>
+        <div id="project-delete-view" hidden>
+          <p id="project-delete-text"></p>
+          <div class="dialog-actions">
+            <button type="button" id="project-delete-cancel">Cancel</button
+            ><button type="button" id="project-delete-confirm" class="danger">
+              Delete
+            </button>
+          </div>
+        </div>
+        <p id="project-dialog-error" role="alert" hidden></p>
+      </form>
+    </dialog>
     <dialog id="record-dialog" aria-labelledby="record-title">
       <div class="panel-header">
         <h2 id="record-title">New recording</h2>

@@ -33,6 +33,10 @@ export interface TwoSourceProjectRequest {
 export interface ProjectNavigation extends ProjectRequest {
   stage: ProjectStage;
 }
+/** A new display name; the immutable baseline keeps the original one. */
+export interface ProjectRename extends ProjectRequest {
+  name: string;
+}
 export interface ProjectFrameRequest {
   projectId: string;
   draftId: string;
@@ -299,6 +303,24 @@ export function assertTwoSourceProjectRequest(
   id(value.firstId);
   id(value.secondId);
   if (value.firstId === value.secondId) invalid();
+}
+/** Names are one line of at most 160 characters, without path separators. */
+export function assertProjectName(value: unknown): asserts value is string {
+  if (
+    typeof value !== "string" ||
+    !value.length ||
+    value.length > 160 ||
+    value.trim() !== value ||
+    /[\x00-\x1f\x7f/\\]/u.test(value)
+  )
+    invalid();
+}
+export function assertProjectRename(
+  value: unknown,
+): asserts value is ProjectRename {
+  exact(value, ["id", "name"]);
+  id(value.id);
+  assertProjectName(value.name);
 }
 export function assertProjectNavigation(
   value: unknown,
@@ -857,6 +879,7 @@ export function assertProjectView(
   ]);
   id(value.id);
   id(value.revisionId);
+  // Earlier names (from file names) may have surrounding spaces.
   if (
     typeof value.name !== "string" ||
     !value.name.length ||

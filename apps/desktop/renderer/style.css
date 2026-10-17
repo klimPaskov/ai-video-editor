@@ -401,6 +401,55 @@ main {
   background: var(--surface-2);
   border-color: var(--border-strong);
 }
+.card-grid li {
+  position: relative;
+}
+/* The options button sits over the card picture, apart from the card. */
+.card-grid .card-options {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: rgb(10 11 16 / 64%);
+  border-color: transparent;
+  overflow: visible;
+}
+.card-grid .card-options:hover:not(:disabled) {
+  background: rgb(10 11 16 / 84%);
+  border-color: transparent;
+}
+.danger {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+  font-weight: 600;
+}
+.ghost.danger {
+  color: var(--danger-text);
+  background: transparent;
+  border-color: transparent;
+  font-weight: 500;
+}
+.ghost.danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+.project-actions {
+  align-items: center;
+}
+#project-name {
+  width: 100%;
+}
+#project-delete-text {
+  margin: 0;
+  line-height: 1.5;
+}
 .thumb {
   position: relative;
   display: block;

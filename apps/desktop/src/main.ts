@@ -53,6 +53,7 @@ import {
   assertProjectFrameRequest,
   assertProjectRequest,
   assertProjectNavigation,
+  assertProjectRename,
   assertProjectList,
   assertTwoSourceProjectRequest,
   assertManualTrimRequest,
@@ -120,6 +121,7 @@ import { DesktopRecorder, RecordingError } from "./recording.ts";
 import { DesktopPlaybackProxies } from "./playback-proxies.ts";
 import { CaptionSettingsStore } from "./caption-settings.ts";
 import { ProjectSettingsStore } from "./project-settings.ts";
+import { removeProjectSideFiles } from "./project-removal.ts";
 import {
   assertAudioSettings,
   assertAudioSettingsRequest,
@@ -1401,6 +1403,22 @@ async function start(): Promise<void> {
       await transcription!.closeProject(request.id);
       activeProjectId = undefined;
     }
+    return null;
+  });
+  register(channels.projectRename, async (request) => {
+    assertProjectRename(request);
+    await projects.rename(request.id, request.name);
+    return projectRuntime.view(request.id);
+  });
+  // Deleting is an explicit Home action on a closed project. Its sources
+  // stay in Media; conversations and per-project choices go with it.
+  register(channels.projectDelete, async (request) => {
+    assertProjectRequest(request);
+    if (activeProjectId === request.id)
+      throw new UserFacingError("Close the project before deleting it.");
+    await projects.open(request.id);
+    await removeProjectSideFiles(userData, request.id);
+    await projects.remove(request.id);
     return null;
   });
   register(channels.projectNavigate, async (request) => {

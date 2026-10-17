@@ -57,6 +57,7 @@ import type {
   ProjectView,
   ProjectRequest,
   ProjectNavigation,
+  ProjectRename,
   TwoSourceProjectRequest,
   ManualTrimRequest,
   ManualSplitRequest,
@@ -243,6 +244,8 @@ export interface DesktopBridge {
   openProject(request: ProjectRequest): Promise<Reply<ProjectView>>;
   closeProject(request: ProjectRequest): Promise<Reply<null>>;
   navigateProject(request: ProjectNavigation): Promise<Reply<ProjectView>>;
+  renameProject(request: ProjectRename): Promise<Reply<ProjectView>>;
+  deleteProject(request: ProjectRequest): Promise<Reply<null>>;
   verifyDraftIntegrity(
     request: ProjectRequest,
   ): Promise<Reply<ProjectDraftIntegrityView>>;
@@ -356,6 +359,8 @@ export const channels = Object.freeze({
   projectOpen: "projects:open",
   projectClose: "projects:close",
   projectNavigate: "projects:navigate",
+  projectRename: "projects:rename",
+  projectDelete: "projects:delete",
   projectIntegrityCheck: "projects:verify-draft-integrity",
   projectFrame: "projects:frame",
   projectManualTrim: "projects:manual-trim",

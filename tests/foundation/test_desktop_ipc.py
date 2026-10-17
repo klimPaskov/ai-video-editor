@@ -390,6 +390,32 @@ class DesktopIpcContractTests(unittest.TestCase):
         selection['payload']['command'] = 'unsafe'
         self.invalid(selection)
 
+    def test_project_rename_and_delete_are_path_free_and_bounded(self):
+        view = self.project_view()
+        project_id = view['id']
+        renamed = deepcopy(view)
+        renamed['name'] = 'Weekly update'
+        self.valid({'channel': 'projects:rename', 'payload': {'id': project_id, 'name': 'Weekly update'},
+                    'response': {'ok': True, 'value': renamed}})
+        self.valid({'channel': 'projects:rename', 'payload': {'id': project_id, 'name': 'x' * 160},
+                    'response': {'ok': False, 'message': 'The project could not be renamed.'}})
+        for name in ['', ' lead', 'trail ', 'a/b', 'a\\b', 'line\nbreak', 'x' * 161, None, 7]:
+            self.invalid({'channel': 'projects:rename', 'payload': {'id': project_id, 'name': name},
+                          'response': {'ok': True, 'value': renamed}})
+        for payload in [{'id': project_id}, {'id': '../project', 'name': 'A'},
+                        {'id': project_id, 'name': 'A', 'path': '/private/project'}]:
+            self.invalid({'channel': 'projects:rename', 'payload': payload,
+                          'response': {'ok': True, 'value': renamed}})
+        self.valid({'channel': 'projects:delete', 'payload': {'id': project_id},
+                    'response': {'ok': True, 'value': None}})
+        self.valid({'channel': 'projects:delete', 'payload': {'id': project_id},
+                    'response': {'ok': False, 'message': 'Close the project before deleting it.'}})
+        for payload in [{}, {'id': '../project'}, {'id': project_id, 'path': '/private/project'}, None]:
+            self.invalid({'channel': 'projects:delete', 'payload': payload,
+                          'response': {'ok': True, 'value': None}})
+        self.invalid({'channel': 'projects:delete', 'payload': {'id': project_id},
+                      'response': {'ok': True, 'value': view}})
+
     def test_project_close_and_codex_conversation_channels_are_explicit(self):
         project_id = '11111111-1111-4111-8111-111111111111'
         self.valid({

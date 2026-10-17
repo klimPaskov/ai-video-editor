@@ -1684,6 +1684,106 @@ function time(value: number): string {
   const seconds = value / 1_000_000;
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(3).padStart(6, "0")}`;
 }
+const projectDialog = element<HTMLDialogElement>("project-dialog"),
+  projectNameInput = element<HTMLInputElement>("project-name");
+let projectOptions: { project: ProjectView; opener: HTMLElement } | null = null;
+let projectBusy = false;
+function projectDialogError(message: string | null): void {
+  const error = element("project-dialog-error");
+  error.textContent = message ?? "";
+  error.hidden = message === null;
+}
+function showProjectView(deleting: boolean): void {
+  element("project-rename-view").hidden = deleting;
+  element("project-delete-view").hidden = !deleting;
+  element("project-dialog-title").textContent = deleting
+    ? "Delete project?"
+    : "Project";
+  projectDialogError(null);
+  (deleting ? element("project-delete-cancel") : projectNameInput).focus();
+}
+/** Rename and delete for a closed project on Home. */
+function openProjectOptions(project: ProjectView, opener: HTMLElement): void {
+  projectOptions = { project, opener };
+  projectNameInput.value = project.name;
+  element("project-delete-text").textContent =
+    `"${project.name}" and its edits, conversations and project choices will be deleted. Your recordings stay in Media, and exported videos are not touched.`;
+  projectDialog.showModal();
+  showProjectView(false);
+  projectNameInput.select();
+}
+function closeProjectOptions(): void {
+  if (projectBusy) return;
+  projectDialog.close();
+}
+projectDialog.addEventListener("close", () => {
+  const opener = projectOptions?.opener;
+  projectOptions = null;
+  if (opener?.isConnected) opener.focus();
+});
+projectDialog.addEventListener("cancel", (event) => {
+  if (projectBusy) event.preventDefault();
+});
+for (const id of ["project-dialog-close", "project-cancel"])
+  element(id).addEventListener("click", closeProjectOptions);
+projectNameInput.addEventListener("input", () => projectDialogError(null));
+element("project-delete").addEventListener("click", () =>
+  showProjectView(true),
+);
+element("project-delete-cancel").addEventListener("click", () =>
+  showProjectView(false),
+);
+async function projectAction(
+  work: (project: ProjectView) => Promise<Reply<unknown>>,
+): Promise<void> {
+  const current = projectOptions;
+  if (!current || projectBusy) return;
+  projectBusy = true;
+  for (const control of projectDialog.querySelectorAll("button, input"))
+    (control as HTMLButtonElement | HTMLInputElement).disabled = true;
+  try {
+    const reply = await work(current.project);
+    if (!reply.ok) {
+      projectDialogError(reply.message);
+      return;
+    }
+    projectBusy = false;
+    projectOptions = null;
+    projectDialog.close();
+    await loadLibrary();
+    // Focus returns to the project's options, or to Import after a delete.
+    const card = document.querySelector<HTMLElement>(
+      `#projects [data-project-options="${current.project.id}"]`,
+    );
+    (card ?? element("import")).focus();
+  } catch {
+    projectDialogError("The project could not be changed. Try again.");
+  } finally {
+    projectBusy = false;
+    for (const control of projectDialog.querySelectorAll("button, input"))
+      (control as HTMLButtonElement | HTMLInputElement).disabled = false;
+  }
+}
+element("project-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = projectNameInput.value.trim();
+  if (!name || name.length > 160 || /[\x00-\x1f\x7f/\\]/u.test(name)) {
+    projectDialogError("Use a name of up to 160 characters without slashes.");
+    return;
+  }
+  if (name === projectOptions?.project.name) {
+    closeProjectOptions();
+    return;
+  }
+  void projectAction((project) =>
+    window.desktop.renameProject({ id: project.id, name }),
+  );
+});
+element("project-delete-confirm").addEventListener("click", () => {
+  void projectAction((project) =>
+    window.desktop.deleteProject({ id: project.id }),
+  );
+});
 async function loadLibrary(): Promise<void> {
   const generation = ++loadingHome;
   const [reply, projects] = await Promise.all([
@@ -1717,7 +1817,16 @@ async function loadLibrary(): Promise<void> {
       button.addEventListener("click", () => {
         void openProject(project.id, button);
       });
-      row.append(button);
+      const options = document.createElement("button");
+      options.type = "button";
+      options.className = "card-options";
+      options.dataset.icon = "more";
+      options.dataset.projectOptions = project.id;
+      options.setAttribute("aria-label", `Options for ${project.name}`);
+      options.addEventListener("click", () =>
+        openProjectOptions(project, options),
+      );
+      row.append(button, options);
       list.append(row);
     }
   }
