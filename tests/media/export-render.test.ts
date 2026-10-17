@@ -299,6 +299,121 @@ test(
 );
 
 test(
+  "a recording with a missed capture holds the previous frame in its slot",
+  { timeout: 180_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-held-"));
+    try {
+      // 60 fps on a millisecond clock (16/17 ms steps, as screen recorders
+      // write) with frame 50 never captured: later frames keep their times.
+      const recorded = join(directory, "recorded.mkv");
+      await ffmpeg([
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=96x64:rate=60:duration=2",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=48000:duration=2",
+        "-vf",
+        "select='not(eq(n\\,50))'",
+        "-fps_mode",
+        "passthrough",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "pcm_s16le",
+        recorded,
+      ]);
+      const input = await source(directory, "held.mkv", [
+        "-i",
+        recorded,
+        "-c",
+        "copy",
+      ]);
+      assert.equal(input.timing.pts.length, 119);
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 500_000,
+            sourceEndUs: 1_500_000,
+          },
+          // Starts in the empty slot: the frame before it is on screen.
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 833_333,
+            sourceEndUs: 1_000_000,
+          },
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 500_000,
+            sourceEndUs: 1_500_000,
+            speed: 2,
+          },
+        ],
+        [input],
+      );
+      assert.deepEqual(
+        plan.clips.map((clip) => [
+          clip.firstFrame,
+          clip.frameCount,
+          clip.decodeFrames,
+          clip.held,
+          clip.outputFrames,
+        ]),
+        [
+          [30, 60, 59, [[19, 1]], 60],
+          [50, 10, 10, [], 10],
+          [30, 60, 59, [[19, 1]], 30],
+        ],
+      );
+      // Independent expectation: each slot shows the last frame at or before it.
+      const frameBytes = rawFrameBytes("yuv420p", 96, 64);
+      const full = await fullDecode(input, "yuv420p", null);
+      assert.equal(full.video.length, 119 * frameBytes);
+      const slots = input.timing.pts.map((pts) =>
+        Math.round(
+          ((pts * input.timing.timeBaseNumerator) /
+            input.timing.timeBaseDenominator) *
+            60,
+        ),
+      );
+      const expected = createHash("sha256");
+      for (const clip of plan.clips)
+        for (
+          let slot = clip.firstFrame;
+          slot < clip.firstFrame + clip.frameCount;
+          slot += clip.speed
+        ) {
+          const frame = slots.findLastIndex((value) => value <= slot);
+          expected.update(
+            full.video.subarray(frame * frameBytes, (frame + 1) * frameBytes),
+          );
+        }
+      const output = join(directory, "held master.mkv");
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: output,
+        replace: false,
+      });
+      assert.equal(evidence.canonicalVideoSha256, expected.digest("hex"));
+      assert.equal(evidence.samplesEqual, true);
+      assert.equal(evidence.frameCount, 100);
+      // Audio follows the slots, not the decoded frame count.
+      assert.equal(evidence.audioSampleCount, (60 + 10) * 800 + 30 * 800);
+      assert.equal(sha(await readFile(input.path)), input.sha256);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
   "smaller MP4 is a separate, decodable, explicitly lossy copy",
   { timeout: 180_000 },
   async () => {

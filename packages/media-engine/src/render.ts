@@ -73,9 +73,17 @@ export interface WorkingFormat {
 export interface PlannedClip {
   sourceId: string;
   path: string;
-  /** Source frame indexes [firstFrame, endFrame). */
+  /** Frame-grid slots [firstFrame, firstFrame + frameCount) of the source. */
   firstFrame: number;
   frameCount: number;
+  /**
+   * Source frames decoded for the slots. A recorder that missed a capture
+   * leaves a slot empty; the frame before it is held there, as a player
+   * shows it, so `held` lists [decoded offset, extra copies] for each such
+   * frame (empty when every slot has its own frame).
+   */
+  decodeFrames: number;
+  held: Array<[number, number]>;
   /** Trim window in seconds with half-frame margins around the kept frames. */
   trimStartSeconds: number;
   trimEndSeconds: number;
@@ -255,6 +263,19 @@ export function nominalFrameRate(
   video: Record<string, unknown>,
   timing: PresentationTiming,
 ): Rational {
+  return frameGrid(video, timing).rate;
+}
+
+/**
+ * The frame grid and each frame's slot on it. Every frame must lie within one
+ * tick (at least 1 ms) of its slot, one frame per slot. A screen recorder
+ * that missed a capture leaves an empty slot (the previous frame stays on
+ * screen); `slots` is null when there is none. Off-grid timing is refused.
+ */
+export function frameGrid(
+  video: Record<string, unknown>,
+  timing: PresentationTiming,
+): { rate: Rational; slots: number[] | null } {
   const { pts, timeBaseNumerator: tbn, timeBaseDenominator: tbd } = timing;
   if (pts.length < 1 || pts[0] !== 0)
     unsupported("This video's frame timing cannot be verified.");
@@ -268,10 +289,23 @@ export function nominalFrameRate(
   if (!rate) unsupported("This video's frame timing cannot be verified.");
   const tolerance = Math.max(tbn / tbd, 0.001) + 1e-9;
   const frameSeconds = rate.denominator / rate.numerator;
-  for (let index = 0; index < pts.length; index++)
-    if (Math.abs((pts[index]! * tbn) / tbd - index * frameSeconds) > tolerance)
+  const offGrid = (index: number, slot: number) =>
+    Math.abs((pts[index]! * tbn) / tbd - slot * frameSeconds) > tolerance;
+  let gap = -1;
+  for (let index = 0; index < pts.length && gap < 0; index++)
+    if (offGrid(index, index)) gap = index;
+  if (gap < 0) return { rate, slots: null };
+  // Held frames are only told apart from jitter when slots are well apart.
+  if (tolerance > frameSeconds / 4)
+    unsupported("Variable frame rate video cannot be exported yet.");
+  const slots = Array.from({ length: gap }, (_, index) => index);
+  for (let index = gap; index < pts.length; index++) {
+    const slot = Math.round((pts[index]! * tbn) / tbd / frameSeconds);
+    if ((index > 0 && slot <= slots[index - 1]!) || offGrid(index, slot))
       unsupported("Variable frame rate video cannot be exported yet.");
-  return rate;
+    slots.push(slot);
+  }
+  return { rate, slots };
 }
 
 /** Exact working format of one source, or an explicit unsupported error. */
@@ -406,6 +440,14 @@ export function planExport(
       unsupported(
         "These sources use different video or audio formats. Exporting them together needs a conversion that is not available yet.",
       );
+  const grids = new Map(
+    sources.map((source) => {
+      const video = streams(source.probe).find(
+        (stream) => stream.codec_type === "video",
+      )!;
+      return [source.sourceId, frameGrid(video, source.timing).slots];
+    }),
+  );
   const planned: PlannedClip[] = [];
   let frameCount = 0;
   let sampleCount = 0;
@@ -427,7 +469,10 @@ export function planExport(
     // Frame i is presented at exactly i / rate (see nominalFrameRate).
     const fn = BigInt(first.video.frameRate.numerator);
     const fd = BigInt(first.video.frameRate.denominator);
-    const frames = source.timing.pts.length;
+    const slots = grids.get(source.sourceId) ?? null;
+    const slotOf = (frame: number) => (slots ? slots[frame]! : frame);
+    const decoded = source.timing.pts.length;
+    const frames = slotOf(decoded - 1) + 1;
     const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
     const frameAt = (us: number) =>
       Math.min(frames, Number(ceilDiv(BigInt(us) * fn, fd * 1_000_000n)));
@@ -435,9 +480,37 @@ export function planExport(
     const endFrame = frameAt(clip.sourceEndUs);
     const count = endFrame - firstFrame;
     if (count <= 0) continue;
+    // Decoded frames [firstDecoded, endDecoded) cover the slots; the first
+    // is the frame on screen at the first slot.
+    let firstDecoded = firstFrame;
+    let endDecoded = endFrame;
+    const held: Array<[number, number]> = [];
+    if (slots) {
+      const atOrBefore = (slot: number) => {
+        let low = 0;
+        let high = decoded - 1;
+        while (low < high) {
+          const middle = (low + high + 1) >> 1;
+          if (slots[middle]! <= slot) low = middle;
+          else high = middle - 1;
+        }
+        return low;
+      };
+      firstDecoded = atOrBefore(firstFrame);
+      endDecoded = atOrBefore(endFrame - 1) + 1;
+      for (let frame = firstDecoded; frame < endDecoded; frame++) {
+        const next = frame + 1 < decoded ? slots[frame + 1]! : frames;
+        const shown =
+          Math.min(next, endFrame) - Math.max(slots[frame]!, firstFrame);
+        if (shown > 1) held.push([frame - firstDecoded, shown - 1]);
+      }
+    }
     const frameSeconds = Number(fd) / Number(fn);
-    const trimStartSeconds = Math.max(0, (firstFrame - 0.5) * frameSeconds);
-    const trimEndSeconds = (endFrame - 0.5) * frameSeconds;
+    const trimStartSeconds = Math.max(
+      0,
+      (slotOf(firstDecoded) - 0.5) * frameSeconds,
+    );
+    const trimEndSeconds = (slotOf(endDecoded - 1) + 0.5) * frameSeconds;
     let firstSample = 0;
     let samples = 0;
     if (first.audio) {
@@ -462,6 +535,8 @@ export function planExport(
       path: source.path,
       firstFrame,
       frameCount: count,
+      decodeFrames: endDecoded - firstDecoded,
+      held,
       trimStartSeconds,
       trimEndSeconds,
       seekSeconds: Math.max(0, trimStartSeconds - 2),
@@ -1220,7 +1295,8 @@ export async function exportDraft(
     const sink = compositor ? compositor.stdin! : encoder.stdin!;
     try {
       for (const clip of plan.clips) {
-        const expected = clip.frameCount * plan.frameBytes;
+        const expected = clip.decodeFrames * plan.frameBytes;
+        const extra = new Map(clip.held);
         const child = track(
           startProcess(
             executables.ffmpeg,
@@ -1236,7 +1312,7 @@ export async function exportDraft(
               "-vf",
               `trim=start=${seconds6(clip.trimStartSeconds)}:end=${seconds6(clip.trimEndSeconds)}`,
               "-frames:v",
-              String(clip.frameCount),
+              String(clip.decodeFrames),
               "-fps_mode",
               "passthrough",
               "-c:v",
@@ -1254,20 +1330,37 @@ export async function exportDraft(
         let written = 0;
         let kept = 0;
         let reported = 0;
+        // The slot of decoded frame `current`; a held frame fills several.
+        let current = 0;
+        let slot = 0;
+        let pending: Buffer[] = [];
         await drain(child.stdout!, async (chunk) => {
           const start = written;
           written += chunk.length;
           if (written > expected) return;
-          // A sped-up clip keeps every `speed`-th decoded frame.
+          // A sped-up clip keeps every `speed`-th slot's frame.
           const parts: Buffer[] = [];
-          if (clip.speed === 1) parts.push(chunk);
+          if (clip.speed === 1 && extra.size === 0) parts.push(chunk);
           else
             for (let at = start; at < written;) {
               const frame = Math.floor(at / plan.frameBytes);
+              for (; current < frame; current++)
+                slot += 1 + (extra.get(current) ?? 0);
               const frameEnd = (frame + 1) * plan.frameBytes;
               const until = Math.min(frameEnd, written);
-              if (frame % clip.speed === 0)
-                parts.push(chunk.subarray(at - start, until - start));
+              const piece = chunk.subarray(at - start, until - start);
+              const copies = 1 + (extra.get(frame) ?? 0);
+              if (copies === 1) {
+                if (slot % clip.speed === 0) parts.push(piece);
+              } else {
+                pending.push(piece);
+                if (until === frameEnd) {
+                  const whole = Buffer.concat(pending);
+                  pending = [];
+                  for (let copy = slot; copy < slot + copies; copy++)
+                    if (copy % clip.speed === 0) parts.push(whole);
+                }
+              }
               at = until;
             }
           for (const part of parts) {
