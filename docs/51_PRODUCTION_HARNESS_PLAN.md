@@ -29,7 +29,7 @@ The goal is met when a signed-in run on the supplied recordings produces such an
 | M1 | Compositions play everywhere | Core done 2026-10-18; export and preview parity checks open |
 | M2 | Composition toolchain for Claude | Motion sheets and `composition.check` done 2026-10-18; real Claude iteration open |
 | M3 | Music, sound and asset layers | Asset setting done 2026-10-18; layers planned |
-| M4 | Production direction and model routing | Direction rewritten 2026-10-18; model routing planned |
+| M4 | Production direction and model routing | Direction rewritten and per-stage models done 2026-10-18; real run open |
 | M5 | End-to-end production on the supplied recordings | Planned |
 | M6 | Spec sync, release checks | Continuous |
 
@@ -64,7 +64,7 @@ What the skills ask of `npx hyperframes`, as app tools that run against the work
 
 - System prompt and guides rewritten for a high-budget production: work out a visual concept from the content and brief; write a style frame and motion language in notes.md before building; design each graphic for its moment; review motion with the motion tools and the reviewer helpers; iterate until it meets the bar; never use a presentation look, stock templates or bulk generation.
 - Reviewer helpers with an explicit quality bar (story, joins, motion, typography, consistency, legibility, sound).
-- Per-stage model settings: rough cut defaults to Haiku 5.5, production to Opus 5.5, both changeable and checked against the live catalog.
+- Per-stage model settings: rough cut defaults to Haiku 5.5, production to Opus 5.5, both changeable and checked against the live catalog. (Done 2026-10-18: Settings → Claude has Production model and Rough cut model.)
 - Done when: a real production run follows the process (concept, build, review, iterate) visibly in its workspace and conversation.
 
 ### M5: End-to-end production on the supplied recordings

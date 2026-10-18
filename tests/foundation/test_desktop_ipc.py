@@ -585,11 +585,17 @@ class DesktopIpcContractTests(unittest.TestCase):
             'account': {'billing': 'subscription', 'plan': 'max'},
             'models': [{'value': 'default', 'label': 'Default (recommended)', 'detail': 'Opus 5.5', 'efforts': ['high']}],
             'selection': {'model': 'default', 'effort': None},
+            'roughCutSelection': {'model': 'haiku', 'effort': None},
             'message': None,
         }
         self.valid({'channel': 'claude:get', 'response': {'ok': True, 'value': signed_in}})
         self.valid({'channel': 'claude:select', 'payload': {'model': 'sonnet', 'effort': 'high'},
                     'response': {'ok': True, 'value': signed_in}})
+        self.valid({'channel': 'claude:select-rough-cut', 'payload': {'model': 'haiku', 'effort': None},
+                    'response': {'ok': True, 'value': signed_in}})
+        missing = deepcopy(signed_in)
+        del missing['roughCutSelection']
+        self.invalid({'channel': 'claude:get', 'response': {'ok': True, 'value': missing}})
         self.valid({'channel': 'claude:install-guide', 'response': {'ok': True, 'value': None}})
         for key, value in [('email', 'person@example.com'), ('executable', '/usr/bin/claude')]:
             leaked = deepcopy(signed_in)
@@ -600,7 +606,7 @@ class DesktopIpcContractTests(unittest.TestCase):
         self.invalid({'channel': 'claude:get', 'response': {'ok': True, 'value': priced}})
         signed_out = dict(signed_in, status='signed_out')
         self.invalid({'channel': 'claude:get', 'response': {'ok': True, 'value': signed_out}})
-        signed_out.update(account=None, models=[], selection=None)
+        signed_out.update(account=None, models=[], selection=None, roughCutSelection=None)
         self.valid({'channel': 'claude:get', 'response': {'ok': True, 'value': signed_out}})
         self.invalid({'channel': 'claude:sign-in', 'payload': {'code': '1234'},
                       'response': {'ok': True, 'value': signed_out}})

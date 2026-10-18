@@ -113,6 +113,7 @@ export interface DesktopBridge {
   cancelClaudeSignIn(): Promise<Reply<ClaudeView>>;
   signOutClaude(): Promise<Reply<ClaudeView>>;
   selectClaudeModel(value: ClaudeSelection): Promise<Reply<ClaudeView>>;
+  selectClaudeRoughCutModel(value: ClaudeSelection): Promise<Reply<ClaudeView>>;
   openClaudeInstallGuide(): Promise<Reply<null>>;
   getClaudeThread(
     request: ClaudeThreadProjectRequest,
@@ -323,6 +324,7 @@ export const channels = Object.freeze({
   claudeCancelSignIn: "claude:cancel-sign-in",
   claudeSignOut: "claude:sign-out",
   claudeSelect: "claude:select",
+  claudeSelectRoughCut: "claude:select-rough-cut",
   claudeInstallGuide: "claude:install-guide",
   claudeThreadGet: "claude-thread:get",
   claudeThreadOpen: "claude-thread:open",

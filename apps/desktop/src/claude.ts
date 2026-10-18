@@ -55,6 +55,56 @@ const projectIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
 const sessionPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
+/** The selection when the catalog offers its model and effort, else null. */
+function offered(
+  catalog: ClaudeCatalog,
+  selection: ClaudeSelection | null,
+): ClaudeSelection | null {
+  if (!selection) return null;
+  const model = catalog.models.find((item) => item.value === selection.model);
+  if (!model) return null;
+  if (selection.effort && !model.efforts.includes(selection.effort))
+    return null;
+  return selection;
+}
+
+/**
+ * A fresh production choice: Opus when the account offers it, otherwise
+ * Claude Code's account-recommended default model.
+ */
+export function freshSelection(catalog: ClaudeCatalog): ClaudeSelection | null {
+  return (
+    offered(catalog, family(catalog, "opus")) ??
+    offered(catalog, { model: "default", effort: null }) ??
+    (catalog.models[0]
+      ? { model: catalog.models[0].value, effort: null }
+      : null)
+  );
+}
+
+/**
+ * A fresh (or no longer offered) rough cut choice: Haiku, a fast and
+ * inexpensive story edit, when offered; otherwise the production model.
+ */
+export function freshRoughCutSelection(
+  catalog: ClaudeCatalog,
+  production: ClaudeSelection | null,
+): ClaudeSelection | null {
+  return (
+    offered(catalog, family(catalog, "haiku")) ??
+    (production ? { ...production } : null)
+  );
+}
+
+/** The catalog's first model of a family ("opus", "haiku"), if any. */
+function family(catalog: ClaudeCatalog, name: string): ClaudeSelection | null {
+  const pattern = new RegExp(`\\b${name}\\b`, "iu");
+  const model = catalog.models.find(
+    (item) => pattern.test(item.value) || pattern.test(item.label),
+  );
+  return model ? { model: model.value, effort: null } : null;
+}
+
 const tool = (name: string) => `mcp__${claudeEditorServer}__${name}`;
 export const claudeEditorInstructions = (projectId: string): string =>
   [
@@ -214,6 +264,7 @@ export class DesktopClaude {
   private readonly runtimeDirectory: string;
   private readonly threadDirectory: string;
   private readonly selectionPath: string;
+  private readonly roughCutSelectionPath: string;
   private runtime: ClaudeRuntime | null = null;
   private view: ClaudeView = {
     status: "checking",
@@ -221,6 +272,7 @@ export class DesktopClaude {
     account: null,
     models: [],
     selection: null,
+    roughCutSelection: null,
     message: null,
   };
   private catalog: ClaudeCatalog | null = null;
@@ -239,6 +291,7 @@ export class DesktopClaude {
     this.runtimeDirectory = join(this.root, "runtime");
     this.threadDirectory = join(this.root, "threads");
     this.selectionPath = join(this.root, "selection.json");
+    this.roughCutSelectionPath = join(this.root, "rough-cut-selection.json");
   }
 
   private env(): NodeJS.ProcessEnv {
@@ -293,6 +346,7 @@ export class DesktopClaude {
         account: null,
         models: [],
         selection: null,
+        roughCutSelection: null,
         message: null,
       });
     await this.refresh();
@@ -310,6 +364,7 @@ export class DesktopClaude {
         account: null,
         models: [],
         selection: null,
+        roughCutSelection: null,
         message: claudeIssues.storage,
       });
       return;
@@ -335,6 +390,7 @@ export class DesktopClaude {
         account: null,
         models: [],
         selection: null,
+        roughCutSelection: null,
         message:
           error instanceof ClaudeCliError && error.code === "outdated"
             ? claudeIssues.outdated
@@ -358,6 +414,7 @@ export class DesktopClaude {
         account: null,
         models: [],
         selection: null,
+        roughCutSelection: null,
         message: claudeIssues.status,
       });
       return;
@@ -370,6 +427,7 @@ export class DesktopClaude {
         account: null,
         models: [],
         selection: null,
+        roughCutSelection: null,
         message: null,
       });
       return;
@@ -387,6 +445,9 @@ export class DesktopClaude {
     this.catalog = catalog;
     const selection = catalog ? await this.restoreSelection(catalog) : null;
     if (catalog && !selection && !message) message = claudeIssues.selection;
+    const roughCutSelection = catalog
+      ? await this.restoreRoughCutSelection(catalog, selection)
+      : null;
     this.set({
       status: "signed_in",
       version,
@@ -396,41 +457,67 @@ export class DesktopClaude {
       },
       models: catalog?.models ?? [],
       selection,
+      roughCutSelection,
       message,
     });
   }
 
-  private async restoreSelection(
+  private async storedSelection(
+    path: string,
     catalog: ClaudeCatalog,
-  ): Promise<ClaudeSelection | null> {
+  ): Promise<{ stored: boolean; valid: ClaudeSelection | null }> {
     let stored: ClaudeSelection | null = null;
     try {
-      const raw = await readPrivate(this.selectionPath);
+      const raw = await readPrivate(path);
       assertClaudeSelection(raw);
       stored = raw;
     } catch {
       stored = null;
     }
-    const valid = (selection: ClaudeSelection | null) => {
-      if (!selection) return null;
-      const model = catalog.models.find(
-        (item) => item.value === selection.model,
-      );
-      if (!model) return null;
-      if (selection.effort && !model.efforts.includes(selection.effort))
-        return null;
-      return selection;
-    };
-    // A fresh preference uses Claude Code's account-recommended default model.
-    return (
-      valid(stored) ??
-      (stored
-        ? null
-        : (valid({ model: "default", effort: null }) ??
-          (catalog.models[0]
-            ? { model: catalog.models[0].value, effort: null }
-            : null)))
+    return { stored: stored !== null, valid: offered(catalog, stored) };
+  }
+
+  private async restoreSelection(
+    catalog: ClaudeCatalog,
+  ): Promise<ClaudeSelection | null> {
+    const { stored, valid } = await this.storedSelection(
+      this.selectionPath,
+      catalog,
     );
+    if (valid || stored) return valid;
+    return freshSelection(catalog);
+  }
+
+  private async restoreRoughCutSelection(
+    catalog: ClaudeCatalog,
+    production: ClaudeSelection | null,
+  ): Promise<ClaudeSelection | null> {
+    const { valid } = await this.storedSelection(
+      this.roughCutSelectionPath,
+      catalog,
+    );
+    return valid ?? freshRoughCutSelection(catalog, production);
+  }
+
+  /** Chooses the rough cut's model (Magic Edit). */
+  async selectRoughCut(selection: ClaudeSelection): Promise<ClaudeView> {
+    assertClaudeSelection(selection);
+    if (
+      this.view.status !== "signed_in" ||
+      !this.catalog ||
+      !offered(this.catalog, selection)
+    ) {
+      this.set({ message: claudeIssues.selection });
+      return this.snapshot();
+    }
+    try {
+      await writePrivate(this.roughCutSelectionPath, JSON.stringify(selection));
+    } catch {
+      this.set({ message: claudeIssues.storage });
+      return this.snapshot();
+    }
+    this.set({ roughCutSelection: { ...selection }, message: null });
+    return this.snapshot();
   }
 
   async select(selection: ClaudeSelection): Promise<ClaudeView> {
@@ -790,15 +877,12 @@ export class DesktopClaude {
   }
 
   /**
-   * The model for a rough cut: Haiku when the account's catalog offers it
-   * (a fast, inexpensive story edit), otherwise the model chosen in Settings.
+   * The model for a rough cut: the rough cut model chosen in Settings (Haiku
+   * by default when offered), otherwise the production model.
    */
   roughCutSelection(): ClaudeSelection | null {
-    const haiku = this.view.models.find(
-      (model) => /haiku/iu.test(model.value) || /haiku/iu.test(model.label),
-    );
-    if (haiku) return { model: haiku.value, effort: null };
-    return this.view.selection ? { ...this.view.selection } : null;
+    const chosen = this.view.roughCutSelection ?? this.view.selection;
+    return chosen ? { ...chosen } : null;
   }
 
   /**

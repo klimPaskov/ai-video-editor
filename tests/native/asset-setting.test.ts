@@ -1,5 +1,6 @@
 /**
- * Packaged native asset setting (docs/51, M3): which material Claude may use.
+ * Packaged native Claude settings (docs/51, M3 and M4): which material
+ * Claude may use, and the rough cut's own model.
  *
  * A clearly labeled test double of the Claude Code CLI
  * (tests/media/support/fake-claude-code.ts) stands in for the model: it drives
@@ -10,7 +11,7 @@
  * rendering, the full-edit record, Undo all and the drawer UI. It proves no
  * model quality and no account sign-in.
  *
- * node tests/native/full-edit.test.ts <packaged-executable>
+ * node tests/native/asset-setting.test.ts <packaged-executable>
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -168,11 +169,28 @@ try {
       return reply.ok ? (reply.value.assetPolicy ?? "any") : "error";
     })
     .toBe("copyright_free");
+  // The rough cut has its own model: Haiku by default, changeable.
+  await expect(page.locator("#claude-rough-cut-model")).toHaveValue("haiku");
+  await page.locator("#claude-rough-cut-model").selectOption("sonnet");
+  await expect
+    .poll(
+      async () => {
+        const reply = await page.evaluate(() => window.desktop.getClaude());
+        return reply.ok
+          ? (reply.value.roughCutSelection?.model ?? null)
+          : "error";
+      },
+      { timeout: 20_000 },
+    )
+    .toBe("sonnet");
+  await expect(page.locator("#claude-model")).toHaveValue("default");
+  result.roughCutModel = { default: "haiku", chosen: "sonnet" };
   await page.screenshot({ path: join(evidence, "asset-setting.png") });
   await page.getByRole("button", { name: "Close settings" }).click();
   await page.getByRole("button", { name: "Settings" }).click();
   await page.locator("#settings-claude").click();
   await expect(page.locator("#asset-policy")).toHaveValue("copyright_free");
+  await expect(page.locator("#claude-rough-cut-model")).toHaveValue("sonnet");
   await page.getByRole("button", { name: "Close settings" }).click();
 
   step = "turn";

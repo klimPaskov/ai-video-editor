@@ -1545,6 +1545,9 @@ async function start(): Promise<void> {
   register(channels.claudeSelect, async (request) =>
     claudeView(() => claude!.select(request as never)),
   );
+  register(channels.claudeSelectRoughCut, async (request) =>
+    claudeView(() => claude!.selectRoughCut(request as never)),
+  );
   register(channels.claudeInstallGuide, async (request) => {
     assertEmptyRequest(request);
     await claude!.openInstallGuide();

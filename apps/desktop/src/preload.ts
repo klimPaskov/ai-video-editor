@@ -218,6 +218,10 @@ const bridge: DesktopBridge = {
     assertClaudeSelection(value);
     return invoke(channels.claudeSelect, value, assertClaudeView);
   },
+  selectClaudeRoughCutModel: (value) => {
+    assertClaudeSelection(value);
+    return invoke(channels.claudeSelectRoughCut, value, assertClaudeView);
+  },
   openClaudeInstallGuide: () =>
     invoke(channels.claudeInstallGuide, undefined, (value) => {
       if (value !== null) throw new Error("Invalid install guide response");

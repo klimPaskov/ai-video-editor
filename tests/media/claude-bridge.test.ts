@@ -16,6 +16,8 @@ import {
   DesktopClaude,
   claudeEditorTools,
   claudeEditorServer,
+  freshRoughCutSelection,
+  freshSelection,
 } from "../../apps/desktop/src/claude.ts";
 import {
   billingForMethod,
@@ -569,7 +571,10 @@ test("desktop Claude signs in through the CLI flow and runs guarded turns", asyn
     );
     assertClaudeView(view);
     assert.deepEqual(view.account, { billing: "subscription", plan: "max" });
+    // No Opus in this catalog: production uses the account's default; the
+    // rough cut defaults to Haiku.
     assert.deepEqual(view.selection, { model: "default", effort: null });
+    assert.deepEqual(view.roughCutSelection, { model: "haiku", effort: null });
     assert.deepEqual(
       view.models.map((model) => model.value),
       ["default", "sonnet", "haiku"],
@@ -579,11 +584,18 @@ test("desktop Claude signs in through the CLI flow and runs guarded turns", asyn
     assert.equal(view.message, claudeIssues.selection);
     view = await claude.select({ model: "sonnet", effort: "high" });
     assert.deepEqual(view.selection, { model: "sonnet", effort: "high" });
+    view = await claude.selectRoughCut({ model: "opus", effort: null });
+    assert.equal(view.message, claudeIssues.selection);
+    assert.deepEqual(view.roughCutSelection, { model: "haiku", effort: null });
+    view = await claude.selectRoughCut({ model: "sonnet", effort: null });
+    assert.deepEqual(view.roughCutSelection, { model: "sonnet", effort: null });
+    assert.equal(view.message, null);
 
-    // A new main process restores the remembered model choice.
+    // A new main process restores both remembered model choices.
     claude = await harness(root);
     view = await claude.check();
     assert.deepEqual(view.selection, { model: "sonnet", effort: "high" });
+    assert.deepEqual(view.roughCutSelection, { model: "sonnet", effort: null });
 
     const project = "project-001";
     let thread: ClaudeThreadView = await claude.openThread(project);
@@ -775,6 +787,7 @@ test("account text names the plan once", () => {
     account: { billing: "subscription", plan },
     models: [{ value: "default", label: "Default", detail: "", efforts: [] }],
     selection: { model: "default", effort: null },
+    roughCutSelection: null,
     message: null,
   });
   assert.equal(claudeAccountText(view("max")), "Claude · Max");
@@ -789,6 +802,7 @@ test("domain assertions reject leaked or inconsistent Claude state", () => {
     account: null,
     models: [],
     selection: null,
+    roughCutSelection: null,
     message: null,
   };
   assertClaudeView(signedOut);
@@ -797,6 +811,7 @@ test("domain assertions reject leaked or inconsistent Claude state", () => {
     // The removed fallback page must not reappear as an unchecked field.
     { ...signedOut, signInPageAvailable: false },
     { ...signedOut, selection: { model: "default", effort: null } },
+    { ...signedOut, roughCutSelection: { model: "haiku", effort: null } },
     { ...signedOut, message: "Not logged in · Please run /login" },
     { ...signedOut, status: "signed_in" },
     { ...signedOut, version: null },
@@ -1011,4 +1026,41 @@ test("a full edit request rejects an oversized or unknown brief", () => {
     { ...request, project_id: "../p" },
   ])
     assert.throws(() => assertClaudeFullEditRequest(bad));
+});
+
+test("fresh model choices: Opus produces and Haiku cuts when offered", () => {
+  const model = (value: string, label: string) => ({
+    value,
+    label,
+    detail: "",
+    efforts: [],
+  });
+  const full = {
+    plan: "max",
+    models: [
+      model("default", "Default (recommended)"),
+      model("claude-opus-5-5", "Opus 5.5"),
+      model("haiku", "Haiku 5.5"),
+    ],
+  };
+  assert.deepEqual(freshSelection(full), {
+    model: "claude-opus-5-5",
+    effort: null,
+  });
+  assert.deepEqual(freshRoughCutSelection(full, freshSelection(full)), {
+    model: "haiku",
+    effort: null,
+  });
+  // Neither family offered: the account default, and the rough cut follows it.
+  const plain = { plan: null, models: [model("default", "Default")] };
+  assert.deepEqual(freshSelection(plain), { model: "default", effort: null });
+  assert.deepEqual(freshRoughCutSelection(plain, freshSelection(plain)), {
+    model: "default",
+    effort: null,
+  });
+  // "Opusculum" is not Opus.
+  assert.deepEqual(
+    freshSelection({ plan: null, models: [model("opusculum", "Opusculum")] }),
+    { model: "opusculum", effort: null },
+  );
 });

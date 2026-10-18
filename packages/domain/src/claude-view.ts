@@ -32,7 +32,10 @@ export interface ClaudeView {
     plan: string | null;
   } | null;
   models: ClaudeModelOption[];
+  /** The production model: full edits and the conversation. */
   selection: ClaudeSelection | null;
+  /** The rough cut's model (Magic Edit); Haiku by default when offered. */
+  roughCutSelection: ClaudeSelection | null;
   message: string | null;
 }
 
@@ -192,6 +195,7 @@ export function assertClaudeView(value: unknown): asserts value is ClaudeView {
     "account",
     "models",
     "selection",
+    "roughCutSelection",
     "message",
   ]);
   if (
@@ -238,10 +242,11 @@ export function assertClaudeView(value: unknown): asserts value is ClaudeView {
     prose(model.detail, 160, true);
     for (const level of model.efforts) effort(level);
   }
-  if (view.selection !== null) {
-    assertClaudeSelection(view.selection);
-    if (view.status !== "signed_in") invalid();
-  }
+  for (const chosen of [view.selection, view.roughCutSelection])
+    if (chosen !== null) {
+      assertClaudeSelection(chosen);
+      if (view.status !== "signed_in") invalid();
+    }
   if (view.message !== null && !issueSet.has(view.message as string)) invalid();
   if (
     (view.status === "signed_in") !== (view.account !== null) ||
