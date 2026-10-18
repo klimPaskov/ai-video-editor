@@ -155,22 +155,37 @@ try {
   mark("magic-edit");
   await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
   await page.locator("#magic-start").click();
-  await expect(page.locator("#magic-status")).toContainText("Removed", {
+  await expect(page.locator("#magic-stop")).toBeVisible({ timeout: 60_000 });
+  // Claude's rough cut ends when Run Magic Edit comes back.
+  await expect(page.locator("#magic-start")).toBeVisible({
     timeout: 4 * 3_600_000,
   });
+  const magicError = (await page.locator("#magic-error").isVisible())
+    ? await page.locator("#magic-error").textContent()
+    : null;
+  await page.screenshot({ path: join(evidence, "rough-cut.png") });
   current = await project(page);
   const afterMagicUs = current.timeline.durationUs;
   result.magicEdit = {
+    by: "Claude rough cut",
+    status: await page.locator("#magic-status").textContent(),
+    error: magicError,
     removedSeconds: Math.round((originalDurationUs - afterMagicUs) / 1e6),
+    editedSeconds: Math.round(afterMagicUs / 1e6),
   };
+  console.log(JSON.stringify({ roughCut: result.magicEdit }));
+  assert.equal(magicError, null, magicError ?? "");
 
   mark("claude-full-edit");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 300_000 });
   await page.getByRole("button", { name: "Claude", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Open conversation", exact: true })
-    .click();
+  // Magic Edit already opened the conversation for its rough cut.
+  const open = page.getByRole("button", {
+    name: "Open conversation",
+    exact: true,
+  });
+  if (await open.isVisible()) await open.click();
   const request = { schema_version: "1.0" as const, project_id: current.id };
   const thread = async () => {
     const reply = await page.evaluate(

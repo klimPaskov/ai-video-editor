@@ -267,16 +267,19 @@ export class DesktopMagicWand {
       before = draftOf(
         await this.invoke(job.projectId, "timeline.get_summary", summary),
       );
-      const evidence: RoughCutEvidence[] = mapCutsToOutput(
-        plan.cuts,
-        before.clips,
-      )
-        .flatMap((range) =>
-          range.kinds.map((kind) => ({
-            kind,
-            startUs: range.start_us,
-            endUs: range.end_us,
-          })),
+      const clips = before.clips;
+      const evidence: RoughCutEvidence[] = plan.cuts
+        .flatMap((cut) =>
+          mapCutsToOutput([cut], clips).flatMap((range) =>
+            range.kinds.map((kind) => ({
+              kind,
+              sourceId: cut.sourceId,
+              sourceStartUs: cut.startUs,
+              sourceEndUs: cut.endUs,
+              startUs: range.start_us,
+              endUs: range.end_us,
+            })),
+          ),
         )
         .sort((a, b) => a.startUs - b.startUs);
       if (job.stop) {

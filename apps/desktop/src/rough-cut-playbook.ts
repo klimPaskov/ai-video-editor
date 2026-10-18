@@ -31,7 +31,7 @@ The evidence list in the request (long pauses, fillers, repeated wording found b
 - To bring back something cut by mistake, use cut.restore_range.
 
 ## 4. Check the result
-- Read the transcript of the edited result from start to finish. Every join must read naturally, and nothing needed to follow the video may be missing; restore anything that was.
+- Reread the edited result from start to finish: the timeline summary lists every clip in order with its source and source range; read exactly those source ranges with transcript.get_range, in timeline order. Every join must read naturally, and nothing needed to follow the video may be missing; restore anything that was.
 - Look at a rendered picture just after a few important joins.
 
 ## 5. Finish
@@ -46,9 +46,16 @@ const presetGuidance: Record<MagicWandPreset, string> = {
     "Tight: a brisk edit. Also remove weaker repeats of a point, minor asides and shorter pauses, while keeping everything the story needs.",
 };
 
-/** One piece of local evidence, already mapped to the current output time. */
+/**
+ * One piece of local evidence: where it is in its recording (the time the
+ * transcript tool uses) and where that is in the current edit (the time the
+ * cut tools use).
+ */
 export interface RoughCutEvidence {
   kind: "pause" | "filler" | "repeated_take";
+  sourceId: string;
+  sourceStartUs: number;
+  sourceEndUs: number;
   startUs: number;
   endUs: number;
 }
@@ -70,10 +77,11 @@ export function roughCutRequest(
     `How far to go: ${presetGuidance[preset]}`,
     "",
     shown.length
-      ? `Local analysis evidence (output times in microseconds; confirm each against the transcript, it is not a cut list):`
+      ? `Local analysis evidence, in microseconds: "source" is the recording's own time (as transcript.get_range uses it), "edit" is the current timeline time (as the cut tools use it). Confirm each against the transcript; it is not a cut list.`
       : "Local analysis found no pauses, fillers or repeated wording to point out.",
     ...shown.map(
-      (item) => `- ${evidenceNames[item.kind]}: ${item.startUs}–${item.endUs}`,
+      (item) =>
+        `- ${evidenceNames[item.kind]} · source ${item.sourceId} ${item.sourceStartUs}–${item.sourceEndUs} · edit ${item.startUs}–${item.endUs}`,
     ),
   ];
   if (evidence.length > shown.length)

@@ -150,12 +150,33 @@ test("Stop stops Claude's run and keeps its cuts", async () => {
 
 test("the rough cut's request carries evidence, not cuts, and its tools only cut", () => {
   const request = roughCutRequest("balanced", [
-    { kind: "pause", startUs: 1_000_000, endUs: 3_500_000 },
-    { kind: "repeated_take", startUs: 9_000_000, endUs: 12_000_000 },
+    {
+      kind: "pause",
+      sourceId: "source-a",
+      sourceStartUs: 1_000_000,
+      sourceEndUs: 3_500_000,
+      startUs: 1_000_000,
+      endUs: 3_500_000,
+    },
+    {
+      kind: "repeated_take",
+      sourceId: "source-b",
+      sourceStartUs: 2_000_000,
+      sourceEndUs: 5_000_000,
+      startUs: 9_000_000,
+      endUs: 12_000_000,
+    },
   ]);
   assert.match(request, /not a cut list/u);
-  assert.match(request, /long pause: 1000000–3500000/u);
-  assert.match(request, /earlier copy of repeated wording: 9000000–12000000/u);
+  assert.match(
+    request,
+    /long pause · source source-a 1000000–3500000 · edit 1000000–3500000/u,
+  );
+  // The second recording's own time differs from its place in the edit.
+  assert.match(
+    request,
+    /earlier copy of repeated wording · source source-b 2000000–5000000 · edit 9000000–12000000/u,
+  );
   for (const tool of roughCutTools)
     assert.ok(
       (codexVideoEditToolNames as readonly string[]).includes(tool),

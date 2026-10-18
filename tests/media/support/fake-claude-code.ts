@@ -238,13 +238,11 @@ async function scriptedRoughCut(
   });
   // The evidence names the earlier copy of repeated wording; the story keeps
   // the final take, so remove that copy.
-  const repeated = /earlier copy of repeated wording: (\d+)–(\d+)/u.exec(
-    request,
-  );
-  const evidence = [...request.matchAll(/: (\d+)–(\d+)/gu)].map((match) => [
-    Number(match[1]),
-    Number(match[2]),
-  ]);
+  const repeated =
+    /earlier copy of repeated wording · source \S+ \d+–\d+ · edit (\d+)–(\d+)/u.exec(
+      request,
+    );
+  const evidence = [...request.matchAll(/ · edit (\d+)–(\d+)/gu)];
   appendFileSync(
     logPath,
     `${JSON.stringify({ scriptedRoughCut: { refusedDecoration: !refused.ok, evidence: evidence.length, repeated: Boolean(repeated) } })}\n`,
