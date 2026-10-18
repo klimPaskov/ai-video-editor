@@ -27,7 +27,7 @@ The goal is met when a signed-in run on the supplied recordings produces such an
 | --- | --- | --- |
 | M0 | Foundations: AI rough cut (ADR 0020), harness workspace and confined Claude Code tools (ADR 0021), the user's own skills, quiet timeline strip, real signed-in acceptance | Done 2026-10-18 |
 | M1 | Compositions play everywhere | Core done 2026-10-18; export and preview parity checks open |
-| M2 | Composition toolchain for Claude | Planned |
+| M2 | Composition toolchain for Claude | Motion sheets done 2026-10-18; check tool planned |
 | M3 | Music, sound and asset layers | Asset setting done 2026-10-18; layers planned |
 | M4 | Production direction and model routing | Direction rewritten 2026-10-18; model routing planned |
 | M5 | End-to-end production on the supplied recordings | Planned |
@@ -48,7 +48,7 @@ What the skills ask of `npx hyperframes`, as app tools that run against the work
 
 - `composition.check`: load the composition in the sealed stage and report runtime errors, duration, missing timeline, layout overflow and text outside the safe area.
 - `composition.snapshot`: rendered stills at chosen times.
-- `composition.motion`: a short contact sheet or low-resolution frame strip across a time range, so Claude judges motion, timing and easing, not single frames; optionally against the underlying video.
+- Motion review (done 2026-10-18 as `media.get_frames` with `layout: "sheet"`): up to 16 moments through the export path tiled into one picture, so Claude judges motion, timing and easing, not single frames.
 - Placement stays `graphics.set`; replacement keeps the graphic ID so iteration is undoable.
 - The system prompt maps the skills' CLI commands to these tools.
 - Done when: a scripted run iterates a composition through check, snapshot and motion and places it; a real Claude run does the same.

@@ -23,6 +23,8 @@ export interface DraftFrame {
 
 export const frameLimits = Object.freeze({
   maxFrames: 3,
+  /** A contact sheet (see the sheet option) tiles up to 16. */
+  maxSheetFrames: 16,
   minWidth: 320,
   maxWidth: 1280,
   defaultWidth: 960,
@@ -46,6 +48,8 @@ export interface FrameRenderOptions {
   ffmpeg?: string;
   ffprobe?: string;
   signal?: AbortSignal;
+  /** Tile every time into one contact sheet, four across, in reading order. */
+  sheet?: boolean;
 }
 
 export class FrameRenderError extends Error {}
@@ -73,6 +77,7 @@ export async function renderDraftFrames(
   const captions = await options.captions().catch(() => null);
   const frames: DraftFrame[] = [];
   let budget = frameLimits.maxTotalBase64;
+  let sheetCell: { width: number; height: number } | null = null;
   const scratch = await mkdtemp(path.join(tmpdir(), "ai-video-editor-frames-"));
   try {
     for (const [index, requested] of options.timesUs.entries()) {
@@ -161,6 +166,32 @@ export async function renderDraftFrames(
         video.height,
         options.maxWidth,
       );
+      if (options.sheet) {
+        // A cell of the contact sheet: kept lossless until the sheet is made.
+        await runProcess({
+          executable: ffmpeg,
+          args: [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-i",
+            master,
+            "-frames:v",
+            "1",
+            "-vf",
+            `scale=${outWidth}:${outHeight}:flags=lanczos`,
+            path.join(scratch, `cell-${String(index).padStart(2, "0")}.png`),
+          ],
+          timeoutMs: 60_000,
+          ...(options.signal ? { signal: options.signal } : {}),
+        });
+        sheetCell = { width: outWidth, height: outHeight };
+        await rm(directory, { recursive: true, force: true }).catch(
+          () => undefined,
+        );
+        continue;
+      }
       let jpeg: Buffer | null = null;
       // Each remaining picture gets an equal share of what is left, so an
       // early detailed frame cannot starve the last one.
@@ -209,6 +240,59 @@ export async function renderDraftFrames(
       await rm(directory, { recursive: true, force: true }).catch(
         () => undefined,
       );
+    }
+    if (options.sheet) {
+      if (!sheetCell) throw new FrameRenderError("sheet");
+      // Four across, in reading order, with a thin dark gutter.
+      const columns = Math.min(4, options.timesUs.length);
+      const rows = Math.ceil(options.timesUs.length / columns);
+      let jpeg: Buffer | null = null;
+      for (const quality of [4, 7, 12, 20, 28]) {
+        const result = await runProcess({
+          executable: ffmpeg,
+          args: [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-framerate",
+            "1",
+            "-i",
+            path.join(scratch, "cell-%02d.png"),
+            "-frames:v",
+            "1",
+            "-vf",
+            `tile=${columns}x${rows}:padding=4:margin=4:color=0x101010,format=yuvj420p`,
+            "-q:v",
+            String(quality),
+            "-f",
+            "image2",
+            "-c:v",
+            "mjpeg",
+            "pipe:1",
+          ],
+          timeoutMs: 120_000,
+          maxOutputBytes: 8 * 1024 * 1024,
+          ...(options.signal ? { signal: options.signal } : {}),
+        });
+        if (
+          result.stdout.length &&
+          Math.ceil(result.stdout.length / 3) * 4 <= frameLimits.maxTotalBase64
+        ) {
+          jpeg = result.stdout;
+          break;
+        }
+      }
+      if (!jpeg) throw new FrameRenderError("size");
+      return [
+        {
+          timeUs: options.timesUs[0]!,
+          width: columns * (sheetCell.width + 4) + 4,
+          height: rows * (sheetCell.height + 4) + 4,
+          mimeType: "image/jpeg",
+          dataBase64: jpeg.toString("base64"),
+        },
+      ];
     }
     return frames;
   } finally {

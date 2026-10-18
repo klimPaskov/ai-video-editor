@@ -460,7 +460,7 @@ export const codexVideoEditMcpTools = [
   {
     name: codexVideoEditToolNames[16],
     description:
-      "See the edit: render 1–3 pictures of the active draft at output times (microseconds), exactly as export draws them with zooms, motion graphics and captions (when captions are on). Use it to check a graphic's text, placement and timing, a zoom's target, or that captions stay clear, before moving on. Pictures are small JPEGs for review (max_width sets the longer side, 320–1280 pixels, default 960); they are never part of the video.",
+      "See the edit: render 1–3 pictures of the active draft at output times (microseconds), exactly as export draws them with zooms, motion graphics and captions (when captions are on). Use it to check a graphic's text, placement and timing, a zoom's target, or that captions stay clear, before moving on. Pictures are small JPEGs for review (max_width sets the longer side, 320–1280 pixels, default 960); they are never part of the video. To judge motion (timing, easing, choreography of a graphic or a zoom), use layout \"sheet\" with 2–16 times across the range: they are tiled four across into one picture in reading order, each cell max_width 320–480 (default 320).",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -471,10 +471,11 @@ export const codexVideoEditMcpTools = [
         times_us: {
           type: "array",
           minItems: 1,
-          maxItems: 3,
+          maxItems: 16,
           items: { type: "integer", minimum: 0 },
         },
         max_width: { type: "integer", minimum: 320, maximum: 1280 },
+        layout: { type: "string", enum: ["frames", "sheet"] },
       },
     },
     annotations: {

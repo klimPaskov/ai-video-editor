@@ -199,7 +199,6 @@ try {
     .poll(async () => (await thread()).status, { timeout: 120_000 })
     .toBe("ready");
   await page.locator("#claude-full-edit summary").click();
-  await page.locator("#full-edit-style").fill("Calm and clean");
   await page.locator("#full-edit-level").selectOption("polished");
   await page.screenshot({ path: join(evidence, "full-edit-brief.png") });
   await page.locator("#start-full-edit").click();

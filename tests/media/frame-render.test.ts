@@ -210,6 +210,29 @@ test(
       });
       assert.deepEqual([small!.width, small!.height], [160, 90]);
 
+      // A contact sheet: moments tiled four across into one picture.
+      const sheet = await renderDraftFrames({
+        drafts,
+        projectId,
+        timesUs: [0, 200_000, 400_000, 600_000, 800_000],
+        maxWidth: 160,
+        captions: noCaptions,
+        sheet: true,
+      });
+      assert.equal(sheet.length, 1);
+      // Two rows of 160x90 cells with 4-pixel gutters and margins.
+      assert.deepEqual(
+        [sheet[0]!.width, sheet[0]!.height],
+        [4 * (160 + 4) + 4, 2 * (90 + 4) + 4],
+      );
+      assert.equal(sheet[0]!.timeUs, 0);
+      assert.equal(
+        Buffer.from(sheet[0]!.dataBase64, "base64")
+          .subarray(0, 2)
+          .toString("hex"),
+        "ffd8",
+      );
+
       await assert.rejects(
         renderDraftFrames({
           drafts,

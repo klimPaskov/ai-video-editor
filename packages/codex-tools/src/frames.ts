@@ -21,6 +21,11 @@ export const frameToolLimits = Object.freeze({
   minWidth: 320,
   maxWidth: 1280,
   defaultWidth: 960,
+  /** A contact sheet: up to 16 moments tiled into one picture, to see motion. */
+  maxSheetFrames: 16,
+  sheetColumns: 4,
+  maxSheetCellWidth: 480,
+  defaultSheetCellWidth: 320,
 });
 
 /**

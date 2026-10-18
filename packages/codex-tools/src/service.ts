@@ -60,6 +60,8 @@ export type FrameRenderer = (
   projectId: string,
   timesUs: number[],
   maxWidth: number,
+  /** "sheet" tiles every time into one picture, in reading order. */
+  layout?: "frames" | "sheet",
 ) => Promise<
   {
     timeUs: number;
@@ -1263,22 +1265,31 @@ export class CodexVideoEditToolService {
     const request = exact(
       input,
       ["schema_version", "project_id", "times_us"],
-      ["max_width"],
+      ["max_width", "layout"],
     );
     if (request.schema_version !== "1.0") reject("invalid_request");
     assertActiveProject(request, this.activeProjectId);
+    const sheet = request.layout === "sheet";
+    if (request.layout !== undefined && request.layout !== "frames" && !sheet)
+      reject("invalid_request");
     const times = request.times_us;
     if (
       !Array.isArray(times) ||
-      times.length < 1 ||
-      times.length > frameToolLimits.maxFrames ||
+      times.length < (sheet ? 2 : 1) ||
+      times.length >
+        (sheet ? frameToolLimits.maxSheetFrames : frameToolLimits.maxFrames) ||
       times.some((time) => !Number.isSafeInteger(time) || time < 0)
     )
       reject("invalid_request");
-    let maxWidth: number = frameToolLimits.defaultWidth;
+    let maxWidth: number = sheet
+      ? frameToolLimits.defaultSheetCellWidth
+      : frameToolLimits.defaultWidth;
     if (request.max_width !== undefined) {
       integer(request.max_width, frameToolLimits.minWidth);
-      if (request.max_width > frameToolLimits.maxWidth)
+      if (
+        request.max_width >
+        (sheet ? frameToolLimits.maxSheetCellWidth : frameToolLimits.maxWidth)
+      )
         reject("invalid_request");
       maxWidth = request.max_width;
     }
@@ -1292,6 +1303,7 @@ export class CodexVideoEditToolService {
         this.activeProjectId,
         times as number[],
         maxWidth,
+        sheet ? "sheet" : "frames",
       );
     } catch (error) {
       // A composition's own script or load error goes back to its author.

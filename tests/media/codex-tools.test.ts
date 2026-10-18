@@ -1915,6 +1915,32 @@ test("media.get_frames validates times and returns the renderer's pictures", asy
     mime_type: "image/jpeg",
     data_base64: jpeg,
   });
+  // A contact sheet takes 2–16 times and cells up to 480 pixels.
+  const sheet = (await claude.invoke("media.get_frames", {
+    ...input,
+    times_us: [0, 100_000, 200_000, 300_000],
+    layout: "sheet",
+  })) as { frames: unknown[] };
+  assert.equal(sheet.frames.length, 4);
+  assert.deepEqual(requests.at(-1), [
+    projectId,
+    [0, 100_000, 200_000, 300_000],
+    320,
+  ]);
+  for (const invalid of [
+    { times_us: [0], layout: "sheet" },
+    {
+      times_us: Array.from({ length: 17 }, (_, index) => index * 1000),
+      layout: "sheet",
+    },
+    { times_us: [0, 1000], layout: "sheet", max_width: 640 },
+    { times_us: [0, 1000], layout: "grid" },
+    { times_us: [0, 1000, 2000, 3000] },
+  ])
+    await assert.rejects(
+      claude.invoke("media.get_frames", { ...input, ...invalid }),
+      expectCode("invalid_request"),
+    );
   await assert.rejects(
     new CodexVideoEditToolService(projectId, drafts, "claude").invoke(
       "media.get_frames",

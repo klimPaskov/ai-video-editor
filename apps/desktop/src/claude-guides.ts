@@ -23,7 +23,7 @@ The bar is a high-budget production: graphics that feel designed by a studio for
 - Place it with graphics.set and composition_path; keep its graphic_id when you revise so the change stays one undoable step.
 
 ## Review and iterate
-- Look at each graphic at its entry, peak and exit, and between, with media.get_frames. If it fails to render, the error says why: fix it.
+- Watch each graphic's motion with media.get_frames and layout "sheet": 8–16 times spread across its duration, tiled into one picture, so you can judge timing, easing, staggers and how it settles. Then look closely at single frames where detail matters. If it fails to render, the error says why: fix it.
 - Ask the motion-reviewer helper to critique it against notes.md and this bar, then revise until it would pass a senior motion designer's review.
 `;
 

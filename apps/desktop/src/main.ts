@@ -1050,6 +1050,7 @@ async function start(): Promise<void> {
     projectId: string,
     timesUs: number[],
     maxWidth: number,
+    layout: "frames" | "sheet" = "frames",
   ) => {
     const work = frameQueue.then(() =>
       renderDraftFrames({
@@ -1057,6 +1058,7 @@ async function start(): Promise<void> {
         projectId,
         timesUs,
         maxWidth,
+        sheet: layout === "sheet",
         captions: () => draftCaptions(projectId),
         renderGraphics: (request) =>
           renderGraphicsTrack(request, `${origin}/stage.html`),
