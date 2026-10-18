@@ -561,9 +561,9 @@ export class CodexVideoEditToolService {
     const sourceId = request.source_id,
       expectedTranscriptId = request.transcript_id,
       sourceStartUs = request.source_start_us,
-      sourceEndUs = request.source_end_us,
       offset = request.offset,
       limit = request.limit;
+    const sourceEndUs = request.source_end_us;
     id(sourceId);
     if (expectedTranscriptId !== undefined) id(expectedTranscriptId);
     integer(sourceStartUs);
@@ -587,12 +587,15 @@ export class CodexVideoEditToolService {
         (expectedTranscriptId === undefined ||
           item.transcript.transcript_id === expectedTranscriptId),
     );
-    if (!result || sourceEndUs > result.transcript.duration_us)
+    if (!result || sourceStartUs >= result.transcript.duration_us)
       reject("transcript_unavailable");
+    // A range to the recording's end may overshoot the transcript's (audio)
+    // duration slightly; read up to where the transcript ends.
+    const endUs = Math.min(sourceEndUs, result.transcript.duration_us);
 
     const matchingWords = result.transcript.segments.flatMap((segment) =>
       segment.words.filter(
-        (word) => word.end_us > sourceStartUs && word.start_us < sourceEndUs,
+        (word) => word.end_us > sourceStartUs && word.start_us < endUs,
       ),
     );
     if (offset > matchingWords.length) reject("invalid_request");
@@ -620,7 +623,7 @@ export class CodexVideoEditToolService {
         duration_us: result.transcript.duration_us,
         requested_source_range: {
           start_us: sourceStartUs,
-          end_us: sourceEndUs,
+          end_us: endUs,
         },
         draft: {
           draft_id: draft.draft.draft_id,

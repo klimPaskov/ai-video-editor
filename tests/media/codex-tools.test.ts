@@ -1071,6 +1071,24 @@ test("transcript.get_range returns bounded path-free source words and stable pag
     service.invoke("transcript.get_range", { ...request, limit: 251 }),
     expectCode("invalid_request"),
   );
+  // A range past the transcript's end reads up to that end.
+  const duration = active.source.duration_us;
+  const tail = (await service.invoke("transcript.get_range", {
+    ...request,
+    source_start_us: 0,
+    source_end_us: duration + 40_000,
+    limit: 10,
+  })) as { requested_source_range: { end_us: number }; words: unknown[] };
+  assert.equal(tail.requested_source_range.end_us, duration);
+  assert.equal(tail.words.length, 4);
+  await assert.rejects(
+    service.invoke("transcript.get_range", {
+      ...request,
+      source_start_us: duration,
+      source_end_us: duration + 40_000,
+    }),
+    expectCode("transcript_unavailable"),
+  );
 });
 
 test("Claude-origin split and undo are attributed in the shared journal", async () => {

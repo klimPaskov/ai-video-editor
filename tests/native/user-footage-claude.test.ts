@@ -185,7 +185,10 @@ try {
     name: "Open conversation",
     exact: true,
   });
-  if (await open.isVisible()) await open.click();
+  // The drawer may still be switching to the open conversation, so a click
+  // that finds the button gone is fine.
+  if (await open.isVisible())
+    await open.click({ timeout: 5_000 }).catch(() => undefined);
   const request = { schema_version: "1.0" as const, project_id: current.id };
   const thread = async () => {
     const reply = await page.evaluate(
