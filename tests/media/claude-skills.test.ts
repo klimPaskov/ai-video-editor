@@ -204,3 +204,34 @@ test("a later init in the same turn is checked, not refused", () => {
   // A later init with a tool outside the set still stops the turn.
   assert.equal(projection.handle(init([...all, "Bash"])), false);
 });
+
+test("a helper call named Agent is the allowed Task tool", () => {
+  const all = [...claudeEditorTools, ...claudeBuiltInTools];
+  const projection = new ClaudeTurnProjection({
+    allowedTools: all,
+    serverName: claudeEditorServer,
+    sessionId: "11111111-2222-4333-8444-555555555555",
+  });
+  assert.equal(
+    projection.handle({
+      type: "system",
+      subtype: "init",
+      session_id: "11111111-2222-4333-8444-555555555555",
+      tools: all,
+      mcp_servers: [{ name: claudeEditorServer, status: "connected" }],
+      permissionMode: "dontAsk",
+    }),
+    true,
+  );
+  const call = (name: string) =>
+    projection.handle({
+      type: "assistant",
+      message: {
+        content: [{ type: "tool_use", id: `toolu_${name}`, name, input: {} }],
+      },
+    });
+  assert.equal(call("Agent"), true);
+  assert.equal(projection.violation, false);
+  assert.equal(call("Bash"), false);
+  assert.deepEqual(projection.violationDetail?.tools, ["Bash"]);
+});

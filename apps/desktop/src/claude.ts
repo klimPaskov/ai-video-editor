@@ -1103,10 +1103,11 @@ export class DesktopClaude {
     }
     session.turn = turn;
     session.settled = turn.done.then(async (outcome) => {
-      // A private note of what stopped a turn for its tools (names only).
+      // A private note of what stopped a turn for its tools (names only),
+      // outside the runtime folder that closing the app removes.
       if (turn.projection.violationDetail)
         await writePrivate(
-          join(this.runtimeDirectory, "last-tool-violation.json"),
+          join(this.root, "last-tool-violation.json"),
           JSON.stringify({
             at: new Date().toISOString(),
             ...turn.projection.violationDetail,

@@ -63,7 +63,14 @@ const builtInLabels: Record<string, { label: string; mutating: boolean }> = {
   Glob: { label: "Searching the workspace", mutating: false },
   Grep: { label: "Searching the workspace", mutating: false },
   Task: { label: "Asking a helper", mutating: false },
+  Agent: { label: "Asking a helper", mutating: false },
 };
+
+/**
+ * Claude Code reports its helper tool as "Task" in the init inventory but
+ * names the call "Agent"; both are the same allowed tool.
+ */
+const builtInCallNames: Readonly<Record<string, string>> = { Task: "Agent" };
 
 /** A subagent the app defines for Claude Code's Task tool. */
 export interface ClaudeAgentDefinition {
@@ -94,6 +101,8 @@ function clean(text: string): string {
  */
 export class ClaudeTurnProjection {
   readonly allowedTools: ReadonlySet<string>;
+  /** Names a tool call may carry: the allowed tools and their call aliases. */
+  private readonly callNames: Set<string>;
   readonly serverName: string;
   private readonly sessionId: string;
   /** True when the turn loads skills (the user's own, ADR 0021). */
@@ -121,6 +130,9 @@ export class ClaudeTurnProjection {
     allowSkills?: boolean;
   }) {
     this.allowedTools = new Set(input.allowedTools);
+    this.callNames = new Set(this.allowedTools);
+    for (const [listed, called] of Object.entries(builtInCallNames))
+      if (this.allowedTools.has(listed)) this.callNames.add(called);
     this.serverName = input.serverName;
     this.sessionId = input.sessionId;
     this.allowSkills = input.allowSkills ?? false;
@@ -260,7 +272,7 @@ export class ClaudeTurnProjection {
           text.push(block.text);
         if (block.type === "tool_use") {
           const name = typeof block.name === "string" ? block.name : "";
-          if (!this.allowedTools.has(name)) {
+          if (!this.callNames.has(name)) {
             this.violationDetail = {
               type: "assistant",
               subtype: null,
