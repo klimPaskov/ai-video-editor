@@ -1,4 +1,4 @@
-import { codexVideoEditToolNames } from "./service.ts";
+import { claudeOnlyToolNames, codexVideoEditToolNames } from "./service.ts";
 
 const id = { type: "string", pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" };
 const hash = { type: "string", pattern: "^[a-f0-9]{64}$" };
@@ -485,4 +485,42 @@ export const codexVideoEditMcpTools = [
       openWorldHint: false,
     },
   },
+] as const;
+
+/** Claude's own tools, on files in its project workspace (ADR 0021). */
+export const claudeOnlyMcpTools = [
+  {
+    name: claudeOnlyToolNames[0],
+    description:
+      "Check a HyperFrames composition in your workspace before or after placing it, the way `npx hyperframes check` and `snapshot` would: it is sealed exactly as graphics.set seals it, loaded in the app's sealed stage at the video's size and seeked through its own runtime. The result reports whether it became ready, its first script error, its duration, the root's declared size against the video's, its registered timelines, and findings at each audited moment: text cut off by the frame edge, text outside the title-safe margin (6% of the shorter side), text too small to read (under about 2.2% of the shorter side), and whether anything on screen moved between moments. A finding held across moments is an error or warning; one seen at a single moment (an entrance or exit) is info. It does not check colour contrast, overlap between elements or audio; look at the picture for those. times_us are composition times (2–16, increasing); without them eight moments spread over its duration are audited. The moments are tiled four across into one picture over a checkerboard (transparent areas), each cell max_width 320–480 (default 320). The composition is not added to the edit.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "composition_path"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        composition_path: { type: "string", minLength: 1, maxLength: 260 },
+        times_us: {
+          type: "array",
+          minItems: 2,
+          maxItems: 16,
+          items: { type: "integer", minimum: 0 },
+        },
+        max_width: { type: "integer", minimum: 320, maximum: 480 },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+] as const;
+
+/** Every tool Claude's editor server lists. */
+export const claudeEditorMcpTools = [
+  ...codexVideoEditMcpTools,
+  ...claudeOnlyMcpTools,
 ] as const;

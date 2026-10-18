@@ -45,6 +45,17 @@ export const codexVideoEditToolNames = [
   "media.get_frames",
 ] as const;
 
+/**
+ * Tools only Claude's route offers: they work on files in Claude's project
+ * workspace (ADR 0021), which the other routes do not have.
+ */
+export const claudeOnlyToolNames = ["composition.check"] as const;
+/** Claude's guarded editor tools: the shared tools plus its own. */
+export const claudeEditorToolNames = [
+  ...codexVideoEditToolNames,
+  ...claudeOnlyToolNames,
+] as const;
+
 /** Rendered pictures of the edit; the app renders, the tool only validates. */
 /**
  * Reads a HyperFrames composition file from the assistant's workspace, seals
@@ -73,6 +84,28 @@ export type FrameRenderer = (
 >;
 
 export type CodexVideoEditToolName = (typeof codexVideoEditToolNames)[number];
+export type ClaudeEditorToolName = (typeof claudeEditorToolNames)[number];
+
+/**
+ * Loads a workspace composition in the sealed stage at the video's size,
+ * audits it at each composition time (or at evenly spread times) and tiles
+ * those moments into one picture. Throws an error named "CompositionError"
+ * when the file cannot be sealed.
+ */
+export type CompositionChecker = (
+  projectId: string,
+  path: string,
+  timesUs: number[] | null,
+  cellWidth: number,
+) => Promise<{
+  report: Record<string, unknown>;
+  sheet: {
+    width: number;
+    height: number;
+    mimeType: "image/jpeg";
+    dataBase64: string;
+  } | null;
+}>;
 
 type DraftTransactions = {
   snapshot(projectId: string): Promise<DraftReadResult>;
@@ -409,6 +442,7 @@ export class CodexVideoEditToolService {
   private readonly transcriptReader: TranscriptReader | undefined;
   private readonly frameRenderer: FrameRenderer | undefined;
   private readonly compositionImporter: CompositionImporter | undefined;
+  private readonly compositionChecker: CompositionChecker | undefined;
 
   constructor(
     activeProjectId: string,
@@ -417,6 +451,7 @@ export class CodexVideoEditToolService {
     transcriptReader?: TranscriptReader,
     frameRenderer?: FrameRenderer,
     compositionImporter?: CompositionImporter,
+    compositionChecker?: CompositionChecker,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
@@ -425,6 +460,7 @@ export class CodexVideoEditToolService {
     this.transcriptReader = transcriptReader;
     this.frameRenderer = frameRenderer;
     this.compositionImporter = compositionImporter;
+    this.compositionChecker = compositionChecker;
   }
 
   private applier():
@@ -485,6 +521,8 @@ export class CodexVideoEditToolService {
           return await this.configureAudio(input);
         case "media.get_frames":
           return await this.getFrames(input);
+        case "composition.check":
+          return await this.checkComposition(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -1340,6 +1378,77 @@ export class CodexVideoEditToolService {
         mime_type: frame.mimeType,
         data_base64: frame.dataBase64,
       })),
+    };
+  }
+
+  private async checkComposition(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      ["schema_version", "project_id", "composition_path"],
+      ["times_us", "max_width"],
+    );
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    if (
+      typeof request.composition_path !== "string" ||
+      !request.composition_path ||
+      request.composition_path.length > 260
+    )
+      reject("invalid_request");
+    let times: number[] | null = null;
+    if (request.times_us !== undefined) {
+      const value = request.times_us;
+      if (
+        !Array.isArray(value) ||
+        value.length < 2 ||
+        value.length > frameToolLimits.maxSheetFrames ||
+        value.some((time) => !Number.isSafeInteger(time) || time < 0) ||
+        value.some((time, index) => index > 0 && time <= value[index - 1])
+      )
+        reject("invalid_request");
+      times = value as number[];
+    }
+    let cellWidth: number = frameToolLimits.defaultSheetCellWidth;
+    if (request.max_width !== undefined) {
+      integer(request.max_width, frameToolLimits.minWidth);
+      if (request.max_width > frameToolLimits.maxSheetCellWidth)
+        reject("invalid_request");
+      cellWidth = request.max_width;
+    }
+    if (!this.compositionChecker) reject("tool_not_available");
+    let checked: Awaited<ReturnType<CompositionChecker>>;
+    try {
+      checked = await this.compositionChecker(
+        this.activeProjectId,
+        request.composition_path,
+        times,
+        cellWidth,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === "CompositionError")
+        throw new CodexVideoEditToolError(
+          "composition_rejected",
+          undefined,
+          error.message,
+        );
+      reject("frame_unavailable");
+    }
+    return {
+      schema_version: "1.0",
+      project_id: this.activeProjectId,
+      composition_path: request.composition_path,
+      ...checked.report,
+      // The audited moments, tiled four across in reading order.
+      frames: checked.sheet
+        ? [
+            {
+              width: checked.sheet.width,
+              height: checked.sheet.height,
+              mime_type: checked.sheet.mimeType,
+              data_base64: checked.sheet.dataBase64,
+            },
+          ]
+        : [],
     };
   }
 

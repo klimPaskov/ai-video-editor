@@ -31,6 +31,8 @@ export interface StageState {
   graphics: StageGraphic[];
   /** Where compositions are served, e.g. "app-scheme://composition/". */
   compositionBase?: string;
+  /** Ask compositions to audit each seek (`composition.check`). */
+  inspect?: boolean;
 }
 
 /**
@@ -74,6 +76,9 @@ export function syncStage(
     __acked?: number;
     __ready?: boolean;
     __error?: string | null;
+    __inspect?: boolean;
+    __report?: unknown;
+    __duration?: number | null;
   };
   // Composition frames answer seeks with a message; remember the answers.
   const view = doc.defaultView as
@@ -86,6 +91,8 @@ export function syncStage(
         id?: unknown;
         ready?: unknown;
         error?: unknown;
+        duration?: unknown;
+        report?: unknown;
       } | null;
       if (data?.type === "hf-ready") {
         // The frame just started listening: give it the latest seek.
@@ -102,6 +109,7 @@ export function syncStage(
               type: "hf-seek",
               id: owner.__seek ?? 0,
               seconds: owner.__seekSeconds ?? 0,
+              inspect: owner.__inspect === true,
             },
             "*",
           );
@@ -118,6 +126,11 @@ export function syncStage(
         owner.__ready = data.ready === true;
         owner.__error =
           typeof data.error === "string" ? data.error.slice(0, 300) : null;
+        owner.__duration =
+          typeof data.duration === "number" && Number.isFinite(data.duration)
+            ? data.duration
+            : null;
+        owner.__report = data.report ?? null;
       }
     });
   }
@@ -173,11 +186,14 @@ export function syncStage(
         section.__seek = view.__stageSeek;
         // Kept so settleStage can resend it until the frame is listening.
         section.__seekSeconds = (us - graphic.startUs) / 1_000_000;
+        section.__inspect = state.inspect === true;
+        section.__report = null;
         frame.contentWindow?.postMessage(
           {
             type: "hf-seek",
             id: section.__seek,
             seconds: (us - graphic.startUs) / 1_000_000,
+            inspect: section.__inspect,
           },
           "*",
         );
@@ -234,6 +250,7 @@ export function settleStage(
     __ready?: boolean;
     __error?: string | null;
     __shown?: boolean;
+    __inspect?: boolean;
   };
   // A seek posted before the frame loaded is lost; resend the latest one.
   let lastResend = 0;
@@ -272,6 +289,7 @@ export function settleStage(
               type: "hf-seek",
               id: section.__seek,
               seconds: section.__seekSeconds ?? 0,
+              inspect: section.__inspect === true,
             },
             "*",
           );
@@ -286,4 +304,32 @@ export function settleStage(
     };
     check();
   });
+}
+
+/**
+ * The latest answer of the stage's first composition, for
+ * `composition.check`: whether it is ready, its error, its duration in
+ * seconds and the audit of the last seek.
+ */
+export function stageReport(doc: Document): {
+  ready: boolean;
+  error: string | null;
+  duration: number | null;
+  report: unknown;
+} | null {
+  const section = doc.querySelector("#stage section") as
+    | (HTMLElement & {
+        __ready?: boolean;
+        __error?: string | null;
+        __duration?: number | null;
+        __report?: unknown;
+      })
+    | null;
+  if (!section?.querySelector("iframe")) return null;
+  return {
+    ready: section.__ready === true,
+    error: section.__error ?? null,
+    duration: section.__duration ?? null,
+    report: section.__report ?? null,
+  };
 }

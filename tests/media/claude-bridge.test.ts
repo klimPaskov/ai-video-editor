@@ -218,8 +218,13 @@ test("turn arguments disable built-in tools, settings and prompts", () => {
   assert.equal(value("--session-id"), "11111111-2222-4333-8444-555555555555");
   assert.equal(value("--effort"), "high");
   assert.ok(!args.includes("--resume"));
-  assert.equal(claudeEditorTools.length, 17);
-  for (const name of ["zoom_set", "zoom_remove", "speed_set"])
+  assert.equal(claudeEditorTools.length, 18);
+  for (const name of [
+    "zoom_set",
+    "zoom_remove",
+    "speed_set",
+    "composition_check",
+  ])
     assert.ok(claudeEditorTools.includes(`mcp__ai_video_editor__${name}`));
   for (const name of claudeEditorTools)
     assert.match(name, /^mcp__ai_video_editor__[a-z_]+$/u);
@@ -894,13 +899,18 @@ test("a full edit runs with the playbook, records its edits and undoes them toge
       args[args.indexOf("--system-prompt") + 1]!,
       /Full edit playbook/u,
     );
-    // The record is on disk, not only in memory.
-    const stored = JSON.parse(
-      await readFile(
-        join(root, "claude", "threads", `${project}.json`),
-        "utf8",
-      ),
-    ) as { fullEdit: { transactionIds: string[] } };
+    // The record is on disk, not only in memory (written just after).
+    const stored = await waitFor(
+      async () =>
+        JSON.parse(
+          await readFile(
+            join(root, "claude", "threads", `${project}.json`),
+            "utf8",
+          ),
+        ) as { fullEdit: { transactionIds: string[] } },
+      (value) => value.fullEdit.transactionIds.length === 2,
+      "the stored full edit",
+    );
     assert.deepEqual(stored.fullEdit.transactionIds, [
       "claude-tx-1",
       "claude-tx-2",

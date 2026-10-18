@@ -118,7 +118,7 @@ import {
   assertExportStartRequest,
   assertExportView,
 } from "../../../packages/domain/src/export-view.ts";
-import { DesktopExports } from "./export.ts";
+import { DesktopExports, planDraft } from "./export.ts";
 import {
   DesktopMagicWand,
   type RoughCutEditor,
@@ -187,6 +187,7 @@ import { zoomSourceRange } from "../../../packages/domain/src/zoom.ts";
 import { graphicAnchor } from "../../../packages/domain/src/graphics.ts";
 import { renderGraphicsTrack } from "./graphics-render.ts";
 import { renderDraftFrames } from "./frame-render.ts";
+import { checkComposition } from "./composition-check.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
 /** Sealed HyperFrames compositions, stored by hash (ADR 0021). */
@@ -1205,6 +1206,41 @@ async function start(): Promise<void> {
     await storeComposition(compositionsRoot(), imported.sha256, imported.html);
     return { sha256: imported.sha256 };
   };
+  // composition.check: the sealed composition in the stage at the video's
+  // size, audited and pictured; it shares the picture queue.
+  const checkCompositionForClaude = async (
+    projectId: string,
+    relativePath: string,
+    timesUs: number[] | null,
+    cellWidth: number,
+  ) => {
+    const { sha256 } = await importCompositionForClaude(
+      projectId,
+      relativePath,
+    );
+    const work = frameQueue.then(async () => {
+      const snapshot = await drafts.snapshot(projectId);
+      const frameUs = Math.ceil(
+        (snapshot.draft.timeline.frame_rate.denominator * 1_000_000) /
+          snapshot.draft.timeline.frame_rate.numerator,
+      );
+      const { plan } = await planDraft(drafts, "ffprobe", projectId, {
+        startUs: 0,
+        endUs: Math.min(snapshot.draft.timeline.duration_us, frameUs),
+      });
+      return checkComposition({
+        stageUrl: `${origin}/stage.html`,
+        sha256,
+        width: plan.format.video.width,
+        height: plan.format.video.height,
+        timesUs,
+        cellWidth,
+        ffmpeg: "ffmpeg",
+      });
+    });
+    frameQueue = work.catch(() => undefined);
+    return work;
+  };
   // The project workspace Claude works in (ADR 0021): the committed edit as
   // files. Writes for one project run one at a time, newest last.
   const workspaceWrites = new Map<string, Promise<void>>();
@@ -1218,6 +1254,27 @@ async function start(): Promise<void> {
     const project = (await service.invoke("project.get_summary", request)) as {
       sources: Array<{ source_id: string }>;
     };
+    // The frame compositions play in: the exported video's size and rate.
+    let frame: { width: number; height: number; frame_rate: string } | null =
+      null;
+    try {
+      const rate = (await drafts.snapshot(projectId)).draft.timeline.frame_rate;
+      const { plan } = await planDraft(drafts, "ffprobe", projectId, {
+        startUs: 0,
+        endUs: Math.min(
+          timeline.duration_us,
+          Math.ceil((rate.denominator * 1_000_000) / rate.numerator),
+        ),
+      });
+      const video = plan.format.video;
+      frame = {
+        width: video.width,
+        height: video.height,
+        frame_rate: `${video.frameRate.numerator}/${video.frameRate.denominator}`,
+      };
+    } catch {
+      // Left out when the sources cannot be probed.
+    }
     let transcripts: LocalTranscript[] = [];
     try {
       const view = await transcription!.get({ ...request, job_id: null });
@@ -1228,7 +1285,7 @@ async function start(): Promise<void> {
     }
     await writeClaudeWorkspace(directory, {
       timeline,
-      project,
+      project: frame ? { ...project, frame } : project,
       transcripts,
       sourceNames: new Map(
         project.sources.map((source, index) => [
@@ -1286,6 +1343,7 @@ async function start(): Promise<void> {
           readTranscriptForTool,
           renderFramesForTool,
           importCompositionForClaude,
+          checkCompositionForClaude,
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { connect } from "node:net";
 import { appIdentity } from "../../domain/src/app-identity.ts";
-import { codexVideoEditMcpTools } from "./mcp-tools.ts";
+import { claudeEditorMcpTools, codexVideoEditMcpTools } from "./mcp-tools.ts";
 import { splitFrameResult, toolCallTimeoutMs } from "./frames.ts";
 
 const MAX_FRAME_BYTES = 1024 * 1024;
@@ -9,6 +9,12 @@ const endpoint = process.env.AI_VIDEO_EDITOR_MCP_ENDPOINT;
 const token = process.env.AI_VIDEO_EDITOR_MCP_TOKEN;
 delete process.env.AI_VIDEO_EDITOR_MCP_ENDPOINT;
 delete process.env.AI_VIDEO_EDITOR_MCP_TOKEN;
+// Claude's server also lists the tools on its workspace files (ADR 0021).
+const tools: readonly { name: string }[] =
+  process.env.AI_VIDEO_EDITOR_MCP_TOOLS === "claude"
+    ? claudeEditorMcpTools
+    : codexVideoEditMcpTools;
+delete process.env.AI_VIDEO_EDITOR_MCP_TOOLS;
 
 type RpcId = string | number;
 
@@ -132,7 +138,7 @@ async function request(message: Record<string, unknown>): Promise<void> {
     return write({
       jsonrpc: "2.0",
       id: message.id,
-      result: { tools: codexVideoEditMcpTools },
+      result: { tools },
     });
   }
   if (message.method === "tools/call") {
@@ -140,14 +146,17 @@ async function request(message: Record<string, unknown>): Promise<void> {
     if (
       !record(params) ||
       typeof params.name !== "string" ||
-      !codexVideoEditMcpTools.some((tool) => tool.name === params.name) ||
+      !tools.some((tool) => tool.name === params.name) ||
       !record(params.arguments)
     )
       return error(message.id, -32602, "Invalid parameters");
     try {
       const result = await invokeBroker(params.name, params.arguments);
       const pictures =
-        params.name === "media.get_frames" ? splitFrameResult(result) : null;
+        params.name === "media.get_frames" ||
+        params.name === "composition.check"
+          ? splitFrameResult(result)
+          : null;
       if (pictures)
         return write({
           jsonrpc: "2.0",

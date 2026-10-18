@@ -39,6 +39,7 @@ const activityLabels: Record<string, { label: string; mutating: boolean }> = {
   captions_configure: { label: "Setting captions", mutating: true },
   audio_configure: { label: "Setting audio", mutating: true },
   media_get_frames: { label: "Looking at the edit", mutating: false },
+  composition_check: { label: "Checking a composition", mutating: false },
   timeline_undo: { label: "Undoing the last edit", mutating: true },
 };
 

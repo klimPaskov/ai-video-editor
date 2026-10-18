@@ -200,6 +200,34 @@ try {
     .split("\n")
     .map((line) => JSON.parse(line) as Record<string, unknown>);
   assert.equal(log.find((entry) => entry.scriptedError) ?? null, null);
+  // composition.check ran the real sealed stage: the sweep is clean and
+  // moves; the flawed one has its held, cut-off, too-small headline found.
+  const checked = log.find((entry) => entry.scriptedCheck)?.scriptedCheck as {
+    sweep: {
+      ok: boolean;
+      duration_us: number | null;
+      moving: string;
+      findings: string[];
+      sheet: boolean;
+    };
+    edge: { ok: boolean; findings: string[] };
+  };
+  assert.ok(checked, "composition.check was not called");
+  assert.deepEqual(checked.sweep, {
+    ok: true,
+    duration_us: 2_000_000,
+    moving: "7 of 7",
+    findings: [],
+    sheet: true,
+  });
+  assert.equal(checked.edge.ok, false);
+  assert.ok(checked.edge.findings.includes("text_cut_off:error"));
+  assert.ok(checked.edge.findings.includes("text_too_small:warning"));
+  await writeFile(
+    join(evidence, "composition-check-sheet.jpg"),
+    await readFile(join(claudeConfig, "scripted-check-sheet.jpg")),
+  );
+  result.check = checked;
   assert.deepEqual(
     (await records()).map((record) => [
       record.origin,

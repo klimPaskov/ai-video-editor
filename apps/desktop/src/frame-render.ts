@@ -243,59 +243,78 @@ export async function renderDraftFrames(
     }
     if (options.sheet) {
       if (!sheetCell) throw new FrameRenderError("sheet");
-      // Four across, in reading order, with a thin dark gutter.
-      const columns = Math.min(4, options.timesUs.length);
-      const rows = Math.ceil(options.timesUs.length / columns);
-      let jpeg: Buffer | null = null;
-      for (const quality of [4, 7, 12, 20, 28]) {
-        const result = await runProcess({
-          executable: ffmpeg,
-          args: [
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-nostdin",
-            "-framerate",
-            "1",
-            "-i",
-            path.join(scratch, "cell-%02d.png"),
-            "-frames:v",
-            "1",
-            "-vf",
-            `tile=${columns}x${rows}:padding=4:margin=4:color=0x101010,format=yuvj420p`,
-            "-q:v",
-            String(quality),
-            "-f",
-            "image2",
-            "-c:v",
-            "mjpeg",
-            "pipe:1",
-          ],
-          timeoutMs: 120_000,
-          maxOutputBytes: 8 * 1024 * 1024,
-          ...(options.signal ? { signal: options.signal } : {}),
-        });
-        if (
-          result.stdout.length &&
-          Math.ceil(result.stdout.length / 3) * 4 <= frameLimits.maxTotalBase64
-        ) {
-          jpeg = result.stdout;
-          break;
-        }
-      }
-      if (!jpeg) throw new FrameRenderError("size");
-      return [
-        {
-          timeUs: options.timesUs[0]!,
-          width: columns * (sheetCell.width + 4) + 4,
-          height: rows * (sheetCell.height + 4) + 4,
-          mimeType: "image/jpeg",
-          dataBase64: jpeg.toString("base64"),
-        },
-      ];
+      const sheet = await tileSheet({
+        ffmpeg,
+        directory: scratch,
+        count: options.timesUs.length,
+        cell: sheetCell,
+        ...(options.signal ? { signal: options.signal } : {}),
+      });
+      return [{ timeUs: options.timesUs[0]!, ...sheet }];
     }
     return frames;
   } finally {
     await rm(scratch, { recursive: true, force: true }).catch(() => undefined);
   }
+}
+
+/**
+ * Tiles `cell-00.png`, `cell-01.png`… in `directory` four across, in
+ * reading order with a thin dark gutter, into one JPEG within the picture
+ * budget of a tool call.
+ */
+export async function tileSheet(options: {
+  ffmpeg: string;
+  directory: string;
+  count: number;
+  cell: { width: number; height: number };
+  signal?: AbortSignal;
+}): Promise<{
+  width: number;
+  height: number;
+  mimeType: "image/jpeg";
+  dataBase64: string;
+}> {
+  const columns = Math.min(4, options.count);
+  const rows = Math.ceil(options.count / columns);
+  for (const quality of [4, 7, 12, 20, 28]) {
+    const result = await runProcess({
+      executable: options.ffmpeg,
+      args: [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-framerate",
+        "1",
+        "-i",
+        path.join(options.directory, "cell-%02d.png"),
+        "-frames:v",
+        "1",
+        "-vf",
+        `tile=${columns}x${rows}:padding=4:margin=4:color=0x101010,format=yuvj420p`,
+        "-q:v",
+        String(quality),
+        "-f",
+        "image2",
+        "-c:v",
+        "mjpeg",
+        "pipe:1",
+      ],
+      timeoutMs: 120_000,
+      maxOutputBytes: 8 * 1024 * 1024,
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    if (
+      result.stdout.length &&
+      Math.ceil(result.stdout.length / 3) * 4 <= frameLimits.maxTotalBase64
+    )
+      return {
+        width: columns * (options.cell.width + 4) + 4,
+        height: rows * (options.cell.height + 4) + 4,
+        mimeType: "image/jpeg",
+        dataBase64: result.stdout.toString("base64"),
+      };
+  }
+  throw new FrameRenderError("size");
 }

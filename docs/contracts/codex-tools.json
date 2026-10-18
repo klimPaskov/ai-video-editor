@@ -77,6 +77,21 @@
       ]
     },
     {
+      "name": "composition.check",
+      "mode": "read",
+      "description": "Claude only: seal a HyperFrames composition from the project workspace, play it in the sealed stage at the video's size, and report runtime errors, duration, canvas size, text cut off, outside the safe area or too small, and frozen motion, with a contact sheet of the audited moments; analysis only, the edit is unchanged.",
+      "undoable": false,
+      "user_confirmation": "none",
+      "allowed_scope": "bounded_media",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
       "name": "assets.search_local",
       "mode": "read",
       "description": "Search licence-indexed local assets.",

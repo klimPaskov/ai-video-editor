@@ -18,11 +18,12 @@ The bar is a high-budget production: graphics that feel designed by a studio for
 - Make each graphic its own: no centred-title-on-flat-colour slides, no bullet lists, no stock templates or registry blocks used unchanged, no same-layout cards with new words, no loops that stamp out graphics.
 
 ## Technical rules
-- A composition is one HTML page with a root carrying data-composition-id, data-width, data-height and data-duration and one paused GSAP timeline registered on window.__timelines[id]. Size it to the stage and keep its background transparent.
+- A composition is one HTML page with a root carrying data-composition-id, data-width, data-height and data-duration and one paused GSAP timeline registered on window.__timelines[id]. It plays in a frame the size of the video (frame in project.json): declare that size, lay it out for it, and keep its background transparent.
 - Libraries load only as pinned jsDelivr URLs with an exact version (for example https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js); put fonts, images and data files next to the composition and reference them relatively. Nothing else may come from the network. No clocks, unseeded randomness or input: every frame must depend only on time.
 - Place it with graphics.set and composition_path; keep its graphic_id when you revise so the change stays one undoable step.
 
 ## Review and iterate
+- Check each composition with composition.check (it stands in for npx hyperframes check and snapshot) before placing it and after every revision: it seals and plays the file exactly as the edit will and reports script errors, its duration, text cut off or outside the safe area, text too small to read and a picture that never moves, with a contact sheet of the audited moments. Fix every error and warning; it does not judge contrast or overlap, so look at the sheet for those.
 - Watch each graphic's motion with media.get_frames and layout "sheet": 8–16 times spread across its duration, tiled into one picture, so you can judge timing, easing, staggers and how it settles. Then look closely at single frames where detail matters. If it fails to render, the error says why: fix it.
 - Ask the motion-reviewer helper to critique it against notes.md and this bar, then revise until it would pass a senior motion designer's review.
 `;
@@ -63,6 +64,7 @@ export const claudeAgents: Readonly<Record<string, ClaudeAgentDefinition>> =
         "Glob",
         editorTool("timeline_get_summary"),
         editorTool("media_get_frames"),
+        editorTool("composition_check"),
       ],
     },
   });

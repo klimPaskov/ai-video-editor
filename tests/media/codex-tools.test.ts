@@ -1996,3 +1996,94 @@ test("media.get_frames validates times and returns the renderer's pictures", asy
     expectCode("stale_draft"),
   );
 });
+
+test("composition.check reports the stage's audit and its picture, Claude only", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const calls: { path: string; times: number[] | null; cell: number }[] = [];
+  const claude = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    undefined,
+    undefined,
+    async (_project, path, times, cell) => {
+      calls.push({ path, times, cell });
+      if (path.includes("broken")) {
+        const error = new Error("Compositions cannot load scripts from x.");
+        error.name = "CompositionError";
+        throw error;
+      }
+      return {
+        report: { ok: false, findings: [{ code: "text_cut_off" }] },
+        sheet: {
+          width: 1300,
+          height: 380,
+          mimeType: "image/jpeg",
+          dataBase64: "AAAA",
+        },
+      };
+    },
+  );
+  const request = {
+    schema_version: "1.0",
+    project_id: projectId,
+    composition_path: "compositions/intro/index.html",
+  };
+  const result = (await claude.invoke("composition.check", request)) as {
+    ok: boolean;
+    findings: unknown[];
+    frames: { mime_type: string; data_base64: string }[];
+  };
+  assert.equal(result.ok, false);
+  assert.equal(result.findings.length, 1);
+  assert.deepEqual(result.frames[0], {
+    width: 1300,
+    height: 380,
+    mime_type: "image/jpeg",
+    data_base64: "AAAA",
+  });
+  assert.deepEqual(calls[0], {
+    path: "compositions/intro/index.html",
+    times: null,
+    cell: 320,
+  });
+  await claude.invoke("composition.check", {
+    ...request,
+    times_us: [0, 500_000, 1_000_000],
+    max_width: 480,
+  });
+  assert.deepEqual(calls[1]!.times, [0, 500_000, 1_000_000]);
+  assert.equal(calls[1]!.cell, 480);
+  // Times must increase, and stay within the sheet's limits.
+  for (const bad of [
+    { times_us: [0] },
+    { times_us: [500_000, 0] },
+    { times_us: Array.from({ length: 17 }, (_, index) => index) },
+    { max_width: 481 },
+    { composition_path: "" },
+    { extra: true },
+  ])
+    await assert.rejects(
+      claude.invoke("composition.check", { ...request, ...bad }),
+      expectCode("invalid_request"),
+    );
+  await assert.rejects(
+    claude.invoke("composition.check", {
+      ...request,
+      composition_path: "compositions/broken/index.html",
+    }),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "composition_rejected" &&
+      /cannot load scripts/u.test(error.message),
+  );
+  // The other routes have no workspace, so no checker.
+  await assert.rejects(
+    new CodexVideoEditToolService(projectId, drafts, "codex").invoke(
+      "composition.check",
+      request,
+    ),
+    expectCode("tool_not_available"),
+  );
+});

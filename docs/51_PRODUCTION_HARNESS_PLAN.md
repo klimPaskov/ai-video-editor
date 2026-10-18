@@ -27,7 +27,7 @@ The goal is met when a signed-in run on the supplied recordings produces such an
 | --- | --- | --- |
 | M0 | Foundations: AI rough cut (ADR 0020), harness workspace and confined Claude Code tools (ADR 0021), the user's own skills, quiet timeline strip, real signed-in acceptance | Done 2026-10-18 |
 | M1 | Compositions play everywhere | Core done 2026-10-18; export and preview parity checks open |
-| M2 | Composition toolchain for Claude | Motion sheets done 2026-10-18; check tool planned |
+| M2 | Composition toolchain for Claude | Motion sheets and `composition.check` done 2026-10-18; real Claude iteration open |
 | M3 | Music, sound and asset layers | Asset setting done 2026-10-18; layers planned |
 | M4 | Production direction and model routing | Direction rewritten 2026-10-18; model routing planned |
 | M5 | End-to-end production on the supplied recordings | Planned |
@@ -46,11 +46,10 @@ A HyperFrames composition in Claude's workspace becomes a graphic in the edit an
 
 What the skills ask of `npx hyperframes`, as app tools that run against the workspace, so the skills work unchanged in spirit:
 
-- `composition.check`: load the composition in the sealed stage and report runtime errors, duration, missing timeline, layout overflow and text outside the safe area.
-- `composition.snapshot`: rendered stills at chosen times.
+- `composition.check` (done 2026-10-18): seals the workspace file, plays it in the sealed stage at the video's size and reports readiness, script errors, duration, timelines, canvas size, text cut off, outside the safe area or too small, and frozen motion, with a contact sheet of the audited moments (this also covers snapshots at chosen times). Contrast and overlap are not audited yet.
 - Motion review (done 2026-10-18 as `media.get_frames` with `layout: "sheet"`): up to 16 moments through the export path tiled into one picture, so Claude judges motion, timing and easing, not single frames.
 - Placement stays `graphics.set`; replacement keeps the graphic ID so iteration is undoable.
-- The system prompt maps the skills' CLI commands to these tools.
+- The system prompt maps the skills' CLI commands to these tools (done 2026-10-18 for lint, check and snapshot).
 - Done when: a scripted run iterates a composition through check, snapshot and motion and places it; a real Claude run does the same.
 
 ### M3: Music, sound and asset layers

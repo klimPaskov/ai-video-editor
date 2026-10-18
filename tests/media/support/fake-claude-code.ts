@@ -215,6 +215,59 @@ async function scriptedComposition(
     join(process.cwd(), "compositions", "sweep", "index.html"),
     `<!doctype html><html><head><meta charset="utf-8"><script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script><style>html,body{margin:0;background:transparent}#root{position:relative;width:100%;height:100%;overflow:hidden}#box{position:absolute;left:0;top:40px;width:80px;height:80px;background:rgb(250,140,20)}</style></head><body><div id="root" data-composition-id="main" data-start="0" data-width="320" data-height="180" data-duration="2"><div id="box" class="clip" data-start="0" data-duration="2"></div></div><script>const tl = gsap.timeline({ paused: true }); tl.fromTo("#box", { x: 0 }, { x: 200, duration: 2, ease: "none" }, 0); window.__timelines["main"] = tl;</script></body></html>`,
   );
+  // A flawed one: a held headline running off the right edge, in type too
+  // small to read.
+  mkdirSync(join(process.cwd(), "compositions", "edge"), { recursive: true });
+  writeFileSync(
+    join(process.cwd(), "compositions", "edge", "index.html"),
+    `<!doctype html><html><head><meta charset="utf-8"><script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script><style>html,body{margin:0;background:transparent}#root{position:relative;width:100%;height:100%;overflow:hidden}#title{position:absolute;left:270px;top:60px;white-space:nowrap;font:bold 9px sans-serif;color:#fff}</style></head><body><div id="root" data-composition-id="main" data-start="0" data-width="320" data-height="180" data-duration="2"><div id="title">Cut off headline</div></div><script>const tl = gsap.timeline({ paused: true }); tl.fromTo("#title", { opacity: 0.5 }, { opacity: 1, duration: 2 }, 0); window.__timelines["main"] = tl;</script></body></html>`,
+  );
+  const check = async (path: string) => {
+    const content = await call("composition.check", {
+      schema_version: "1.0",
+      project_id: projectId,
+      composition_path: path,
+    });
+    const report = JSON.parse(content[0]!.text as string) as {
+      ok: boolean;
+      duration_us: number | null;
+      moving_between_moments: string;
+      findings: { code: string; severity: string }[];
+    };
+    const sheet = content.find((item) => item.type === "image");
+    return {
+      report,
+      sheet: typeof sheet?.data === "string" ? sheet.data : null,
+    };
+  };
+  const sweep = await check("compositions/sweep/index.html");
+  const edge = await check("compositions/edge/index.html");
+  if (sweep.sheet)
+    writeFileSync(
+      join(root, "scripted-check-sheet.jpg"),
+      Buffer.from(sweep.sheet, "base64"),
+    );
+  appendFileSync(
+    logPath,
+    `${JSON.stringify({
+      scriptedCheck: {
+        sweep: {
+          ok: sweep.report.ok,
+          duration_us: sweep.report.duration_us,
+          moving: sweep.report.moving_between_moments,
+          findings: sweep.report.findings.map((item) => item.code),
+          sheet: sweep.sheet !== null,
+        },
+        edge: {
+          ok: edge.report.ok,
+          findings: edge.report.findings.map(
+            (item) => `${item.code}:${item.severity}`,
+          ),
+        },
+      },
+    })}
+`,
+  );
   const summary = JSON.parse(
     (
       await call("timeline.get_summary", {

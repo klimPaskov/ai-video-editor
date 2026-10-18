@@ -13,7 +13,10 @@ import {
   resolveCodexMcpScript,
 } from "../../packages/codex-tools/src/broker.ts";
 import { CodexVideoEditToolError } from "../../packages/codex-tools/src/service.ts";
-import { codexVideoEditMcpTools } from "../../packages/codex-tools/src/mcp-tools.ts";
+import {
+  claudeEditorMcpTools,
+  codexVideoEditMcpTools,
+} from "../../packages/codex-tools/src/mcp-tools.ts";
 import {
   buildCodexAppServerArguments,
   codexClientInternals,
@@ -32,12 +35,14 @@ type RpcHarness = {
 async function childFor(
   runtime: ReturnType<CodexMcpBroker["runtime"]>,
   token = runtime.token,
+  extraEnv: Record<string, string> = {},
 ): Promise<RpcHarness> {
   const child = spawn(runtime.command, [runtime.script], {
     env: {
       AI_VIDEO_EDITOR_MCP_ENDPOINT: runtime.endpoint,
       AI_VIDEO_EDITOR_MCP_TOKEN: token,
       NODE_NO_WARNINGS: "1",
+      ...extraEnv,
     },
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
@@ -887,8 +892,92 @@ test("every constant and choice in the editor tool schemas declares its type", (
     for (const [key, value] of Object.entries(record))
       walk(value, `${path}.${key}`);
   };
-  for (const tool of codexVideoEditMcpTools) walk(tool.inputSchema, tool.name);
+  for (const tool of claudeEditorMcpTools) walk(tool.inputSchema, tool.name);
   assert.deepEqual(untyped, []);
+});
+
+test("only Claude's server lists composition.check, with its picture as an image", async () => {
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64");
+  const state = await fixture(async (name) => {
+    assert.equal(name, "composition.check");
+    return {
+      schema_version: "1.0",
+      project_id: "project-1",
+      composition_path: "compositions/intro/index.html",
+      ok: true,
+      findings: [],
+      frames: [
+        {
+          width: 1300,
+          height: 380,
+          mime_type: "image/jpeg",
+          data_base64: jpeg,
+        },
+      ],
+    };
+  });
+  const codex = await childFor(state.runtime);
+  const claude = await childFor(state.runtime, state.runtime.token, {
+    AI_VIDEO_EDITOR_MCP_TOOLS: "claude",
+  });
+  const call = {
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: {
+      name: "composition.check",
+      arguments: {
+        schema_version: "1.0",
+        project_id: "project-1",
+        composition_path: "compositions/intro/index.html",
+      },
+    },
+  };
+  try {
+    for (const rpc of [codex, claude])
+      await rpc.request({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-06-18" },
+      });
+    const list = async (rpc: RpcHarness) =>
+      (
+        (await rpc.request({ jsonrpc: "2.0", id: 2, method: "tools/list" }))
+          .result as { tools: { name: string }[] }
+      ).tools.map((tool) => tool.name);
+    assert.deepEqual(
+      await list(codex),
+      codexVideoEditMcpTools.map((tool) => tool.name),
+    );
+    assert.equal((await list(codex)).length, 17);
+    assert.deepEqual(
+      await list(claude),
+      claudeEditorMcpTools.map((tool) => tool.name),
+    );
+    assert.equal((await list(claude)).at(-1), "composition.check");
+    assert.equal(
+      ((await codex.request(call)).error as { code: number }).code,
+      -32602,
+    );
+    const result = (await claude.request(call)).result as {
+      isError: boolean;
+      content: Array<Record<string, unknown>>;
+    };
+    assert.equal(result.isError, false);
+    assert.equal(result.content.length, 2);
+    assert.match(result.content[0]!.text as string, /"ok":true/u);
+    assert.deepEqual(result.content[1], {
+      type: "image",
+      data: jpeg,
+      mimeType: "image/jpeg",
+    });
+  } finally {
+    await codex.close();
+    await claude.close();
+    await state.broker.close();
+    await rm(state.root, { recursive: true, force: true });
+  }
 });
 
 test("a tool call may outlast the idle limit once its request has arrived", async () => {
