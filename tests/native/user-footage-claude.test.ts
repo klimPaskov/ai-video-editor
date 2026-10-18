@@ -4,12 +4,17 @@
  *
  * node tests/native/user-footage-claude.test.ts <packaged-executable>
  *   <claude-bin-dir> <profile-config-root> <first.mp4> <second.mp4> [--export]
+ *   [--continue <project-id>]
  *
  * The profile is a private config root whose Claude Code sign-in the user
  * completed themselves (docs/48); no credential is copied. The run imports the
  * recordings in order, runs Magic Edit (which also transcribes), then Edit
  * with Claude (Polished) with a light brief, and records what changed. With
- * --export it also exports and verifies the lossless master. Footage,
+ * --export it also exports and verifies the lossless master. With --continue
+ * it opens that existing project of an earlier run instead of importing and
+ * cutting, and starts another full edit in the same Claude conversation
+ * (Claude keeps its workspace notes), for example after an interrupted run.
+ * Footage,
  * transcripts, screenshots and the conversation stay in the guest; only
  * aggregate facts are printed.
  */
@@ -31,6 +36,9 @@ assert.ok(
   "Executable, Claude bin directory, profile and both recordings are required",
 );
 const exportMaster = process.argv.includes("--export");
+const continueAt = process.argv.indexOf("--continue");
+const continueProject = continueAt > 0 ? process.argv[continueAt + 1] : null;
+assert.ok(continueAt < 0 || continueProject, "--continue needs a project id");
 const evidenceRoot = resolve("test-results");
 await mkdir(evidenceRoot, { recursive: true, mode: 0o700 });
 const evidence = await mkdtemp(join(evidenceRoot, "native-footage-claude-"));
@@ -122,59 +130,84 @@ try {
     )
     .toBe("signed_in");
 
-  mark("import");
-  const before = await page.evaluate(() => window.desktop.listProjects());
-  assert.ok(before.ok);
-  const known = new Set(before.value.map((view) => view.id));
-  await page.getByRole("button", { name: "Import video", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Add footage" })
-    .click({ timeout: 600_000 });
-  await expect(page.getByRole("button", { name: "Add footage" })).toBeHidden({
-    timeout: 600_000,
-  });
-  await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
-  const listed = await page.evaluate(() => window.desktop.listProjects());
-  assert.ok(listed.ok);
-  projectId = listed.value.find(
-    (view) => !known.has(view.id) && view.sources?.length === 2,
-  )!.id;
-  let current = await project(page);
-  const folder = join(userData, "project-store", current.id);
-  const baselineBytes = await readFile(join(folder, "baseline.json"));
-  const baseline = JSON.parse(baselineBytes.toString("utf8")) as {
-    sources: Array<{ managed_path: string; sha256: string }>;
-  };
-  assert.deepEqual(
-    baseline.sources.map((source) => source.sha256),
-    originalHashes,
-  );
-  const originalDurationUs = current.timeline.durationUs;
-  result.imported = { sources: 2, inOrder: true };
+  let current: Awaited<ReturnType<typeof project>>;
+  let folder: string;
+  let baselineBytes: Buffer;
+  let baseline: { sources: Array<{ managed_path: string; sha256: string }> };
+  if (continueProject) {
+    mark("continue");
+    projectId = continueProject;
+    await page
+      .locator(`#projects [data-project-id="${continueProject}"]`)
+      .click();
+    await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
+    current = await project(page);
+    folder = join(userData, "project-store", current.id);
+    baselineBytes = await readFile(join(folder, "baseline.json"));
+    baseline = JSON.parse(baselineBytes.toString("utf8"));
+    assert.deepEqual(
+      baseline.sources.map((source) => source.sha256),
+      originalHashes,
+    );
+    result.continued = {
+      editedSeconds: Math.round(current.timeline.durationUs / 1e6),
+      graphics: current.graphics?.length ?? 0,
+    };
+  } else {
+    mark("import");
+    const before = await page.evaluate(() => window.desktop.listProjects());
+    assert.ok(before.ok);
+    const known = new Set(before.value.map((view) => view.id));
+    await page
+      .getByRole("button", { name: "Import video", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Add footage" })
+      .click({ timeout: 600_000 });
+    await expect(page.getByRole("button", { name: "Add footage" })).toBeHidden({
+      timeout: 600_000,
+    });
+    await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
+    const listed = await page.evaluate(() => window.desktop.listProjects());
+    assert.ok(listed.ok);
+    projectId = listed.value.find(
+      (view) => !known.has(view.id) && view.sources?.length === 2,
+    )!.id;
+    current = await project(page);
+    folder = join(userData, "project-store", current.id);
+    baselineBytes = await readFile(join(folder, "baseline.json"));
+    baseline = JSON.parse(baselineBytes.toString("utf8"));
+    assert.deepEqual(
+      baseline.sources.map((source) => source.sha256),
+      originalHashes,
+    );
+    const originalDurationUs = current.timeline.durationUs;
+    result.imported = { sources: 2, inOrder: true };
 
-  mark("magic-edit");
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
-  await page.locator("#magic-start").click();
-  await expect(page.locator("#magic-stop")).toBeVisible({ timeout: 60_000 });
-  // Claude's rough cut ends when Run Magic Edit comes back.
-  await expect(page.locator("#magic-start")).toBeVisible({
-    timeout: 4 * 3_600_000,
-  });
-  const magicError = (await page.locator("#magic-error").isVisible())
-    ? await page.locator("#magic-error").textContent()
-    : null;
-  await page.screenshot({ path: join(evidence, "rough-cut.png") });
-  current = await project(page);
-  const afterMagicUs = current.timeline.durationUs;
-  result.magicEdit = {
-    by: "Claude rough cut",
-    status: await page.locator("#magic-status").textContent(),
-    error: magicError,
-    removedSeconds: Math.round((originalDurationUs - afterMagicUs) / 1e6),
-    editedSeconds: Math.round(afterMagicUs / 1e6),
-  };
-  console.log(JSON.stringify({ roughCut: result.magicEdit }));
-  assert.equal(magicError, null, magicError ?? "");
+    mark("magic-edit");
+    await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+    await page.locator("#magic-start").click();
+    await expect(page.locator("#magic-stop")).toBeVisible({ timeout: 60_000 });
+    // Claude's rough cut ends when Run Magic Edit comes back.
+    await expect(page.locator("#magic-start")).toBeVisible({
+      timeout: 4 * 3_600_000,
+    });
+    const magicError = (await page.locator("#magic-error").isVisible())
+      ? await page.locator("#magic-error").textContent()
+      : null;
+    await page.screenshot({ path: join(evidence, "rough-cut.png") });
+    current = await project(page);
+    const afterMagicUs = current.timeline.durationUs;
+    result.magicEdit = {
+      by: "Claude rough cut",
+      status: await page.locator("#magic-status").textContent(),
+      error: magicError,
+      removedSeconds: Math.round((originalDurationUs - afterMagicUs) / 1e6),
+      editedSeconds: Math.round(afterMagicUs / 1e6),
+    };
+    console.log(JSON.stringify({ roughCut: result.magicEdit }));
+    assert.equal(magicError, null, magicError ?? "");
+  }
 
   mark("claude-full-edit");
   await page.getByRole("button", { name: "Edit", exact: true }).click();
@@ -203,6 +236,12 @@ try {
     .toBe("ready");
   await page.locator("#claude-full-edit summary").click();
   await page.locator("#full-edit-level").selectOption("polished");
+  if (continueProject)
+    await page
+      .locator("#full-edit-style")
+      .fill(
+        "Continue the production you started (see notes.md): finish the remaining graphics and your review. Pictures inside long graphics now render quickly; the earlier failures were an app bug, now fixed.",
+      );
   await page.screenshot({ path: join(evidence, "full-edit-brief.png") });
   await page.locator("#start-full-edit").click();
   const journal = join(folder, "draft", "journal");
