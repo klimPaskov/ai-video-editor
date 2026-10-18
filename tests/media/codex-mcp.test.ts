@@ -6,6 +6,7 @@ import { createInterface, type Interface } from "node:readline";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { once } from "node:events";
+import { connect } from "node:net";
 
 import {
   CodexMcpBroker,
@@ -891,4 +892,57 @@ test("every constant and choice in the editor tool schemas declares its type", (
   };
   for (const tool of codexVideoEditMcpTools) walk(tool.inputSchema, tool.name);
   assert.deepEqual(untyped, []);
+});
+
+test("a tool call may outlast the idle limit once its request has arrived", async () => {
+  const parent = resolve("test-results", "codex-mcp");
+  await mkdir(parent, { recursive: true });
+  const root = await mkdtemp(join(parent, "timeouts-"));
+  // Pictures of a long recording take longer than an idle connection may wait.
+  const broker = await CodexMcpBroker.open(
+    root,
+    async () => {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 600));
+      return { schema_version: "1.0", project_id: "project-1" };
+    },
+    { idleMs: 150, callMs: 5_000 },
+  );
+  const runtime = broker.runtime(
+    process.execPath,
+    resolve("packages/codex-tools/src/mcp-server.ts"),
+  );
+  const exchange = (request: string | null) =>
+    new Promise<string>((resolveReply, reject) => {
+      const socket = connect(runtime.endpoint);
+      let reply = "";
+      socket.on("data", (chunk) => (reply += chunk.toString("utf8")));
+      socket.once("close", () => resolveReply(reply));
+      socket.once("error", reject);
+      if (request !== null)
+        socket.once("connect", () =>
+          socket.write(`${request}
+`),
+        );
+    });
+  try {
+    const reply = JSON.parse(
+      await exchange(
+        JSON.stringify({
+          schema_version: "1.0",
+          token: runtime.token,
+          request_id: "slow-call",
+          tool_name: "project.get_summary",
+          input: { schema_version: "1.0", project_id: "project-1" },
+        }),
+      ),
+    ) as { ok: boolean };
+    assert.equal(reply.ok, true);
+    // A connection that never sends its request is still closed quickly.
+    const started = Date.now();
+    assert.equal(await exchange(null), "");
+    assert.ok(Date.now() - started < 2_000);
+  } finally {
+    await broker.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });

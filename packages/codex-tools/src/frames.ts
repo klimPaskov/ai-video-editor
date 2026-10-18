@@ -9,6 +9,13 @@ export const assistantGraphicLimits = Object.freeze({
   maxCssBytes: 24 * 1024,
 });
 
+/**
+ * How long a tool call may run once main has its request. Rendering pictures
+ * of a long 1440p recording takes well over the 35 s a connection may sit
+ * idle before its request arrives.
+ */
+export const toolCallTimeoutMs = 5 * 60_000;
+
 export const frameToolLimits = Object.freeze({
   maxFrames: 3,
   minWidth: 320,

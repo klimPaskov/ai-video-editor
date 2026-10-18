@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { connect } from "node:net";
 import { appIdentity } from "../../domain/src/app-identity.ts";
 import { codexVideoEditMcpTools } from "./mcp-tools.ts";
-import { splitFrameResult } from "./frames.ts";
+import { splitFrameResult, toolCallTimeoutMs } from "./frames.ts";
 
 const MAX_FRAME_BYTES = 1024 * 1024;
 const endpoint = process.env.AI_VIDEO_EDITOR_MCP_ENDPOINT;
@@ -57,7 +57,7 @@ async function invokeBroker(name: string, input: unknown): Promise<unknown> {
     const socket = connect(endpoint);
     let buffer = Buffer.alloc(0);
     const fail = () => reject(new Error("The editing service is unavailable."));
-    socket.setTimeout(35_000, () => socket.destroy());
+    socket.setTimeout(toolCallTimeoutMs, () => socket.destroy());
     socket.once("error", fail);
     socket.once("connect", () => socket.write(request));
     socket.on("data", (chunk: Buffer) => {
