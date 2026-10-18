@@ -3,9 +3,11 @@ import type { GraphicInterval } from "../../../packages/domain/src/graphics.ts";
 import type { ZoomInterval } from "../../../packages/domain/src/zoom.ts";
 
 /**
- * Proportional view of the draft timeline: one block per visible clip, the
- * in/out marks and the playhead. It only reflects state; clicking seeks.
- * The position slider remains the keyboard-accessible control.
+ * Proportional view of the draft timeline: one continuous bar coloured by
+ * recording, with a hairline at each cut, the in/out marks and the playhead.
+ * After an automatic edit there can be a hundred parts, so parts carry no
+ * labels. It only reflects state; clicking seeks. The position slider
+ * remains the keyboard-accessible control.
  */
 export interface TimelineMarks {
   inUs?: number | undefined;
@@ -37,6 +39,10 @@ export function setupTimelineStrip(options: {
   let key = "";
   let current: ProjectView | undefined;
 
+  const minutes = (us: number): string => {
+    const seconds = Math.round(us / 1_000_000);
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  };
   const percent = (us: number): string =>
     `${durationUs > 0 ? Math.min(100, Math.max(0, (us / durationUs) * 100)) : 0}%`;
 
@@ -87,13 +93,19 @@ export function setupTimelineStrip(options: {
           block.className =
             sourceIndex > 0 ? "timeline-clip second-source" : "timeline-clip";
           if (clip.speed) block.classList.add("sped");
+          if (index > 0) block.classList.add("cut");
+          const share =
+            (clip.timelineEndUs - clip.timelineStartUs) /
+            Math.max(1, durationUs);
           block.style.left = percent(clip.timelineStartUs);
-          block.style.width = `calc(${percent(clip.timelineEndUs - clip.timelineStartUs)} - 2px)`;
-          block.textContent =
-            project.clips!.length > 1
-              ? `${index + 1}`
-              : (sources[0]?.name ?? "");
-          if (clip.speed) {
+          block.style.width = percent(
+            clip.timelineEndUs - clip.timelineStartUs,
+          );
+          // A single clip is named after its recording; parts are not.
+          if (project.clips!.length === 1)
+            block.textContent = sources[0]?.name ?? "";
+          // The speed shows where the part is wide enough to read it.
+          if (clip.speed && share >= 0.04) {
             const badge = document.createElement("span");
             badge.className = "timeline-speed";
             badge.textContent = `${clip.speed}×`;
@@ -106,22 +118,13 @@ export function setupTimelineStrip(options: {
         (sum, source) => sum + source.durationUs,
         0,
       );
-      const parts = project.clips.length;
-      // Footage kept is measured in source time, so speed-ups do not count.
-      const keptUs = project.clips.reduce(
-        (sum, clip) => sum + clip.sourceEndUs - clip.sourceStartUs,
-        0,
-      );
-      const count = `${parts} ${parts === 1 ? "clip" : "clips"}`;
+      // Only the edited length against the recordings; the player shows the
+      // exact time.
       summary.textContent =
-        keptUs === durationUs
-          ? originalUs > keptUs
-            ? `${count} · ${options.time(durationUs)} of ${options.time(originalUs)} kept`
-            : `${count} · ${options.time(durationUs)}`
-          : // Sped-up parts make the output shorter than the footage kept.
-            originalUs > keptUs
-            ? `${count} · ${options.time(durationUs)} from ${options.time(keptUs)} of ${options.time(originalUs)} footage`
-            : `${count} · ${options.time(durationUs)} from ${options.time(originalUs)} footage`;
+        durationUs < originalUs
+          ? `${minutes(durationUs)} of ${minutes(originalUs)}`
+          : "";
+      summary.hidden = durationUs >= originalUs;
     }
     const layers: HTMLElement[] = [];
     const { inUs, outUs } = marks;
