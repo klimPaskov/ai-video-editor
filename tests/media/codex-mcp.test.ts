@@ -876,3 +876,19 @@ test("rendered pictures reach Claude and Codex MCP clients as image content", as
     await rm(state.root, { recursive: true, force: true });
   }
 });
+
+test("every constant and choice in the editor tool schemas declares its type", () => {
+  // Claude Code passes an untyped numeric-looking constant such as "1.0" as
+  // the number 1, which the tools then reject.
+  const untyped: string[] = [];
+  const walk = (node: unknown, path: string) => {
+    if (!node || typeof node !== "object") return;
+    const record = node as Record<string, unknown>;
+    if (("const" in record || "enum" in record) && !("type" in record))
+      untyped.push(path);
+    for (const [key, value] of Object.entries(record))
+      walk(value, `${path}.${key}`);
+  };
+  for (const tool of codexVideoEditMcpTools) walk(tool.inputSchema, tool.name);
+  assert.deepEqual(untyped, []);
+});

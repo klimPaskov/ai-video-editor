@@ -3,8 +3,10 @@ import { codexVideoEditToolNames } from "./service.ts";
 const id = { type: "string", pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" };
 const hash = { type: "string", pattern: "^[a-f0-9]{64}$" };
 const prose = { type: "string", minLength: 1, maxLength: 1000 };
+// Every constant and choice declares its type: without one, Claude Code
+// passes a numeric-looking value such as "1.0" as the number 1.
 const freshness = {
-  schema_version: { const: "1.0" },
+  schema_version: { type: "string", const: "1.0" },
   request_id: id,
   project_id: id,
   draft_id: id,
@@ -24,7 +26,7 @@ export const codexVideoEditMcpTools = [
       additionalProperties: false,
       required: ["schema_version", "project_id"],
       properties: {
-        schema_version: { const: "1.0" },
+        schema_version: { type: "string", const: "1.0" },
         project_id: id,
       },
     },
@@ -44,7 +46,7 @@ export const codexVideoEditMcpTools = [
       additionalProperties: false,
       required: ["schema_version", "project_id"],
       properties: {
-        schema_version: { const: "1.0" },
+        schema_version: { type: "string", const: "1.0" },
         project_id: id,
       },
     },
@@ -73,7 +75,7 @@ export const codexVideoEditMcpTools = [
         ...freshness,
         pass_group_id: id,
         clip_id: id,
-        edge: { enum: ["start", "end"] },
+        edge: { type: "string", enum: ["start", "end"] },
         timeline_position_us: { type: "integer", minimum: 1 },
       },
     },
@@ -238,7 +240,7 @@ export const codexVideoEditMcpTools = [
         "limit",
       ],
       properties: {
-        schema_version: { const: "1.0" },
+        schema_version: { type: "string", const: "1.0" },
         project_id: id,
         source_id: id,
         transcript_id: id,
@@ -416,9 +418,9 @@ export const codexVideoEditMcpTools = [
         ...freshness,
         pass_group_id: id,
         enabled: { type: "boolean" },
-        style: { enum: ["plain", "highlight", "minimal"] },
-        size: { enum: ["small", "medium", "large"] },
-        position: { enum: ["bottom", "top"] },
+        style: { type: "string", enum: ["plain", "highlight", "minimal"] },
+        size: { type: "string", enum: ["small", "medium", "large"] },
+        position: { type: "string", enum: ["bottom", "top"] },
         burn_in: { type: "boolean" },
       },
     },
@@ -465,7 +467,7 @@ export const codexVideoEditMcpTools = [
       additionalProperties: false,
       required: ["schema_version", "project_id", "times_us"],
       properties: {
-        schema_version: { const: "1.0" },
+        schema_version: { type: "string", const: "1.0" },
         project_id: id,
         times_us: {
           type: "array",
