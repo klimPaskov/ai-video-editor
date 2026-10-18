@@ -2678,7 +2678,9 @@
             "The draft changed while Magic Edit was running. Applied cuts are kept and can be undone.",
             "Magic Edit could not finish. Applied cuts are kept and can be undone.",
             "Magic Edit stopped. Applied cuts are kept and can be undone.",
-            "No safe cuts were found for this preset."
+            "Claude found nothing to cut for this preset.",
+            "Magic Edit uses Claude for the rough cut. Sign in to Claude in Settings, then run it again.",
+            "Your Claude usage limit was reached. Cuts made so far are kept; run Magic Edit again after it resets."
           ]
         }
       }

@@ -6,6 +6,8 @@ import {
   assertClaudeThreadSendRequest,
   assertClaudeThreadView,
   assertClaudeView,
+  claudeThreadIssues,
+  type ClaudeThreadView,
 } from "../../../packages/domain/src/claude-view.ts";
 import { DesktopApiProviders } from "./api-providers.ts";
 import { ApiProviderThreads } from "./api-thread.ts";
@@ -116,12 +118,17 @@ import {
   assertExportView,
 } from "../../../packages/domain/src/export-view.ts";
 import { DesktopExports } from "./export.ts";
-import { DesktopMagicWand } from "./magic-wand.ts";
+import {
+  DesktopMagicWand,
+  type RoughCutEditor,
+  type RoughCutOutcome,
+} from "./magic-wand.ts";
 import { DesktopRecorder, RecordingError } from "./recording.ts";
 import { DesktopPlaybackProxies } from "./playback-proxies.ts";
 import { CaptionSettingsStore } from "./caption-settings.ts";
 import { ProjectSettingsStore } from "./project-settings.ts";
 import { removeProjectSideFiles } from "./project-removal.ts";
+import { roughCutTools } from "./rough-cut-playbook.ts";
 import {
   assertAudioSettings,
   assertAudioSettingsRequest,
@@ -1054,8 +1061,40 @@ async function start(): Promise<void> {
   );
   // Claude reaches the same guarded tool service through its own broker, so
   // every Claude transaction is attributed to the Claude origin.
-  // Magic Edit commits through the same guarded tools as the assistants,
-  // attributed to its own origin so its cuts share Undo/Redo.
+  // Magic Edit reads the draft through the guarded tools as its own origin;
+  // the rough cut itself is Claude's story edit (claude origin, shared Undo).
+  const roughCutOutcome = (view: ClaudeThreadView): RoughCutOutcome | null =>
+    view.status === "running" || view.status === "interrupting"
+      ? null
+      : view.status === "ready"
+        ? "completed"
+        : view.message === claudeThreadIssues.stopped
+          ? "stopped"
+          : view.message === claudeThreadIssues.signIn ||
+              view.message === claudeThreadIssues.model
+            ? "signIn"
+            : view.message === claudeThreadIssues.limit
+              ? "limit"
+              : "failed";
+  const roughCutEditor: RoughCutEditor = {
+    async start(projectId, preset, request) {
+      if (!claude || activeProjectId !== projectId) return "failed";
+      if ((await claude.get()).status !== "signed_in") return "signIn";
+      try {
+        return roughCutOutcome(
+          await claude.startRoughCut(projectId, preset, request),
+        );
+      } catch {
+        return "failed";
+      }
+    },
+    outcome: (projectId) =>
+      claude ? roughCutOutcome(claude.getThread(projectId)) : "failed",
+    async stop(projectId) {
+      if (claude?.runKind(projectId) === "rough_cut")
+        await claude.interruptThread(projectId);
+    },
+  };
   const magicWand = new DesktopMagicWand(
     transcription!,
     async (projectId, name, input) => {
@@ -1076,6 +1115,7 @@ async function start(): Promise<void> {
         notify: publishDraftNotice,
       });
     },
+    roughCutEditor,
   );
   magicWandBusy = (projectId) => magicWand.busy(projectId);
   register(channels.magicGet, async (request) => {
@@ -1106,6 +1146,12 @@ async function start(): Promise<void> {
     // Captured before the call so an edit that lands after Stop still
     // belongs to its full edit.
     const run = claude?.fullEditRun(projectId) ?? null;
+    // A rough cut only reads, cuts and looks; it never decorates.
+    if (
+      claude?.runKind(projectId) === "rough_cut" &&
+      !roughCutTools.has(name as string)
+    )
+      throw new CodexVideoEditToolError("tool_not_available");
     const target =
       input && typeof input === "object"
         ? (input as { target_transaction_id?: unknown }).target_transaction_id

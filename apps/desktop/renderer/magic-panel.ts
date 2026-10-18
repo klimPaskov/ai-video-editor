@@ -4,11 +4,10 @@ import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
 
 const presetNotes: Record<MagicWandPreset, string> = {
   gentle:
-    "Shortens only very long pauses and removes earlier repeated takes. Fillers stay.",
+    "Claude removes clear retakes, repeated ideas, false starts and long dead air.",
   balanced:
-    "Shortens long pauses, removes clean um/uh fillers and earlier repeated takes. Protected and uncertain words stay.",
-  tight:
-    "Also shortens shorter pauses. Names, numbers, negations and uncertain words stay.",
+    "Claude makes a story edit: repeated ideas, retakes, false starts, tangents and dead air go.",
+  tight: "Claude makes a brisk story edit, keeping everything the story needs.",
 };
 
 function seconds(us: number): string {
@@ -33,7 +32,9 @@ export function magicSummaryText(view: MagicWandView): string {
   const review = summary.leftForReview
     ? ` ${plural(summary.leftForReview, "item", "items")} left for review.`
     : "";
-  return `Removed ${seconds(summary.removedUs)} in ${plural(summary.cuts, "cut", "cuts")}: ${parts.join(", ")}.${review} Undo in Edit reverses each step.`;
+  // Claude's rough cut explains itself in the conversation.
+  const detail = parts.length ? `: ${parts.join(", ")}` : "";
+  return `Removed ${seconds(summary.removedUs)} in ${plural(summary.cuts, "cut", "cuts")}${detail}.${review} Undo in Edit reverses each step.`;
 }
 
 export interface MagicPanel {
@@ -79,10 +80,12 @@ export function setupMagicPanel(onFinished: () => void): MagicPanel {
     progress.hidden = !active;
     if (active && view?.progress !== null && view?.progress !== undefined)
       progress.value = Math.round(view.progress * 1000);
+    // Claude's edit has no measurable progress: an open-ended bar.
+    else if (active) progress.removeAttribute("value");
     const text = active
       ? view?.status === "transcribing"
         ? "Transcribing locally before editing…"
-        : "Applying cuts to the draft…"
+        : "Claude is making the rough cut…"
       : view?.status === "completed" || view?.status === "stopped"
         ? magicSummaryText(view)
         : "";

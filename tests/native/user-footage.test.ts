@@ -1,14 +1,15 @@
 /**
  * Packaged native run on the user's own two recordings (P10 groundwork).
  *
- * node tests/native/user-footage.test.ts <packaged-executable> <first.mp4> <second.mp4> [--skip-export]
+ * node tests/native/user-footage.test.ts <packaged-executable> <first.mp4> <second.mp4>
+ *   --profile <signed-in-config-root> --claude-bin <dir> [--skip-export]
  *
- * Imports the recordings in the given order through the visible UI, runs the
- * deterministic Magic Edit (Balanced), turns on captions and loudness, makes a
- * manual refinement, checks shared Undo/Redo, reopens the project, exports the
- * default lossless master and a separately requested MP4, and checks that the
- * originals and managed copies never change. It runs no AI assistant, so it is
- * not the final acceptance in docs/40; that needs a signed-in Claude or Codex.
+ * Imports the recordings in the given order through the visible UI, runs
+ * Magic Edit (Balanced), which is Claude's rough cut (ADR 0020) and needs a
+ * private profile whose Claude sign-in the user completed, turns on captions
+ * and loudness, makes a manual refinement, checks shared Undo/Redo, reopens
+ * the project, exports the default lossless master and a separately requested
+ * MP4, and checks that the originals and managed copies never change.
  *
  * Footage, transcripts, screenshots and outputs stay in the isolated guest's
  * ignored test-results. Only aggregate facts are printed.
@@ -31,10 +32,17 @@ assert.ok(
   "Executable and both recordings are required",
 );
 const skipExport = process.argv.includes("--skip-export");
+const option = (name: string) => {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : undefined;
+};
+const profile = option("--profile");
+const claudeBin = option("--claude-bin");
+assert.ok(profile && claudeBin, "--profile and --claude-bin are required");
 const evidenceRoot = resolve("test-results");
 await mkdir(evidenceRoot, { recursive: true, mode: 0o700 });
 const evidence = await mkdtemp(join(evidenceRoot, "native-user-footage-"));
-const configRoot = join(evidence, "config");
+const configRoot = resolve(profile);
 const outputs = join(evidence, "outputs");
 await mkdir(outputs, { mode: 0o700 });
 const started = Date.now();
@@ -76,7 +84,7 @@ const originalHashes = await Promise.all(originals.map(fileHash));
 let step = "launch";
 const result: Record<string, unknown> = {
   scope: "P10-groundwork-user-footage",
-  assistant: "none (deterministic Magic Edit only)",
+  assistant: "Claude rough cut (Magic Edit)",
 };
 const marks: Array<[string, number]> = [];
 const mark = (name: string) => {
@@ -88,7 +96,11 @@ const mark = (name: string) => {
 const launch = () =>
   _electron.launch({
     executablePath,
-    env: { ...process.env, XDG_CONFIG_HOME: configRoot },
+    env: {
+      ...process.env,
+      XDG_CONFIG_HOME: configRoot,
+      PATH: `${resolve(claudeBin)}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+    },
     chromiumSandbox: true,
     timeout: 60_000,
   });
@@ -111,13 +123,17 @@ async function dialogs(electron: ElectronApplication, save: string | null) {
 }
 
 // Adding footage creates a new two-source project beside the first one.
+// A reused profile holds earlier runs' projects; this run's is the new one.
 let projectId: string | null = null;
+let known = new Set<string>();
 async function project(page: Page) {
   const listed = await page.evaluate(() => window.desktop.listProjects());
   assert.ok(listed.ok);
   const found = projectId
     ? listed.value.find((view) => view.id === projectId)
-    : listed.value.find((view) => view.sources?.length === 2);
+    : listed.value.find(
+        (view) => !known.has(view.id) && view.sources?.length === 2,
+      );
   assert.ok(found, "the two-source project is listed");
   projectId = found.id;
   return found;
@@ -138,6 +154,9 @@ try {
   await dialogs(electron, null);
   let page = await electron.firstWindow();
   mark("import");
+  const earlier = await page.evaluate(() => window.desktop.listProjects());
+  assert.ok(earlier.ok);
+  known = new Set(earlier.value.map((view) => view.id));
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.getByRole("button", { name: "Add footage" })).toBeVisible({
     timeout: 600_000,
@@ -175,6 +194,15 @@ try {
   await page.screenshot({ path: join(evidence, "imported.png") });
 
   mark("magic-edit");
+  await expect
+    .poll(
+      async () => {
+        const reply = await page.evaluate(() => window.desktop.getClaude());
+        return reply.ok ? reply.value.status : "error";
+      },
+      { timeout: 120_000 },
+    )
+    .toBe("signed_in");
   await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
   await expect(page.locator("#magic-start")).toBeVisible();
   await expect(page.locator("#magic-preset")).toHaveValue("balanced");
@@ -200,7 +228,8 @@ try {
         ),
     );
   const magic = (await records()).filter(
-    (record) => record.origin === "magic_wand",
+    // Magic Edit's rough cut is Claude's.
+    (record) => record.origin === "claude",
   );
   result.magicEdit = {
     transactions: magic.length,

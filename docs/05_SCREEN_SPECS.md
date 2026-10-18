@@ -108,7 +108,7 @@ Visible:
 - optional transcript-derived review cues and source-mapped preview action
 - timing and unidentified-language disclosure
 
-The intended complete S07 adds Magic Wand, preset menu, simple feature switches, optional natural-language instruction, concise live edit activity, Stop and shared Undo after their operations and acceptance evidence exist.
+Magic Edit (2026-10-18, ADR 0020): a preset menu (Gentle, Balanced, Tight) with a one-line note on how far Claude goes, **Run Magic Edit**, an open-ended progress bar with "Claude is making the rough cut…" while Claude works (transcription first shows its own progress), Stop, and afterwards one line such as "Removed 13.1 s in 1 cut. Undo in Edit reverses each step." Claude's own summary appears in the Claude conversation. Without Claude sign-in the card says Magic Edit uses Claude and nothing is cut. The intended complete S07 adds Magic Wand, preset menu, simple feature switches, optional natural-language instruction, concise live edit activity, Stop and shared Undo after their operations and acceptance evidence exist.
 
 ## S08: editor (Edit stage)
 

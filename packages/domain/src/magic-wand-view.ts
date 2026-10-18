@@ -40,7 +40,11 @@ export const magicWandIssues = Object.freeze({
   failed:
     "Magic Edit could not finish. Applied cuts are kept and can be undone.",
   stopped: "Magic Edit stopped. Applied cuts are kept and can be undone.",
-  nothing: "No safe cuts were found for this preset.",
+  nothing: "Claude found nothing to cut for this preset.",
+  claude:
+    "Magic Edit uses Claude for the rough cut. Sign in to Claude in Settings, then run it again.",
+  limit:
+    "Your Claude usage limit was reached. Cuts made so far are kept; run Magic Edit again after it resets.",
 } as const);
 
 const messages = new Set<string>(Object.values(magicWandIssues));
@@ -138,8 +142,10 @@ export function assertMagicWandView(
     invalid();
   if (view.message !== null && !messages.has(view.message as string)) invalid();
   const running = view.status === "transcribing" || view.status === "applying";
+  // Transcription reports progress; Claude's rough cut has no measurable one.
   if (
-    running !== (view.progress !== null) ||
+    (view.status === "transcribing" && view.progress === null) ||
+    (!running && view.progress !== null) ||
     (view.status === "idle") !== (view.projectId === null) ||
     (view.status === "idle" &&
       (view.preset !== null ||

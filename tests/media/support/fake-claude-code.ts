@@ -55,12 +55,11 @@ const flag = (name: string) => {
  * reports each call in the stream, so the packaged app runs the whole path
  * without a model or an account.
  */
-async function scriptedFullEdit(
+async function connectEditor(
   allowed: string[],
   assistant: (content: unknown[], error?: string) => void,
-  result: (ok: boolean, extra?: Record<string, unknown>) => void,
   base: Record<string, unknown>,
-): Promise<void> {
+) {
   const config = JSON.parse(readFileSync(flag("--mcp-config")!, "utf8")) as {
     mcpServers: Record<
       string,
@@ -112,6 +111,28 @@ async function scriptedFullEdit(
     if (reply.isError) throw new Error(`${name} failed`);
     return reply.content;
   };
+  /** Like call, but returns a refused call's error instead of failing. */
+  const attempt = async (name: string, input: Record<string, unknown>) => {
+    try {
+      return { ok: true, content: await call(name, input) };
+    } catch {
+      return { ok: false, content: [] };
+    }
+  };
+  return { call, attempt, projectId, close: () => child.stdin.end() };
+}
+
+async function scriptedFullEdit(
+  allowed: string[],
+  assistant: (content: unknown[], error?: string) => void,
+  result: (ok: boolean, extra?: Record<string, unknown>) => void,
+  base: Record<string, unknown>,
+): Promise<void> {
+  const { call, projectId, close } = await connectEditor(
+    allowed,
+    assistant,
+    base,
+  );
   const summary = JSON.parse(
     (
       await call("timeline.get_summary", {
@@ -164,8 +185,92 @@ async function scriptedFullEdit(
       join(root, "scripted-picture.jpg"),
       Buffer.from(image.data, "base64"),
     );
-  child.stdin.end();
+  close();
   assistant([{ type: "text", text: "Added an opening title and checked it." }]);
+  result(true);
+}
+
+/**
+ * Scripted rough cut for native tests: reads the timeline, confirms that a
+ * decorating tool is refused during a rough cut, removes the earlier take
+ * named by the request's evidence and looks at the result.
+ */
+async function scriptedRoughCut(
+  allowed: string[],
+  assistant: (content: unknown[], error?: string) => void,
+  result: (ok: boolean, extra?: Record<string, unknown>) => void,
+  base: Record<string, unknown>,
+  request: string,
+): Promise<void> {
+  const { call, attempt, projectId, close } = await connectEditor(
+    allowed,
+    assistant,
+    base,
+  );
+  const read = async () =>
+    JSON.parse(
+      (
+        await call("timeline.get_summary", {
+          schema_version: "1.0",
+          project_id: projectId,
+        })
+      )[0]!.text as string,
+    ) as Record<string, unknown>;
+  const summary = await read();
+  const head = {
+    schema_version: "1.0",
+    request_id: `scripted-${Date.now()}`,
+    project_id: projectId,
+    draft_id: summary.draft_id,
+    base_revision_id: summary.base_revision_id,
+    expected_sequence: summary.draft_sequence,
+    expected_timeline_sha256: summary.timeline_sha256,
+  };
+  const refused = await attempt("zoom.set", {
+    ...head,
+    pass_group_id: "scripted-zoom",
+    reason: "Not allowed in a rough cut.",
+    start_us: 0,
+    end_us: 500_000,
+    center_x: 0.5,
+    center_y: 0.5,
+    scale: 1.5,
+  });
+  // The evidence names the earlier copy of repeated wording; the story keeps
+  // the final take, so remove that copy.
+  const repeated = /earlier copy of repeated wording: (\d+)–(\d+)/u.exec(
+    request,
+  );
+  const evidence = [...request.matchAll(/: (\d+)–(\d+)/gu)].map((match) => [
+    Number(match[1]),
+    Number(match[2]),
+  ]);
+  appendFileSync(
+    logPath,
+    `${JSON.stringify({ scriptedRoughCut: { refusedDecoration: !refused.ok, evidence: evidence.length, repeated: Boolean(repeated) } })}\n`,
+  );
+  if (!repeated) throw new Error("no repeated wording in the evidence");
+  await call("cut.delete_range", {
+    ...head,
+    request_id: `scripted-cut-${Date.now()}`,
+    pass_group_id: "scripted-rough-cut",
+    reason: "Keep the final complete take.",
+    start_us: Number(repeated[1]),
+    end_us: Number(repeated[2]),
+  });
+  await call("media.get_frames", {
+    schema_version: "1.0",
+    project_id: projectId,
+    times_us: [0],
+    max_width: 320,
+  });
+  close();
+  assistant([
+    {
+      type: "text",
+      text: "Kept the final complete take and removed the earlier one.",
+    },
+  ]);
   result(true);
 }
 
@@ -362,6 +467,29 @@ if (args[0] === "--version") {
           });
           assistant([{ type: "text", text: "Split the clip." }]);
           result(true);
+        } else if (kind === "scripted_rough_cut") {
+          const content = (message.message as { content?: unknown })?.content;
+          const text =
+            typeof content === "string"
+              ? content
+              : Array.isArray(content)
+                ? content
+                    .map((part) =>
+                      typeof (part as { text?: unknown }).text === "string"
+                        ? (part as { text: string }).text
+                        : "",
+                    )
+                    .join("\n")
+                : "";
+          void scriptedRoughCut(allowed, assistant, result, base, text).catch(
+            (error: unknown) => {
+              appendFileSync(
+                logPath,
+                `${JSON.stringify({ scriptedError: String(error).slice(0, 200) })}\n`,
+              );
+              result(false);
+            },
+          );
         } else if (kind === "scripted_full_edit") {
           void scriptedFullEdit(allowed, assistant, result, base).catch(
             (error: unknown) => {

@@ -33,6 +33,8 @@ import {
   fullEditPlaybook,
   fullEditRequest,
 } from "./full-edit-playbook.ts";
+import { roughCutLabel, roughCutPlaybook } from "./rough-cut-playbook.ts";
+import type { MagicWandPreset } from "../../../packages/domain/src/magic-wand.ts";
 import { codexVideoEditToolNames } from "../../../packages/codex-tools/src/service.ts";
 import type { CodexMcpRuntime } from "../../../packages/codex-tools/src/broker.ts";
 
@@ -97,6 +99,8 @@ interface Session {
   turn: ClaudeTurn | null;
   /** True while the running turn is a full edit whose commits are recorded. */
   fullEditRunning: boolean;
+  /** What the running turn is: a message, a full edit or a rough cut. */
+  runKind: ClaudeRunKind;
   /** True while Undo all is reverting the run's edits. */
   undoing: boolean;
   /** Settles after a finished turn's bookkeeping has been saved. */
@@ -113,6 +117,9 @@ export interface ClaudeDraftHistory {
 }
 
 const fullEditMaxTurns = 150;
+const roughCutMaxTurns = 150;
+
+export type ClaudeRunKind = "chat" | "full_edit" | "rough_cut";
 const transactionIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
 
 export interface DesktopClaudeOptions {
@@ -707,6 +714,7 @@ export class DesktopClaude {
       stored,
       turn: null,
       fullEditRunning: false,
+      runKind: "chat",
       undoing: false,
       settled: Promise.resolve(),
       saveTimer: null,
@@ -758,7 +766,48 @@ export class DesktopClaude {
       systemPrompt: claudeEditorInstructions(session.stored.projectId),
       maxTurns,
       fullEdit: false,
+      kind: "chat",
     });
+  }
+
+  /**
+   * The model for a rough cut: Haiku when the account's catalog offers it
+   * (a fast, inexpensive story edit), otherwise the model chosen in Settings.
+   */
+  roughCutSelection(): ClaudeSelection | null {
+    const haiku = this.view.models.find(
+      (model) => /haiku/iu.test(model.value) || /haiku/iu.test(model.label),
+    );
+    if (haiku) return { model: haiku.value, effort: null };
+    return this.view.selection ? { ...this.view.selection } : null;
+  }
+
+  /**
+   * Starts the rough cut (Magic Edit): a story edit by Claude with the
+   * rough-cut playbook and only the cutting tools (main enforces them).
+   */
+  async startRoughCut(
+    projectId: string,
+    preset: MagicWandPreset,
+    request: string,
+  ): Promise<ClaudeThreadView> {
+    if (!this.sessions.has(projectId)) await this.openThread(projectId);
+    const session = this.readySession(projectId);
+    return this.startTurn(session, {
+      shown: roughCutLabel(preset),
+      text: request,
+      systemPrompt: `${claudeEditorInstructions(projectId)}\n\n${roughCutPlaybook}`,
+      maxTurns: roughCutMaxTurns,
+      fullEdit: false,
+      kind: "rough_cut",
+      model: this.roughCutSelection(),
+    });
+  }
+
+  /** The running turn's kind, or null when nothing is running. */
+  runKind(projectId: string): ClaudeRunKind | null {
+    const session = this.sessions.get(projectId);
+    return session?.turn ? session.runKind : null;
   }
 
   /**
@@ -778,6 +827,7 @@ export class DesktopClaude {
       systemPrompt: `${claudeEditorInstructions(projectId)}\n\n${fullEditPlaybook}`,
       maxTurns: fullEditMaxTurns,
       fullEdit: true,
+      kind: "full_edit",
     });
   }
 
@@ -894,10 +944,14 @@ export class DesktopClaude {
       systemPrompt: string;
       maxTurns: number;
       fullEdit: boolean;
+      kind: ClaudeRunKind;
+      /** A model for this run instead of the Settings choice. */
+      model?: ClaudeSelection | null;
     },
   ): Promise<ClaudeThreadView> {
     const text = input.shown;
-    const selection = this.view.selection;
+    const selection =
+      input.model === undefined ? this.view.selection : input.model;
     const runtime = this.runtime;
     const issue =
       this.view.status !== "signed_in" || !runtime
@@ -933,6 +987,7 @@ export class DesktopClaude {
       };
       session.fullEditRunning = true;
     }
+    session.runKind = input.kind;
     session.view.status = "running";
     session.view.message = null;
     session.view.streaming = "";
@@ -990,6 +1045,7 @@ export class DesktopClaude {
       if (input.fullEdit && session.stored.fullEdit)
         session.stored.fullEdit.status = "failed";
       session.fullEditRunning = false;
+      session.runKind = "chat";
       await this.persist(session);
       return this.threadView(session);
     }
@@ -1024,6 +1080,7 @@ export class DesktopClaude {
               ? "stopped"
               : "failed";
       session.fullEditRunning = false;
+      session.runKind = "chat";
       session.turn = null;
       if (outcome.kind === "failed" && outcome.issue === "signIn")
         void this.refresh();
