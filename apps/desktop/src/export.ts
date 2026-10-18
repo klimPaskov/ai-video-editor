@@ -56,6 +56,18 @@ export type DraftReader = {
   snapshotWithProject(projectId: string): Promise<DraftProjectReadResult>;
 };
 
+/** An error, its private detail and its causes, for the failure note. */
+function describe(error: unknown, depth = 0): string {
+  if (!(error instanceof Error)) return String(error);
+  const detail =
+    error instanceof MediaError && error.detail ? `\n${error.detail}` : "";
+  const cause =
+    error.cause !== undefined && depth < 4
+      ? `\ncaused by: ${describe(error.cause, depth + 1)}`
+      : "";
+  return `${error.name}: ${error.message}${detail}\n${error.stack ?? ""}${cause}`;
+}
+
 export interface DesktopExportOptions {
   drafts: DraftReader;
   /** Directory for delivery manifests (never shown to the renderer). */
@@ -520,11 +532,7 @@ export class DesktopExports {
               profile,
               name: error instanceof Error ? error.name : typeof error,
               code: error instanceof MediaError ? error.code : null,
-              detail: (error instanceof Error
-                ? `${error.message}
-${error.stack ?? ""}`
-                : String(error)
-              ).slice(0, 4000),
+              detail: describe(error).slice(0, 12_000),
             }),
             { mode: 0o600 },
           ),

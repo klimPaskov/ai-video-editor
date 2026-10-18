@@ -625,9 +625,15 @@ function startProcess(
   });
 }
 
-/** Resolves on exit 0, rejects otherwise; stderr is drained, never surfaced. */
+/**
+ * Resolves on exit 0, rejects otherwise. Stderr is drained and never shown to
+ * users; the end of it travels with the error for private diagnostics.
+ */
 function exited(child: ChildProcess): Promise<void> {
-  child.stderr?.resume();
+  let tail = "";
+  child.stderr?.on("data", (chunk: Buffer) => {
+    tail = (tail + chunk.toString("utf8")).slice(-4000);
+  });
   const result = new Promise<void>((resolvePromise, reject) => {
     child.once("error", () =>
       reject(
@@ -640,7 +646,11 @@ function exited(child: ChildProcess): Promise<void> {
     child.once("close", (code) =>
       code === 0
         ? resolvePromise()
-        : reject(new MediaError("PROCESS_FAILED", "Media executable failed.")),
+        : reject(
+            new MediaError("PROCESS_FAILED", "Media executable failed.", {
+              detail: `exit ${code}: ${tail}`,
+            }),
+          ),
     );
   });
   // A process killed by cancellation may fail before anyone awaits it.
@@ -863,12 +873,23 @@ export async function exportDraft(
   const { video, audio } = plan.format;
   const children = new Set<ChildProcess>();
   const closed: Promise<void>[] = [];
+  // Processes that ended on their own with an error, for private diagnostics:
+  // a broken pipe to one of them is reported with its own reason.
+  const exits: string[] = [];
   const track = (child: ChildProcess) => {
     children.add(child);
+    let tail = "";
+    child.stderr?.on("data", (chunk: Buffer) => {
+      tail = (tail + chunk.toString("utf8")).slice(-3000);
+    });
     closed.push(
       new Promise<void>((resolveClose) =>
-        child.once("close", () => {
+        child.once("close", (code, exitSignal) => {
           children.delete(child);
+          if (code !== 0 && !halt.signal.aborted)
+            exits.push(
+              `${child.spawnargs.slice(1).join(" ").slice(0, 600)}\nexit ${code ?? exitSignal}: ${tail}`,
+            );
           resolveClose();
         }),
       ),
@@ -906,6 +927,9 @@ export async function exportDraft(
     throw new MediaError(
       "PROCESS_FAILED",
       "The export could not be completed.",
+      {
+        cause: error,
+      },
     );
   };
   try {
@@ -1602,6 +1626,17 @@ export async function exportDraft(
         : null,
     };
   } catch (error) {
+    if (!(error instanceof MediaError) && !cancelled && !signal?.aborted) {
+      // A write to a process that has just died: give its exit a moment to
+      // arrive, then report it with the error.
+      await new Promise((resolveWait) => setTimeout(resolveWait, 3000));
+      return fail(
+        new MediaError("PROCESS_FAILED", "The export could not be completed.", {
+          cause: error,
+          detail: exits.join("\n---\n") || "no process exited on its own",
+        }),
+      );
+    }
     return fail(error);
   } finally {
     halt.abort();
