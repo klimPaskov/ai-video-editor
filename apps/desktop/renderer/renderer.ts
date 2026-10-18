@@ -3054,6 +3054,31 @@ const codexDrawerButton = element<HTMLButtonElement>("codex-drawer-button");
 const settingsButton = element<HTMLButtonElement>("settings");
 const settingsDialog = element<HTMLDialogElement>("settings-dialog");
 const scaleSelect = element<HTMLSelectElement>("interface-scale");
+const assetPolicySelect = element<HTMLSelectElement>("asset-policy");
+// The material Claude may use is saved as soon as it changes.
+assetPolicySelect.addEventListener("change", async () => {
+  assetPolicySelect.disabled = true;
+  try {
+    const current = await window.desktop.getPreferences();
+    if (!current.ok) throw new Error("load");
+    const value = {
+      ...current.value,
+      assetPolicy: assetPolicySelect.value,
+    };
+    assertPreferences(value);
+    const reply = await window.desktop.setPreferences(value);
+    if (!reply.ok) throw new Error("save");
+    showToast(
+      value.assetPolicy === "copyright_free"
+        ? "Claude will use copyright-free material only"
+        : "Claude may use any material",
+    );
+  } catch {
+    showToast("The material setting could not be saved. Try again.");
+  } finally {
+    assetPolicySelect.disabled = false;
+  }
+});
 const resetSettingsSection = setupCodexSettings(settingsDialog);
 let savingPreferences = false;
 let settingsLoad = 0;
@@ -3713,6 +3738,7 @@ async function openSettings(): Promise<void> {
     if (!settingsDialog.open || load !== settingsLoad) return;
     if (!reply.ok) throw new Error("load");
     scaleSelect.value = String(reply.value.interfaceScale);
+    assetPolicySelect.value = reply.value.assetPolicy ?? "any";
     scaleSelect.disabled = false;
     element<HTMLButtonElement>("save-settings").disabled = false;
     if (!element("appearance-settings").hidden) scaleSelect.focus();
@@ -3769,7 +3795,11 @@ async function savePreferences(): Promise<void> {
     control.disabled = true;
   });
   try {
-    const value = { interfaceScale: Number(scaleSelect.value) };
+    // Keep the asset choice; this form saves the interface size.
+    const value = {
+      interfaceScale: Number(scaleSelect.value),
+      assetPolicy: assetPolicySelect.value,
+    };
     assertPreferences(value);
     const reply = await window.desktop.setPreferences(value);
     if (!reply.ok) throw new Error("save");

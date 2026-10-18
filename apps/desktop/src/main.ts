@@ -135,6 +135,7 @@ import {
   type WorkspaceTimeline,
 } from "./claude-workspace.ts";
 import { claudeGuides } from "./claude-guides.ts";
+import { effectiveAssetPolicy } from "../../../packages/domain/src/preferences.ts";
 import { serveComposition, storeComposition } from "./composition-server.ts";
 import { importComposition } from "./composition-import.ts";
 import { mirrorUserSkills, userSkillsDirectory } from "./claude-skills.ts";
@@ -1325,6 +1326,12 @@ async function start(): Promise<void> {
     env: process.env,
     prepareWorkspace: (projectId, directory) =>
       refreshClaudeWorkspace(projectId, directory, true),
+    assetPolicy: async () =>
+      effectiveAssetPolicy(
+        await new PreferencesStore(
+          path.join(app.getPath("userData"), "preferences"),
+        ).read(),
+      ),
     // The user's own Claude Code skills, mirrored into the app's profile.
     userSkills: async () =>
       (

@@ -224,6 +224,11 @@ class DesktopIpcContractTests(unittest.TestCase):
             value = {'interfaceScale': scale}
             self.valid({'channel': 'preferences:get', 'response': {'ok': True, 'value': value}})
             self.valid({'channel': 'preferences:set', 'payload': value, 'response': {'ok': True, 'value': value}})
+        for policy in ['any', 'copyright_free']:
+            value = {'interfaceScale': 1, 'assetPolicy': policy}
+            self.valid({'channel': 'preferences:set', 'payload': value, 'response': {'ok': True, 'value': value}})
+        for policy in ['', 'none', None, True]:
+            self.invalid({'channel': 'preferences:set', 'payload': {'interfaceScale': 1, 'assetPolicy': policy}, 'response': {'ok': True, 'value': {'interfaceScale': 1}}})
         self.valid({'channel': 'preferences:get', 'response': {'ok': False, 'message': 'Settings could not be loaded.'}})
         self.valid({'channel': 'preferences:set', 'payload': {'interfaceScale': 1}, 'response': {'ok': False, 'message': 'Settings could not be saved.'}})
 

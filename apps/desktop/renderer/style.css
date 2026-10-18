@@ -1942,6 +1942,11 @@ dialog::backdrop {
   font-size: 13px;
   font-weight: 500;
 }
+.field-note {
+  margin: 4px 0 0;
+  color: var(--text-3);
+  font-size: 12px;
+}
 .choice-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

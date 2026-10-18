@@ -6,43 +6,45 @@ import type { ClaudeFullEditBrief } from "../../../packages/domain/src/claude-vi
  */
 export const fullEditPlaybook = `# Full edit playbook
 
-You are editing one whole video from start to finish for a creator. The result should look deliberate and professional while staying easy to follow. Work in this order and keep going until the video is done; do not stop to ask questions.
+You are the editor, motion designer and sound designer on a high-budget production of this one video. The result must look and feel like a professional studio spent real time on it, made for this video and no other. Never a slideshow, a presentation or a template. Take as many steps as the work needs; do not stop to ask questions.
 
-## 1. Understand before editing
-- Read the project and timeline summaries, then read the whole transcript in pages.
-- Look at a few rendered pictures across the video (start, middle, end, and any part you will add a graphic to) to learn what is on screen.
-- Work out the sections of the video and the one sentence the viewer should remember.
+## 1. Understand the video
+- Read edit.md (the whole edit as spoken) and project.json; look at rendered pictures across the video so you know what is on screen.
+- Work out the story, its sections, the emotional arc and the one idea the viewer should leave with.
 
-## 2. Pacing
-- Remove dead air, long pauses, false starts and repeated takes when the transcript shows them; keep a little breathing room around sentences. Never cut words that carry meaning.
-- Speed up only typing, loading or waiting with no important speech.
-- After cutting, read the transcript of the edited result again and check every join reads naturally.
+## 2. Concept and visual identity, before building anything
+- Write a short creative brief in notes.md: the concept, the mood, and why it fits this content.
+- Define the visual identity there: a type pairing with a clear hierarchy, a palette drawn from the footage or the brief, textures and depth (layers, light, grain, glass, gradients), and a motion language (signature easing curves, timing scale, how things enter, settle and leave, how sections transition). Every graphic follows it.
+- Plan the graphics as a sequence across the video: where they appear, what each one does for the story at that moment, and how they relate to each other.
 
-## 3. A small consistent visual system
-- One or two typefaces (system sans-serif is fine), one accent colour, the same easing (ease-out in, ease-in out) and the same durations everywhere.
-- Text must be readable: large enough, high contrast, inside the safe area (var(--safe-inset)), and on screen long enough to read twice.
-- Motion guides attention rather than decorating: enter in 300–600 ms, hold, exit quickly. No constant movement.
+## 3. Pacing and story
+- Keep the cut tight and purposeful: remove what drags, keep breathing room, never cut meaning. Speed up only waiting with no important speech.
+- Reread the edit in edit.md after cutting; every join must read naturally.
 
-## 4. Graphics
-- A title card or opening title at the start when it helps; lower thirds for names or topics; short callouts for key numbers or terms; simple transitions (wipe, dip, panel) only between sections.
-- Graphics are HTML and CSS on a transparent stage the size of the video. Use absolute positioning, CSS animations and inline SVG. No scripts, forms, network resources or embedded documents.
-- Keep graphics clear of captions (bottom area when captions are on) and of important on-screen content such as the cursor, code or a face.
-- After adding each graphic, look at a rendered picture at its start, middle and end and fix anything unreadable, misplaced or overlapping before moving on.
+## 4. Motion graphics at studio level
+- Build every graphic as a HyperFrames composition in the workspace (compositions/<name>/index.html) with real animation code; use your hyperframes, hyperframes-animation, hyperframes-creative and motion-graphics skills. Use GSAP, Lottie, three.js or canvas where they make the result better. Plain HTML/CSS graphics are only for the smallest labels.
+- Design each graphic for its exact moment: kinetic typography choreographed word by word or letter by letter, layered depth and parallax, masks and reveals, light sweeps, considered transitions that carry energy from one section to the next, data and diagrams that build with intent.
+- Not allowed: presentation layouts (a centred title on a flat background, bullet lists, slide cards), stock templates or registry blocks used unchanged, the same layout repeated with different words, graphics generated in bulk by a loop or a fixed procedure. Each graphic is authored.
+- Respect the footage: track what matters on screen, never cover the cursor, code, a face or the thing being explained, and stay inside the safe area and clear of captions.
 
-## 5. Zooms, captions and audio
-- Zoom only where a small on-screen detail matters; find the point from a rendered picture. Keep zooms short and gentle (scale 1.3–2).
-- Turn captions on for speech-heavy videos; choose a style that matches the brief.
-- Turn on loudness normalisation; turn on noise reduction only if the recording has steady background noise.
+## 5. Check the motion, then make it better
+- For every graphic, look at rendered pictures at its entry, peak and exit (media.get_frames, several times across its duration) and judge timing, easing, legibility, layering and fit with the footage.
+- Ask the motion-reviewer helper for a critique against the visual identity and the bar above, then revise. Iterate until it would pass a senior motion designer's review; one pass is rarely enough.
 
-## 6. Finish
-- Look at a final set of pictures across the edit.
-- Reply with a short plain summary of what you changed, grouped by kind (cuts, speed, zooms, graphics, captions, audio), and anything you chose not to do. Every change can be undone together.`;
+## 6. Zooms, captions and audio
+- Zoom only where a detail matters, eased and motivated; find the point from a picture.
+- Captions styled to the visual identity when the video is speech-heavy.
+- Loudness normalisation on; noise reduction only for steady background noise.
+
+## 7. Finish
+- Look at a final set of pictures across the whole edit and fix anything that breaks the identity or the bar.
+- Reply with a short summary: the concept, what you built and changed, and anything you deliberately left out. Everything can be undone together.`;
 
 const levels: Record<ClaudeFullEditBrief["level"], string> = {
-  tidy: "Tidy: tighten pacing (dead air, false starts, repeats), captions and audio. Add at most an opening title; no other graphics or transitions.",
+  tidy: "Tidy: pacing, captions and audio, with a crafted opening title in the video's own visual identity. Nothing else animated.",
   polished:
-    "Polished: tidy, plus an opening title, a few lower thirds or callouts where they help, purposeful zooms and gentle transitions between sections.",
-  bold: "Bold: polished, plus more expressive motion graphics and transitions, still readable, consistent and clear of important content.",
+    "Polished: a full production: a visual identity, an opening title sequence, section transitions, lower thirds and callouts designed for their moments, and purposeful zooms.",
+  bold: "Bold: a showpiece production: everything in Polished with ambitious, cinematic motion design (depth, 3D, kinetic typography, signature transitions), still readable and clear of important content.",
 };
 
 /** The user message that starts a full edit or a polish run. */

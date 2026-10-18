@@ -4,23 +4,27 @@ import { roughCutPlaybook } from "./rough-cut-playbook.ts";
 
 const motionDesignGuide = `# Motion design guide
 
-Graphics should make the video easier to follow and feel made by a designer: deliberate, consistent and calm. Fewer, better graphics beat many.
+The bar is a high-budget production: graphics that feel designed by a studio for this exact video, with real effort in every frame. Never a presentation, never a template, never generated in bulk.
 
-## Decide first
-- Write a short visual system in notes.md before the first graphic: one or two typefaces, one accent colour taken from what is on screen or the brief, one easing, two or three durations, where text sits.
-- Each graphic has one job: name a section, label a person or place, show a key number or term, mark a transition. If it has no job, leave it out.
+## Start from a concept
+- Write the creative brief and visual identity in notes.md before the first graphic: concept and mood; a type pairing with hierarchy (display, text, accents); a palette drawn from the footage or brief; texture and depth; and a motion language (signature easing curves, a timing scale, entrances, settles, exits, transitions).
+- Plan the graphics as a sequence across the video, each with a job for the story at its moment.
 
-## Craft
-- Type: large, high contrast, short lines, tight but readable letter spacing; never more than about seven words on screen at once.
-- Layout: inside the safe area (var(--safe-inset)); align to a consistent margin; leave the bottom clear when captions are on; never cover the cursor, code, a face or the thing being explained.
-- Motion: enter in 300–600 ms with an ease-out, hold long enough to read twice, exit faster than the entry. Animate position, opacity, scale, clip-path or masks, not everything at once. Stagger related pieces by 60–120 ms.
-- Transitions belong between sections only; a short wipe, panel or dip that covers the cut.
+## Build like a motion designer
+- Use HyperFrames compositions (compositions/<name>/index.html) for every graphic of substance; your hyperframes, hyperframes-core, hyperframes-animation, hyperframes-creative and motion-graphics skills describe the craft and the contract. Animate with GSAP; use Lottie, three.js, canvas or shaders when they lift the result.
+- Choreograph: stagger and overlap, anticipation and follow-through, eased arcs instead of linear moves, motion that resolves. Kinetic type by word or letter where the words matter.
+- Layer: foreground, midground and background; parallax; masks, wipes and reveals; light, glow, grain and blur used deliberately.
+- Integrate with the footage: align with speech and on-screen action, frame the subject, never cover the cursor, code, a face or the thing being explained; stay in the safe area and clear of captions.
+- Make each graphic its own: no centred-title-on-flat-colour slides, no bullet lists, no stock templates or registry blocks used unchanged, no same-layout cards with new words, no loops that stamp out graphics.
 
-## How graphics work here
-- A graphic is one HTML fragment and its CSS on a transparent stage the size of the video (var(--stage-width), var(--stage-height)). Use absolute positioning, CSS animations and transitions, inline SVG (including stroke-dash line drawing), gradients, masks and clip-path.
-- No scripts, external fonts, images or other network resources yet; use system sans-serif and inline SVG. HTML and CSS are each at most 24 KiB.
-- The stage seeks every animation to the exact frame, so the preview and the export match.
-- Look at every graphic with media.get_frames at its start, middle and end; fix anything unreadable, misplaced or overlapping before moving on. The motion-reviewer helper can do this check for you.
+## Technical rules
+- A composition is one HTML page with a root carrying data-composition-id, data-width, data-height and data-duration and one paused GSAP timeline registered on window.__timelines[id]. Size it to the stage and keep its background transparent.
+- Libraries load only as pinned jsDelivr URLs with an exact version (for example https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js); put fonts, images and data files next to the composition and reference them relatively. Nothing else may come from the network. No clocks, unseeded randomness or input: every frame must depend only on time.
+- Place it with graphics.set and composition_path; keep its graphic_id when you revise so the change stays one undoable step.
+
+## Review and iterate
+- Look at each graphic at its entry, peak and exit, and between, with media.get_frames. If it fails to render, the error says why: fix it.
+- Ask the motion-reviewer helper to critique it against notes.md and this bar, then revise until it would pass a senior motion designer's review.
 `;
 
 /** The guides main writes into every project workspace. */
@@ -51,9 +55,9 @@ export const claudeAgents: Readonly<Record<string, ClaudeAgentDefinition>> =
     },
     "motion-reviewer": {
       description:
-        "Looks at rendered pictures of graphics at their start, middle and end and reports readability, placement, overlap and consistency problems against the visual system in notes.md. Makes no edits.",
+        "A senior motion designer's critique of graphics: looks at rendered pictures across each graphic and reports where it falls short of a high-budget production (concept, craft, choreography, typography, layering, fit with the footage, legibility, consistency with notes.md, any presentation or template look). Makes no edits.",
       prompt:
-        "You review motion graphics in a video edit. Read notes.md and guides/motion-design.md, then look at rendered pictures of each graphic you are asked about at its start, middle and end. Report anything unreadable, outside the safe area, covering important content or captions, or inconsistent with the visual system, with the graphic's name and edit time. Do not edit anything.",
+        "You are a senior motion designer reviewing graphics for a high-budget video. Read notes.md and guides/motion-design.md, then look at rendered pictures of each graphic you are asked about at its entry, peak and exit and in between. Be demanding: report anything that looks like a slide, a template or bulk output, weak choreography or easing, poor typography or hierarchy, flat layering, inconsistency with the visual identity, text that is hard to read, anything outside the safe area or covering important content or captions. For each problem give the graphic's name, the edit time and a concrete fix. Do not edit anything.",
       tools: [
         "Read",
         "Glob",

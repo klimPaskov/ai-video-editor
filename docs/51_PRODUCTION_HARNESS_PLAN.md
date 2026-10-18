@@ -28,8 +28,8 @@ The goal is met when a signed-in run on the supplied recordings produces such an
 | M0 | Foundations: AI rough cut (ADR 0020), harness workspace and confined Claude Code tools (ADR 0021), the user's own skills, quiet timeline strip, real signed-in acceptance | Done 2026-10-18 |
 | M1 | Compositions play everywhere | Core done 2026-10-18; export and preview parity checks open |
 | M2 | Composition toolchain for Claude | Planned |
-| M3 | Music, sound and asset layers | Planned |
-| M4 | Production direction and model routing | Planned |
+| M3 | Music, sound and asset layers | Asset setting done 2026-10-18; layers planned |
+| M4 | Production direction and model routing | Direction rewritten 2026-10-18; model routing planned |
 | M5 | End-to-end production on the supplied recordings | Planned |
 | M6 | Spec sync, release checks | Continuous |
 

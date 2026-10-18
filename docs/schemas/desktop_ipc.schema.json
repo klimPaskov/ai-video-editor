@@ -3021,6 +3021,10 @@
             1.5,
             2
           ]
+        },
+        "assetPolicy": {
+          "enum": ["any", "copyright_free"],
+          "description": "Which media Claude may use: any material including copyrighted (the default when absent) or copyright-free material only."
         }
       }
     },

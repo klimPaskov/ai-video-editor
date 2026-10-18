@@ -752,6 +752,15 @@
             <label for="claude-effort">Effort</label
             ><select id="claude-effort"></select>
           </div>
+          <label for="asset-policy">Material Claude may use</label
+          ><select id="asset-policy">
+            <option value="any">Any material, including copyrighted</option>
+            <option value="copyright_free">Copyright-free material only</option>
+          </select>
+          <p id="asset-policy-note" class="field-note">
+            Copyrighted material can get a video claimed, muted or blocked on
+            some platforms.
+          </p>
         </section>
         <section id="codex-settings" aria-label="Codex account" hidden>
           <p id="codex-account" role="status"></p>
