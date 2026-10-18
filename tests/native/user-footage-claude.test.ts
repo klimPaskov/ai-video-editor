@@ -110,9 +110,14 @@ async function project(page: Page) {
 /** Opens the run's project from Home (or finds it already open). */
 async function openProject(page: Page, id: string) {
   const row = page.locator(`#projects [data-project-id="${id}"]`);
-  await expect(row.or(page.locator("#frame"))).toBeVisible({
-    timeout: 300_000,
-  });
+  // Home lists it, or the app reopened it already.
+  await expect
+    .poll(
+      async () =>
+        (await row.isVisible()) || (await page.locator("#frame").isVisible()),
+      { timeout: 300_000 },
+    )
+    .toBe(true);
   if (await row.isVisible()) await row.click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
 }
