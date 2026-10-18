@@ -312,9 +312,10 @@
         "duration_us": { "type": "integer", "minimum": 100000, "maximum": 600000000 },
         "layer": { "type": "integer", "minimum": 0, "maximum": 99 },
         "html": { "type": "string", "maxLength": 65536 },
-        "css": { "type": "string", "maxLength": 65536 }
+        "css": { "type": "string", "maxLength": 65536 },
+        "composition_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       },
-      "description": "A motion graphic: an HTML fragment and its CSS, starting where source moment source_us plays in the edit and lasting duration_us of output time. Runtime rejects scripts, event handlers, script URLs, embedded documents, form and media elements, @import and any non-data, non-fragment URL, and requires source_us inside the source and unique IDs."
+      "description": "A motion graphic: an HTML fragment and its CSS, or (with composition_sha256 and empty html and css) a stored HyperFrames composition played in a sealed child page, starting where source moment source_us plays in the edit and lasting duration_us of output time. Runtime rejects scripts, event handlers, script URLs, embedded documents, form and media elements, @import and any non-data, non-fragment URL, and requires source_us inside the source and unique IDs."
     },
     "zoom_effect": {
       "type": "object",

@@ -7,6 +7,11 @@
  * Graphics never run scripts or load anything from the network. The stage
  * page's Content Security Policy enforces that; this validator rejects such
  * content before it is saved, so stored drafts stay clean.
+ *
+ * A graphic can instead be a HyperFrames composition (ADR 0021): a whole
+ * HTML page with its own animation scripts, stored by content hash in the
+ * project and played in a sealed child page of the stage. Its html and css
+ * are then empty.
  */
 import { viewTimelineAt } from "./speed.ts";
 
@@ -23,6 +28,8 @@ export interface GraphicEffect {
   layer: number;
   html: string;
   css: string;
+  /** SHA-256 of a stored HyperFrames composition; html and css are empty. */
+  composition_sha256?: string;
 }
 
 export const graphicLimits = Object.freeze({
@@ -118,15 +125,27 @@ function utf8Bytes(value: string): number {
 export function assertGraphicEffect(
   value: unknown,
 ): asserts value is GraphicEffect {
+  const composed =
+    value !== null &&
+    typeof value === "object" &&
+    Object.hasOwn(value, "composition_sha256");
   if (
     value === null ||
     typeof value !== "object" ||
     Array.isArray(value) ||
-    Object.keys(value).length !== graphicKeys.length ||
+    Object.keys(value).length !== graphicKeys.length + (composed ? 1 : 0) ||
     graphicKeys.some((key) => !Object.hasOwn(value, key))
   )
     invalid();
   const graphic = value as Record<string, unknown>;
+  if (
+    composed &&
+    (typeof graphic.composition_sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/u.test(graphic.composition_sha256) ||
+      graphic.html !== "" ||
+      graphic.css !== "")
+  )
+    invalid();
   if (
     typeof graphic.graphic_id !== "string" ||
     !idPattern.test(graphic.graphic_id) ||
@@ -201,6 +220,8 @@ export interface GraphicInterval {
   layer: number;
   html: string;
   css: string;
+  /** Set for a HyperFrames composition graphic. */
+  composition?: string;
 }
 
 /**
@@ -235,6 +256,9 @@ export function graphicIntervals(
       layer: graphic.layer,
       html: graphic.html,
       css: graphic.css,
+      ...(graphic.composition_sha256
+        ? { composition: graphic.composition_sha256 }
+        : {}),
     });
   }
   return placed.sort((a, b) => a.startUs - b.startUs || a.layer - b.layer);

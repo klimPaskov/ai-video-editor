@@ -163,3 +163,27 @@ test("skills load only with a plugin, and the tool inventory stays exact", () =>
   // Skills never widen the tools.
   assert.equal(projection(true).handle(init([...all, "Bash"])), false);
 });
+
+test("a later init in the same turn is checked, not refused", () => {
+  const all = [...claudeEditorTools, ...claudeBuiltInTools];
+  const init = (tools: string[]) => ({
+    type: "system",
+    subtype: "init",
+    session_id: "11111111-2222-4333-8444-555555555555",
+    tools,
+    mcp_servers: [{ name: claudeEditorServer, status: "connected" }],
+    permissionMode: "dontAsk",
+    skills: [],
+    slash_commands: [],
+  });
+  const projection = new ClaudeTurnProjection({
+    allowedTools: all,
+    serverName: claudeEditorServer,
+    sessionId: "11111111-2222-4333-8444-555555555555",
+  });
+  assert.equal(projection.handle(init(all)), true);
+  // A helper reporting back starts a new step with the same inventory.
+  assert.equal(projection.handle(init(all)), true);
+  // A later init with more tools still stops the turn.
+  assert.equal(projection.handle(init([...all, "Bash"])), false);
+});

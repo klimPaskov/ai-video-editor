@@ -7,6 +7,7 @@
  */
 import {
   appendFileSync,
+  mkdirSync,
   existsSync,
   readFileSync,
   writeFileSync,
@@ -108,7 +109,10 @@ async function connectEditor(
         ],
       },
     });
-    if (reply.isError) throw new Error(`${name} failed`);
+    if (reply.isError)
+      throw new Error(
+        `${name} failed: ${JSON.stringify(reply.content).slice(0, 400)}`,
+      );
     return reply.content;
   };
   /** Like call, but returns a refused call's error instead of failing. */
@@ -187,6 +191,72 @@ async function scriptedFullEdit(
     );
   close();
   assistant([{ type: "text", text: "Added an opening title and checked it." }]);
+  result(true);
+}
+
+/**
+ * Scripted composition for native tests: writes a small GSAP composition to
+ * the workspace (the CLI's working directory), places it with graphics.set
+ * and looks at a rendered picture of it.
+ */
+async function scriptedComposition(
+  allowed: string[],
+  assistant: (content: unknown[], error?: string) => void,
+  result: (ok: boolean, extra?: Record<string, unknown>) => void,
+  base: Record<string, unknown>,
+): Promise<void> {
+  const { call, projectId, close } = await connectEditor(
+    allowed,
+    assistant,
+    base,
+  );
+  mkdirSync(join(process.cwd(), "compositions", "sweep"), { recursive: true });
+  writeFileSync(
+    join(process.cwd(), "compositions", "sweep", "index.html"),
+    `<!doctype html><html><head><meta charset="utf-8"><script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script><style>html,body{margin:0;background:transparent}#root{position:relative;width:100%;height:100%;overflow:hidden}#box{position:absolute;left:0;top:40px;width:80px;height:80px;background:rgb(250,140,20)}</style></head><body><div id="root" data-composition-id="main" data-start="0" data-width="320" data-height="180" data-duration="2"><div id="box" class="clip" data-start="0" data-duration="2"></div></div><script>const tl = gsap.timeline({ paused: true }); tl.fromTo("#box", { x: 0 }, { x: 200, duration: 2, ease: "none" }, 0); window.__timelines["main"] = tl;</script></body></html>`,
+  );
+  const summary = JSON.parse(
+    (
+      await call("timeline.get_summary", {
+        schema_version: "1.0",
+        project_id: projectId,
+      })
+    )[0]!.text as string,
+  ) as Record<string, unknown>;
+  await call("graphics.set", {
+    schema_version: "1.0",
+    request_id: `scripted-${Date.now()}`,
+    project_id: projectId,
+    draft_id: summary.draft_id,
+    base_revision_id: summary.base_revision_id,
+    expected_sequence: summary.draft_sequence,
+    expected_timeline_sha256: summary.timeline_sha256,
+    reason: "Add an animated sweep.",
+    pass_group_id: "scripted-composition",
+    start_us: 0,
+    duration_us: 2_000_000,
+    name: "Sweep",
+    layer: 1,
+    composition_path: "compositions/sweep/index.html",
+  });
+  const pictures = await call("media.get_frames", {
+    schema_version: "1.0",
+    project_id: projectId,
+    times_us: [1_000_000],
+    max_width: 320,
+  });
+  const image = pictures.find((item) => item.type === "image");
+  if (typeof image?.data === "string")
+    writeFileSync(
+      join(root, "scripted-picture.jpg"),
+      Buffer.from(image.data, "base64"),
+    );
+  appendFileSync(
+    logPath,
+    `${JSON.stringify({ scriptedComposition: { picture: typeof image?.data === "string" } })}\n`,
+  );
+  close();
+  assistant([{ type: "text", text: "Placed the sweep and checked it." }]);
   result(true);
 }
 
@@ -465,6 +535,16 @@ if (args[0] === "--version") {
           });
           assistant([{ type: "text", text: "Split the clip." }]);
           result(true);
+        } else if (kind === "scripted_composition") {
+          void scriptedComposition(allowed, assistant, result, base).catch(
+            (error: unknown) => {
+              appendFileSync(
+                logPath,
+                `${JSON.stringify({ scriptedError: String(error).slice(0, 300) })}\n`,
+              );
+              result(false);
+            },
+          );
         } else if (kind === "scripted_rough_cut") {
           const content = (message.message as { content?: unknown })?.content;
           const text =

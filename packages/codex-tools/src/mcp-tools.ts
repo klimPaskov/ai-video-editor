@@ -344,7 +344,7 @@ export const codexVideoEditMcpTools = [
   {
     name: codexVideoEditToolNames[12],
     description:
-      "Add or replace a motion graphic (title card, lower third, callout, label or transition) drawn over the video and under captions, as one undoable transaction. start_us is an output time; the graphic is anchored to the source moment shown there, so it follows later cuts, and stays duration_us on screen (0.1–600 s). html is one HTML fragment and css its stylesheet (each at most 24 KiB) for a transparent stage the size of the video, with --stage-width, --stage-height and safe-area custom properties. CSS animations start when the graphic starts and are seeked frame-exactly in preview and export. No scripts, event handlers, forms, embedded documents, audio/video elements or network resources; images must be inline SVG or data: URLs. Keep text inside the safe area, on screen long enough to read, and clear of captions and important footage. With graphic_id the existing graphic is replaced. Higher layer draws on top (0–99).",
+      "Add or replace a motion graphic (title card, lower third, callout, label or transition) drawn over the video and under captions, as one undoable transaction. start_us is an output time; the graphic is anchored to the source moment shown there, so it follows later cuts, and stays duration_us on screen (0.1–600 s). html is one HTML fragment and css its stylesheet (each at most 24 KiB) for a transparent stage the size of the video, with --stage-width, --stage-height and safe-area custom properties. CSS animations start when the graphic starts and are seeked frame-exactly in preview and export. No scripts, event handlers, forms, embedded documents, audio/video elements or network resources; images must be inline SVG or data: URLs. Keep text inside the safe area, on screen long enough to read, and clear of captions and important footage. With graphic_id the existing graphic is replaced. Higher layer draws on top (0–99). Instead of html and css, Claude can pass composition_path: a HyperFrames composition page in its workspace (see the hyperframes-core skill), with its own GSAP, Lottie, three.js or anime.js animation scripts. Local scripts, styles, images and fonts next to it are bundled in; libraries load only as pinned jsdelivr.net/npm URLs (exact x.y.z); nothing else may come from the network. It plays in a sealed frame seeked through the HyperFrames runtime, identically in preview, pictures and export; if it fails to load or render, the error says why.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -355,8 +355,6 @@ export const codexVideoEditMcpTools = [
         "duration_us",
         "name",
         "layer",
-        "html",
-        "css",
       ],
       properties: {
         ...freshness,
@@ -368,6 +366,7 @@ export const codexVideoEditMcpTools = [
         layer: { type: "integer", minimum: 0, maximum: 99 },
         html: { type: "string", maxLength: 24576 },
         css: { type: "string", maxLength: 24576 },
+        composition_path: { type: "string", minLength: 1, maxLength: 260 },
       },
     },
     annotations: {

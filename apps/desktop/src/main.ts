@@ -84,6 +84,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  net,
   protocol,
   safeStorage,
   screen,
@@ -134,6 +135,8 @@ import {
   type WorkspaceTimeline,
 } from "./claude-workspace.ts";
 import { claudeGuides } from "./claude-guides.ts";
+import { serveComposition, storeComposition } from "./composition-server.ts";
+import { importComposition } from "./composition-import.ts";
 import { mirrorUserSkills, userSkillsDirectory } from "./claude-skills.ts";
 import type { LocalTranscript } from "../../../packages/domain/src/transcription.ts";
 import {
@@ -185,6 +188,9 @@ import { renderGraphicsTrack } from "./graphics-render.ts";
 import { renderDraftFrames } from "./frame-render.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
+/** Sealed HyperFrames compositions, stored by hash (ADR 0021). */
+const compositionsRoot = () =>
+  path.join(app.getPath("userData"), "compositions");
 const page = `${origin}/index.html`;
 class UserFacingError extends Error {}
 let window: BrowserWindow | undefined;
@@ -464,8 +470,42 @@ async function start(): Promise<void> {
     if (!bytes.length) throw new Error("Required renderer resource is empty");
     assets.set(route, { bytes, mime: mime! });
   }
+  // Sealed HyperFrames compositions and their pinned libraries (ADR 0021).
+  const compositionPackaged = {
+    runtime: await readFile(
+      path.join(
+        app.getAppPath(),
+        "renderer",
+        "vendor",
+        "hyperframes-runtime.js",
+      ),
+    ),
+    bridge: await readFile(
+      path.join(app.getAppPath(), "renderer", "stage-bridge.js"),
+    ),
+  };
   protocol.handle(appIdentity.urlScheme, async (request) => {
     const url = new URL(request.url);
+    if (url.host === "composition") {
+      if (request.method !== "GET" || url.search)
+        return new Response("Not found", { status: 404 });
+      return serveComposition(url.pathname, {
+        scheme: appIdentity.urlScheme,
+        compositions: compositionsRoot(),
+        libraryCache: path.join(app.getPath("userData"), "library-cache"),
+        packaged: compositionPackaged,
+        fetchLibrary: async (address) => {
+          const response = await net.fetch(address, { redirect: "error" });
+          const length = Number(response.headers.get("content-length") ?? 0);
+          if (!response.ok || length > 8 * 1024 * 1024)
+            throw new Error("Library unavailable");
+          const bytes = Buffer.from(await response.arrayBuffer());
+          if (bytes.length > 8 * 1024 * 1024)
+            throw new Error("Library too large");
+          return bytes;
+        },
+      });
+    }
     const media =
       /^\/media\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})$/u.exec(
         url.pathname,
@@ -481,8 +521,9 @@ async function start(): Promise<void> {
         "Content-Security-Policy":
           url.pathname === "/stage.html"
             ? // Graphics: their own inline styles and data: images; no
-              // scripts, network, frames, forms or navigation.
-              "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+              // scripts, network, forms or navigation. The only frames are
+              // sealed compositions, which run in their own opaque origin.
+              `default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'self'; frame-src ${appIdentity.urlScheme}://composition; base-uri 'none'; form-action 'none'`
             : "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'",
       },
     });
@@ -1147,6 +1188,20 @@ async function start(): Promise<void> {
     assertMagicWandView(value);
     return value;
   });
+  // A HyperFrames composition from Claude's workspace, sealed and stored by
+  // hash so the stage can play it (ADR 0021).
+  const importCompositionForClaude = async (
+    projectId: string,
+    relativePath: string,
+  ) => {
+    if (!claude) throw new Error("Claude is unavailable");
+    const imported = await importComposition(
+      claude.workspaceFor(projectId),
+      relativePath,
+    );
+    await storeComposition(compositionsRoot(), imported.sha256, imported.html);
+    return { sha256: imported.sha256 };
+  };
   // The project workspace Claude works in (ADR 0021): the committed edit as
   // files. Writes for one project run one at a time, newest last.
   const workspaceWrites = new Map<string, Promise<void>>();
@@ -1227,6 +1282,7 @@ async function start(): Promise<void> {
           "claude",
           readTranscriptForTool,
           renderFramesForTool,
+          importCompositionForClaude,
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
@@ -2513,9 +2569,14 @@ async function start(): Promise<void> {
   window.removeMenu();
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
-  // The only frame is the graphics stage; nothing may navigate it away.
+  // The only frames are the graphics stage and the sealed compositions in
+  // it; nothing may navigate them elsewhere.
   window.webContents.on("will-frame-navigate", (event) => {
-    if (!event.isMainFrame && event.url !== `${origin}/stage.html`)
+    if (
+      !event.isMainFrame &&
+      event.url !== `${origin}/stage.html` &&
+      !/^[a-z-]+:\/\/composition\/[a-f0-9]{64}\.html$/u.test(event.url)
+    )
       event.preventDefault();
   });
   window.webContents.on("will-attach-webview", (event) =>

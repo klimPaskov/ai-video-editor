@@ -46,6 +46,16 @@ export const codexVideoEditToolNames = [
 ] as const;
 
 /** Rendered pictures of the edit; the app renders, the tool only validates. */
+/**
+ * Reads a HyperFrames composition file from the assistant's workspace, seals
+ * and stores it, and returns its hash. Throws an error named
+ * "CompositionError" with a reason the assistant can act on.
+ */
+export type CompositionImporter = (
+  projectId: string,
+  path: string,
+) => Promise<{ sha256: string }>;
+
 export type FrameRenderer = (
   projectId: string,
   timesUs: number[],
@@ -96,6 +106,7 @@ export type CodexVideoEditToolErrorCode =
   | "outcome_unknown"
   | "transcript_unavailable"
   | "graphic_rejected"
+  | "composition_rejected"
   | "frame_unavailable"
   | "service_unavailable";
 
@@ -118,6 +129,7 @@ const messages: Record<CodexVideoEditToolErrorCode, string> = {
     "The frames could not be rendered. Use 1–3 output times inside the edit and try again.",
   graphic_rejected:
     "The graphic was rejected. Use inline HTML and CSS without scripts, forms, embedded documents or network resources.",
+  composition_rejected: "The composition could not be used.",
   service_unavailable:
     "The editing service is unavailable. Reopen the project and try again.",
 };
@@ -146,7 +158,11 @@ export class CodexVideoEditToolError extends Error {
             graphicReason !== undefined &&
             graphicContentReasons.has(graphicReason)
           ? `${messages[code]} ${graphicReason}`
-          : messages[code],
+          : // A composition's own problem (its file, or its script error),
+            // so Claude can fix what it wrote.
+            code === "composition_rejected" && graphicReason !== undefined
+            ? `${messages[code]} ${graphicReason.replace(/[\u0000-\u001f\u007f]/gu, " ").slice(0, 400)}`
+            : messages[code],
     );
     this.name = "CodexVideoEditToolError";
     this.code = code;
@@ -390,6 +406,7 @@ export class CodexVideoEditToolService {
   private readonly origin: ToolEditOrigin;
   private readonly transcriptReader: TranscriptReader | undefined;
   private readonly frameRenderer: FrameRenderer | undefined;
+  private readonly compositionImporter: CompositionImporter | undefined;
 
   constructor(
     activeProjectId: string,
@@ -397,6 +414,7 @@ export class CodexVideoEditToolService {
     origin: ToolEditOrigin = "codex",
     transcriptReader?: TranscriptReader,
     frameRenderer?: FrameRenderer,
+    compositionImporter?: CompositionImporter,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
@@ -404,6 +422,7 @@ export class CodexVideoEditToolService {
     this.origin = origin;
     this.transcriptReader = transcriptReader;
     this.frameRenderer = frameRenderer;
+    this.compositionImporter = compositionImporter;
   }
 
   private applier():
@@ -1016,13 +1035,19 @@ export class CodexVideoEditToolService {
         "duration_us",
         "name",
         "layer",
-        "html",
-        "css",
       ],
-      ["graphic_id"],
+      ["graphic_id", "html", "css", "composition_path"],
     );
     freshness(request, this.activeProjectId);
     id(request.pass_group_id);
+    // Either an HTML/CSS fragment or a composition file, never both.
+    const composing = request.composition_path !== undefined;
+    if (
+      composing
+        ? request.html !== undefined || request.css !== undefined
+        : request.html === undefined || request.css === undefined
+    )
+      reject("invalid_request");
     let graphicId: string | null = null;
     if (request.graphic_id !== undefined) {
       id(request.graphic_id);
@@ -1038,7 +1063,35 @@ export class CodexVideoEditToolService {
       typeof request.name !== "string" ||
       !request.name.trim() ||
       request.name.length > graphicLimits.maxNameChars ||
-      /[\u0000-\u001f\u007f]/u.test(request.name) ||
+      /[\u0000-\u001f\u007f]/u.test(request.name)
+    )
+      reject("invalid_request");
+    let composition: string | null = null;
+    if (composing) {
+      if (
+        typeof request.composition_path !== "string" ||
+        !request.composition_path ||
+        request.composition_path.length > 260
+      )
+        reject("invalid_request");
+      if (!this.compositionImporter) reject("tool_not_available");
+      try {
+        composition = (
+          await this.compositionImporter(
+            this.activeProjectId,
+            request.composition_path,
+          )
+        ).sha256;
+      } catch (error) {
+        throw new CodexVideoEditToolError(
+          "composition_rejected",
+          undefined,
+          error instanceof Error && error.name === "CompositionError"
+            ? error.message
+            : "The composition file could not be read.",
+        );
+      }
+    } else if (
       typeof request.html !== "string" ||
       typeof request.css !== "string" ||
       new TextEncoder().encode(request.html).length >
@@ -1048,7 +1101,8 @@ export class CodexVideoEditToolService {
     )
       reject("invalid_request");
     try {
-      assertGraphicContent(request.html, request.css);
+      if (!composition)
+        assertGraphicContent(request.html as string, request.css as string);
     } catch (error) {
       if (error instanceof GraphicContentError)
         throw new CodexVideoEditToolError(
@@ -1097,8 +1151,9 @@ export class CodexVideoEditToolService {
             source_us: anchor.source_us,
             duration_us: request.duration_us,
             layer: request.layer,
-            html: request.html,
-            css: request.css,
+            html: composition ? "" : (request.html as string),
+            css: composition ? "" : (request.css as string),
+            ...(composition ? { composition_sha256: composition } : {}),
           },
         },
       ],
@@ -1238,7 +1293,14 @@ export class CodexVideoEditToolService {
         times as number[],
         maxWidth,
       );
-    } catch {
+    } catch (error) {
+      // A composition's own script or load error goes back to its author.
+      if (error instanceof Error && error.name === "CompositionRenderError")
+        throw new CodexVideoEditToolError(
+          "composition_rejected",
+          undefined,
+          `It did not render: ${error.message}`,
+        );
       reject("frame_unavailable");
     }
     // The pictures are of the reported state only if nothing changed while

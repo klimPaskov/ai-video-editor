@@ -166,3 +166,5 @@ The fresh 2026-09-27 packaged dynamic split fixture required nine guarded editor
 ## Authorization policy
 
 Tools scoped to `active_draft` or `export_staging` use `user_confirmation: none` for already authorized work. This includes Magic Wand and export preparation. Validate scope, source immutability, sequence, protected speech and undo guarantees on every call. Do not request approval again merely because a reversible edit changes the draft materially. Final export requires the explicit user action in the native Export screen; no AI tool may authorize it. Source deletion, cleanup, spending and publication remain explicit user actions.
+
+`graphics.set` (2026-10-18): instead of `html` and `css`, Claude may pass `composition_path`, a HyperFrames composition page in its project workspace. Main seals and stores it (ADR 0021) and the graphic plays in a sandboxed scripted frame; a composition that cannot be imported or rendered returns `composition_rejected` with its reason. Other routes have no workspace and get `tool_not_available` for it.

@@ -193,7 +193,9 @@ export class ClaudeTurnProjection {
   handle(message: Record<string, unknown>): boolean {
     if (this.finished) return true;
     if (message.type === "system" && message.subtype === "init") {
-      if (this.initialized || !this.validateInit(message)) {
+      // Claude Code starts a new step of the turn (for example when a
+      // helper reports back) with another init; each must be exact.
+      if (!this.validateInit(message)) {
         this.violationFound = true;
         this.fail("tools");
         return false;

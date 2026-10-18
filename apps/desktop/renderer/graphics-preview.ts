@@ -102,10 +102,18 @@ export function setupGraphicsPreview(preview: HTMLElement): {
       layer: item.layer,
       html: item.html,
       css: item.css,
+      ...(item.composition ? { composition: item.composition } : {}),
     }));
     syncStage(
       frame.contentDocument,
-      { width, height, scale: box.width / width, graphics },
+      {
+        width,
+        height,
+        scale: box.width / width,
+        graphics,
+        // Sealed compositions are served on the scheme's composition host.
+        compositionBase: `${location.protocol}//composition/`,
+      },
       us,
     );
   }

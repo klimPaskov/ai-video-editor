@@ -1,13 +1,18 @@
 import { BrowserWindow } from "electron";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { join } from "node:path";
-import { syncStage } from "../renderer/stage-control.ts";
+import { settleStage, syncStage } from "../renderer/stage-control.ts";
 import {
   graphicsSegments,
   unpremultiplyBgra,
   type GraphicsRenderRequest,
   type GraphicsTrack,
 } from "./graphics-track.ts";
+
+/** A composition failed to load or seek; the message is its own reason. */
+export class CompositionRenderError extends Error {
+  override name = "CompositionRenderError";
+}
 
 /**
  * Renders the graphics of an export with the stage page in an offscreen
@@ -54,6 +59,8 @@ export async function renderGraphicsTrack(
       width,
       height,
       scale: 1,
+      // Sealed compositions are served on the scheme's composition host.
+      compositionBase: `${new URL(stageUrl).protocol}//composition/`,
       graphics: request.intervals.map((interval) => ({
         id: interval.graphicId,
         startUs: interval.startUs,
@@ -61,10 +68,12 @@ export async function renderGraphicsTrack(
         layer: interval.layer,
         html: interval.html,
         css: interval.css,
+        ...(interval.composition ? { composition: interval.composition } : {}),
       })),
     };
+    const composed = state.graphics.some((graphic) => graphic.composition);
     await window.webContents.executeJavaScript(
-      `window.__sync = ${syncStage.toString()}; window.__state = ${JSON.stringify(state)}; 0`,
+      `window.__sync = ${syncStage.toString()}; window.__settle = ${settleStage.toString()}; window.__state = ${JSON.stringify(state)}; 0`,
     );
     const rendered: GraphicsTrack["segments"] = [];
     let previous: Buffer | null = null;
@@ -89,6 +98,14 @@ export async function renderGraphicsTrack(
         const changed = (await window.webContents.executeJavaScript(
           `__sync(document, __state, ${us})`,
         )) as boolean;
+        if (composed) {
+          // Compositions confirm their seek; one that cannot render stops
+          // the export with its own reason.
+          const problem = (await window.webContents.executeJavaScript(
+            "__settle(document, 20000)",
+          )) as string | null;
+          if (problem) throw new CompositionRenderError(problem);
+        }
         if (changed || !previous) {
           // Let the page lay out and paint the new state before capturing;
           // otherwise a graphic's first frame captures the previous picture.

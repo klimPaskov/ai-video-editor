@@ -1573,6 +1573,91 @@ function graphicInput(snapshot: Snapshot, requestId: string) {
   };
 }
 
+test("graphics.set places a HyperFrames composition from the workspace", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const sha = "c".repeat(64);
+  const imported: string[] = [];
+  const claude = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    undefined,
+    async (_project, path) => {
+      imported.push(path);
+      if (path.includes("broken")) {
+        const error = new Error(
+          'Compositions cannot load "https://example.com/a.js" from the network.',
+        );
+        error.name = "CompositionError";
+        throw error;
+      }
+      return { sha256: sha };
+    },
+  );
+  // A composition graphic has no HTML or CSS of its own.
+  const base: Record<string, unknown> = graphicInput(
+    await drafts.snapshot(projectId),
+    "composition-1",
+  );
+  delete base.html;
+  delete base.css;
+  const result = (await claude.invoke("graphics.set", {
+    ...base,
+    composition_path: "compositions/intro/index.html",
+  })) as { status: string };
+  assert.equal(result.status, "committed");
+  const graphic = (await drafts.snapshot(projectId)).draft.timeline
+    .graphics![0]!;
+  assert.equal(graphic.composition_sha256, sha);
+  assert.equal(graphic.html, "");
+  assert.equal(graphic.css, "");
+  // The importer's own reason goes back to Claude.
+  await assert.rejects(
+    claude.invoke("graphics.set", {
+      ...graphicInput(await drafts.snapshot(projectId), "composition-2"),
+      html: undefined,
+      css: undefined,
+      composition_path: "compositions/broken/index.html",
+    }),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "composition_rejected" &&
+      /from the network/u.test(error.message),
+  );
+  // Both forms at once, or neither, is refused.
+  await assert.rejects(
+    claude.invoke("graphics.set", {
+      ...graphicInput(await drafts.snapshot(projectId), "composition-3"),
+      composition_path: "compositions/intro/index.html",
+    }),
+    expectCode("invalid_request"),
+  );
+  await assert.rejects(
+    claude.invoke("graphics.set", {
+      ...base,
+      ...head(await drafts.snapshot(projectId), "composition-4"),
+    }),
+    expectCode("invalid_request"),
+  );
+  // Routes without a workspace cannot place compositions.
+  await assert.rejects(
+    new CodexVideoEditToolService(projectId, drafts, "codex").invoke(
+      "graphics.set",
+      {
+        ...base,
+        ...head(await drafts.snapshot(projectId), "composition-5"),
+        composition_path: "compositions/intro/index.html",
+      },
+    ),
+    expectCode("tool_not_available"),
+  );
+  assert.deepEqual(imported, [
+    "compositions/intro/index.html",
+    "compositions/broken/index.html",
+  ]);
+});
+
 test("graphics.set anchors a validated graphic, explains unsafe content, and shares Undo", async () => {
   const { root, source, active, drafts, service } = await fixture();
   const projectId = active.project.project_id;

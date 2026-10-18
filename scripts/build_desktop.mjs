@@ -111,7 +111,7 @@ await writeFile(
   join(mcpResources, "manifest.json"),
   JSON.stringify(mcpManifest, null, 2),
 );
-await mkdir(join(staging, "renderer"), { recursive: true });
+await mkdir(join(staging, "renderer", "vendor"), { recursive: true });
 await build({
   entryPoints: [join(root, "apps/desktop/src/main.ts")],
   outfile: join(staging, "main.cjs"),
@@ -147,6 +147,13 @@ await build({
   target: "chrome152",
 });
 await build({
+  entryPoints: [join(root, "apps/desktop/renderer/stage-bridge.ts")],
+  outfile: join(staging, "renderer/stage-bridge.js"),
+  bundle: true,
+  platform: "browser",
+  target: "chrome152",
+});
+await build({
   entryPoints: [join(root, "apps/desktop/src/region-preload.ts")],
   outfile: join(staging, "region-preload.cjs"),
   bundle: true,
@@ -169,6 +176,8 @@ for (const file of [
   "region.css",
   "stage.html",
   "stage.css",
+  "vendor/hyperframes-runtime.js",
+  "vendor/HYPERFRAMES-LICENSE",
 ])
   await copyFile(
     join(root, "apps/desktop/renderer", file),

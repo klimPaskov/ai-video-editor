@@ -142,16 +142,13 @@ test("packaged MCP protocol lists only reviewed tools and forwards a bounded cal
     );
     const graphic = tools.find((tool) => tool.name === "graphics.set");
     assert.ok(graphic);
-    for (const field of [
-      "start_us",
-      "duration_us",
-      "name",
-      "layer",
-      "html",
-      "css",
-    ])
+    for (const field of ["start_us", "duration_us", "name", "layer"])
       assert.ok(graphic.inputSchema.required.includes(field));
-    assert.ok(!graphic.inputSchema.required.includes("graphic_id"));
+    // Either an HTML/CSS fragment or a HyperFrames composition file.
+    for (const field of ["graphic_id", "html", "css", "composition_path"]) {
+      assert.ok(!graphic.inputSchema.required.includes(field), field);
+      assert.ok(field in graphic.inputSchema.properties, field);
+    }
     const ungraphic = tools.find((tool) => tool.name === "graphics.remove");
     assert.ok(ungraphic?.inputSchema.required.includes("graphic_id"));
     const zoom = tools.find((tool) => tool.name === "zoom.set");
