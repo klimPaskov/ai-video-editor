@@ -101,6 +101,13 @@ export class ClaudeTurnProjection {
   private initialized = false;
   private finished: ClaudeTurnOutcome | null = null;
   private violationFound = false;
+  /** What stopped the turn for its tools: names only, never content. */
+  violationDetail: {
+    type: string;
+    subtype: string | null;
+    tools: string[];
+    fromHelper: boolean;
+  } | null = null;
   private interruptRequested = false;
   private live = "";
   private readonly segments: string[] = [];
@@ -157,14 +164,22 @@ export class ClaudeTurnProjection {
     };
   }
 
-  private validateInit(message: Record<string, unknown>): boolean {
+  /**
+   * The turn's first init must list exactly the allowed tools. A later init
+   * (a new step of the turn, or a helper starting with its own smaller set)
+   * may list fewer, but never a tool outside them.
+   */
+  private validateInit(
+    message: Record<string, unknown>,
+    first: boolean,
+  ): boolean {
     const tools = message.tools;
     const servers = message.mcp_servers;
     if (
-      message.session_id !== this.sessionId ||
+      (first && message.session_id !== this.sessionId) ||
       message.permissionMode !== "dontAsk" ||
       !Array.isArray(tools) ||
-      tools.length !== this.allowedTools.size ||
+      (first && tools.length !== this.allowedTools.size) ||
       tools.some(
         (tool) => typeof tool !== "string" || !this.allowedTools.has(tool),
       ) ||
@@ -194,8 +209,20 @@ export class ClaudeTurnProjection {
     if (this.finished) return true;
     if (message.type === "system" && message.subtype === "init") {
       // Claude Code starts a new step of the turn (for example when a
-      // helper reports back) with another init; each must be exact.
-      if (!this.validateInit(message)) {
+      // helper starts or reports back) with another init; each is checked.
+      if (!this.validateInit(message, !this.initialized)) {
+        this.violationDetail = {
+          type: "system",
+          subtype: "init",
+          tools: Array.isArray(message.tools)
+            ? message.tools
+                .filter((tool): tool is string => typeof tool === "string")
+                .slice(0, 64)
+            : [],
+          fromHelper:
+            message.parent_tool_use_id !== null &&
+            message.parent_tool_use_id !== undefined,
+        };
         this.violationFound = true;
         this.fail("tools");
         return false;
@@ -234,6 +261,12 @@ export class ClaudeTurnProjection {
         if (block.type === "tool_use") {
           const name = typeof block.name === "string" ? block.name : "";
           if (!this.allowedTools.has(name)) {
+            this.violationDetail = {
+              type: "assistant",
+              subtype: null,
+              tools: [name.slice(0, 120)],
+              fromHelper: false,
+            };
             this.violationFound = true;
             this.fail("tools");
             return false;

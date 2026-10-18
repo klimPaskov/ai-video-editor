@@ -1103,6 +1103,15 @@ export class DesktopClaude {
     }
     session.turn = turn;
     session.settled = turn.done.then(async (outcome) => {
+      // A private note of what stopped a turn for its tools (names only).
+      if (turn.projection.violationDetail)
+        await writePrivate(
+          join(this.runtimeDirectory, "last-tool-violation.json"),
+          JSON.stringify({
+            at: new Date().toISOString(),
+            ...turn.projection.violationDetail,
+          }),
+        ).catch(() => undefined);
       await rm(mcpConfigPath, { force: true }).catch(() => undefined);
       if (turn.projection.ready) session.stored.started = true;
       if (outcome.kind === "failed" && outcome.issue === "resume") {

@@ -182,8 +182,25 @@ test("a later init in the same turn is checked, not refused", () => {
     sessionId: "11111111-2222-4333-8444-555555555555",
   });
   assert.equal(projection.handle(init(all)), true);
+  // The first init must be exact: fewer tools than expected is refused.
+  assert.equal(
+    new ClaudeTurnProjection({
+      allowedTools: all,
+      serverName: claudeEditorServer,
+      sessionId: "11111111-2222-4333-8444-555555555555",
+    }).handle(init(["Read"])),
+    false,
+  );
   // A helper reporting back starts a new step with the same inventory.
   assert.equal(projection.handle(init(all)), true);
-  // A later init with more tools still stops the turn.
+  // A helper starts with its own smaller set: allowed.
+  assert.equal(
+    projection.handle({
+      ...init(["Read", "Grep", "mcp__ai_video_editor__media_get_frames"]),
+      session_id: "22222222-3333-4444-8555-666666666666",
+    }),
+    true,
+  );
+  // A later init with a tool outside the set still stops the turn.
   assert.equal(projection.handle(init([...all, "Bash"])), false);
 });
