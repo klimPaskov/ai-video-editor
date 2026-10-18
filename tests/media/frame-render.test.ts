@@ -6,6 +6,10 @@ import {
   FrameRenderError,
   renderDraftFrames,
 } from "../../apps/desktop/src/frame-render.ts";
+import {
+  graphicsSegments,
+  type GraphicsRenderRequest,
+} from "../../apps/desktop/src/graphics-track.ts";
 import { defaultCaptionSettings } from "../../packages/domain/src/captions.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -289,14 +293,21 @@ test(
         ],
       });
       const directories: string[] = [];
+      const segmentFrames: number[] = [];
+      const windowFrames: number[] = [];
       // Like the app's offscreen renderer: a fixed file name in the given folder.
-      const renderGraphics = async (request: {
-        directory: string;
-        width: number;
-        height: number;
-        frameCount: number;
-      }) => {
+      const renderGraphics = async (request: GraphicsRenderRequest) => {
         directories.push(request.directory);
+        // What the offscreen renderer would draw: only the picture's frame,
+        // even for a graphic that began before it.
+        windowFrames.push(request.frameCount);
+        segmentFrames.push(
+          graphicsSegments(
+            request.intervals,
+            request.frameRate,
+            request.frameCount,
+          ).reduce((sum, segment) => sum + segment.frameCount, 0),
+        );
         const path = join(request.directory, "graphics-000.mkv");
         await runProcess({
           executable: "ffmpeg",
@@ -331,6 +342,8 @@ test(
       });
       assert.equal(frames.length, 2);
       assert.equal(new Set(directories).size, 2);
+      assert.deepEqual(segmentFrames, windowFrames);
+      assert.ok(windowFrames.every((count) => count <= 2));
       // The opaque red graphic covers each picture.
       const pixels = await decode(root, frames[1]!.dataBase64, "graphic");
       assert.ok(pixels[0]! > 200 && pixels[1]! < 60 && pixels[2]! < 60);

@@ -192,6 +192,7 @@ import { graphicAnchor } from "../../../packages/domain/src/graphics.ts";
 import { renderGraphicsTrack } from "./graphics-render.ts";
 import { renderDraftFrames } from "./frame-render.ts";
 import { checkComposition } from "./composition-check.ts";
+import { toolCallTimeoutMs } from "../../../packages/codex-tools/src/frames.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
 /**
@@ -1062,12 +1063,16 @@ async function start(): Promise<void> {
     maxWidth: number,
     layout: "frames" | "sheet" = "frames",
   ) => {
+    // The assistant stops waiting after the tool-call limit; a render it
+    // gave up on stops too instead of holding up the next request.
+    const signal = AbortSignal.timeout(toolCallTimeoutMs);
     const work = frameQueue.then(() =>
       renderDraftFrames({
         drafts,
         projectId,
         timesUs,
         maxWidth,
+        signal,
         sheet: layout === "sheet",
         captions: () => draftCaptions(projectId),
         renderGraphics: (request) =>
@@ -1239,7 +1244,9 @@ async function start(): Promise<void> {
       projectId,
       relativePath,
     );
+    const signal = AbortSignal.timeout(toolCallTimeoutMs);
     const work = frameQueue.then(async () => {
+      if (signal.aborted) throw new Error("Cancelled.");
       const snapshot = await drafts.snapshot(projectId);
       const frameUs = Math.ceil(
         (snapshot.draft.timeline.frame_rate.denominator * 1_000_000) /
@@ -1257,6 +1264,7 @@ async function start(): Promise<void> {
         timesUs,
         cellWidth,
         ffmpeg: "ffmpeg",
+        signal,
       });
     });
     frameQueue = work.catch(() => undefined);
