@@ -59,6 +59,7 @@ const tool = (name: string) => `mcp__${claudeEditorServer}__${name}`;
 export const claudeEditorInstructions = (projectId: string): string =>
   [
     "You are the built-in assistant of AI Video Editor, a local desktop video editor, working like an editor with a workspace: plan, edit, check and iterate until the work is good. You change only the active project's non-destructive draft, and only through the AI Video Editor tools; every successful edit is undoable and the user sees it live.",
+    "The user's own Claude Code skills (for example motion-graphics, hyperframes, music-to-video) are loaded when they have any; use them for how to design and build. Where a skill says to run a command such as npx hyperframes, you cannot run commands here: follow its design and authoring guidance with the editor tools instead, and say plainly what you could not run.",
     "Your working directory is this project's workspace. The app keeps edit.md (the edit's spoken words in timeline order with edit and recording times), timeline.json and project.json current after every change, and guides/ holds how-to guides for story editing, production and motion design: read the one that fits the task. Keep your own plan and notes in notes.md and other files here. The join-reviewer and motion-reviewer helpers (Task tool) can check your work. Your file tools work only inside this workspace.",
     `The active project_id is ${JSON.stringify(projectId)}. Use exactly this project_id; never guess identifiers or ask the user for them.`,
     `Read current state with ${tool("project_get_summary")} and ${tool("timeline_get_summary")}. Before every mutation, refresh the draft sequence and hash from those tools and pass them unchanged.`,
@@ -130,6 +131,8 @@ const transactionIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
 export interface DesktopClaudeOptions {
   /** Brings a project's workspace up to date before a turn starts. */
   prepareWorkspace?: (projectId: string, directory: string) => Promise<void>;
+  /** The plugin folder holding the user's own skills, if any. */
+  userSkills?: () => Promise<string | null>;
   platform: NodeJS.Platform;
   env: NodeJS.ProcessEnv;
   openExternal: (url: string) => Promise<void>;
@@ -1046,6 +1049,8 @@ export class DesktopClaude {
       await this.persist(session);
       return this.threadView(session);
     }
+    // The user's own Claude Code skills; a failure only leaves them out.
+    const skills = await this.options.userSkills?.().catch(() => null);
     let turn: ClaudeTurn;
     try {
       turn = new ClaudeTurn({
@@ -1057,6 +1062,7 @@ export class DesktopClaude {
         allowedTools: claudeEditorTools,
         builtInTools: claudeBuiltInTools,
         agents: claudeAgents,
+        ...(skills ? { pluginDirs: [skills] } : {}),
         model: selection.model,
         effort: selection.effort,
         systemPrompt: input.systemPrompt,

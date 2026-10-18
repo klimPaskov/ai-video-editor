@@ -96,6 +96,8 @@ export class ClaudeTurnProjection {
   readonly allowedTools: ReadonlySet<string>;
   readonly serverName: string;
   private readonly sessionId: string;
+  /** True when the turn loads skills (the user's own, ADR 0021). */
+  private readonly allowSkills: boolean;
   private initialized = false;
   private finished: ClaudeTurnOutcome | null = null;
   private violationFound = false;
@@ -109,10 +111,12 @@ export class ClaudeTurnProjection {
     allowedTools: Iterable<string>;
     serverName: string;
     sessionId: string;
+    allowSkills?: boolean;
   }) {
     this.allowedTools = new Set(input.allowedTools);
     this.serverName = input.serverName;
     this.sessionId = input.sessionId;
+    this.allowSkills = input.allowSkills ?? false;
   }
 
   get ready(): boolean {
@@ -177,8 +181,10 @@ export class ClaudeTurnProjection {
       return false;
     for (const key of ["skills", "slash_commands"]) {
       const value = message[key];
-      if (value !== undefined && (!Array.isArray(value) || value.length))
-        return false;
+      if (value === undefined) continue;
+      if (!Array.isArray(value)) return false;
+      // Skills only guide Claude; the tool inventory above is what limits it.
+      if (value.length && !this.allowSkills) return false;
     }
     return true;
   }
@@ -337,6 +343,8 @@ export interface ClaudeTurnOptions {
   /** Claude Code's own tools for this turn; none keeps them all off. */
   builtInTools?: readonly string[];
   agents?: Readonly<Record<string, ClaudeAgentDefinition>>;
+  /** Plugin folders whose skills the turn loads (the user's own skills). */
+  pluginDirs?: readonly string[];
   model: string;
   effort: ClaudeEffort | null;
   systemPrompt: string;
@@ -359,6 +367,12 @@ export function claudeTurnArguments(
     // Restricted mode confines the file tools to the working directory.
     const at = session.indexOf("--tools");
     session.splice(at, 2, "--restricted", "--tools", builtIns.join(","));
+  }
+  const plugins = options.pluginDirs ?? [];
+  if (plugins.length) {
+    // Skills load only with slash commands on; tools stay as listed.
+    session.splice(session.indexOf("--disable-slash-commands"), 1);
+    for (const directory of plugins) session.push("--plugin-dir", directory);
   }
   return [
     ...session,
@@ -393,6 +407,7 @@ export class ClaudeTurn {
   constructor(options: ClaudeTurnOptions) {
     this.projection = new ClaudeTurnProjection({
       allowedTools: [...options.allowedTools, ...(options.builtInTools ?? [])],
+      allowSkills: Boolean(options.pluginDirs?.length),
       serverName: options.serverName,
       sessionId: options.sessionId,
     });

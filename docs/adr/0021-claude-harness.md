@@ -21,3 +21,7 @@ The video editor must act as a harness for Claude rather than a deterministic pa
 - A Claude Code version without `--restricted` is no longer supported for turns (2.1.302 has it).
 - Existing conversations started in the old shared working directory cannot be resumed; the next message starts a new session and says so.
 - Later slices: a scriptable graphics runtime (JavaScript animation in the sealed stage, composition files in the workspace) and motion previews for Claude.
+
+## Addendum (2026-10-18): the user's own skills
+
+The user asked that every skill they use in Claude Code, such as HyperFrames, motion-graphics, music-to-video and remotion-to-hyperframes, be available to the app's Claude. Main mirrors the skills folder of the user's normal Claude Code profile (`~/.claude/skills`, or `$CLAUDE_CONFIG_DIR/skills`) into an app-owned plugin (`claude/skills-plugin`, private data, regular files only, links never followed, size limits, copied only when changed) and each turn loads it with `--plugin-dir`, so they appear as `my-skills:<name>`. Loading skills needs slash commands on, so Claude Code's generic skills load too; skills only guide Claude, and the init check still enforces the exact tool list. A probe on Claude Code 2.1.302 listed all 22 mirrored skills with only the six built-in tools. Skills that say to run `npx hyperframes` cannot run commands here yet: the next slice runs HyperFrames compositions in the app's sealed stage and offers the CLI's check, lint, snapshot and render as app tools.

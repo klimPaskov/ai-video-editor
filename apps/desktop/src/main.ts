@@ -134,6 +134,7 @@ import {
   type WorkspaceTimeline,
 } from "./claude-workspace.ts";
 import { claudeGuides } from "./claude-guides.ts";
+import { mirrorUserSkills, userSkillsDirectory } from "./claude-skills.ts";
 import type { LocalTranscript } from "../../../packages/domain/src/transcription.ts";
 import {
   assertAudioSettings,
@@ -1268,6 +1269,14 @@ async function start(): Promise<void> {
     env: process.env,
     prepareWorkspace: (projectId, directory) =>
       refreshClaudeWorkspace(projectId, directory, true),
+    // The user's own Claude Code skills, mirrored into the app's profile.
+    userSkills: async () =>
+      (
+        await mirrorUserSkills(
+          userSkillsDirectory(process.env, app.getPath("home")),
+          path.join(userData, "claude", "skills-plugin"),
+        )
+      )?.directory ?? null,
     openExternal: (url) => shell.openExternal(url),
     mcpRuntime: () => claudeMcpRuntime,
     history: {
