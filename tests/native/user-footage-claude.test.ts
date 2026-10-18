@@ -365,9 +365,38 @@ try {
       "lossless_master",
     );
     await page.locator("#export-start").click();
-    await expect(page.locator("#export-done")).toBeVisible({
-      timeout: 8 * 3_600_000,
-    });
+    // Done, or failed: then the private failure note says why.
+    let exported: { status: string; message: string | null } = {
+      status: "running",
+      message: null,
+    };
+    while (Date.now() - started < 12 * 3_600_000) {
+      const reply = await page.evaluate(
+        (id) =>
+          window.desktop.getExport({ schema_version: "1.0", project_id: id }),
+        current.id,
+      );
+      assert.ok(reply.ok);
+      exported = reply.value;
+      // Idle until main has the destination and starts the job.
+      if (
+        exported.status !== "idle" &&
+        exported.status !== "running" &&
+        exported.status !== "cancelling"
+      )
+        break;
+      await new Promise((resolve) => setTimeout(resolve, 15_000));
+    }
+    if (exported.status !== "completed") {
+      const note = await readFile(
+        join(userData, "exports", "last-failure.json"),
+        "utf8",
+      ).catch(() => "no failure note");
+      console.log(JSON.stringify({ exportFailed: exported.message, note }));
+      await page.screenshot({ path: join(evidence, "export-failed.png") });
+      throw new Error(`The export did not complete: ${exported.status}`);
+    }
+    await expect(page.locator("#export-done")).toBeVisible();
     const done = await page.evaluate(
       (id) =>
         window.desktop.getExport({ schema_version: "1.0", project_id: id }),

@@ -508,6 +508,28 @@ export class DesktopExports {
                 ? error.message
                 : exportIssues.failed
         : exportIssues.failed;
+    // The technical reason stays private (never shown to the renderer), for
+    // diagnosing a failure the user only sees as a plain message.
+    if (message !== exportIssues.cancelled)
+      void mkdir(this.options.recordRoot, { recursive: true, mode: 0o700 })
+        .then(() =>
+          writeFile(
+            path.join(this.options.recordRoot, "last-failure.json"),
+            JSON.stringify({
+              at: new Date().toISOString(),
+              profile,
+              name: error instanceof Error ? error.name : typeof error,
+              code: error instanceof MediaError ? error.code : null,
+              detail: (error instanceof Error
+                ? `${error.message}
+${error.stack ?? ""}`
+                : String(error)
+              ).slice(0, 4000),
+            }),
+            { mode: 0o600 },
+          ),
+        )
+        .catch(() => undefined);
     this.set({
       status: "failed",
       projectId,
