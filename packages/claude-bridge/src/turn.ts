@@ -42,6 +42,36 @@ const activityLabels: Record<string, { label: string; mutating: boolean }> = {
   timeline_undo: { label: "Undoing the last edit", mutating: true },
 };
 
+/**
+ * Claude Code's own tools a turn may use (ADR 0021). Restricted mode confines
+ * the file tools to the project workspace; tools that run commands or code
+ * and web access are never named, so they stay off.
+ */
+export const claudeBuiltInTools = Object.freeze([
+  "Read",
+  "Write",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Task",
+]);
+
+const builtInLabels: Record<string, { label: string; mutating: boolean }> = {
+  Read: { label: "Reading the workspace", mutating: false },
+  Write: { label: "Writing notes", mutating: false },
+  Edit: { label: "Editing notes", mutating: false },
+  Glob: { label: "Searching the workspace", mutating: false },
+  Grep: { label: "Searching the workspace", mutating: false },
+  Task: { label: "Asking a helper", mutating: false },
+};
+
+/** A subagent the app defines for Claude Code's Task tool. */
+export interface ClaudeAgentDefinition {
+  description: string;
+  prompt: string;
+  tools: readonly string[];
+}
+
 const maxText = 32 * 1024;
 const activityId = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
 
@@ -204,8 +234,10 @@ export class ClaudeTurnProjection {
             typeof block.id === "string" && activityId.test(block.id)
               ? block.id
               : `tool-${randomUUID()}`;
-          const short = name.slice(`mcp__${this.serverName}__`.length);
-          const known = activityLabels[short] ?? {
+          const prefix = `mcp__${this.serverName}__`;
+          const known = (name.startsWith(prefix)
+            ? activityLabels[name.slice(prefix.length)]
+            : builtInLabels[name]) ?? {
             label: "Using an editor tool",
             mutating: true,
           };
@@ -302,6 +334,9 @@ export interface ClaudeTurnOptions {
   mcpConfigPath: string;
   serverName: string;
   allowedTools: readonly string[];
+  /** Claude Code's own tools for this turn; none keeps them all off. */
+  builtInTools?: readonly string[];
+  agents?: Readonly<Record<string, ClaudeAgentDefinition>>;
   model: string;
   effort: ClaudeEffort | null;
   systemPrompt: string;
@@ -318,13 +353,23 @@ export function claudeTurnArguments(
     "runtime" | "cwd" | "env" | "onUpdate" | "text"
   >,
 ): string[] {
+  const builtIns = options.builtInTools ?? [];
+  const session = [...restrictedSessionArguments];
+  if (builtIns.length) {
+    // Restricted mode confines the file tools to the working directory.
+    const at = session.indexOf("--tools");
+    session.splice(at, 2, "--restricted", "--tools", builtIns.join(","));
+  }
   return [
-    ...restrictedSessionArguments,
+    ...session,
     "--include-partial-messages",
     "--mcp-config",
     options.mcpConfigPath,
     "--allowedTools",
-    options.allowedTools.join(","),
+    [...options.allowedTools, ...builtIns].join(","),
+    ...(options.agents && Object.keys(options.agents).length
+      ? ["--agents", JSON.stringify(options.agents)]
+      : []),
     "--model",
     options.model,
     ...(options.effort ? ["--effort", options.effort] : []),
@@ -347,7 +392,7 @@ export class ClaudeTurn {
 
   constructor(options: ClaudeTurnOptions) {
     this.projection = new ClaudeTurnProjection({
-      allowedTools: options.allowedTools,
+      allowedTools: [...options.allowedTools, ...(options.builtInTools ?? [])],
       serverName: options.serverName,
       sessionId: options.sessionId,
     });

@@ -30,6 +30,7 @@ import {
 } from "../../packages/claude-bridge/src/cli.ts";
 import {
   ClaudeTurnProjection,
+  claudeBuiltInTools,
   claudeTurnArguments,
 } from "../../packages/claude-bridge/src/turn.ts";
 import {
@@ -46,7 +47,7 @@ const fake = resolve("tests/media/support/fake-claude-code.ts");
 const fakeRuntime: ClaudeRuntime = {
   executable: process.execPath,
   prefix: [fake],
-  version: "2.1.285",
+  version: "2.1.302",
 };
 
 test("auth status parsing follows the documented JSON and exit code", () => {
@@ -222,6 +223,67 @@ test("turn arguments disable built-in tools, settings and prompts", () => {
     assert.ok(claudeEditorTools.includes(`mcp__ai_video_editor__${name}`));
   for (const name of claudeEditorTools)
     assert.match(name, /^mcp__ai_video_editor__[a-z_]+$/u);
+});
+
+test("harness turns confine Claude Code's own tools to the workspace", () => {
+  const args = claudeTurnArguments({
+    mcpConfigPath: "/private/mcp.json",
+    serverName: claudeEditorServer,
+    allowedTools: claudeEditorTools,
+    builtInTools: claudeBuiltInTools,
+    agents: {
+      "join-reviewer": {
+        description: "Checks joins",
+        prompt: "Review the joins.",
+        tools: ["Read"],
+      },
+    },
+    model: "default",
+    effort: null,
+    systemPrompt: "prompt",
+    sessionId: "11111111-2222-4333-8444-555555555555",
+    resume: false,
+    maxTurns: 24,
+  });
+  const value = (name: string) => args[args.indexOf(name) + 1];
+  assert.ok(args.includes("--restricted"));
+  assert.equal(value("--tools"), "Read,Write,Edit,Glob,Grep,Task");
+  // Nothing that runs commands or code, and no web access.
+  for (const name of ["Bash", "PowerShell", "WebFetch", "WebSearch"])
+    assert.ok(!value("--tools")!.split(",").includes(name), name);
+  assert.equal(args.filter((arg) => arg === "--tools").length, 1);
+  assert.ok(args.includes("--disable-slash-commands"));
+  assert.equal(value("--setting-sources"), "");
+  assert.equal(value("--permission-mode"), "dontAsk");
+  assert.equal(
+    value("--allowedTools"),
+    [...claudeEditorTools, ...claudeBuiltInTools].join(","),
+  );
+  assert.deepEqual(Object.keys(JSON.parse(value("--agents")!)), [
+    "join-reviewer",
+  ]);
+  assert.ok(!args.includes("--effort"));
+  // The init check expects exactly those tools; a stray one stops the turn.
+  const harness = new ClaudeTurnProjection({
+    allowedTools: [...claudeEditorTools, ...claudeBuiltInTools],
+    serverName: claudeEditorServer,
+    sessionId: "11111111-2222-4333-8444-555555555555",
+  });
+  assert.equal(
+    harness.handle({
+      ...init([...claudeEditorTools, ...claudeBuiltInTools]),
+    }),
+    true,
+  );
+  const strict = new ClaudeTurnProjection({
+    allowedTools: [...claudeEditorTools, ...claudeBuiltInTools],
+    serverName: claudeEditorServer,
+    sessionId: "11111111-2222-4333-8444-555555555555",
+  });
+  assert.equal(
+    strict.handle(init([...claudeEditorTools, ...claudeBuiltInTools, "Bash"])),
+    false,
+  );
 });
 
 const session = "11111111-2222-4333-8444-555555555555";
@@ -491,7 +553,7 @@ test("desktop Claude signs in through the CLI flow and runs guarded turns", asyn
     let claude = await harness(root);
     let view: ClaudeView = await claude.check();
     assert.equal(view.status, "signed_out");
-    assert.equal(view.version, "2.1.285");
+    assert.equal(view.version, "2.1.302");
     assert.deepEqual(view.models, []);
     view = await claude.signIn();
     assert.equal(view.status, "signing_in");
@@ -718,7 +780,7 @@ test("account text names the plan once", () => {
 test("domain assertions reject leaked or inconsistent Claude state", () => {
   const signedOut: ClaudeView = {
     status: "signed_out",
-    version: "2.1.285",
+    version: "2.1.302",
     account: null,
     models: [],
     selection: null,

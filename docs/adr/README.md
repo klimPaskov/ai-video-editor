@@ -23,3 +23,4 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0018: Claude account sign-in as the default AI connection through the user's unmodified Claude Code CLI; signed-in edit/Undo/Stop/restart passed, app-button sign-in completion pending
 - 0019: full AI edit with motion graphics
 - 0020: the rough cut (Magic Edit) is always an AI story edit; local analysis is evidence only
+- 0021: the editor is a harness for Claude: a per-project workspace and Claude Code's confined file and helper tools (amends 0018)

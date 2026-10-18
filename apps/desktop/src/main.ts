@@ -130,6 +130,12 @@ import { ProjectSettingsStore } from "./project-settings.ts";
 import { removeProjectSideFiles } from "./project-removal.ts";
 import { roughCutTools } from "./rough-cut-playbook.ts";
 import {
+  writeClaudeWorkspace,
+  type WorkspaceTimeline,
+} from "./claude-workspace.ts";
+import { claudeGuides } from "./claude-guides.ts";
+import type { LocalTranscript } from "../../../packages/domain/src/transcription.ts";
+import {
   assertAudioSettings,
   assertAudioSettingsRequest,
   assertAudioSettingsUpdate,
@@ -1140,6 +1146,51 @@ async function start(): Promise<void> {
     assertMagicWandView(value);
     return value;
   });
+  // The project workspace Claude works in (ADR 0021): the committed edit as
+  // files. Writes for one project run one at a time, newest last.
+  const workspaceWrites = new Map<string, Promise<void>>();
+  const writeWorkspace = async (projectId: string, directory: string) => {
+    const service = new CodexVideoEditToolService(projectId, drafts, "claude");
+    const request = { schema_version: "1.0" as const, project_id: projectId };
+    const timeline = (await service.invoke(
+      "timeline.get_summary",
+      request,
+    )) as WorkspaceTimeline;
+    const project = (await service.invoke("project.get_summary", request)) as {
+      sources: Array<{ source_id: string }>;
+    };
+    let transcripts: LocalTranscript[] = [];
+    try {
+      const view = await transcription!.get({ ...request, job_id: null });
+      if (view.job.status === "completed")
+        transcripts = view.results.map((result) => result.transcript);
+    } catch {
+      // No transcript yet: edit.md says so.
+    }
+    await writeClaudeWorkspace(directory, {
+      timeline,
+      project,
+      transcripts,
+      sourceNames: new Map(
+        project.sources.map((source, index) => [
+          source.source_id,
+          `recording ${index + 1}`,
+        ]),
+      ),
+      guides: claudeGuides,
+    });
+  };
+  const refreshClaudeWorkspace = (
+    projectId: string,
+    directory: string,
+    required = false,
+  ): Promise<void> => {
+    const next = (workspaceWrites.get(projectId) ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => writeWorkspace(projectId, directory));
+    workspaceWrites.set(projectId, next);
+    return required ? next : next.catch(() => undefined);
+  };
   const invokeClaudeTool = async (name: unknown, input: unknown) => {
     if (!activeProjectId) throw new CodexVideoEditToolError("inactive_project");
     const projectId = activeProjectId;
@@ -1194,6 +1245,14 @@ async function start(): Promise<void> {
           run,
         );
     }
+    // Claude reads the edit from its workspace; keep it current.
+    if (
+      claude &&
+      value &&
+      typeof value === "object" &&
+      (value as { status?: unknown }).status === "committed"
+    )
+      void refreshClaudeWorkspace(projectId, claude.workspaceFor(projectId));
     return value;
   };
   claudeBroker = await CodexMcpBroker.open(
@@ -1207,6 +1266,8 @@ async function start(): Promise<void> {
   claude = new DesktopClaude(userData, {
     platform: process.platform,
     env: process.env,
+    prepareWorkspace: (projectId, directory) =>
+      refreshClaudeWorkspace(projectId, directory, true),
     openExternal: (url) => shell.openExternal(url),
     mcpRuntime: () => claudeMcpRuntime,
     history: {

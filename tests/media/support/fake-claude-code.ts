@@ -1,5 +1,5 @@
 /**
- * TEST DOUBLE ONLY. Emulates the Claude Code 2.1.285 CLI behaviors observed in
+ * TEST DOUBLE ONLY. Emulates the Claude Code 2.1.302 CLI behaviors observed in
  * the isolated guest (auth status JSON, the browser-login wait, the stream-json
  * initialize/turn/interrupt messages) so the bridge can be unit tested without
  * an account. It is never packaged and makes no network requests. Production
@@ -273,7 +273,7 @@ async function scriptedRoughCut(
 }
 
 if (args[0] === "--version") {
-  process.stdout.write("2.1.285 (Claude Code)\n");
+  process.stdout.write("2.1.302 (Claude Code)\n");
 } else if (args[0] === "auth" && args[1] === "status") {
   const state = readState();
   process.stdout.write(
