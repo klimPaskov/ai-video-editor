@@ -231,9 +231,11 @@ try {
     assert.ok(reply.ok);
     return reply.value;
   };
+  // An earlier run that was stopped leaves its turn "failed"; the app
+  // accepts a new run from there as from "ready".
   await expect
     .poll(async () => (await thread()).status, { timeout: 120_000 })
-    .toBe("ready");
+    .toMatch(/^(ready|failed)$/u);
   await page.locator("#claude-full-edit summary").click();
   await page.locator("#full-edit-level").selectOption("polished");
   if (continueProject)
