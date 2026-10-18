@@ -4,7 +4,7 @@
  *
  * node tests/native/user-footage-claude.test.ts <packaged-executable>
  *   <claude-bin-dir> <profile-config-root> <first.mp4> <second.mp4> [--export]
- *   [--continue <project-id>]
+ *   [--continue <project-id> [--no-edit]]
  *
  * The profile is a private config root whose Claude Code sign-in the user
  * completed themselves (docs/48); no credential is copied. The run imports the
@@ -13,7 +13,8 @@
  * --export it also exports and verifies the lossless master. With --continue
  * it opens that existing project of an earlier run instead of importing and
  * cutting, and starts another full edit in the same Claude conversation
- * (Claude keeps its workspace notes), for example after an interrupted run.
+ * (Claude keeps its workspace notes), for example after an interrupted run;
+ * --no-edit then skips the full edit and only reopens and exports.
  * Footage,
  * transcripts, screenshots and the conversation stay in the guest; only
  * aggregate facts are printed.
@@ -39,6 +40,7 @@ const exportMaster = process.argv.includes("--export");
 const continueAt = process.argv.indexOf("--continue");
 const continueProject = continueAt > 0 ? process.argv[continueAt + 1] : null;
 assert.ok(continueAt < 0 || continueProject, "--continue needs a project id");
+const skipEdit = continueProject !== null && process.argv.includes("--no-edit");
 const evidenceRoot = resolve("test-results");
 await mkdir(evidenceRoot, { recursive: true, mode: 0o700 });
 const evidence = await mkdtemp(join(evidenceRoot, "native-footage-claude-"));
@@ -105,6 +107,15 @@ async function project(page: Page) {
   assert.ok(found, "the run's project is listed");
   return found;
 }
+/** Opens the run's project from Home (or finds it already open). */
+async function openProject(page: Page, id: string) {
+  const row = page.locator(`#projects [data-project-id="${id}"]`);
+  await expect(row.or(page.locator("#frame"))).toBeVisible({
+    timeout: 300_000,
+  });
+  if (await row.isVisible()) await row.click();
+  await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
+}
 async function seek(page: Page, us: number) {
   await page.evaluate((value) => {
     const control = document.querySelector<HTMLInputElement>("#seek")!;
@@ -137,10 +148,7 @@ try {
   if (continueProject) {
     mark("continue");
     projectId = continueProject;
-    await page
-      .locator(`#projects [data-project-id="${continueProject}"]`)
-      .click();
-    await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
+    await openProject(page, continueProject);
     current = await project(page);
     folder = join(userData, "project-store", current.id);
     baselineBytes = await readFile(join(folder, "baseline.json"));
@@ -209,116 +217,121 @@ try {
     assert.equal(magicError, null, magicError ?? "");
   }
 
-  mark("claude-full-edit");
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 300_000 });
-  await page.getByRole("button", { name: "Claude", exact: true }).click();
-  // Magic Edit already opened the conversation for its rough cut.
-  const open = page.getByRole("button", {
-    name: "Open conversation",
-    exact: true,
-  });
-  // The drawer may still be switching to the open conversation, so a click
-  // that finds the button gone is fine.
-  if (await open.isVisible())
-    await open.click({ timeout: 5_000 }).catch(() => undefined);
-  const request = { schema_version: "1.0" as const, project_id: current.id };
-  const thread = async () => {
-    const reply = await page.evaluate(
-      (value) => window.desktop.getClaudeThread(value),
-      request,
-    );
-    assert.ok(reply.ok);
-    return reply.value;
-  };
-  // An earlier run that was stopped leaves its turn "failed"; the app
-  // accepts a new run from there as from "ready".
-  await expect
-    .poll(async () => (await thread()).status, { timeout: 120_000 })
-    .toMatch(/^(ready|failed)$/u);
-  await page.locator("#claude-full-edit summary").click();
-  await page.locator("#full-edit-level").selectOption("polished");
-  if (continueProject)
-    await page
-      .locator("#full-edit-style")
-      .fill(
-        "Continue the production you started (see notes.md): finish the remaining graphics and your review. Pictures inside long graphics now render quickly; the earlier failures were an app bug, now fixed.",
-      );
-  await page.screenshot({ path: join(evidence, "full-edit-brief.png") });
-  await page.locator("#start-full-edit").click();
-  const journal = join(folder, "draft", "journal");
-  const records = async () =>
-    Promise.all(
-      (await readdir(journal).catch(() => []))
-        .filter((name) => name.endsWith(".json"))
-        .sort()
-        .map(
-          async (name) =>
-            JSON.parse(await readFile(join(journal, name), "utf8")) as {
-              origin: string;
-              kind: string;
-              operations: Array<{ operation_type: string }>;
-            },
-        ),
-    );
-  let shot = 0;
-  let lastLog = 0;
-  let view = await thread();
-  for (;;) {
-    view = await thread();
-    if (view.fullEdit?.status !== "running" && view.status !== "running") break;
-    if (Date.now() - lastLog > 60_000) {
-      lastLog = Date.now();
-      const claudeEdits = (await records()).filter(
-        (record) => record.origin === "claude",
-      ).length;
-      console.log(
-        JSON.stringify({
-          seconds: elapsed(),
-          status: view.status,
-          changes: view.fullEdit?.changes ?? 0,
-          claudeTransactions: claudeEdits,
-        }),
-      );
-      if (shot < 12)
-        await page.screenshot({
-          path: join(
-            evidence,
-            `running-${String(++shot).padStart(2, "0")}.png`,
-          ),
-        });
-    }
-    if (elapsed() > 4 * 3600) throw new Error("The full edit ran too long.");
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
-  }
-  const applied = await records();
-  const claudeOps: Record<string, number> = {};
-  for (const record of applied)
-    if (record.origin === "claude")
-      for (const operation of record.operations)
-        claudeOps[operation.operation_type] =
-          (claudeOps[operation.operation_type] ?? 0) + 1;
-  current = await project(page);
-  result.fullEdit = {
-    status: view.fullEdit?.status ?? null,
-    threadStatus: view.status,
-    message: view.message,
-    changes: view.fullEdit?.changes ?? 0,
-    undoable: view.fullEdit?.undoable ?? false,
-    claudeOperations: claudeOps,
-    finalSummaryLength: view.messages.at(-1)?.text.length ?? 0,
-    editedSeconds: Math.round(current.timeline.durationUs / 1e6),
-    graphics: current.graphics?.length ?? 0,
-  };
-  console.log(JSON.stringify({ fullEdit: result.fullEdit }));
-  await page.screenshot({ path: join(evidence, "full-edit-finished.png") });
-  await page.locator("#close-codex").click();
-  // Pictures across the edit for review.
-  for (const fraction of [0.02, 0.1, 0.25, 0.5, 0.75, 0.95]) {
-    await seek(page, Math.round(current.timeline.durationUs * fraction));
-    await page.screenshot({
-      path: join(evidence, `review-${Math.round(fraction * 100)}.png`),
+  if (!skipEdit) {
+    mark("claude-full-edit");
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(page.locator("#edit-actions")).toBeVisible({
+      timeout: 300_000,
     });
+    await page.getByRole("button", { name: "Claude", exact: true }).click();
+    // Magic Edit already opened the conversation for its rough cut.
+    const open = page.getByRole("button", {
+      name: "Open conversation",
+      exact: true,
+    });
+    // The drawer may still be switching to the open conversation, so a click
+    // that finds the button gone is fine.
+    if (await open.isVisible())
+      await open.click({ timeout: 5_000 }).catch(() => undefined);
+    const request = { schema_version: "1.0" as const, project_id: current.id };
+    const thread = async () => {
+      const reply = await page.evaluate(
+        (value) => window.desktop.getClaudeThread(value),
+        request,
+      );
+      assert.ok(reply.ok);
+      return reply.value;
+    };
+    // An earlier run that was stopped leaves its turn "failed"; the app
+    // accepts a new run from there as from "ready".
+    await expect
+      .poll(async () => (await thread()).status, { timeout: 120_000 })
+      .toMatch(/^(ready|failed)$/u);
+    await page.locator("#claude-full-edit summary").click();
+    await page.locator("#full-edit-level").selectOption("polished");
+    if (continueProject)
+      await page
+        .locator("#full-edit-style")
+        .fill(
+          "Continue the production you started (see notes.md): finish the remaining graphics and your review. Pictures inside long graphics now render quickly; the earlier failures were an app bug, now fixed.",
+        );
+    await page.screenshot({ path: join(evidence, "full-edit-brief.png") });
+    await page.locator("#start-full-edit").click();
+    const journal = join(folder, "draft", "journal");
+    const records = async () =>
+      Promise.all(
+        (await readdir(journal).catch(() => []))
+          .filter((name) => name.endsWith(".json"))
+          .sort()
+          .map(
+            async (name) =>
+              JSON.parse(await readFile(join(journal, name), "utf8")) as {
+                origin: string;
+                kind: string;
+                operations: Array<{ operation_type: string }>;
+              },
+          ),
+      );
+    let shot = 0;
+    let lastLog = 0;
+    let view = await thread();
+    for (;;) {
+      view = await thread();
+      if (view.fullEdit?.status !== "running" && view.status !== "running")
+        break;
+      if (Date.now() - lastLog > 60_000) {
+        lastLog = Date.now();
+        const claudeEdits = (await records()).filter(
+          (record) => record.origin === "claude",
+        ).length;
+        console.log(
+          JSON.stringify({
+            seconds: elapsed(),
+            status: view.status,
+            changes: view.fullEdit?.changes ?? 0,
+            claudeTransactions: claudeEdits,
+          }),
+        );
+        if (shot < 12)
+          await page.screenshot({
+            path: join(
+              evidence,
+              `running-${String(++shot).padStart(2, "0")}.png`,
+            ),
+          });
+      }
+      if (elapsed() > 4 * 3600) throw new Error("The full edit ran too long.");
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+    }
+    const applied = await records();
+    const claudeOps: Record<string, number> = {};
+    for (const record of applied)
+      if (record.origin === "claude")
+        for (const operation of record.operations)
+          claudeOps[operation.operation_type] =
+            (claudeOps[operation.operation_type] ?? 0) + 1;
+    current = await project(page);
+    result.fullEdit = {
+      status: view.fullEdit?.status ?? null,
+      threadStatus: view.status,
+      message: view.message,
+      changes: view.fullEdit?.changes ?? 0,
+      undoable: view.fullEdit?.undoable ?? false,
+      claudeOperations: claudeOps,
+      finalSummaryLength: view.messages.at(-1)?.text.length ?? 0,
+      editedSeconds: Math.round(current.timeline.durationUs / 1e6),
+      graphics: current.graphics?.length ?? 0,
+    };
+    console.log(JSON.stringify({ fullEdit: result.fullEdit }));
+    await page.screenshot({ path: join(evidence, "full-edit-finished.png") });
+    await page.locator("#close-codex").click();
+    // Pictures across the edit for review.
+    for (const fraction of [0.02, 0.1, 0.25, 0.5, 0.75, 0.95]) {
+      await seek(page, Math.round(current.timeline.durationUs * fraction));
+      await page.screenshot({
+        path: join(evidence, `review-${Math.round(fraction * 100)}.png`),
+      });
+    }
   }
 
   mark("reopen");
@@ -330,8 +343,7 @@ try {
   electron = await launch();
   await dialogs(electron, null);
   page = await electron.firstWindow();
-  await page.locator(`#projects [data-project-id="${current.id}"]`).click();
-  await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
+  await openProject(page, current.id);
   current = await project(page);
   assert.deepEqual(
     { sequence: current.draft.sequence, sha: current.draft.timelineSha256 },
