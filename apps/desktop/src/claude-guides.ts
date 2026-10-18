@@ -19,7 +19,7 @@ The bar is a high-budget production: graphics that feel designed by a studio for
 
 ## Technical rules
 - A composition is one HTML page with a root carrying data-composition-id, data-width, data-height and data-duration and one paused GSAP timeline registered on window.__timelines[id]. It plays in a frame the size of the video (frame in project.json): declare that size, lay it out for it, and keep its background transparent.
-- Libraries load only as pinned jsDelivr URLs with an exact version (for example https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js); put fonts, images and data files next to the composition and reference them relatively. Nothing else may come from the network. No clocks, unseeded randomness or input: every frame must depend only on time.
+- Libraries load only as pinned jsDelivr URLs with an exact version (for example https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js); fonts load as pinned Fontsource packages (open-source fonts) from jsDelivr, for example <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.2.8/latin-700.css"> or @fontsource-variable/<name> for variable fonts; load only the weights and subsets you use; they are fetched once and sealed into the composition, so type renders the same everywhere. Choose type for the concept: the renderer's system fonts are few and differ between machines, so do not design around them. Put images and data files next to the composition and reference them relatively. Nothing else may come from the network. No clocks, unseeded randomness or input: every frame must depend only on time.
 - Place it with graphics.set and composition_path; keep its graphic_id when you revise so the change stays one undoable step.
 
 ## Review and iterate

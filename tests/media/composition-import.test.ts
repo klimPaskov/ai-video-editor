@@ -193,3 +193,99 @@ test("the composition host serves sealed pages under a no-network policy", async
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("pinned Fontsource fonts are fetched once and inlined; other fonts are refused", async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "composition-"));
+  try {
+    const folder = join(workspace, "compositions", "type");
+    await mkdir(folder, { recursive: true });
+    await writeFile(join(folder, "bg.png"), Buffer.from([0x89, 0x50]));
+    const base = "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.2.8";
+    const fetched: string[] = [];
+    const fetchFont = async (url: string) => {
+      fetched.push(url);
+      if (url === `${base}/latin-700.css`)
+        return Buffer.from(
+          `/* inter-latin-700-normal */
+@font-face {
+  font-family: 'Inter';
+  font-weight: 700;
+  src: url(./files/inter-latin-700-normal.woff2) format('woff2'), url(./files/inter-latin-700-normal.woff) format('woff');
+}`,
+        );
+      if (url === `${base}/files/inter-latin-700-normal.woff2`)
+        return Buffer.from("wOF2-bytes");
+      if (url.endsWith("/display.woff2")) return Buffer.from("wOF2-display");
+      throw new Error("missing");
+    };
+    await writeFile(
+      join(folder, "index.html"),
+      page(
+        "<h1>Title</h1>",
+        `<link rel="preconnect" href="https://fonts.gstatic.com"><link rel="stylesheet" href="${base}/latin-700.css"><style>@font-face{font-family:D;src:url("https://cdn.jsdelivr.net/npm/@fontsource-variable/fraunces@5.2.8/files/display.woff2") format("woff2")}</style>`,
+      ),
+    );
+    const { html } = await importComposition(
+      workspace,
+      "compositions/type/index.html",
+      { fetchFont },
+    );
+    // The stylesheet and its woff2 are inlined; the woff fallback is dropped.
+    assert.deepEqual(fetched, [
+      `${base}/latin-700.css`,
+      `${base}/files/inter-latin-700-normal.woff2`,
+      "https://cdn.jsdelivr.net/npm/@fontsource-variable/fraunces@5.2.8/files/display.woff2",
+    ]);
+    assert.ok(
+      html.includes(
+        `src: url("data:font/woff2;base64,${Buffer.from("wOF2-bytes").toString("base64")}") format('woff2');`,
+      ),
+    );
+
+    assert.doesNotMatch(html, /\.woff\)|cdn\.jsdelivr|fonts\.gstatic/u);
+    assert.match(html, /font-family: 'Inter'/u);
+
+    // Google Fonts, unpinned versions, other CDNs and missing files are refused.
+    for (const [head, reason] of [
+      [
+        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">',
+        /Fontsource/u,
+      ],
+      [
+        '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5/700.css">',
+        /Fontsource/u,
+      ],
+      [
+        '<style>@font-face{font-family:X;src:url("https://example.com/x.woff2")}</style>',
+        /from the network/u,
+      ],
+      [
+        '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.2.8/missing.css">',
+        /could not be downloaded/u,
+      ],
+    ] as const) {
+      await writeFile(join(folder, "index.html"), page("<h1>T</h1>", head));
+      await assert.rejects(
+        importComposition(workspace, "compositions/type/index.html", {
+          fetchFont,
+        }),
+        (error: Error) =>
+          error.name === "CompositionError" && reason.test(error.message),
+      );
+    }
+    // Without a fetcher, a font package cannot be sealed.
+    await writeFile(
+      join(folder, "index.html"),
+      page(
+        "<h1>T</h1>",
+        `<link rel="stylesheet" href="${base}/latin-700.css">`,
+      ),
+    );
+    await assert.rejects(
+      importComposition(workspace, "compositions/type/index.html"),
+      /cannot be fetched/u,
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});

@@ -228,6 +228,20 @@ try {
     await readFile(join(claudeConfig, "scripted-check-sheet.jpg")),
   );
   result.check = checked;
+  // The flawed composition loads a pinned Fontsource font: it is sealed
+  // into the stored page, not fetched at render time.
+  const stored = join(configRoot, appIdentity.slug, "compositions");
+  const pages = await Promise.all(
+    (await readdir(stored))
+      .filter((name) => name.endsWith(".html"))
+      .map((name) => readFile(join(stored, name), "utf8")),
+  );
+  const typed = pages.find((html) => html.includes("Cut off headline"));
+  assert.ok(typed, "the checked composition was not stored");
+  assert.match(typed, /font-family: 'Inter'/u);
+  assert.match(typed, /url\("data:font\/woff2;base64,[A-Za-z0-9+/]{200,}/u);
+  assert.doesNotMatch(typed, /fontsource|\.woff\)/u);
+  result.font = { sealed: true };
   assert.deepEqual(
     (await records()).map((record) => [
       record.origin,

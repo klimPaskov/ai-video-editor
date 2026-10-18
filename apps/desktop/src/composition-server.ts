@@ -79,30 +79,48 @@ export async function serveComposition(
     library[3]!.split("/").some((part) => part === "." || part === "..")
   )
     return notFound();
-  const cached = join(
-    options.libraryCache,
-    `${library[1]!.replace("/", "__")}@${library[2]}`,
-    library[3]!,
-  );
   let bytes: Buffer;
   try {
-    bytes = await readFile(cached);
+    bytes = await cachedPackageFile(
+      options.libraryCache,
+      { name: library[1]!, version: library[2]!, file: library[3]! },
+      options.fetchLibrary,
+    );
   } catch {
-    try {
-      bytes = await options.fetchLibrary(
-        `https://cdn.jsdelivr.net/npm/${library[1]}@${library[2]}/${library[3]}`,
-      );
-      await mkdir(dirname(cached), { recursive: true, mode: 0o700 });
-      const temporary = `${cached}.${process.pid}.tmp`;
-      await writeFile(temporary, bytes, { mode: 0o600 });
-      await rename(temporary, cached);
-    } catch {
-      return notFound();
-    }
+    return notFound();
   }
   return new Response(new Uint8Array(bytes), {
     headers: { "Content-Type": javascript },
   });
+}
+
+/**
+ * A pinned npm package file from jsDelivr: read from the local cache, or
+ * fetched once by its exact URL and cached. Callers validate the name,
+ * version and file first.
+ */
+export async function cachedPackageFile(
+  cache: string,
+  pinned: { name: string; version: string; file: string },
+  fetch: (url: string) => Promise<Buffer>,
+): Promise<Buffer> {
+  const cached = join(
+    cache,
+    `${pinned.name.replace("/", "__")}@${pinned.version}`,
+    pinned.file,
+  );
+  try {
+    return await readFile(cached);
+  } catch {
+    const bytes = await fetch(
+      `https://cdn.jsdelivr.net/npm/${pinned.name}@${pinned.version}/${pinned.file}`,
+    );
+    await mkdir(dirname(cached), { recursive: true, mode: 0o700 });
+    const temporary = `${cached}.${process.pid}.tmp`;
+    await writeFile(temporary, bytes, { mode: 0o600 });
+    await rename(temporary, cached);
+    return bytes;
+  }
 }
 
 /** Stores a sealed composition page by its hash. */

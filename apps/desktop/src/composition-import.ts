@@ -6,8 +6,10 @@ import { extname, isAbsolute, join, normalize, relative, sep } from "node:path";
  * Turns a HyperFrames composition in Claude's workspace into one
  * self-contained page the sealed stage can play (ADR 0021): local scripts,
  * styles, images and fonts are inlined; pinned animation libraries on
- * jsDelivr are served from the app's local library cache; anything else on
- * the network is refused with a reason Claude can act on. The composition
+ * jsDelivr are served from the app's local library cache; pinned open-source
+ * fonts (Fontsource packages on jsDelivr) are fetched once and inlined, so
+ * the sealed page renders the same type on every machine, offline; anything
+ * else on the network is refused with a reason Claude can act on. The composition
  * page's Content Security Policy enforces the same rules at render time.
  */
 
@@ -35,6 +37,28 @@ export function libraryRoute(url: string): string | null {
   return `/lib/${match[1]}@${match[2]}/${match[3]}`;
 }
 
+const fontUrl =
+  /^https:\/\/cdn\.jsdelivr\.net\/npm\/(@fontsource(?:-variable)?\/[a-z0-9][a-z0-9-]*)@(\d+\.\d+\.\d+)\/([A-Za-z0-9._/-]+\.(?:css|woff2|woff))$/u;
+
+/**
+ * A pinned Fontsource file (an open-source font package) on jsDelivr, or
+ * null. Fontsource packages carry OFL or similarly open licences.
+ */
+export function fontPackageFile(
+  url: string,
+): { name: string; version: string; file: string } | null {
+  const match = fontUrl.exec(url);
+  if (
+    !match ||
+    match[3]!.split("/").some((part) => part === ".." || part === ".")
+  )
+    return null;
+  return { name: match[1]!, version: match[2]!, file: match[3]! };
+}
+
+const fontHelp =
+  'Load fonts as pinned Fontsource packages, for example <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.2.8/latin-700.css">, or put font files in the workspace and use @font-face.';
+
 const limits = Object.freeze({
   maxPageBytes: 2 * 1024 * 1024,
   maxFileBytes: 4 * 1024 * 1024,
@@ -58,6 +82,11 @@ const mimeTypes: Record<string, string> = {
 export interface ImportedComposition {
   sha256: string;
   html: string;
+}
+
+export interface ImportOptions {
+  /** Fetches (or reads from the local cache) a pinned Fontsource file. */
+  fetchFont?: (url: string) => Promise<Buffer>;
 }
 
 /** A file inside the workspace, refusing paths and links that leave it. */
@@ -104,6 +133,7 @@ const external = /^(?:https?:|\/\/)/iu;
 export async function importComposition(
   workspace: string,
   relativePath: string,
+  options: ImportOptions = {},
 ): Promise<ImportedComposition> {
   if (!/\.html?$/iu.test(relativePath))
     throw new CompositionError("A composition is an .html file.");
@@ -135,7 +165,37 @@ export async function importComposition(
       );
     return file.bytes.toString("utf8");
   };
-  const inlineCss = async (css: string): Promise<string> => {
+  /** A pinned Fontsource file, counted against the size limits. */
+  const font = async (url: string): Promise<Buffer> => {
+    if (!fontPackageFile(url))
+      throw new CompositionError(
+        `Compositions cannot load "${url.slice(0, 120)}" from the network. ${fontHelp}`,
+      );
+    if (!options.fetchFont)
+      throw new CompositionError("Fonts cannot be fetched here.");
+    let bytes: Buffer;
+    try {
+      bytes = await options.fetchFont(url);
+    } catch {
+      throw new CompositionError(
+        `"${url.slice(0, 120)}" could not be downloaded. Check the package name, version and file.`,
+      );
+    }
+    total += bytes.length;
+    if (bytes.length > limits.maxFileBytes || total > limits.maxTotalBytes)
+      throw new CompositionError(
+        "The composition and its files are larger than 12 MiB. Load only the font weights and subsets you use (for example latin-700.css).",
+      );
+    return bytes;
+  };
+  /** Inlines a stylesheet's files; `remote` is a Fontsource stylesheet's URL. */
+  const inlineCss = async (css: string, remote?: string): Promise<string> => {
+    // A Fontsource stylesheet lists a woff fallback; woff2 alone is enough.
+    if (remote)
+      css = css.replace(
+        /,\s*url\(\s*["']?[^)"']+\.woff["']?\s*\)\s*format\(\s*["']woff["']\s*\)/giu,
+        "",
+      );
     let out = "";
     let last = 0;
     for (const match of css.matchAll(/url\(\s*(["']?)([^)"']+)\1\s*\)/giu)) {
@@ -146,10 +206,17 @@ export async function importComposition(
         out += match[0];
         continue;
       }
-      if (external.test(reference))
-        throw new CompositionError(
-          `Compositions cannot load "${reference.slice(0, 120)}" from the network. Put the file in the workspace.`,
-        );
+      const absolute = remote ? new URL(reference, remote).href : reference;
+      if (remote || external.test(reference)) {
+        const file = fontPackageFile(absolute);
+        if (!file || !/\.woff2?$/u.test(file.file))
+          throw new CompositionError(
+            `Compositions cannot load "${absolute.slice(0, 120)}" from the network. ${fontHelp}`,
+          );
+        const mime = file.file.endsWith(".woff2") ? "font/woff2" : "font/woff";
+        out += `url("data:${mime};base64,${(await font(absolute)).toString("base64")}")`;
+        continue;
+      }
       out += `url("${await dataUrl(reference)}")`;
     }
     if (/@import\b/iu.test(css))
@@ -196,10 +263,17 @@ export async function importComposition(
       sheets.push(external.test(href ?? "") ? "" : tag);
       continue;
     }
-    if (external.test(href))
-      throw new CompositionError(
-        `Compositions cannot load the stylesheet "${href.slice(0, 120)}" from the network (fonts included). Put font files in the workspace and use @font-face.`,
+    if (external.test(href)) {
+      const file = fontPackageFile(href);
+      if (!file || !file.file.endsWith(".css"))
+        throw new CompositionError(
+          `Compositions cannot load the stylesheet "${href.slice(0, 120)}" from the network. ${fontHelp}`,
+        );
+      sheets.push(
+        `<style>${await inlineCss((await font(href)).toString("utf8"), href)}</style>`,
       );
+      continue;
+    }
     sheets.push(`<style>${await inlineCss(await text(href))}</style>`);
   }
   index = 0;

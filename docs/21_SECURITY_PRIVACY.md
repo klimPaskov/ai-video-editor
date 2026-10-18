@@ -113,3 +113,7 @@ Claude runs through the user's installed, unmodified Claude Code CLI (ADR 0018, 
 The renderer plays sources through `ai-video-editor://app/media/<project>/<source>`. Main serves only managed sources of the currently active project, read-only with byte ranges and `Cache-Control: no-store`; any other path, project or source returns 404. The page CSP adds `media-src 'self'` and still has no `connect-src`, so renderer script cannot read media bytes with `fetch`.
 
 Playback copies (2026-10-07): `playback:get` reports only a status, a progress fraction and one fixed message. The media route still serves only the active project's sources, now through their playback copy when one is needed; copy paths stay in main.
+
+## Composition sealing and network (2026-10-18, ADR 0021)
+
+Claude's HyperFrames compositions run in a sandboxed frame with an opaque origin and a policy that blocks every connection (`connect-src 'none'`); their scripts, styles, images and fonts are inlined when main seals them. The only network use is main fetching exact pinned jsDelivr files by URL, with redirects refused and an 8 MiB cap: allowlisted animation libraries (gsap, lottie-web, three, animejs) on first use, and Fontsource font stylesheets and woff2 files at sealing time. Both are cached under app data and never sent anything from the project. Any other network reference in a composition is refused before it is stored.

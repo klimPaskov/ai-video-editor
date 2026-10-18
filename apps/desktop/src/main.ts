@@ -136,8 +136,12 @@ import {
 } from "./claude-workspace.ts";
 import { claudeGuides } from "./claude-guides.ts";
 import { effectiveAssetPolicy } from "../../../packages/domain/src/preferences.ts";
-import { serveComposition, storeComposition } from "./composition-server.ts";
-import { importComposition } from "./composition-import.ts";
+import {
+  cachedPackageFile,
+  serveComposition,
+  storeComposition,
+} from "./composition-server.ts";
+import { fontPackageFile, importComposition } from "./composition-import.ts";
 import { mirrorUserSkills, userSkillsDirectory } from "./claude-skills.ts";
 import type { LocalTranscript } from "../../../packages/domain/src/transcription.ts";
 import {
@@ -190,6 +194,20 @@ import { renderDraftFrames } from "./frame-render.ts";
 import { checkComposition } from "./composition-check.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
+/**
+ * Downloads one exact pinned jsDelivr file (a composition library or a
+ * Fontsource font); callers validate the URL and cache the bytes.
+ */
+async function fetchPinnedFile(address: string): Promise<Buffer> {
+  const response = await net.fetch(address, { redirect: "error" });
+  const length = Number(response.headers.get("content-length") ?? 0);
+  if (!response.ok || length > 8 * 1024 * 1024)
+    throw new Error("File unavailable");
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length > 8 * 1024 * 1024) throw new Error("File too large");
+  return bytes;
+}
+
 /** Sealed HyperFrames compositions, stored by hash (ADR 0021). */
 const compositionsRoot = () =>
   path.join(app.getPath("userData"), "compositions");
@@ -496,16 +514,7 @@ async function start(): Promise<void> {
         compositions: compositionsRoot(),
         libraryCache: path.join(app.getPath("userData"), "library-cache"),
         packaged: compositionPackaged,
-        fetchLibrary: async (address) => {
-          const response = await net.fetch(address, { redirect: "error" });
-          const length = Number(response.headers.get("content-length") ?? 0);
-          if (!response.ok || length > 8 * 1024 * 1024)
-            throw new Error("Library unavailable");
-          const bytes = Buffer.from(await response.arrayBuffer());
-          if (bytes.length > 8 * 1024 * 1024)
-            throw new Error("Library too large");
-          return bytes;
-        },
+        fetchLibrary: fetchPinnedFile,
       });
     }
     const media =
@@ -1202,6 +1211,18 @@ async function start(): Promise<void> {
     const imported = await importComposition(
       claude.workspaceFor(projectId),
       relativePath,
+      {
+        // Pinned Fontsource files, cached with the libraries.
+        fetchFont: (url) => {
+          const pinned = fontPackageFile(url);
+          if (!pinned) throw new Error("Not a pinned font");
+          return cachedPackageFile(
+            path.join(app.getPath("userData"), "library-cache"),
+            pinned,
+            fetchPinnedFile,
+          );
+        },
+      },
     );
     await storeComposition(compositionsRoot(), imported.sha256, imported.html);
     return { sha256: imported.sha256 };
