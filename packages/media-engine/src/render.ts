@@ -569,6 +569,17 @@ export function planExport(
 const quiet = ["-hide_banner", "-loglevel", "error", "-nostdin"];
 
 /** Retimes a graphics segment so its first frame is output frame `startFrame`. */
+/**
+ * Threads for the compositor's filter graph. Every graphics input adds a
+ * scaler and an overlay, and each filter starts this many threads, so an
+ * edit with dozens of graphics would otherwise start hundreds and can hit a
+ * process or container thread limit (FFmpeg then fails to configure the
+ * graph). Keeps the total near 200.
+ */
+export function compositorThreads(graphicsInputs: number): number {
+  return Math.max(1, Math.min(4, Math.floor(96 / Math.max(1, graphicsInputs))));
+}
+
 export function graphicsTiming(
   startFrame: number,
   frameRate: { numerator: number; denominator: number },
@@ -1274,8 +1285,15 @@ export async function exportDraft(
             `${video.frameRate.numerator}/${video.frameRate.denominator}`,
             "-i",
             "pipe:0",
-            ...(graphics?.segments.flatMap((segment) => ["-i", segment.path]) ??
-              []),
+            // One decoder thread per graphics input: a long edit has dozens.
+            ...(graphics?.segments.flatMap((segment) => [
+              "-threads",
+              "1",
+              "-i",
+              segment.path,
+            ]) ?? []),
+            "-filter_complex_threads",
+            String(compositorThreads(graphics?.segments.length ?? 0)),
             // A relative name avoids filter-argument escaping of full paths.
             "-filter_complex",
             graph,

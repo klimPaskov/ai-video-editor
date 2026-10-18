@@ -21,6 +21,7 @@ import {
 } from "../../packages/domain/src/zoom.ts";
 import { probePresentationTiming } from "../../packages/media-engine/src/presentation-timing.ts";
 import {
+  compositorThreads,
   exportDraft,
   planExport,
   rawFrameBytes,
@@ -1528,3 +1529,16 @@ test(
     }
   },
 );
+
+test("the compositor's threads shrink as graphics inputs grow", () => {
+  // A long edit has dozens of graphics segments; each adds filters that
+  // each start this many threads (a 512-thread container limit broke an
+  // export with 21 segments at the default).
+  assert.equal(compositorThreads(0), 4);
+  assert.equal(compositorThreads(12), 4);
+  assert.equal(compositorThreads(30), 3);
+  assert.equal(compositorThreads(60), 1);
+  assert.equal(compositorThreads(500), 1);
+  for (const inputs of [1, 10, 21, 30, 48, 96])
+    assert.ok(inputs * 2 * compositorThreads(inputs) <= 200);
+});
