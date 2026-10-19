@@ -571,9 +571,8 @@ test("desktop Claude signs in through the CLI flow and runs guarded turns", asyn
     );
     assertClaudeView(view);
     assert.deepEqual(view.account, { billing: "subscription", plan: "max" });
-    // No Opus in this catalog: production uses the account's default; the
-    // rough cut defaults to Haiku.
-    assert.deepEqual(view.selection, { model: "default", effort: null });
+    // Production defaults to Sonnet, the rough cut to Haiku.
+    assert.deepEqual(view.selection, { model: "sonnet", effort: null });
     assert.deepEqual(view.roughCutSelection, { model: "haiku", effort: null });
     assert.deepEqual(
       view.models.map((model) => model.value),
@@ -1028,7 +1027,7 @@ test("a full edit request rejects an oversized or unknown brief", () => {
     assert.throws(() => assertClaudeFullEditRequest(bad));
 });
 
-test("fresh model choices: Opus produces and Haiku cuts when offered", () => {
+test("fresh model choices: Sonnet produces and Haiku cuts when offered", () => {
   const model = (value: string, label: string) => ({
     value,
     label,
@@ -1040,13 +1039,12 @@ test("fresh model choices: Opus produces and Haiku cuts when offered", () => {
     models: [
       model("default", "Default (recommended)"),
       model("claude-opus-5-5", "Opus 5.5"),
+      model("sonnet", "Sonnet 5.5"),
       model("haiku", "Haiku 5.5"),
     ],
   };
-  assert.deepEqual(freshSelection(full), {
-    model: "claude-opus-5-5",
-    effort: null,
-  });
+  // Opus is offered (and the default may be Opus), but Sonnet is chosen.
+  assert.deepEqual(freshSelection(full), { model: "sonnet", effort: null });
   assert.deepEqual(freshRoughCutSelection(full, freshSelection(full)), {
     model: "haiku",
     effort: null,
@@ -1058,9 +1056,9 @@ test("fresh model choices: Opus produces and Haiku cuts when offered", () => {
     model: "default",
     effort: null,
   });
-  // "Opusculum" is not Opus.
+  // "Sonnetina" is not Sonnet.
   assert.deepEqual(
-    freshSelection({ plan: null, models: [model("opusculum", "Opusculum")] }),
-    { model: "opusculum", effort: null },
+    freshSelection({ plan: null, models: [model("sonnetina", "Sonnetina")] }),
+    { model: "sonnetina", effort: null },
   );
 });

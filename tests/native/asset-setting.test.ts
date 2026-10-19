@@ -169,9 +169,11 @@ try {
       return reply.ok ? (reply.value.assetPolicy ?? "any") : "error";
     })
     .toBe("copyright_free");
-  // The rough cut has its own model: Haiku by default, changeable.
+  // Production defaults to Sonnet; the rough cut has its own model, Haiku by
+  // default, changeable.
+  await expect(page.locator("#claude-model")).toHaveValue("sonnet");
   await expect(page.locator("#claude-rough-cut-model")).toHaveValue("haiku");
-  await page.locator("#claude-rough-cut-model").selectOption("sonnet");
+  await page.locator("#claude-rough-cut-model").selectOption("default");
   await expect
     .poll(
       async () => {
@@ -182,15 +184,15 @@ try {
       },
       { timeout: 20_000 },
     )
-    .toBe("sonnet");
-  await expect(page.locator("#claude-model")).toHaveValue("default");
-  result.roughCutModel = { default: "haiku", chosen: "sonnet" };
+    .toBe("default");
+  await expect(page.locator("#claude-model")).toHaveValue("sonnet");
+  result.roughCutModel = { default: "haiku", chosen: "default" };
   await page.screenshot({ path: join(evidence, "asset-setting.png") });
   await page.getByRole("button", { name: "Close settings" }).click();
   await page.getByRole("button", { name: "Settings" }).click();
   await page.locator("#settings-claude").click();
   await expect(page.locator("#asset-policy")).toHaveValue("copyright_free");
-  await expect(page.locator("#claude-rough-cut-model")).toHaveValue("sonnet");
+  await expect(page.locator("#claude-rough-cut-model")).toHaveValue("default");
   await page.getByRole("button", { name: "Close settings" }).click();
 
   step = "turn";

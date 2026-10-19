@@ -69,12 +69,13 @@ function offered(
 }
 
 /**
- * A fresh production choice: Opus when the account offers it, otherwise
- * Claude Code's account-recommended default model.
+ * A fresh production choice: Sonnet when the account offers it, otherwise
+ * Claude Code's account-recommended default model. (The default can itself
+ * be Opus, so Sonnet is chosen by name.)
  */
 export function freshSelection(catalog: ClaudeCatalog): ClaudeSelection | null {
   return (
-    offered(catalog, family(catalog, "opus")) ??
+    offered(catalog, family(catalog, "sonnet")) ??
     offered(catalog, { model: "default", effort: null }) ??
     (catalog.models[0]
       ? { model: catalog.models[0].value, effort: null }
@@ -96,7 +97,7 @@ export function freshRoughCutSelection(
   );
 }
 
-/** The catalog's first model of a family ("opus", "haiku"), if any. */
+/** The catalog's first model of a family ("sonnet", "haiku"), if any. */
 function family(catalog: ClaudeCatalog, name: string): ClaudeSelection | null {
   const pattern = new RegExp(`\\b${name}\\b`, "iu");
   const model = catalog.models.find(
