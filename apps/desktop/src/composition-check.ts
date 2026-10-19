@@ -98,6 +98,7 @@ export async function checkComposition(
       report: {
         findings?: StageTextFinding[];
         animations?: number;
+        seek?: boolean;
         timelines?: string[];
         declared_size?: { width: number; height: number } | null;
       } | null;
@@ -126,6 +127,7 @@ export async function checkComposition(
     let error = first?.error ?? null;
     let timelines = first?.report?.timelines ?? [];
     let animations = first?.report?.animations ?? 0;
+    let hasSeek = first?.report?.seek === true;
     let declaredSize = first?.report?.declared_size ?? null;
     let cell: { width: number; height: number } | null = null;
     if (ready)
@@ -135,6 +137,7 @@ export async function checkComposition(
         if (answer?.report?.timelines?.length)
           timelines = answer.report.timelines;
         animations = Math.max(animations, answer?.report?.animations ?? 0);
+        hasSeek ||= answer?.report?.seek === true;
         declaredSize ??= answer?.report?.declared_size ?? null;
         await window.webContents.executeJavaScript(
           "new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(0))))",
@@ -169,6 +172,7 @@ export async function checkComposition(
       declaredSize,
       timelines,
       animations,
+      seek: hasSeek,
       samples,
     });
     const sheet =

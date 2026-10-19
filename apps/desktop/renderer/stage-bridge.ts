@@ -1,9 +1,19 @@
 /**
- * Runs inside a sealed HyperFrames composition page (sandboxed frame, opaque
- * origin, no network). It answers the stage's seek messages through the
- * HyperFrames seek protocol (`window.__hf.seek`) and reports readiness and
+ * Runs inside a sealed composition page (sandboxed frame, opaque origin, no
+ * network). It answers the stage's seek messages and reports readiness and
  * the first script error, so preview, export and Claude's pictures show the
  * same frame for the same time.
+ *
+ * Two kinds of composition play here:
+ * - HyperFrames: a root with data-composition-id, driven through the
+ *   HyperFrames seek protocol (`window.__hf.seek`, or the player's
+ *   `renderSeek`) by the vendored runtime.
+ * - Free-form: any page. The page may define `window.__seek(seconds)` (draw
+ *   exactly this time: canvas, WebGL, three.js, shaders, SVG, DOM; it may
+ *   return a promise) and `window.__duration` (seconds), and may set
+ *   `window.__ready = false` while it loads. CSS and Web animations and SVG
+ *   (SMIL) animations are paused and seeked by this bridge before each
+ *   `__seek`, so a page of only those needs no script at all.
  */
 type HfWindow = Window & {
   __renderReady?: boolean;
@@ -14,6 +24,12 @@ type HfWindow = Window & {
     getDuration?(): number;
   };
   __hfWaitForSeekCompletion?: () => Promise<unknown>;
+  /** Free-form compositions: draw the frame for this time, in seconds. */
+  __seek?: (seconds: number) => unknown;
+  /** Free-form compositions: the length in seconds. */
+  __duration?: number;
+  /** Free-form compositions: false while the page is still loading. */
+  __ready?: boolean;
 };
 
 const page = window as HfWindow;
@@ -22,24 +38,93 @@ const remember = (value: unknown) => {
   firstError ??= String(value).slice(0, 300);
 };
 window.addEventListener("error", (event) => remember(event.message));
+// A script, stylesheet or image that fails to load fires an error on its
+// element (which does not bubble); say which one, so the author can fix it.
+window.addEventListener(
+  "error",
+  (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const source =
+      (target as HTMLScriptElement).src ||
+      (target as HTMLLinkElement).href ||
+      "";
+    remember(
+      `A ${target.tagName.toLowerCase()} could not be loaded${source ? `: ${source}` : ""}. Check the pinned package URL (exact version and file path) and that ES module imports resolve through the import map.`,
+    );
+  },
+  true,
+);
 window.addEventListener("unhandledrejection", (event) =>
   remember(event.reason),
 );
 
-/** The seek protocol: `__hf.seek` when a producer installed it, else the player. */
-const seeker = (): ((time: number) => void) | null =>
-  typeof page.__hf?.seek === "function"
-    ? (time) => page.__hf!.seek!(time)
-    : typeof page.__player?.renderSeek === "function"
-      ? (time) => page.__player!.renderSeek!(time)
-      : null;
-const duration = (): number | null =>
-  typeof page.__hf?.duration === "number"
-    ? page.__hf.duration
-    : typeof page.__player?.getDuration === "function"
-      ? page.__player.getDuration()
-      : null;
-const ready = () => Boolean(page.__renderReady && seeker());
+/** A HyperFrames composition has a root with data-composition-id. */
+const hyperframes = (): boolean =>
+  document.querySelector("[data-composition-id]") !== null;
+/** Free-form pages with SVG (SMIL) animation elements. */
+const svgAnimated = (): SVGSVGElement[] =>
+  [...document.querySelectorAll<SVGSVGElement>("svg")].filter(
+    (svg) =>
+      typeof svg.setCurrentTime === "function" &&
+      svg.querySelector("animate, animateTransform, animateMotion, set"),
+  );
+/** Seeks CSS, Web and SVG animations of a free-form page to `seconds`. */
+const seekAnimations = (seconds: number): void => {
+  for (const animation of document.getAnimations()) {
+    animation.pause();
+    animation.currentTime = seconds * 1000;
+  }
+  for (const svg of svgAnimated()) {
+    svg.pauseAnimations();
+    svg.setCurrentTime(seconds);
+  }
+};
+
+/**
+ * The seek protocol: `__hf.seek` when a producer installed it, else the
+ * player, else (free-form) animations plus the page's own `__seek`. The
+ * function may return a promise.
+ */
+const seeker = (): ((time: number) => unknown) | null => {
+  if (hyperframes())
+    return typeof page.__hf?.seek === "function"
+      ? (time) => page.__hf!.seek!(time)
+      : typeof page.__player?.renderSeek === "function"
+        ? (time) => page.__player!.renderSeek!(time)
+        : null;
+  if (
+    typeof page.__seek !== "function" &&
+    document.getAnimations().length === 0 &&
+    svgAnimated().length === 0
+  )
+    return null;
+  return (time) => {
+    seekAnimations(time);
+    return page.__seek?.(time);
+  };
+};
+const duration = (): number | null => {
+  if (hyperframes())
+    return typeof page.__hf?.duration === "number"
+      ? page.__hf.duration
+      : typeof page.__player?.getDuration === "function"
+        ? page.__player.getDuration()
+        : null;
+  if (typeof page.__duration === "number") return page.__duration;
+  // Without a declared duration: the end of the page's finite animations.
+  const ends = document
+    .getAnimations()
+    .map((animation) => Number(animation.effect?.getComputedTiming().endTime))
+    .filter((end) => Number.isFinite(end));
+  return ends.length ? Math.max(...ends) / 1000 : null;
+};
+const ready = (): boolean =>
+  hyperframes()
+    ? Boolean(page.__renderReady && seeker())
+    : document.readyState === "complete" &&
+      page.__ready !== false &&
+      seeker() !== null;
 
 /** Text on screen now, as `composition.check` audits it. */
 interface TextFinding {
@@ -179,7 +264,8 @@ window.addEventListener("message", (event: MessageEvent) => {
       await new Promise((done) => setTimeout(done, 20));
     if (ready())
       try {
-        seeker()!(Math.max(0, seconds));
+        // A free-form __seek may be asynchronous (loading a texture, say).
+        await seeker()!(Math.max(0, seconds));
         await page.__hfWaitForSeekCompletion?.();
       } catch (error) {
         remember(error);
@@ -192,6 +278,7 @@ window.addEventListener("message", (event: MessageEvent) => {
           ...inspect(),
           timelines: timelines(),
           declared_size: declaredSize(),
+          seek: typeof page.__seek === "function",
         };
       } catch (error) {
         remember(error);
@@ -212,6 +299,8 @@ window.addEventListener("message", (event: MessageEvent) => {
 
 /** Why the runtime is not ready, in terms Claude can act on. */
 const diagnosis = () => {
+  if (!hyperframes())
+    return `The page did not become ready as a free-form composition (document ${document.readyState}, window.__ready ${String(page.__ready)}, window.__seek ${typeof page.__seek}, animations ${document.getAnimations().length}). Define window.__seek(seconds) so the page draws exactly that time (and window.__duration), or use CSS/Web/SVG animations; for HyperFrames, give the root data-composition-id.`;
   const view = window as unknown as {
     __timelines?: Record<string, unknown>;
     gsap?: unknown;

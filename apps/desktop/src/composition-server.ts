@@ -1,25 +1,35 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { compositionFile } from "./composition-import.ts";
-import { compositionLibraries } from "./composition-import.ts";
+import { dirname, extname, join } from "node:path";
+import {
+  compositionFile,
+  packageFile,
+  packageMimeTypes,
+} from "./composition-import.ts";
 
 /**
- * Serves sealed HyperFrames compositions on the `composition` host of the
- * app scheme (ADR 0021): the stored page by hash, the vendored HyperFrames
- * runtime and stage bridge, and pinned animation libraries from a local
- * cache. A library missing from the cache is fetched once from jsDelivr by
- * its exact pinned path; nothing else ever reaches the network.
+ * Serves sealed compositions on the `composition` host of the app scheme
+ * (ADR 0021): the stored page by hash, the vendored HyperFrames runtime and
+ * stage bridge, and pinned npm package files (libraries, ES modules, fonts,
+ * models) from a local cache. A file missing from the cache is fetched once
+ * from jsDelivr by its exact pinned path; nothing else ever reaches the
+ * network, and a composition itself has no network at all.
  */
 
+/**
+ * What a sealed composition page may do. It runs in a sandboxed frame with
+ * an opaque origin; scripts (including ES modules and WebAssembly) come from
+ * this host or are inline, and it may fetch only this host's pinned files
+ * (for example a model or a wasm file of a package) and data or blob URLs.
+ */
 export function compositionPolicy(scheme: string): string {
   return [
     "default-src 'none'",
-    `script-src ${scheme}://composition 'unsafe-inline'`,
+    `script-src ${scheme}://composition 'unsafe-inline' 'wasm-unsafe-eval'`,
     "style-src 'unsafe-inline'",
     "img-src data: blob:",
     "font-src data:",
     "media-src data: blob:",
-    "connect-src 'none'",
+    `connect-src ${scheme}://composition data: blob:`,
     "frame-src 'none'",
     "worker-src blob:",
     "base-uri 'none'",
@@ -27,8 +37,8 @@ export function compositionPolicy(scheme: string): string {
   ].join("; ");
 }
 
-const libraryPath =
-  /^\/lib\/(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?)@(\d+\.\d+\.\d+)\/([A-Za-z0-9._/-]+\.js)$/u;
+/** `/lib/<package>@<version>/<file>`; scoped packages have one more segment. */
+const libraryPath = /^\/lib\/(@[^/@]+\/[^/@]+|[^/@/]+)@([^/]+)\/(.+)$/u;
 
 export interface CompositionServerOptions {
   scheme: string;
@@ -73,24 +83,32 @@ export async function serveComposition(
       headers: { "Content-Type": javascript },
     });
   const library = libraryPath.exec(pathname);
-  if (
-    !library ||
-    !compositionLibraries.has(library[1]!) ||
-    library[3]!.split("/").some((part) => part === "." || part === "..")
-  )
-    return notFound();
+  // The same validation as sealing: an exact, pinned package file.
+  const pinned = library
+    ? packageFile(
+        `https://cdn.jsdelivr.net/npm/${library[1]}@${library[2]}/${library[3]}`,
+      )
+    : null;
+  if (!pinned) return notFound();
   let bytes: Buffer;
   try {
     bytes = await cachedPackageFile(
       options.libraryCache,
-      { name: library[1]!, version: library[2]!, file: library[3]! },
+      pinned,
       options.fetchLibrary,
     );
   } catch {
     return notFound();
   }
   return new Response(new Uint8Array(bytes), {
-    headers: { "Content-Type": javascript },
+    headers: {
+      "Content-Type":
+        packageMimeTypes[extname(pinned.file).toLowerCase()] ??
+        "application/octet-stream",
+      // ES modules and fetches from the sandboxed (opaque-origin) frame are
+      // cross-origin requests.
+      "Access-Control-Allow-Origin": "*",
+    },
   });
 }
 

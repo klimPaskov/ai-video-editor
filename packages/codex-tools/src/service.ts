@@ -58,7 +58,7 @@ export const claudeEditorToolNames = [
 
 /** Rendered pictures of the edit; the app renders, the tool only validates. */
 /**
- * Reads a HyperFrames composition file from the assistant's workspace, seals
+ * Reads a composition file (free-form or HyperFrames) from the assistant's workspace, seals
  * and stores it, and returns its hash. Throws an error named
  * "CompositionError" with a reason the assistant can act on.
  */

@@ -141,7 +141,7 @@ import {
   serveComposition,
   storeComposition,
 } from "./composition-server.ts";
-import { fontPackageFile, importComposition } from "./composition-import.ts";
+import { importComposition, packageFile } from "./composition-import.ts";
 import { mirrorUserSkills, userSkillsDirectory } from "./claude-skills.ts";
 import type { LocalTranscript } from "../../../packages/domain/src/transcription.ts";
 import {
@@ -280,6 +280,10 @@ const userDataPath = existsSync(legacyUserDataPath)
 mkdirSync(userDataPath, { recursive: true });
 app.setPath("userData", userDataPath);
 app.enableSandbox();
+// Compositions may draw with WebGL (three.js, shaders). A machine without a
+// usable GPU (or with a blocked driver) gets Chromium's software renderer
+// instead of no WebGL at all, so previews and exports still work.
+app.commandLine.appendSwitch("enable-unsafe-swiftshader");
 protocol.registerSchemesAsPrivileged([
   {
     scheme: appIdentity.urlScheme,
@@ -287,6 +291,10 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       supportFetchAPI: true,
+      // Sealed compositions (opaque-origin frames) load ES modules and fetch
+      // pinned package files from the composition host: cross-origin
+      // requests, which the host answers with CORS headers.
+      corsEnabled: true,
       // Range requests let the preview <video> seek inside a source.
       stream: true,
     },
@@ -1217,10 +1225,10 @@ async function start(): Promise<void> {
       claude.workspaceFor(projectId),
       relativePath,
       {
-        // Pinned Fontsource files, cached with the libraries.
-        fetchFont: (url) => {
-          const pinned = fontPackageFile(url);
-          if (!pinned) throw new Error("Not a pinned font");
+        // Pinned package files (fonts, stylesheets), cached with the libraries.
+        fetchPackage: (url) => {
+          const pinned = packageFile(url);
+          if (!pinned) throw new Error("Not a pinned package file");
           return cachedPackageFile(
             path.join(app.getPath("userData"), "library-cache"),
             pinned,

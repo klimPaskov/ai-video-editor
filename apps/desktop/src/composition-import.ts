@@ -11,43 +11,36 @@ import { extname, isAbsolute, join, normalize, relative, sep } from "node:path";
  * the sealed page renders the same type on every machine, offline; anything
  * else on the network is refused with a reason Claude can act on. The composition
  * page's Content Security Policy enforces the same rules at render time.
+ *
+ * A composition is any page that can draw itself for a given time. It is
+ * either a HyperFrames composition (a root with data-composition-id, played
+ * by the vendored HyperFrames runtime) or free-form: any HTML, CSS, SVG,
+ * canvas, WebGL, shader or script code that defines window.__seek(seconds)
+ * (and window.__duration), or only CSS/Web/SMIL animations, which the stage
+ * bridge seeks itself. Any pinned npm package file on jsDelivr may be used,
+ * including ES modules through an import map.
  */
 
 export class CompositionError extends Error {
   override name = "CompositionError";
 }
 
-/** Animation libraries a composition may load, by their exact npm name. */
-export const compositionLibraries: ReadonlySet<string> = new Set([
-  "gsap",
-  "lottie-web",
-  "three",
-  "animejs",
-]);
+/** File types a composition may take from a pinned npm package. */
+const packageExtensions =
+  "js|mjs|cjs|css|json|wasm|woff2|woff|ttf|otf|glb|gltf|bin|hdr|png|jpe?g|webp|gif|svg|txt";
 
-const libraryUrl =
-  /^https:\/\/cdn\.jsdelivr\.net\/npm\/(@?[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?)@(\d+\.\d+\.\d+)\/([A-Za-z0-9._/-]+\.js)$/u;
+const packageName =
+  "(@[a-z0-9][a-z0-9._-]*\\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)";
+const packageUrl = new RegExp(
+  `^https://cdn\\.jsdelivr\\.net/npm/${packageName}@(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?)/([A-Za-z0-9._/-]+\\.(?:${packageExtensions}))$`,
+  "u",
+);
 
-/** The local route for a pinned library file, or null if not allowed. */
-export function libraryRoute(url: string): string | null {
-  const match = libraryUrl.exec(url);
-  if (!match || !compositionLibraries.has(match[1]!)) return null;
-  if (match[3]!.split("/").some((part) => part === ".." || part === "."))
-    return null;
-  return `/lib/${match[1]}@${match[2]}/${match[3]}`;
-}
-
-const fontUrl =
-  /^https:\/\/cdn\.jsdelivr\.net\/npm\/(@fontsource(?:-variable)?\/[a-z0-9][a-z0-9-]*)@(\d+\.\d+\.\d+)\/([A-Za-z0-9._/-]+\.(?:css|woff2|woff))$/u;
-
-/**
- * A pinned Fontsource file (an open-source font package) on jsDelivr, or
- * null. Fontsource packages carry OFL or similarly open licences.
- */
-export function fontPackageFile(
+/** An exact, pinned file of an npm package on jsDelivr, or null. */
+export function packageFile(
   url: string,
 ): { name: string; version: string; file: string } | null {
-  const match = fontUrl.exec(url);
+  const match = packageUrl.exec(url);
   if (
     !match ||
     match[3]!.split("/").some((part) => part === ".." || part === ".")
@@ -56,8 +49,30 @@ export function fontPackageFile(
   return { name: match[1]!, version: match[2]!, file: match[3]! };
 }
 
-const fontHelp =
-  'Load fonts as pinned Fontsource packages, for example <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.2.8/latin-700.css">, or put font files in the workspace and use @font-face.';
+/** A directory of a pinned package, for an import map prefix such as `three/addons/`. */
+const packageDirectoryUrl = new RegExp(
+  `^https://cdn\\.jsdelivr\\.net/npm/${packageName}@(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?)/((?:[A-Za-z0-9._-]+/)*)$`,
+  "u",
+);
+
+/**
+ * The local route for a pinned package file (or a directory of one, for an
+ * import map prefix), or null if not allowed.
+ */
+export function libraryRoute(url: string): string | null {
+  const file = packageFile(url);
+  if (file) return `/lib/${file.name}@${file.version}/${file.file}`;
+  const directory = packageDirectoryUrl.exec(url);
+  if (
+    directory &&
+    !directory[3]!.split("/").some((part) => part === ".." || part === ".")
+  )
+    return `/lib/${directory[1]}@${directory[2]}/${directory[3]}`;
+  return null;
+}
+
+const packageHelp =
+  "Load libraries and fonts as pinned npm package files from cdn.jsdelivr.net/npm with an exact version and file path, for example https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js or, as ES modules, https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js in an import map; or put files in the workspace.";
 
 const limits = Object.freeze({
   maxPageBytes: 2 * 1024 * 1024,
@@ -77,6 +92,35 @@ const mimeTypes: Record<string, string> = {
   ".ttf": "font/ttf",
   ".otf": "font/otf",
   ".json": "application/json",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".bin": "application/octet-stream",
+  ".txt": "text/plain",
+};
+
+/** Content types for files taken from a pinned package. */
+export const packageMimeTypes: Record<string, string> = {
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".cjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json",
+  ".wasm": "application/wasm",
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".bin": "application/octet-stream",
+  ".hdr": "application/octet-stream",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".svg": "image/svg+xml",
+  ".txt": "text/plain; charset=utf-8",
 };
 
 export interface ImportedComposition {
@@ -85,8 +129,8 @@ export interface ImportedComposition {
 }
 
 export interface ImportOptions {
-  /** Fetches (or reads from the local cache) a pinned Fontsource file. */
-  fetchFont?: (url: string) => Promise<Buffer>;
+  /** Fetches (or reads from the local cache) a pinned npm package file. */
+  fetchPackage?: (url: string) => Promise<Buffer>;
 }
 
 /** A file inside the workspace, refusing paths and links that leave it. */
@@ -165,17 +209,17 @@ export async function importComposition(
       );
     return file.bytes.toString("utf8");
   };
-  /** A pinned Fontsource file, counted against the size limits. */
-  const font = async (url: string): Promise<Buffer> => {
-    if (!fontPackageFile(url))
+  /** A pinned package file, counted against the size limits. */
+  const fetched = async (url: string): Promise<Buffer> => {
+    if (!packageFile(url))
       throw new CompositionError(
-        `Compositions cannot load "${url.slice(0, 120)}" from the network. ${fontHelp}`,
+        `Compositions cannot load "${url.slice(0, 120)}" from the network. ${packageHelp}`,
       );
-    if (!options.fetchFont)
-      throw new CompositionError("Fonts cannot be fetched here.");
+    if (!options.fetchPackage)
+      throw new CompositionError("Package files cannot be fetched here.");
     let bytes: Buffer;
     try {
-      bytes = await options.fetchFont(url);
+      bytes = await options.fetchPackage(url);
     } catch {
       throw new CompositionError(
         `"${url.slice(0, 120)}" could not be downloaded. Check the package name, version and file.`,
@@ -184,13 +228,13 @@ export async function importComposition(
     total += bytes.length;
     if (bytes.length > limits.maxFileBytes || total > limits.maxTotalBytes)
       throw new CompositionError(
-        "The composition and its files are larger than 12 MiB. Load only the font weights and subsets you use (for example latin-700.css).",
+        "The composition and its files are larger than 12 MiB. Load only the files you use (for example one font weight and subset).",
       );
     return bytes;
   };
-  /** Inlines a stylesheet's files; `remote` is a Fontsource stylesheet's URL. */
+  /** Inlines a stylesheet's files; `remote` is a package stylesheet's URL. */
   const inlineCss = async (css: string, remote?: string): Promise<string> => {
-    // A Fontsource stylesheet lists a woff fallback; woff2 alone is enough.
+    // A font package's stylesheet lists a woff fallback; woff2 alone is enough.
     if (remote)
       css = css.replace(
         /,\s*url\(\s*["']?[^)"']+\.woff["']?\s*\)\s*format\(\s*["']woff["']\s*\)/giu,
@@ -208,13 +252,15 @@ export async function importComposition(
       }
       const absolute = remote ? new URL(reference, remote).href : reference;
       if (remote || external.test(reference)) {
-        const file = fontPackageFile(absolute);
-        if (!file || !/\.woff2?$/u.test(file.file))
+        const file = packageFile(absolute);
+        const mime = file
+          ? mimeTypes[extname(file.file).toLowerCase()]
+          : undefined;
+        if (!file || !mime)
           throw new CompositionError(
-            `Compositions cannot load "${absolute.slice(0, 120)}" from the network. ${fontHelp}`,
+            `Compositions cannot load "${absolute.slice(0, 120)}" from the network. ${packageHelp}`,
           );
-        const mime = file.file.endsWith(".woff2") ? "font/woff2" : "font/woff";
-        out += `url("data:${mime};base64,${(await font(absolute)).toString("base64")}")`;
+        out += `url("data:${mime};base64,${(await fetched(absolute)).toString("base64")}")`;
         continue;
       }
       out += `url("${await dataUrl(reference)}")`;
@@ -227,10 +273,25 @@ export async function importComposition(
   };
 
   let html = page.bytes.toString("utf8");
-  if (!/data-composition-id\s*=/iu.test(html))
-    throw new CompositionError(
-      "This is not a HyperFrames composition: its root element needs data-composition-id (see the hyperframes-core skill).",
-    );
+  // A root with data-composition-id is a HyperFrames composition (played by
+  // its runtime); any other page is free-form and draws itself in
+  // window.__seek(seconds) or through animations the stage bridge seeks.
+  const hyperframes = /data-composition-id\s*=/iu.test(html);
+  /** The script tag's other attributes (type="module" and so on). */
+  const scriptAttributes = (before: string, after: string): string => {
+    const kept = `${before} ${after}`
+      .replace(/\s+/gu, " ")
+      .replace(
+        /\s*\b(?:integrity|crossorigin)(?:\s*=\s*(?:"[^"]*"|'[^']*'|\S+))?/giu,
+        "",
+      )
+      .trimEnd();
+    return kept && kept !== " "
+      ? kept.startsWith(" ")
+        ? kept
+        : ` ${kept}`
+      : "";
+  };
   // Scripts: pinned libraries from the local cache, workspace scripts inline.
   const scripts: string[] = [];
   for (const match of html.matchAll(
@@ -241,12 +302,14 @@ export async function importComposition(
       const route = libraryRoute(source);
       if (!route)
         throw new CompositionError(
-          `Compositions can load only pinned gsap, lottie-web, three or animejs files from cdn.jsdelivr.net/npm (exact x.y.z versions), not "${source.slice(0, 120)}".`,
+          `"${source.slice(0, 120)}" cannot be loaded. ${packageHelp}`,
         );
-      scripts.push(`<script src="${route}"></script>`);
+      scripts.push(
+        `<script${scriptAttributes(match[1]!, match[4]!)} src="${route}"></script>`,
+      );
     } else
       scripts.push(
-        `<script>${(await text(source)).replace(/<\/script/giu, "<\\/script")}</script>`,
+        `<script${scriptAttributes(match[1]!, match[4]!)}>${(await text(source)).replace(/<\/script/giu, "<\\/script")}</script>`,
       );
   }
   let index = 0;
@@ -254,6 +317,30 @@ export async function importComposition(
     /<script\b([^>]*?)\bsrc\s*=\s*(["'])([^"']+)\2([^>]*)>\s*<\/script>/giu,
     () => scripts[index++]!,
   );
+  // Inline scripts and import maps (and the workspace scripts inlined above):
+  // pinned package URLs, in imports and strings, point at the local cache.
+  html = html.replace(
+    /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/giu,
+    (_whole, open: string, body: string, close: string) =>
+      `${open}${body.replace(
+        /https:\/\/cdn\.jsdelivr\.net\/[^\s"'`)\\<>]+/giu,
+        (url) => {
+          const route = libraryRoute(url);
+          if (!route)
+            throw new CompositionError(
+              `"${url.slice(0, 120)}" cannot be loaded. ${packageHelp}`,
+            );
+          return route;
+        },
+      )}${close}`,
+  );
+  // Script bodies are code, not markup: set them aside while the markup
+  // passes below inline files and check attributes, then put them back.
+  const codeBlocks: string[] = [];
+  html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, (whole) => {
+    codeBlocks.push(whole);
+    return `\u0000code${codeBlocks.length - 1}\u0000`;
+  });
   // Stylesheets: workspace files inline; no network.
   const sheets: string[] = [];
   for (const match of html.matchAll(/<link\b[^>]*>/giu)) {
@@ -264,13 +351,13 @@ export async function importComposition(
       continue;
     }
     if (external.test(href)) {
-      const file = fontPackageFile(href);
+      const file = packageFile(href);
       if (!file || !file.file.endsWith(".css"))
         throw new CompositionError(
-          `Compositions cannot load the stylesheet "${href.slice(0, 120)}" from the network. ${fontHelp}`,
+          `Compositions cannot load the stylesheet "${href.slice(0, 120)}" from the network. ${packageHelp}`,
         );
       sheets.push(
-        `<style>${await inlineCss((await font(href)).toString("utf8"), href)}</style>`,
+        `<style>${await inlineCss((await fetched(href)).toString("utf8"), href)}</style>`,
       );
       continue;
     }
@@ -313,10 +400,16 @@ export async function importComposition(
   }
   index = 0;
   html = html.replace(attributePattern, () => attributes[index++]!);
-  // The HyperFrames runtime and the stage bridge come first.
-  // A transparent page over the video: its color scheme matches the frame.
-  const runtime =
-    '<style>:root{color-scheme:normal!important}</style><script src="/lib/hyperframes-runtime.js"></script><script src="/lib/stage-bridge.js"></script>';
+  // The stage bridge comes first, after the HyperFrames runtime for a
+  // HyperFrames composition. A transparent page over the video: its color
+  // scheme matches the frame.
+  html = html.replace(
+    /\u0000code(\d+)\u0000/gu,
+    (_whole, at: string) => codeBlocks[Number(at)]!,
+  );
+  const runtime = `<style>:root{color-scheme:normal!important}</style>${
+    hyperframes ? '<script src="/lib/hyperframes-runtime.js"></script>' : ""
+  }<script src="/lib/stage-bridge.js"></script>`;
   html = /<head\b[^>]*>/iu.test(html)
     ? html.replace(/<head\b[^>]*>/iu, (head) => `${head}${runtime}`)
     : `${runtime}${html}`;

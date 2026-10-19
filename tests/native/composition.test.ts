@@ -228,6 +228,41 @@ try {
     await readFile(join(claudeConfig, "scripted-check-sheet.jpg")),
   );
   result.check = checked;
+  // Free-form pages (no HyperFrames): a 2D canvas, pure CSS animation and a
+  // three.js WebGL scene loaded as an ES module through an import map all
+  // seal, play, move and pass the check; a page nothing can drive is told
+  // how to become one.
+  const freeform = log.find((entry) => entry.scriptedFreeform)
+    ?.scriptedFreeform as Record<
+    string,
+    {
+      ok: boolean;
+      duration_us: number | null;
+      moving: string;
+      findings: string[];
+      sheet: boolean;
+    }
+  >;
+  assert.ok(freeform, "the free-form checks did not run");
+  for (const name of ["canvas", "css", "cube"]) {
+    const item = freeform[name]!;
+    assert.equal(item.ok, true, `${name}: ${item.findings.join(", ")}`);
+    assert.equal(item.duration_us, 2_000_000, name);
+    assert.equal(item.moving, "7 of 7", name);
+    assert.equal(item.sheet, true, name);
+  }
+  assert.equal(freeform.static!.ok, false);
+  assert.ok(
+    freeform.static!.findings.some((item) =>
+      item.startsWith("runtime_not_ready"),
+    ),
+    freeform.static!.findings.join(", "),
+  );
+  await writeFile(
+    join(evidence, "freeform-cube-sheet.jpg"),
+    await readFile(join(claudeConfig, "scripted-cube-sheet.jpg")),
+  );
+  result.freeform = freeform;
   // The flawed composition loads a pinned Fontsource font: it is sealed
   // into the stored page, not fetched at render time.
   const stored = join(configRoot, appIdentity.slug, "compositions");
@@ -247,9 +282,12 @@ try {
       record.origin,
       record.operations[0]?.operation_type ?? null,
     ]),
-    [["claude", "graphic"]],
+    [
+      ["claude", "graphic"],
+      ["claude", "graphic"],
+    ],
   );
-  await expect(page.locator(".timeline-graphic")).toHaveCount(1, {
+  await expect(page.locator(".timeline-graphic")).toHaveCount(2, {
     timeout: 30_000,
   });
   // The preview plays it in a sealed frame on the composition host.
@@ -307,7 +345,11 @@ try {
     Math.abs(b! - 20) < 40;
   assert.ok(red(at(140, 80)), `moved box missing: ${at(140, 80)}`);
   assert.ok(!red(at(40, 80)), `box did not move: ${at(40, 80)}`);
-  result.picture = { movedBox: true };
+  // The WebGL cube (green, unlit) is drawn by the export path as well: its
+  // centre is right of the sweep box, in a colour the test pattern lacks.
+  const green = ([r, g, b]: number[]) => g! > 200 && r! < 80 && b! < 170;
+  assert.ok(green(at(229, 90)), `cube missing in the picture: ${at(229, 90)}`);
+  result.picture = { movedBox: true, webglCube: true };
   assert.equal(sha(await readFile(sourcePath)), sourceHash);
   result.sourceUnchanged = true;
   result.step = "complete";

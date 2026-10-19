@@ -82,8 +82,6 @@ test("network, paths outside the workspace and non-compositions are refused", as
         return true;
       });
     await write("bg.png", "png");
-    await write("plain.html", "<html><body><h1>Hi</h1></body></html>");
-    await refused("plain.html", /data-composition-id/u);
     await write(
       "unpinned.html",
       page(
@@ -116,21 +114,40 @@ test("network, paths outside the workspace and non-compositions are refused", as
   }
 });
 
-test("only pinned allowlisted library files map to the local cache", () => {
-  assert.equal(
-    libraryRoute("https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"),
-    "/lib/gsap@3.14.2/dist/gsap.min.js",
-  );
-  assert.equal(
-    libraryRoute(
+test("exactly pinned package files and directories map to the local cache", () => {
+  for (const [url, route] of [
+    [
+      "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js",
+      "/lib/gsap@3.14.2/dist/gsap.min.js",
+    ],
+    [
       "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-    ),
-    "/lib/three@0.170.0/build/three.module.js",
-  );
+      "/lib/three@0.170.0/build/three.module.js",
+    ],
+    // Any package, scoped ones too, and prerelease versions.
+    [
+      "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/rapier.es.js",
+      "/lib/@dimforge/rapier3d-compat@0.14.0/rapier.es.js",
+    ],
+    [
+      "https://cdn.jsdelivr.net/npm/pixi.js@8.0.0-rc.1/dist/pixi.min.mjs",
+      "/lib/pixi.js@8.0.0-rc.1/dist/pixi.min.mjs",
+    ],
+    // An import map prefix is a directory of a pinned package.
+    [
+      "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+      "/lib/three@0.170.0/examples/jsm/",
+    ],
+  ] as const)
+    assert.equal(libraryRoute(url), route, url);
   for (const url of [
     "https://cdn.jsdelivr.net/npm/gsap@latest/dist/gsap.min.js",
-    "https://cdn.jsdelivr.net/npm/evil@1.0.0/x.js",
+    "https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js",
+    "https://cdn.jsdelivr.net/npm/gsap/dist/gsap.min.js",
     "https://cdn.jsdelivr.net/npm/gsap@3.14.2/../../x.js",
+    "https://cdn.jsdelivr.net/npm/three@0.170.0/../examples/",
+    "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/install.sh",
+    "https://cdn.jsdelivr.net/gh/user/repo@1.0.0/x.js",
     "http://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js",
     "https://unpkg.com/gsap@3.14.2/dist/gsap.min.js",
   ])
@@ -160,11 +177,18 @@ test("the composition host serves sealed pages under a no-network policy", async
     assert.equal(await response.text(), "<html>sealed</html>");
     const policy = response.headers.get("Content-Security-Policy")!;
     assert.equal(policy, compositionPolicy("ai-video-editor"));
-    assert.match(policy, /connect-src 'none'/u);
+    // No network: a page may fetch only this host's pinned files and
+    // data/blob URLs; scripts are inline or from this host (modules and
+    // WebAssembly included).
     assert.match(
       policy,
-      /script-src ai-video-editor:\/\/composition 'unsafe-inline'/u,
+      /connect-src ai-video-editor:\/\/composition data: blob:/u,
     );
+    assert.match(
+      policy,
+      /script-src ai-video-editor:\/\/composition 'unsafe-inline' 'wasm-unsafe-eval'/u,
+    );
+    assert.match(policy, /default-src 'none'/u);
     assert.doesNotMatch(policy, /https?:/u);
     assert.equal(
       await (await serveComposition("/lib/stage-bridge.js", options)).text(),
@@ -181,14 +205,39 @@ test("the composition host serves sealed pages under a no-network policy", async
     assert.deepEqual(fetched, [
       "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js",
     ]);
+    // Any pinned package file, with its own content type, and CORS for the
+    // sandboxed frame's module and fetch requests.
+    for (const [path, type] of [
+      ["/lib/three@0.170.0/build/three.module.js", "text/javascript"],
+      ["/lib/pixi.js@8.0.0/dist/pixi.min.mjs", "text/javascript"],
+      ["/lib/@dimforge/rapier3d-compat@0.14.0/rapier.wasm", "application/wasm"],
+      ["/lib/pkg@1.2.3/data/model.glb", "model/gltf-binary"],
+      ["/lib/pkg@1.2.3/data/table.json", "application/json"],
+    ] as const) {
+      const served = await serveComposition(path, options);
+      assert.equal(served.status, 200, path);
+      assert.match(served.headers.get("Content-Type")!, new RegExp(type), path);
+      assert.equal(served.headers.get("Access-Control-Allow-Origin"), "*");
+    }
     for (const path of [
-      "/lib/evil@1.0.0/x.js",
       "/lib/gsap@3.14.2/../x.js",
+      "/lib/gsap@latest/dist/gsap.min.js",
+      "/lib/gsap@3.14.2/dist/install.sh",
+      "/lib/gsap@3.14.2/dist/",
       `/${"b".repeat(64)}.html`,
       "/index.html",
     ])
       assert.equal((await serveComposition(path, options)).status, 404, path);
-    assert.equal(fetched.length, 1);
+    // Only the exact pinned URLs were fetched.
+    assert.equal(
+      fetched.every((url) =>
+        /^https:\/\/cdn\.jsdelivr\.net\/npm\/[^/]+(\/[^/]+)?@[0-9][^/]*\/[A-Za-z0-9._/-]+$/u.test(
+          url,
+        ),
+      ),
+      true,
+    );
+    assert.equal(fetched.length, 6);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -202,7 +251,7 @@ test("pinned Fontsource fonts are fetched once and inlined; other fonts are refu
     await writeFile(join(folder, "bg.png"), Buffer.from([0x89, 0x50]));
     const base = "https://cdn.jsdelivr.net/npm/@fontsource/inter@5.2.8";
     const fetched: string[] = [];
-    const fetchFont = async (url: string) => {
+    const fetchPackage = async (url: string) => {
       fetched.push(url);
       if (url === `${base}/latin-700.css`)
         return Buffer.from(
@@ -228,7 +277,7 @@ test("pinned Fontsource fonts are fetched once and inlined; other fonts are refu
     const { html } = await importComposition(
       workspace,
       "compositions/type/index.html",
-      { fetchFont },
+      { fetchPackage },
     );
     // The stylesheet and its woff2 are inlined; the woff fallback is dropped.
     assert.deepEqual(fetched, [
@@ -249,11 +298,11 @@ test("pinned Fontsource fonts are fetched once and inlined; other fonts are refu
     for (const [head, reason] of [
       [
         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">',
-        /Fontsource/u,
+        /pinned npm package files/u,
       ],
       [
         '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5/700.css">',
-        /Fontsource/u,
+        /pinned npm package files/u,
       ],
       [
         '<style>@font-face{font-family:X;src:url("https://example.com/x.woff2")}</style>',
@@ -267,7 +316,7 @@ test("pinned Fontsource fonts are fetched once and inlined; other fonts are refu
       await writeFile(join(folder, "index.html"), page("<h1>T</h1>", head));
       await assert.rejects(
         importComposition(workspace, "compositions/type/index.html", {
-          fetchFont,
+          fetchPackage,
         }),
         (error: Error) =>
           error.name === "CompositionError" && reason.test(error.message),

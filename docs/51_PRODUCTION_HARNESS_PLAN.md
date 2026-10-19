@@ -26,7 +26,7 @@ The goal is met when a signed-in run on the supplied recordings produces such an
 | # | Milestone | Status |
 | --- | --- | --- |
 | M0 | Foundations: AI rough cut (ADR 0020), harness workspace and confined Claude Code tools (ADR 0021), the user's own skills, quiet timeline strip, real signed-in acceptance | Done 2026-10-18 |
-| M1 | Compositions play everywhere | Core done 2026-10-18; export and preview parity checks open |
+| M1 | Compositions play everywhere | Core done 2026-10-18; free-form pages, any pinned package and WebGL done 2026-10-19; export and preview parity checks open |
 | M2 | Composition toolchain for Claude | Motion sheets and `composition.check` done 2026-10-18; real Claude iteration open |
 | M3 | Music, sound and asset layers | Asset setting done 2026-10-18; layers planned |
 | M4 | Production direction and model routing | Direction rewritten and per-stage models done 2026-10-18; real run open |
@@ -40,6 +40,7 @@ A HyperFrames composition in Claude's workspace becomes a graphic in the edit an
 - Done: `graphics.set` accepts `composition_path`; the importer inlines local files, maps pinned jsDelivr libraries (gsap, lottie-web, three, animejs) to a local cache and refuses other network references with a reason; sealed pages are stored by hash and served on the `composition` host under a no-network policy; the vendored HyperFrames runtime (Apache-2.0) and the stage bridge are injected; the stage plays each composition in a sandboxed frame (opaque origin) and drives it by seek messages; export waits for every composition to confirm its seek; render errors go back to Claude.
 - Done since: the runtime reports ready and seeks through its player; the frame is transparent over the video; `tests/native/composition.test.ts` passes (the export-path picture at 1 s shows the GSAP box where its timeline puts it, over the video; the preview uses the sealed frame).
 - Open: a full lossless export with a composition, frame parity between preview and export, composition audio and video elements, export capture performance.
+- Done 2026-10-19 (user direction: HyperFrames limits imagination): compositions are free-form pages (`window.__seek`, CSS/Web/SVG animation, canvas, WebGL, three.js, shaders) or HyperFrames; any pinned npm package file, ES modules through an import map; WebGL with a software fallback. Native test with a canvas page, a CSS-only page and a three.js cube passes. The first full lossless export of a real edit with compositions verified on 2026-10-18 (HyperFrames only).
 - Done when: the native test passes, an export with a composition verifies, and frames match between preview, pictures and export.
 
 ### M2: Composition toolchain for Claude

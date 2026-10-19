@@ -27,6 +27,8 @@ export interface CompositionCheckInput {
   declaredSize: { width: number; height: number } | null;
   timelines: string[];
   animations: number;
+  /** The page defines window.__seek (a free-form composition). */
+  seek: boolean;
   samples: CompositionSample[];
 }
 
@@ -80,9 +82,14 @@ export function compositionCheckReport(
       code: "no_duration",
       severity: "error",
       message:
-        "The runtime reports no duration: register a paused GSAP timeline in window.__timelines or set data-duration on the root.",
+        "No duration: set window.__duration (seconds) in a free-form page, or for HyperFrames register a paused GSAP timeline in window.__timelines or set data-duration on the root.",
     });
-  if (input.ready && !input.timelines.length && !input.animations)
+  if (
+    input.ready &&
+    !input.timelines.length &&
+    !input.animations &&
+    !input.seek
+  )
     findings.push({
       code: "no_timeline",
       severity: "warning",
@@ -151,7 +158,7 @@ export function compositionCheckReport(
       code: "motion_static",
       severity:
         (input.durationSeconds ?? 0) >= 3 &&
-        (input.timelines.length > 0 || input.animations > 0)
+        (input.timelines.length > 0 || input.animations > 0 || input.seek)
           ? "error"
           : "warning",
       message:

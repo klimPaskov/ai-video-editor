@@ -17,6 +17,7 @@ const base = (
   declaredSize: { width: 1920, height: 1080 },
   timelines: ["main"],
   animations: 0,
+  seek: false,
   samples: [0, 1, 2, 3].map((index) => ({
     timeUs: index * 1_000_000,
     findings: [],

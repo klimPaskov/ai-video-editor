@@ -222,6 +222,32 @@ async function scriptedComposition(
     join(process.cwd(), "compositions", "edge", "index.html"),
     `<!doctype html><html><head><meta charset="utf-8"><script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.2.8/latin-700.css"><style>html,body{margin:0;background:transparent}#root{position:relative;width:100%;height:100%;overflow:hidden}#title{position:absolute;left:270px;top:60px;white-space:nowrap;font:700 9px Inter,sans-serif;color:#fff}</style></head><body><div id="root" data-composition-id="main" data-start="0" data-width="320" data-height="180" data-duration="2"><div id="title">Cut off headline</div></div><script>const tl = gsap.timeline({ paused: true }); tl.fromTo("#title", { opacity: 0.5 }, { opacity: 1, duration: 2 }, 0); window.__timelines["main"] = tl;</script></body></html>`,
   );
+  // Free-form pages (no HyperFrames): a 2D canvas drawn in __seek, pure CSS
+  // animation with no script, a three.js WebGL cube loaded as an ES module
+  // through an import map, and a page that cannot be driven at all.
+  const freeform = (name: string, html: string) => {
+    mkdirSync(join(process.cwd(), "compositions", name), { recursive: true });
+    writeFileSync(
+      join(process.cwd(), "compositions", name, "index.html"),
+      html,
+    );
+  };
+  freeform(
+    "canvas",
+    `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}canvas{display:block}</style></head><body><canvas id="c" width="320" height="180"></canvas><script>window.__duration = 2; window.__seek = (seconds) => { const g = document.getElementById("c").getContext("2d"); g.clearRect(0, 0, 320, 180); g.fillStyle = "rgb(250,40,200)"; g.fillRect(seconds * 100, 130, 60, 30); };</script></body></html>`,
+  );
+  freeform(
+    "css",
+    `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}#b{position:absolute;left:10px;top:130px;width:60px;height:30px;background:#fff;animation:slide 2s linear forwards}@keyframes slide{from{transform:translateX(0)}to{transform:translateX(200px)}}</style></head><body><div id="b"></div></body></html>`,
+  );
+  freeform(
+    "cube",
+    `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent;overflow:hidden}canvas{display:block}</style><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script></head><body><script type="module">import * as THREE from "three"; const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true }); renderer.setSize(innerWidth, innerHeight); renderer.setClearColor(0x000000, 0); document.body.append(renderer.domElement); const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 50); camera.position.z = 5; const cube = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), new THREE.MeshBasicMaterial({ color: new THREE.Color("rgb(10,240,120)") })); cube.position.x = 1.4; scene.add(cube); window.__duration = 2; window.__seek = (seconds) => { cube.rotation.set(seconds * 0.8, seconds * 1.3, 0); renderer.render(scene, camera); };</script></body></html>`,
+  );
+  freeform(
+    "static",
+    `<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Nothing drives this page</h1></body></html>`,
+  );
   const check = async (path: string) => {
     const content = await call("composition.check", {
       schema_version: "1.0",
@@ -242,6 +268,34 @@ async function scriptedComposition(
   };
   const sweep = await check("compositions/sweep/index.html");
   const edge = await check("compositions/edge/index.html");
+  const free: Record<string, Awaited<ReturnType<typeof check>>> = {};
+  for (const name of ["canvas", "css", "cube", "static"])
+    free[name] = await check(`compositions/${name}/index.html`);
+  if (free.cube?.sheet)
+    writeFileSync(
+      join(root, "scripted-cube-sheet.jpg"),
+      Buffer.from(free.cube.sheet, "base64"),
+    );
+  appendFileSync(
+    logPath,
+    `${JSON.stringify({
+      scriptedFreeform: Object.fromEntries(
+        Object.entries(free).map(([name, value]) => [
+          name,
+          {
+            ok: value.report.ok,
+            duration_us: value.report.duration_us,
+            moving: value.report.moving_between_moments,
+            findings: value.report.findings.map(
+              (item) => `${item.code}:${item.severity}`,
+            ),
+            sheet: value.sheet !== null,
+          },
+        ]),
+      ),
+    })}
+`,
+  );
   if (sweep.sheet)
     writeFileSync(
       join(root, "scripted-check-sheet.jpg"),
@@ -291,6 +345,31 @@ async function scriptedComposition(
     name: "Sweep",
     layer: 1,
     composition_path: "compositions/sweep/index.html",
+  });
+  // The WebGL cube too, so the export path draws a free-form page.
+  const afterSweep = JSON.parse(
+    (
+      await call("timeline.get_summary", {
+        schema_version: "1.0",
+        project_id: projectId,
+      })
+    )[0]!.text as string,
+  ) as Record<string, unknown>;
+  await call("graphics.set", {
+    schema_version: "1.0",
+    request_id: `scripted-cube-${Date.now()}`,
+    project_id: projectId,
+    draft_id: afterSweep.draft_id,
+    base_revision_id: afterSweep.base_revision_id,
+    expected_sequence: afterSweep.draft_sequence,
+    expected_timeline_sha256: afterSweep.timeline_sha256,
+    reason: "Add a rotating cube.",
+    pass_group_id: "scripted-composition-cube",
+    start_us: 0,
+    duration_us: 2_000_000,
+    name: "Cube",
+    layer: 2,
+    composition_path: "compositions/cube/index.html",
   });
   const pictures = await call("media.get_frames", {
     schema_version: "1.0",
