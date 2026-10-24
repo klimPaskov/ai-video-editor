@@ -506,12 +506,16 @@ try {
         const preview = document
           .querySelector(".preview")!
           .getBoundingClientRect();
+        // The page scrolls when the picture and controls need more height,
+        // so the player must be reachable, not already in view.
+        const controls = document.querySelector("#frame-controls")!;
+        controls.scrollIntoView({ block: "nearest" });
         return (
-          panel.left >= preview.right &&
+          // Beside the picture; in a narrow window it covers the picture.
+          (panel.left >= preview.right || globalThis.innerWidth <= 900) &&
           panel.bottom <= globalThis.innerHeight &&
           document.querySelector("header")!.getBoundingClientRect().top >= 0 &&
-          document.querySelector("#frame-controls")!.getBoundingClientRect()
-            .bottom <= globalThis.innerHeight
+          controls.getBoundingClientRect().bottom <= globalThis.innerHeight + 1
         );
       }),
       true,

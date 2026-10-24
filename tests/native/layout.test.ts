@@ -256,6 +256,12 @@ try {
       if (await claude.isVisible()) {
         await claude.click();
         await audit(`${tag} / Edit with the Claude drawer`);
+        await page.screenshot({
+          path: join(
+            evidence,
+            `${themeId}-${size.replace("@", "x")}-drawer.png`,
+          ),
+        });
         await claude.click();
       }
       const details = page.locator("#source-details");
