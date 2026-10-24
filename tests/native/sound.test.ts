@@ -70,7 +70,7 @@ const musicPath = join(evidence, "Bed.wav");
 const effectPath = join(evidence, "Hit.wav");
 for (const [file, seconds, frequency] of [
   [musicPath, 3, 1000],
-  [effectPath, 1.5, 2000],
+  [effectPath, 0.5, 2000],
 ] as const)
   await runProcess({
     executable: "ffmpeg",
@@ -186,7 +186,7 @@ try {
   assert.equal(effect.duck_db, 0);
   assert.deepEqual(effect.timeline_range, {
     start_us: 2_000_000,
-    end_us: 3_500_000,
+    end_us: 2_500_000,
   });
 
   step = "export";
@@ -196,8 +196,9 @@ try {
   await expect(page.locator("#export-result")).toContainText(
     "verified lossless",
   );
-  // The recording is silent after 2 s: the music bed (-18 dB) is audible at
-  // the end, after the effect has finished, where the plain edit has none.
+  // The recording is silent after 2 s: the music bed (-18 dB, fading out over
+  // the last 2 s) is audible after the effect has finished, where the plain
+  // edit has none.
   const level = async (from: number, length: number) => {
     const probe = await runProcess({
       executable: "ffmpeg",
@@ -225,10 +226,10 @@ try {
     assert.ok(match, "no volume measurement");
     return Number(match[1]);
   };
-  const tail = await level(3.7, 0.25);
-  const middle = await level(2.2, 1.0);
-  assert.ok(tail > -45, `music tail ${tail} dB`);
-  assert.ok(tail < -15, `music tail ${tail} dB`);
+  const tail = await level(2.6, 0.4);
+  const middle = await level(2.05, 0.4);
+  assert.ok(tail > -60, `music tail ${tail} dB`);
+  assert.ok(tail < -25, `music tail ${tail} dB`);
   assert.ok(middle > tail, `effect ${middle} dB over music ${tail} dB`);
   result.musicTailDb = tail;
   result.effectDb = middle;
