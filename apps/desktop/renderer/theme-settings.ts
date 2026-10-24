@@ -12,6 +12,24 @@ import {
 
 const cacheKey = "ai-video-editor-theme";
 
+/** Error, success and record colours that read on a dark or a light custom background. */
+const statusColours = {
+  dark: {
+    "--danger": "#ff6d6d",
+    "--danger-text": "#ffb1ab",
+    "--danger-soft": "rgb(255 109 109 / 14%)",
+    "--record": "#cf2233",
+    "--success": "#45d39a",
+  },
+  light: {
+    "--danger": "#d92d3a",
+    "--danger-text": "#b3202c",
+    "--danger-soft": "rgb(217 45 58 / 10%)",
+    "--record": "#cf2233",
+    "--success": "#14835a",
+  },
+} as const;
+
 /** Applies a theme to the whole window: palette, layout and custom colours. */
 export function applyTheme(choice: ThemeChoice): void {
   const root = document.documentElement;
@@ -23,6 +41,7 @@ export function applyTheme(choice: ThemeChoice): void {
     "--c-text",
     "--c-accent",
     "--on-accent",
+    ...Object.keys(statusColours.light),
   ];
   if (choice.id === "custom" && choice.custom) {
     const custom = choice.custom;
@@ -31,8 +50,12 @@ export function applyTheme(choice: ThemeChoice): void {
     root.style.setProperty("--c-text", custom.text);
     root.style.setProperty("--c-accent", custom.accent);
     root.style.setProperty("--on-accent", onAccent(custom.accent));
-    root.style.colorScheme =
-      luminance(custom.background) < 0.4 ? "dark" : "light";
+    const dark = luminance(custom.background) < 0.4;
+    root.style.colorScheme = dark ? "dark" : "light";
+    for (const [name, value] of Object.entries(
+      statusColours[dark ? "dark" : "light"],
+    ))
+      root.style.setProperty(name, value);
   } else {
     for (const name of names) root.style.removeProperty(name);
     root.style.removeProperty("color-scheme");

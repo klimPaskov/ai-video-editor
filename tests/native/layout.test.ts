@@ -10,15 +10,15 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { _electron, expect } from "playwright/test";
+import { _electron, expect as baseExpect } from "playwright/test";
 import { auditLayout, type LayoutFinding } from "./layout-audit.ts";
 import { openDisclosures } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
 
 await assertNativeTestEnvironment();
-// The guest shares a busy machine; allow slow starts and saves.
-expect.configure({ timeout: 30_000 });
+// The guest shares a busy machine: allow slow starts, saves and navigation.
+const expect = baseExpect.configure({ timeout: 30_000 });
 const executablePath = process.argv[2];
 assert.ok(executablePath, "Packaged executable path is required");
 const evidenceRoot = resolve("test-results");
@@ -109,14 +109,20 @@ const electron = await _electron.launch({
   timeout: 30_000,
 });
 try {
-  await electron.evaluate(({ dialog }, file) => {
-    dialog.showOpenDialog = async () => ({
-      canceled: false,
-      filePaths: [file],
-    });
-  }, sourcePath);
+  await electron.evaluate(
+    ({ dialog }, files) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [files.source],
+      });
+      dialog.showSaveDialog = async () => ({
+        canceled: false,
+        filePath: files.master,
+      });
+    },
+    { source: sourcePath, master: join(evidence, "audit master.mkv") },
+  );
   const page = await electron.firstWindow();
-  expect.configure({ timeout: 30_000 });
   await expect(page.locator("#import")).toBeVisible({ timeout: 60_000 });
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 120_000 });
@@ -199,6 +205,50 @@ try {
               (details as HTMLDetailsElement).open = false;
           });
         }
+      }
+      // States that need doing something first, once per theme and again at
+      // the largest interface size for the default theme.
+      if (
+        size === "1200x800@1" ||
+        (themeId === "light_canvas" && size === "1200x800@2")
+      ) {
+        await go("Auto Edit", "auto_edit");
+        // Claude is not signed in here: starting shows the plain failure.
+        await page.locator("#auto-all-start").click();
+        await expect(page.locator("#auto-all-error")).toBeVisible();
+        await audit(`${tag} / Auto Edit after a failed start`);
+        await go("Review", "review");
+        await page.locator("#check-draft-integrity").click();
+        await expect(page.locator("#draft-integrity-result")).toBeVisible();
+        await audit(`${tag} / Review with the integrity result`);
+        await go("Export", "export");
+        await page.locator("#export-start").click();
+        await expect
+          .poll(
+            async () =>
+              (await page.locator("#export-running").isVisible()) ||
+              (await page.locator("#export-done").isVisible()),
+          )
+          .toBe(true);
+        if (await page.locator("#export-running").isVisible())
+          await audit(`${tag} / Export running`);
+        await expect(page.locator("#export-done")).toBeVisible({
+          timeout: 300_000,
+        });
+        await audit(`${tag} / Export done`);
+        await page.locator("#export-again").click();
+        // The project card's options dialog and the recording dialog, from Home.
+        await page.getByRole("button", { name: "Home" }).click();
+        await page.locator(".card-options").first().click();
+        await audit(`${tag} / Project options dialog`);
+        await page.keyboard.press("Escape");
+        if (await page.locator("#record-new").isVisible()) {
+          await page.locator("#record-new").click();
+          await audit(`${tag} / New recording dialog`);
+          await page.keyboard.press("Escape");
+        }
+        await page.locator(`[data-project-id="${projectId}"]`).click();
+        await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
       }
       // The assistant drawer and the source details.
       await go("Edit", "edit");

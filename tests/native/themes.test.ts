@@ -10,14 +10,14 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { _electron, expect } from "playwright/test";
+import { _electron, expect as baseExpect } from "playwright/test";
 import type { Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
 
 await assertNativeTestEnvironment();
-// The guest shares a busy machine; allow slow starts and saves.
-expect.configure({ timeout: 30_000 });
+// The guest shares a busy machine: allow slow starts, saves and navigation.
+const expect = baseExpect.configure({ timeout: 30_000 });
 const executablePath = process.argv[2];
 assert.ok(executablePath, "Packaged executable path is required");
 const evidenceRoot = resolve("test-results");

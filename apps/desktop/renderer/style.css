@@ -20,7 +20,7 @@
   --danger: #d92d3a;
   --danger-text: #b3202c;
   --danger-soft: rgb(217 45 58 / 10%);
-  --record: #e5303f;
+  --record: #cf2233;
   --success: #14835a;
   --shadow: 0 1px 2px rgb(20 22 28 / 6%), 0 10px 28px rgb(20 22 28 / 7%);
   --shadow-lg: 0 24px 70px rgb(20 22 28 / 22%);
@@ -67,7 +67,7 @@
   --danger: #ff6d6d;
   --danger-text: #ffb1ab;
   --danger-soft: rgb(255 109 109 / 12%);
-  --record: #ff4d5e;
+  --record: #cf2233;
   --success: #45d39a;
   --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 28px rgb(0 0 0 / 28%);
   --shadow-lg: 0 24px 80px rgb(0 0 0 / 55%);
@@ -98,7 +98,7 @@
   --danger: #c0392b;
   --danger-text: #a02a1e;
   --danger-soft: rgb(192 57 43 / 10%);
-  --record: #c0392b;
+  --record: #cf2233;
   --success: #2e7d4f;
   --shadow: 0 1px 2px rgb(42 33 24 / 8%), 0 10px 28px rgb(42 33 24 / 8%);
   --shadow-lg: 0 24px 70px rgb(42 33 24 / 28%);
@@ -129,7 +129,7 @@
   --danger: #ff6d6d;
   --danger-text: #ffb1ab;
   --danger-soft: rgb(255 109 109 / 12%);
-  --record: #ff4d5e;
+  --record: #cf2233;
   --success: #45d39a;
   --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 36px rgb(0 0 0 / 45%);
   --shadow-lg: 0 24px 80px rgb(0 0 0 / 65%);
@@ -1028,7 +1028,7 @@ dd {
   min-width: 40px;
   height: 40px;
   padding: 0;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
   border-radius: 50%;
@@ -1237,7 +1237,7 @@ dd {
 }
 .area-choice button[aria-checked="true"],
 .area-choice button[aria-checked="true"]:hover:not(:disabled) {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
 }
 .zoom-controls {
@@ -2043,7 +2043,7 @@ dialog::backdrop {
 #api-provider-connect {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 #claude-model-settings,
 #codex-model-settings,
@@ -2137,6 +2137,7 @@ dialog::backdrop {
 }
 .record-button,
 .record-button:hover:not(:disabled) {
+  color: #fff;
   background: var(--record);
   border-color: var(--record);
 }
@@ -2941,97 +2942,100 @@ dialog {
   border-radius: 24px;
 }
 
-/* The Cinematic layout: the video fills the window and the controls float
+@media (min-width: 821px) and (min-height: 561px) {
+  /* The Cinematic layout: the video fills the window and the controls float
    over it as frosted glass. A custom theme can use it with any colours. */
-html[data-layout="cinematic"] header {
-  position: fixed;
-  inset: 0 0 auto;
-  z-index: 8;
-}
-html[data-layout="cinematic"] main:has(#viewer:not([hidden])) {
-  overflow: hidden;
-}
-html[data-layout="cinematic"] #viewer {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  max-width: none;
-  padding: 0;
-  gap: 0;
-}
-html[data-layout="cinematic"] #project-navigation {
-  position: absolute;
-  top: 72px;
-  left: 50%;
-  z-index: 7;
-  width: min(640px, calc(100% - 32px));
-  padding: 12px 16px 10px;
-  transform: translateX(-50%);
-  background: var(--glass);
-  backdrop-filter: blur(18px);
-  border: 1px solid var(--border);
-  border-radius: 24px;
-}
-html[data-layout="cinematic"] .stage-card {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 0 0 20px;
-  pointer-events: none;
-}
-html[data-layout="cinematic"] .stage-media {
-  display: contents;
-}
-html[data-layout="cinematic"] .workspace {
-  position: absolute;
-  inset: 0;
-  height: auto;
-  gap: 0;
-  pointer-events: auto;
-}
-html[data-layout="cinematic"] .preview {
-  border-radius: 0;
-}
-html[data-layout="cinematic"] #inspector,
-html[data-layout="cinematic"] #codex-drawer {
-  position: relative;
-  z-index: 6;
-  margin: 150px 16px 260px 0;
-  background: var(--glass);
-  backdrop-filter: blur(18px);
-}
-html[data-layout="cinematic"] #frame-controls,
-html[data-layout="cinematic"] .stage-panel,
-html[data-layout="cinematic"] .source-row {
-  position: relative;
-  z-index: 7;
-  width: min(940px, calc(100% - 40px));
-  margin: 0 auto;
-  padding: 12px;
-  pointer-events: auto;
-  background: var(--glass);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  box-shadow: var(--shadow-lg);
-}
-html[data-layout="cinematic"] .stage-panel {
-  max-height: 45vh;
-  overflow-y: auto;
-}
-html[data-layout="cinematic"] .stage-panel:not(:has(> :not([hidden]))) {
-  display: none;
-}
-html[data-layout="cinematic"] .edit-actions,
-html[data-layout="cinematic"] .export-actions {
-  background: transparent;
-  box-shadow: none;
-}
-html[data-layout="cinematic"] #viewer[data-stage="export"] .stage-card {
-  display: flex;
+  html[data-layout="cinematic"] header {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 8;
+  }
+  html[data-layout="cinematic"] main:has(#viewer:not([hidden])) {
+    overflow: hidden;
+  }
+  html[data-layout="cinematic"] #viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    max-width: none;
+    padding: 0;
+    gap: 0;
+  }
+  html[data-layout="cinematic"] #project-navigation {
+    position: absolute;
+    top: 72px;
+    left: 50%;
+    z-index: 7;
+    width: min(640px, calc(100% - 32px));
+    padding: 12px 16px 10px;
+    transform: translateX(-50%);
+    background: var(--glass);
+    backdrop-filter: blur(18px);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+  }
+  html[data-layout="cinematic"] .stage-card {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 0 0 20px;
+    pointer-events: none;
+  }
+  html[data-layout="cinematic"] .stage-media {
+    display: contents;
+  }
+  html[data-layout="cinematic"] #viewer .workspace,
+  html[data-layout="cinematic"] .workspace {
+    position: absolute;
+    inset: 0;
+    height: auto;
+    gap: 0;
+    pointer-events: auto;
+  }
+  html[data-layout="cinematic"] .preview {
+    border-radius: 0;
+  }
+  html[data-layout="cinematic"] #inspector,
+  html[data-layout="cinematic"] #codex-drawer {
+    position: relative;
+    z-index: 6;
+    margin: 150px 16px 260px 0;
+    background: var(--glass);
+    backdrop-filter: blur(18px);
+  }
+  html[data-layout="cinematic"] #frame-controls,
+  html[data-layout="cinematic"] .stage-panel,
+  html[data-layout="cinematic"] .source-row {
+    position: relative;
+    z-index: 7;
+    width: min(940px, calc(100% - 40px));
+    margin: 0 auto;
+    padding: 12px;
+    pointer-events: auto;
+    background: var(--glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-lg);
+  }
+  html[data-layout="cinematic"] .stage-panel {
+    max-height: 45vh;
+    overflow-y: auto;
+  }
+  html[data-layout="cinematic"] .stage-panel:not(:has(> :not([hidden]))) {
+    display: none;
+  }
+  html[data-layout="cinematic"] .edit-actions,
+  html[data-layout="cinematic"] .export-actions {
+    background: transparent;
+    box-shadow: none;
+  }
+  html[data-layout="cinematic"] #viewer[data-stage="export"] .stage-card {
+    display: flex;
+  }
 }
 
 .theme-name {
@@ -3089,4 +3093,15 @@ body:has(#home:not([hidden])) #source-details {
 .auto-edit-actions > details.more > summary {
   justify-content: center;
   width: 100%;
+}
+.brand {
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  header {
+    padding: 0 16px;
+  }
+  .brand-name {
+    display: none;
+  }
 }

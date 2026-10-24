@@ -144,9 +144,29 @@ export function setupAutoPanel(options: {
     }
   }
 
+  /** Claude must be ready before anything starts, so nothing is wasted. */
+  async function claudeReady(): Promise<string | null> {
+    const reply = await window.desktop.getClaude().catch(() => null);
+    if (!reply?.ok) return "Claude's status could not be read. Try again.";
+    const view = reply.value;
+    if (view.status === "signed_in") return null;
+    if (view.status === "signed_out")
+      return "Sign in with your Claude account in Settings, then try again.";
+    if (view.status === "unavailable")
+      return (
+        view.message ??
+        "Claude Code is not installed. Open Settings > Claude to set it up."
+      );
+    if (view.status === "signing_in")
+      return "Finish signing in to Claude, then try again.";
+    return view.message ?? "Claude is not ready yet. Try again in a moment.";
+  }
+
   async function run(): Promise<void> {
     if (!project || running()) return;
     const id = project.id;
+    const blocked = await claudeReady();
+    if (blocked) return fail(blocked);
     runProject = id;
     stopRequested = false;
     message = null;

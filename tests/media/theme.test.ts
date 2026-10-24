@@ -138,7 +138,8 @@ test("every built-in palette keeps its text readable", async () => {
   for (const id of ["light_canvas", "studio_dark", "paper", "cinematic"]) {
     const own = all.get(id);
     assert.ok(own, `${id} is defined in the style sheet`);
-    const get = (name: string) => own.get(name) ?? base.get(name)!;
+    const get = (name: string) =>
+      name === "--white" ? "#ffffff" : (own.get(name) ?? base.get(name)!);
     const checks: Array<[string, string, string, number]> = [
       ["--text", "--bg", "text on the background", 7],
       ["--text", "--surface", "text on cards", 7],
@@ -151,6 +152,7 @@ test("every built-in palette keeps its text readable", async () => {
       ["--on-accent", "--accent", "button text on the accent", 4.5],
       ["--danger-text", "--surface", "error text on cards", 4.5],
       ["--clip-text", "--clip", "timeline label on a clip", 4.5],
+      ["--white", "--record", "recording button text", 4.5],
     ];
     for (const [front, back, what, minimum] of checks) {
       const ratio = contrastRatio(get(front), get(back));
