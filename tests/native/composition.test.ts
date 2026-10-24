@@ -16,6 +16,9 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { createSocket } from "node:dgram";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import {
   chmod,
   mkdir,
@@ -46,6 +49,18 @@ const claudeConfig = join(
 const sha = (data: Uint8Array) =>
   createHash("sha256").update(data).digest("hex");
 
+// Listeners on loopback to catch any attempt of a composition to reach out.
+const reached: string[] = [];
+const web = createServer((request, response) => {
+  reached.push(`http ${request.method} ${request.url}`);
+  response.end("");
+});
+await new Promise<void>((done) => web.listen(0, "127.0.0.1", done));
+const probePort = (web.address() as AddressInfo).port;
+const stun = createSocket("udp4");
+stun.on("message", (_message, from) => reached.push(`udp ${from.port}`));
+await new Promise<void>((done) => stun.bind(probePort, "127.0.0.1", done));
+
 // The scripted CLI starts signed in, so no account is involved.
 await mkdir(claudeConfig, { recursive: true, mode: 0o700 });
 await writeFile(
@@ -54,7 +69,7 @@ await writeFile(
 );
 await writeFile(
   join(claudeConfig, "fake-scenario.json"),
-  JSON.stringify({ kind: "scripted_composition" }),
+  JSON.stringify({ kind: "scripted_composition", leakPort: probePort }),
 );
 const bin = join(evidence, "bin");
 await mkdir(bin, { mode: 0o700 });
@@ -263,6 +278,17 @@ try {
     await readFile(join(claudeConfig, "scripted-cube-sheet.jpg")),
   );
   result.freeform = freeform;
+  // The hostile page ran, and its blocked loads are reported to its author
+  // as errors; nothing it tried reached the listeners: the sandbox has no
+  // way out.
+  assert.equal(freeform.leak!.ok, false);
+  assert.ok(
+    freeform.leak!.findings.some((item) => /could not be loaded/u.test(item)),
+    freeform.leak!.findings.join(", "),
+  );
+  await new Promise((done) => setTimeout(done, 2_000));
+  assert.deepEqual(reached, [], "a composition reached the network");
+  result.networkProbe = { attempts: 13, reached: 0 };
   // The flawed composition loads a pinned Fontsource font: it is sealed
   // into the stored page, not fetched at render time.
   const stored = join(configRoot, appIdentity.slug, "compositions");
@@ -366,4 +392,6 @@ try {
   throw error;
 } finally {
   await electron.close().catch(() => undefined);
+  web.close();
+  stun.close();
 }

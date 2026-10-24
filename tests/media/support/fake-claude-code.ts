@@ -29,6 +29,12 @@ const readState = (): State =>
     : { loggedIn: false, method: "none" };
 const writeState = (state: State) =>
   writeFileSync(statePath, JSON.stringify(state));
+/** A loopback port the native test listens on, to catch a page's network use. */
+const leakPort = (): number | null =>
+  existsSync(scenarioPath)
+    ? ((JSON.parse(readFileSync(scenarioPath, "utf8")) as { leakPort?: number })
+        .leakPort ?? null)
+    : null;
 const scenario = (): string =>
   existsSync(scenarioPath)
     ? (JSON.parse(readFileSync(scenarioPath, "utf8")) as { kind: string }).kind
@@ -244,6 +250,15 @@ async function scriptedComposition(
     "cube",
     `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent;overflow:hidden}canvas{display:block}</style><script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script></head><body><script type="module">import * as THREE from "three"; const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true }); renderer.setSize(innerWidth, innerHeight); renderer.setClearColor(0x000000, 0); document.body.append(renderer.domElement); const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 50); camera.position.z = 5; const cube = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), new THREE.MeshBasicMaterial({ color: new THREE.Color("rgb(10,240,120)") })); cube.position.x = 1.4; scene.add(cube); window.__duration = 2; window.__seek = (seconds) => { cube.rotation.set(seconds * 0.8, seconds * 1.3, 0); renderer.render(scene, camera); };</script></body></html>`,
   );
+  // A hostile page: every way it can think of to reach a listener on this
+  // machine (image, fetch, WebSocket, beacon, form, preconnect, a frame, a
+  // worker, WebRTC to a STUN server). None may arrive.
+  const port = leakPort();
+  if (port !== null)
+    freeform(
+      "leak",
+      `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}</style></head><body><script>window.__duration = 1; window.__seek = () => {}; const base = "http://127.0.0.1:${port}"; const add = (parent, tag, attributes) => { const element = document.createElement(tag); for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value); parent.append(element); return element; }; const tries = [ () => { new Image().src = base + "/image.png"; }, () => fetch(base + "/fetch", { mode: "no-cors" }).catch(() => {}), () => navigator.sendBeacon(base + "/beacon", "x"), () => { try { new WebSocket("ws://127.0.0.1:${port}/socket"); } catch {} }, () => { const form = add(document.body, "form", { action: base + "/form", method: "post" }); form.submit(); }, () => add(document.body, "iframe", { src: base + "/frame" }), () => add(document.head, "link", { rel: "preconnect", href: base }), () => add(document.head, "link", { rel: "dns-prefetch", href: base }), () => add(document.head, "link", { rel: "stylesheet", href: base + "/style.css" }), () => add(document.head, "script", { src: base + "/script.js" }), () => { new Worker(URL.createObjectURL(new Blob(["fetch('" + base + "/worker')"]))); }, () => { const peer = new RTCPeerConnection({ iceServers: [{ urls: "stun:127.0.0.1:${port}" }] }); peer.createDataChannel("x"); peer.createOffer().then((offer) => peer.setLocalDescription(offer)); }, () => { window.open(base + "/popup"); }, () => { location.href = base + "/navigate"; } ]; for (const attempt of tries) try { attempt(); } catch {}</script></body></html>`,
+    );
   freeform(
     "static",
     `<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Nothing drives this page</h1></body></html>`,
@@ -258,7 +273,7 @@ async function scriptedComposition(
       ok: boolean;
       duration_us: number | null;
       moving_between_moments: string;
-      findings: { code: string; severity: string }[];
+      findings: { code: string; severity: string; message: string }[];
     };
     const sheet = content.find((item) => item.type === "image");
     return {
@@ -269,7 +284,13 @@ async function scriptedComposition(
   const sweep = await check("compositions/sweep/index.html");
   const edge = await check("compositions/edge/index.html");
   const free: Record<string, Awaited<ReturnType<typeof check>>> = {};
-  for (const name of ["canvas", "css", "cube", "static"])
+  for (const name of [
+    "canvas",
+    "css",
+    "cube",
+    "static",
+    ...(port !== null ? ["leak"] : []),
+  ])
     free[name] = await check(`compositions/${name}/index.html`);
   if (free.cube?.sheet)
     writeFileSync(
@@ -287,7 +308,8 @@ async function scriptedComposition(
             duration_us: value.report.duration_us,
             moving: value.report.moving_between_moments,
             findings: value.report.findings.map(
-              (item) => `${item.code}:${item.severity}`,
+              (item) =>
+                `${item.code}:${item.severity}:${item.message.slice(0, 200)}`,
             ),
             sheet: value.sheet !== null,
           },

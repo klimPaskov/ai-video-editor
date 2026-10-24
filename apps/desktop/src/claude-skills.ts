@@ -39,6 +39,29 @@ interface Entry {
   mtimeMs: number;
 }
 
+/** Folders that are never mirrored: version control and installed packages. */
+const skippedFolders = new Set([".git", "node_modules", "__pycache__"]);
+
+/**
+ * Files that look like secrets (environment files, keys, tokens,
+ * credentials) are never copied into the app's data, even when a skill
+ * folder happens to hold one. Skills need only their instructions, scripts
+ * and reference files.
+ */
+export function looksSecret(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    /^\.env(\.|$)/u.test(lower) ||
+    /^(\.npmrc|\.netrc|\.pypirc|\.git-credentials|id_rsa|id_ed25519|id_ecdsa|id_dsa)/u.test(
+      lower,
+    ) ||
+    /\.(pem|key|p12|pfx|jks|keystore|token|secret|secrets|kdbx|crt)$/u.test(
+      lower,
+    ) ||
+    /(secret|credential|password|private[-_]?key|api[-_]?key)/u.test(lower)
+  );
+}
+
 /** Regular files under `root`, without following links; null if over limits. */
 async function listFiles(root: string): Promise<Entry[] | null> {
   const files: Entry[] = [];
@@ -48,10 +71,11 @@ async function listFiles(root: string): Promise<Entry[] | null> {
       const path = join(directory, item.name);
       if (item.isSymbolicLink()) continue;
       if (item.isDirectory()) {
+        if (skippedFolders.has(item.name)) continue;
         if (!(await walk(path))) return false;
         continue;
       }
-      if (!item.isFile()) continue;
+      if (!item.isFile() || looksSecret(item.name)) continue;
       const stat = await lstat(path);
       if (stat.size > maxFileBytes) continue;
       total += stat.size;

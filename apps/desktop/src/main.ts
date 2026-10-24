@@ -129,6 +129,7 @@ import { DesktopPlaybackProxies } from "./playback-proxies.ts";
 import { CaptionSettingsStore } from "./caption-settings.ts";
 import { ProjectSettingsStore } from "./project-settings.ts";
 import { removeProjectSideFiles } from "./project-removal.ts";
+import { sweepPartialExports, sweepTemporaryFolders } from "./private-notes.ts";
 import { roughCutTools } from "./rough-cut-playbook.ts";
 import {
   writeClaudeWorkspace,
@@ -195,18 +196,38 @@ import { checkComposition } from "./composition-check.ts";
 import { toolCallTimeoutMs } from "../../../packages/codex-tools/src/frames.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
+/** The only page a sealed composition frame may load: a sealed page by hash. */
+const compositionFrameUrl = new RegExp(
+  `^${appIdentity.urlScheme}://composition/[a-f0-9]{64}[.]html$`,
+  "u",
+);
+
 /**
  * Downloads one exact pinned jsDelivr file (a composition library or a
  * Fontsource font); callers validate the URL and cache the bytes.
  */
 async function fetchPinnedFile(address: string): Promise<Buffer> {
-  const response = await net.fetch(address, { redirect: "error" });
-  const length = Number(response.headers.get("content-length") ?? 0);
-  if (!response.ok || length > 8 * 1024 * 1024)
+  const limit = 8 * 1024 * 1024;
+  const response = await net.fetch(address, {
+    redirect: "error",
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (
+    !response.ok ||
+    !response.body ||
+    Number(response.headers.get("content-length") ?? 0) > limit
+  )
     throw new Error("File unavailable");
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length > 8 * 1024 * 1024) throw new Error("File too large");
-  return bytes;
+  // Read the body as it arrives and stop at the limit, whatever the headers
+  // claim.
+  const chunks: Buffer[] = [];
+  let received = 0;
+  for await (const chunk of response.body) {
+    received += chunk.length;
+    if (received > limit) throw new Error("File too large");
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
 }
 
 /** Sealed HyperFrames compositions, stored by hash (ADR 0021). */
@@ -553,6 +574,29 @@ async function start(): Promise<void> {
   );
   session.defaultSession.setPermissionCheckHandler(() => false);
   session.defaultSession.on("will-download", (event) => event.preventDefault());
+  // The app's pages (and the sealed compositions in them) never reach the
+  // network: they load packaged content over the app scheme only. This
+  // default-deny filter sits under each page's Content Security Policy as a
+  // second layer, for channels a policy may not cover (preconnect, WebSocket,
+  // WebRTC signalling). The main process's own downloads of pinned package
+  // files (net.fetch) belong to no page and pass.
+  session.defaultSession.webRequest.onBeforeRequest(
+    {
+      urls: ["http://*/*", "https://*/*", "ws://*/*", "wss://*/*", "ftp://*/*"],
+    },
+    (details, callback) =>
+      callback({ cancel: details.webContentsId !== undefined }),
+  );
+  app.on("web-contents-created", (_event, contents) => {
+    // No WebRTC connection can be made, so no address can leak through ICE.
+    contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
+    // Nothing in any window, the hidden export and check windows included,
+    // navigates a frame away from the app's own pages.
+    contents.on("will-frame-navigate", (event) => {
+      if (!event.url.startsWith(`${appIdentity.urlScheme}://`))
+        event.preventDefault();
+    });
+  });
   const preferences = new PreferencesStore(
     path.join(app.getPath("userData"), "preferences"),
   );
@@ -885,6 +929,11 @@ async function start(): Promise<void> {
     assertEmptyRequest(request);
     return recording(() => recorder!.cancel());
   });
+  // Leftovers of an export or picture render that was interrupted last time.
+  void sweepTemporaryFolders().catch(() => undefined);
+  void sweepPartialExports(path.join(userData, "exports")).catch(
+    () => undefined,
+  );
   exports = new DesktopExports({
     renderGraphics: (request) =>
       renderGraphicsTrack(request, `${origin}/stage.html`),
@@ -2682,7 +2731,7 @@ async function start(): Promise<void> {
     if (
       !event.isMainFrame &&
       event.url !== `${origin}/stage.html` &&
-      !/^[a-z-]+:\/\/composition\/[a-f0-9]{64}\.html$/u.test(event.url)
+      !compositionFrameUrl.test(event.url)
     )
       event.preventDefault();
   });

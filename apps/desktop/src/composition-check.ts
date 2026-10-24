@@ -9,9 +9,10 @@ import {
 } from "../renderer/stage-control.ts";
 import {
   auditTimes,
+  cleanAnswer,
   compositionCheckReport,
   type CompositionSample,
-  type StageTextFinding,
+  type StageAnswer,
 } from "./composition-check-report.ts";
 import { tileSheet } from "./frame-render.ts";
 
@@ -91,18 +92,7 @@ export async function checkComposition(
     await window.webContents.executeJavaScript(
       `window.__sync = ${syncStage.toString()}; window.__settle = ${settleStage.toString()}; window.__report = ${stageReport.toString()}; window.__state = ${JSON.stringify(state)}; document.documentElement.style.background = "repeating-conic-gradient(#2a2a2a 0 25%, #1f1f1f 0 50%) 0 0 / 32px 32px"; 0`,
     );
-    type Answer = {
-      ready: boolean;
-      error: string | null;
-      duration: number | null;
-      report: {
-        findings?: StageTextFinding[];
-        animations?: number;
-        seek?: boolean;
-        timelines?: string[];
-        declared_size?: { width: number; height: number } | null;
-      } | null;
-    } | null;
+    type Answer = StageAnswer | null;
     const seek = async (us: number): Promise<Answer> => {
       if (options.signal?.aborted) throw new Error("Cancelled.");
       await window.webContents.executeJavaScript(
@@ -111,9 +101,10 @@ export async function checkComposition(
       const problem = (await window.webContents.executeJavaScript(
         "__settle(document, 20000)",
       )) as string | null;
-      const answer = (await window.webContents.executeJavaScript(
-        "__report(document)",
-      )) as Answer;
+      // What the page reports is checked field by field before use.
+      const answer = cleanAnswer(
+        await window.webContents.executeJavaScript("__report(document)"),
+      );
       // A seek the composition never confirmed is its own problem.
       return problem && answer
         ? { ...answer, ready: false, error: answer.error ?? problem }

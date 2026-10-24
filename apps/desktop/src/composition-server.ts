@@ -1,4 +1,13 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import {
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 import {
   compositionFile,
@@ -112,32 +121,92 @@ export async function serveComposition(
   });
 }
 
+/** The most the package cache may hold; the oldest files go first. */
+export const packageCacheQuotaBytes = 512 * 1024 * 1024;
+
+const sha256 = (bytes: Buffer) =>
+  createHash("sha256").update(bytes).digest("hex");
+
 /**
  * A pinned npm package file from jsDelivr: read from the local cache, or
  * fetched once by its exact URL and cached. Callers validate the name,
- * version and file first.
+ * version and file first. The first download's SHA-256 is kept beside the
+ * file and checked on every read, so a changed or damaged cache entry is
+ * fetched again instead of being served; a file from before hashes were
+ * kept is adopted as it is.
  */
 export async function cachedPackageFile(
   cache: string,
   pinned: { name: string; version: string; file: string },
   fetch: (url: string) => Promise<Buffer>,
+  quotaBytes = packageCacheQuotaBytes,
 ): Promise<Buffer> {
   const cached = join(
     cache,
     `${pinned.name.replace("/", "__")}@${pinned.version}`,
     pinned.file,
   );
-  try {
-    return await readFile(cached);
-  } catch {
-    const bytes = await fetch(
-      `https://cdn.jsdelivr.net/npm/${pinned.name}@${pinned.version}/${pinned.file}`,
-    );
+  const hashed = `${cached}.sha256`;
+  const store = async (bytes: Buffer) => {
     await mkdir(dirname(cached), { recursive: true, mode: 0o700 });
-    const temporary = `${cached}.${process.pid}.tmp`;
-    await writeFile(temporary, bytes, { mode: 0o600 });
-    await rename(temporary, cached);
-    return bytes;
+    for (const [target, content] of [
+      [cached, bytes],
+      [hashed, sha256(bytes)],
+    ] as const) {
+      const temporary = `${target}.${process.pid}.tmp`;
+      await writeFile(temporary, content, { mode: 0o600 });
+      await rename(temporary, target);
+    }
+  };
+  try {
+    const bytes = await readFile(cached);
+    let expected: string | null = null;
+    try {
+      expected = (await readFile(hashed, "utf8")).trim();
+    } catch {
+      expected = null;
+    }
+    if (expected === null) {
+      await store(bytes);
+      return bytes;
+    }
+    if (sha256(bytes) === expected) return bytes;
+  } catch {
+    // Not cached.
+  }
+  const bytes = await fetch(
+    `https://cdn.jsdelivr.net/npm/${pinned.name}@${pinned.version}/${pinned.file}`,
+  );
+  await store(bytes);
+  await trimPackageCache(cache, quotaBytes, cached).catch(() => undefined);
+  return bytes;
+}
+
+/** Deletes the oldest cached files until the cache fits its quota. */
+export async function trimPackageCache(
+  cache: string,
+  quotaBytes: number,
+  keep: string,
+): Promise<void> {
+  const files: { path: string; size: number; time: number }[] = [];
+  const walk = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) await walk(path);
+      else if (entry.isFile() && !entry.name.endsWith(".sha256")) {
+        const info = await stat(path);
+        files.push({ path, size: info.size, time: info.mtimeMs });
+      }
+    }
+  };
+  await walk(cache);
+  let total = files.reduce((sum, file) => sum + file.size, 0);
+  for (const file of files.sort((a, b) => a.time - b.time)) {
+    if (total <= quotaBytes) return;
+    if (file.path === keep) continue;
+    await rm(file.path, { force: true });
+    await rm(`${file.path}.sha256`, { force: true });
+    total -= file.size;
   }
 }
 

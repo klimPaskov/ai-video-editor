@@ -123,11 +123,12 @@
               <option value="gemini">Gemini API</option>
             </select>
             <p id="claude-context-notice">
-              Requests and the project information Claude reads through the
-              editor's tools are sent to Anthropic. Speech work may include
-              bounded local transcript text; earlier messages in this
-              conversation are included in later turns. Source audio and video
-              stay on this device.
+              Requests and what Claude reads are sent to Anthropic: project and
+              timeline details, the whole edited transcript (Claude keeps it in
+              its project workspace), and small pictures of your edit that it
+              asks to see, which show your footage. Earlier messages in this
+              conversation are included in later turns. Your source audio and
+              video files stay on this device.
             </p>
             <p id="claude-api-notice" hidden>
               This Claude Code sign-in uses Anthropic Console API billing, so
@@ -135,9 +136,11 @@
             </p>
             <p id="codex-context-notice" hidden>
               Requests and the project information Codex reads are sent to
-              OpenAI. Speech work may include bounded local transcript text;
+              OpenAI, including small pictures of your edit when it asks to see
+              them. Speech work may include bounded local transcript text;
               transcript pages may remain in this conversation and be included
-              in later turns. Source audio and video stay on this device.
+              in later turns. Your source audio and video files stay on this
+              device.
             </p>
             <p id="codex-thread-status" role="status"></p>
             <div id="codex-thread-messages" aria-live="polite"></div>
@@ -729,8 +732,9 @@
             Claude runs through Claude Code on this device. You sign in through
             Anthropic in your browser; this app never receives your password or
             sign-in token. During a turn you start, Claude may receive your
-            request, project and timeline details and bounded local transcript
-            pages. Source audio and video stay on this device.
+            request, project and timeline details, the whole edited transcript
+            and small pictures of your edit (which show your footage). Your
+            source audio and video files stay on this device.
           </p>
           <div class="codex-actions">
             <button type="button" id="claude-sign-in" hidden>

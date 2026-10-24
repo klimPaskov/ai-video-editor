@@ -40,6 +40,104 @@ export interface CompositionFinding {
   times_us?: number[];
 }
 
+/** What the stage hands back for a composition after a seek (validated). */
+export interface StageAnswer {
+  ready: boolean;
+  error: string | null;
+  duration: number | null;
+  report: {
+    findings: StageTextFinding[];
+    animations: number;
+    seek: boolean;
+    timelines: string[];
+    declared_size: { width: number; height: number } | null;
+  } | null;
+}
+
+const findingCodes: readonly StageTextFinding["code"][] = [
+  "text_cut_off",
+  "text_outside_safe_area",
+  "text_too_small",
+];
+
+function plainText(value: unknown, max: number): string | null {
+  return typeof value === "string"
+    ? value.replace(/[\u0000-\u001f\u007f]/gu, " ").slice(0, max)
+    : null;
+}
+
+function bounded(value: unknown, min: number, max: number): number | null {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= min &&
+    value <= max
+    ? value
+    : null;
+}
+
+/**
+ * The composition page runs model-authored (and package) code that can post
+ * any message, and what it says ends up in Claude's tool result. Only known
+ * fields of the expected types and sizes pass; everything else is dropped.
+ */
+export function cleanAnswer(raw: unknown): StageAnswer | null {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw))
+    return null;
+  const answer = raw as Record<string, unknown>;
+  let report: StageAnswer["report"] = null;
+  const given = answer.report;
+  if (given !== null && typeof given === "object" && !Array.isArray(given)) {
+    const source = given as Record<string, unknown>;
+    const findings: StageTextFinding[] = [];
+    if (Array.isArray(source.findings))
+      for (const item of source.findings.slice(0, 24)) {
+        if (item === null || typeof item !== "object") continue;
+        const finding = item as Record<string, unknown>;
+        const code = findingCodes.find((known) => known === finding.code);
+        const text = plainText(finding.text, 60);
+        const box = Array.isArray(finding.box)
+          ? finding.box.slice(0, 4).map((part) => bounded(part, -1e6, 1e6))
+          : [];
+        if (!code || text === null || box.length !== 4 || box.includes(null))
+          continue;
+        const font = bounded(finding.font_px, 0, 10_000);
+        findings.push({
+          code,
+          text,
+          box: box as [number, number, number, number],
+          ...(font !== null ? { font_px: font } : {}),
+        });
+      }
+    const size =
+      source.declared_size !== null &&
+      typeof source.declared_size === "object" &&
+      !Array.isArray(source.declared_size)
+        ? (source.declared_size as Record<string, unknown>)
+        : null;
+    const width = size ? bounded(size.width, 1, 100_000) : null;
+    const height = size ? bounded(size.height, 1, 100_000) : null;
+    report = {
+      findings,
+      animations: bounded(source.animations, 0, 100_000) ?? 0,
+      seek: source.seek === true,
+      timelines: Array.isArray(source.timelines)
+        ? source.timelines
+            .slice(0, 16)
+            .map((name) => plainText(name, 64))
+            .filter((name): name is string => name !== null)
+        : [],
+      declared_size:
+        width !== null && height !== null ? { width, height } : null,
+    };
+  }
+  return {
+    ready: answer.ready === true,
+    error: plainText(answer.error, 300),
+    duration: bounded(answer.duration, 0, 86_400),
+    report,
+  };
+}
+
 const messages: Record<StageTextFinding["code"], string> = {
   text_cut_off: "Text is cut off by the frame edge.",
   text_outside_safe_area:

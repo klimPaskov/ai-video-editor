@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { redactStrings } from "./private-notes.ts";
 import { dirname, join, resolve } from "node:path";
 import {
   assertClaudeSelection,
@@ -30,6 +31,7 @@ import {
 import {
   ClaudeTurn,
   claudeBuiltInTools,
+  type ClaudeTurnOutcome,
 } from "../../../packages/claude-bridge/src/turn.ts";
 import { claudeAgents } from "./claude-guides.ts";
 import {
@@ -858,6 +860,42 @@ export class DesktopClaude {
   }
 
   /** The project's workspace directory. */
+  /**
+   * A private note of why a turn failed (not a stop): the result event's
+   * fields and the end of the process's error output, with personal paths
+   * replaced; never shown. A completed turn removes the earlier note. This
+   * is diagnostics only and can never fail or delay a turn.
+   */
+  private async noteTurnOutcome(
+    outcome: ClaudeTurnOutcome,
+    kind: ClaudeRunKind,
+    model: string,
+    turn: ClaudeTurn,
+  ): Promise<void> {
+    const file = join(this.root, "last-turn-failure.json");
+    try {
+      if (outcome.kind === "completed") {
+        await rm(file, { force: true });
+        return;
+      }
+      if (outcome.issue === "stopped" || outcome.issue === "resume") return;
+      await writePrivate(
+        file,
+        JSON.stringify({
+          at: new Date().toISOString(),
+          issue: outcome.issue,
+          kind,
+          model,
+          ...(redactStrings(turn.diagnostics(), [
+            { path: this.root, as: "<claude data>" },
+          ]) as Record<string, unknown>),
+        }),
+      );
+    } catch {
+      // Diagnostics are best effort.
+    }
+  }
+
   workspaceFor(projectId: string): string {
     if (!projectIdPattern.test(projectId)) throw new Error("Invalid project");
     return join(this.root, "workspaces", projectId);
@@ -1199,6 +1237,7 @@ export class DesktopClaude {
             ...turn.projection.violationDetail,
           }),
         ).catch(() => undefined);
+      await this.noteTurnOutcome(outcome, input.kind, selection.model, turn);
       await rm(mcpConfigPath, { force: true }).catch(() => undefined);
       if (turn.projection.ready) session.stored.started = true;
       if (outcome.kind === "failed" && outcome.issue === "resume") {

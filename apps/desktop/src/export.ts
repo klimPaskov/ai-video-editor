@@ -30,6 +30,7 @@ import {
   type ExportView,
 } from "../../../packages/domain/src/export-view.ts";
 import { MediaError } from "../../../packages/media-engine/src/process.ts";
+import { recordExportFolder, redactPaths } from "./private-notes.ts";
 import { draftWindowClips } from "../../../packages/domain/src/short-clips.ts";
 import {
   windowZoomIntervals,
@@ -345,6 +346,12 @@ export class DesktopExports {
       result: null,
       message: null,
     });
+    // Remember where the export writes, so staging folders an interrupted
+    // export leaves behind can be swept at the next start.
+    void recordExportFolder(
+      this.options.recordRoot,
+      path.dirname(job.outputPath),
+    ).catch(() => undefined);
     void this.run(job, plan, replace);
     return this.get(projectId);
   }
@@ -438,6 +445,10 @@ export class DesktopExports {
     if (this.job !== job) return;
     this.job = null;
     this.lastOutput = job.outputPath;
+    // A success replaces the note of an earlier failure.
+    void rm(path.join(this.options.recordRoot, "last-failure.json"), {
+      force: true,
+    }).catch(() => undefined);
     this.set({
       status: "completed",
       projectId: job.projectId,
@@ -532,7 +543,12 @@ export class DesktopExports {
               profile,
               name: error instanceof Error ? error.name : typeof error,
               code: error instanceof MediaError ? error.code : null,
-              detail: describe(error).slice(0, 12_000),
+              detail: redactPaths(describe(error), [
+                {
+                  path: path.dirname(this.options.recordRoot),
+                  as: "<app data>",
+                },
+              ]).slice(0, 12_000),
             }),
             { mode: 0o600 },
           ),

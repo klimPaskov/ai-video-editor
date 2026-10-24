@@ -10,9 +10,10 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import test from "node:test";
 import {
+  looksSecret,
   mirrorUserSkills,
   userSkillsDirectory,
 } from "../../apps/desktop/src/claude-skills.ts";
@@ -94,6 +95,47 @@ test("the user's skills are mirrored as a plugin, regular files only", async () 
       "changed",
     );
     assert.equal(await mirrorUserSkills(join(root, "missing"), target), null);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("secret-looking files and version control folders are never mirrored", async () => {
+  const root = await mkdtemp(join(tmpdir(), "claude-skills-"));
+  try {
+    const skill = join(root, "skills", "deploy");
+    await mkdir(join(skill, ".git"), { recursive: true });
+    await mkdir(join(skill, "node_modules", "pkg"), { recursive: true });
+    await mkdir(join(skill, "scripts"), { recursive: true });
+    const kept = ["SKILL.md", "scripts/build.sh", "notes.md", "tokenizer.js"];
+    const dropped = [
+      ".env",
+      ".env.production",
+      "server.pem",
+      "deploy.key",
+      "id_rsa",
+      "credentials.json",
+      "aws-secrets.txt",
+      "api_key.txt",
+      ".npmrc",
+      ".git/config",
+      "node_modules/pkg/index.js",
+    ];
+    for (const name of [...kept, ...dropped])
+      await writeFile(join(skill, name), `content of ${name}`);
+    const target = join(root, "plugin");
+    await mirrorUserSkills(join(root, "skills"), target);
+    const mirrored = (
+      await readdir(join(target, "skills", "deploy"), { recursive: true })
+    )
+      .map((path) => path.split(sep).join("/"))
+      .sort();
+    for (const name of kept) assert.ok(mirrored.includes(name), name);
+    for (const name of dropped) assert.ok(!mirrored.includes(name), name);
+    assert.ok(!mirrored.some((path) => path.startsWith(".git/")));
+    assert.ok(!mirrored.some((path) => path.startsWith("node_modules/")));
+    assert.equal(looksSecret("tokenizer.js"), false);
+    assert.equal(looksSecret("My Secret Plan.md"), true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
