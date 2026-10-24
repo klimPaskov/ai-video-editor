@@ -12,6 +12,7 @@ import {
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
@@ -143,6 +144,7 @@ const electron = await _electron.launch({
 });
 try {
   const page = await electron.firstWindow();
+  await openDisclosures(page);
   assert.equal(page.url(), "ai-video-editor://app/index.html");
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   assert.ok(

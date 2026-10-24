@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
 import {
   assertNativeTestEnvironment,
   insideGuestWorkspace,
@@ -209,6 +210,7 @@ try {
     timeout: 30000,
   });
   const page = await electron.firstWindow();
+  await openDisclosures(page);
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   assert.equal(page.url(), "ai-video-editor://app/index.html");
   await electron.evaluate(({ dialog }, path) => {

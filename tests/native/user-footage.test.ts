@@ -20,6 +20,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
 import type { ElectronApplication, Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { appIdentity } from "../../packages/domain/src/app-identity.ts";
@@ -153,6 +154,7 @@ let electron = await launch();
 try {
   await dialogs(electron, null);
   let page = await electron.firstWindow();
+  await openDisclosures(page);
   mark("import");
   const earlier = await page.evaluate(() => window.desktop.listProjects());
   assert.ok(earlier.ok);
@@ -328,6 +330,7 @@ try {
   electron = await launch();
   await dialogs(electron, null);
   page = await electron.firstWindow();
+  await openDisclosures(page);
   await page.locator(`#projects [data-project-id="${current.id}"]`).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
   current = await project(page);

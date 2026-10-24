@@ -14,6 +14,7 @@ import { createReadStream } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { _electron, expect, type Page } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
 import { assertTwoSourceInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import type { TranscriptionProjectView } from "../../packages/domain/src/transcription.ts";
 import { sha256 } from "../../packages/media-engine/src/lossless.ts";
@@ -140,6 +141,7 @@ try {
 
   electron = await launch();
   page = await electron.firstWindow();
+  await openDisclosures(page);
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   assert.equal(page.url(), "ai-video-editor://app/index.html");
   assert.ok(
@@ -391,6 +393,7 @@ try {
   await electron.close();
   electron = await launch();
   page = await electron.firstWindow();
+  await openDisclosures(page);
   const reopenedCard = page.locator(
     `#projects [data-project-id="${project.id}"]`,
   );

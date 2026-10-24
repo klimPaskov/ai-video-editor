@@ -230,7 +230,15 @@ const stageSelect = element<HTMLSelectElement>("stage-select");
 const stageButtons = new Map<ProjectStage, HTMLButtonElement>();
 for (const stage of Object.keys(stageLabels) as ProjectStage[]) {
   const button = document.createElement("button");
-  button.textContent = stageLabels[stage];
+  // The name stays the stage's own; the number is decoration.
+  button.setAttribute("aria-label", stageLabels[stage]);
+  const number = document.createElement("span");
+  number.className = "step-number";
+  number.setAttribute("aria-hidden", "true");
+  const text = document.createElement("span");
+  text.setAttribute("aria-hidden", "true");
+  text.textContent = stageLabels[stage];
+  button.append(number, text);
   button.addEventListener("click", () => {
     void navigate(stage);
   });
@@ -256,11 +264,17 @@ function renderStage(): void {
   addFootageButton.disabled = addingFootage || navigating;
   stageSelect.disabled = navigating;
   if (activeProject) stageSelect.value = activeProject.stage;
+  const order = Object.keys(stageLabels);
+  const current = activeProject ? order.indexOf(activeProject.stage) : -1;
   for (const [stage, button] of stageButtons) {
     button.disabled = navigating;
+    const index = order.indexOf(stage);
     if (activeProject?.stage === stage)
       button.setAttribute("aria-current", "step");
     else button.removeAttribute("aria-current");
+    button.classList.toggle("done", index < current);
+    const number = button.querySelector(".step-number");
+    if (number) number.textContent = index < current ? "✓" : String(index + 1);
   }
   renderEditTools();
   renderDraftIntegrityAction();
