@@ -14,6 +14,8 @@ Also disable the pinned runtime's default-on `hooks`, shadow `skill_search`, and
 - Validate every IPC sender and payload.
 - Expose only narrow preload functions.
 - Never render arbitrary remote HTML inside a privileged view.
+- Release builds (`--release`, ADR 0022) set Electron fuses: the app loads only from its ASAR with embedded integrity validation, the Node inspector flags, `NODE_OPTIONS` and extra `file://` privileges are off. `RunAsNode` stays on because the editor-tool child processes are this executable run with `ELECTRON_RUN_AS_NODE`. Test builds keep the inspector for Playwright. The ASAR integrity fuse is enforced by Electron on Windows and macOS only.
+- Bundled FFmpeg/ffprobe and the Codex client are verified against a packaged manifest (size and SHA-256 of every file) before use; the executable path is never taken from the environment, renderer or PATH on Windows. Install folders are user-writable, so this detects damage and accidental replacement; it does not defend against an attacker who can already write as the user.
 - Screen capture never outlives the app: each FFmpeg capture runs under a supervisor that finishes it when the app's pipe closes or the app process goes away.
 - The recording area picker is a separate sandboxed window on packaged `region.html` whose preload can only send one rectangle (fractions of the display) or a cancellation; main accepts it only from that window's own page and refuses areas outside the display.
 

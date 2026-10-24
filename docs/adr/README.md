@@ -21,3 +21,4 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0016: Luna/high Codex subscription default and current official runtime
 - 0017: AI Video Editor product and repository identity
 - 0018: Claude account sign-in as the default AI connection through the user's unmodified Claude Code CLI; signed-in acceptance pending
+- 0022: Windows release: cross-packaged win32-x64, bundled LGPL FFmpeg, Windows Codex client, per-user NSIS installer, release fuses, unsigned until a certificate exists
