@@ -12,14 +12,47 @@ import type { WindowsPins } from "./sidecars.ts";
  * package-lock.json already pins.
  */
 
-interface LockEntry {
+export interface LockEntry {
+  name?: string;
   version?: string;
   resolved?: string;
   integrity?: string;
   link?: boolean;
+  dependencies?: Record<string, string>;
 }
-interface Lock {
+export interface Lock {
+  name?: string;
+  version?: string;
+  lockfileVersion?: number;
+  requires?: boolean;
   packages: Record<string, LockEntry>;
+}
+
+/**
+ * A lockfile for the staging project, cut from the root lockfile: the same
+ * pinned entries (including the optional per-platform packages), minus the
+ * workspace packages and with a root entry that lists only production
+ * dependencies. `npm ci` then installs exactly what the root lockfile pins.
+ */
+export function stageLockfile(
+  rootLock: Lock,
+  dependencies: Record<string, string>,
+): Lock {
+  assert.equal(rootLock.lockfileVersion, 3, "Unsupported lockfile version");
+  const packages: Record<string, LockEntry> = {
+    "": { name: "ai-video-editor", version: "0.0.0", dependencies },
+  };
+  for (const [key, entry] of Object.entries(rootLock.packages)) {
+    if (!key.startsWith("node_modules/") || entry.link) continue;
+    packages[key] = entry;
+  }
+  return {
+    name: "ai-video-editor",
+    version: "0.0.0",
+    lockfileVersion: 3,
+    requires: true,
+    packages,
+  };
 }
 
 function packageName(lockKey: string): string {
@@ -97,19 +130,26 @@ export async function stageWindowsDependencies(
   ) as { dependencies?: Record<string, string> };
   assert.ok(rootPackage.dependencies, "No production dependencies to stage");
   await mkdir(stageDirectory, { recursive: true });
+  const rootLock = JSON.parse(
+    await readFile(join(root, "package-lock.json"), "utf8"),
+  ) as Lock;
   await writeFile(
     join(stageDirectory, "package.json"),
     JSON.stringify({
-      name: "ai-video-editor-windows-dependencies",
+      name: "ai-video-editor",
       version: "0.0.0",
       private: true,
       dependencies: rootPackage.dependencies,
     }),
   );
+  await writeFile(
+    join(stageDirectory, "package-lock.json"),
+    JSON.stringify(stageLockfile(rootLock, rootPackage.dependencies), null, 2),
+  );
   execFileSync(
     process.platform === "win32" ? "npm.cmd" : "npm",
     [
-      "install",
+      "ci",
       "--omit=dev",
       "--os=win32",
       "--cpu=x64",
@@ -129,9 +169,6 @@ export async function stageWindowsDependencies(
       join(stageDirectory, "node_modules/.package-lock.json"),
       "utf8",
     ),
-  ) as Lock;
-  const rootLock = JSON.parse(
-    await readFile(join(root, "package-lock.json"), "utf8"),
   ) as Lock;
   const problems = unpinnedPackages(staged, rootLock);
   assert.deepEqual(

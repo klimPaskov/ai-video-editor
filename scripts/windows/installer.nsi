@@ -115,7 +115,7 @@ Section "Install"
   ${EndIf}
 
   SetOutPath "$INSTDIR"
-  File /r "${SOURCE_DIR}\*.*"
+  File /r "${SOURCE_DIR}/*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}.lnk" "$INSTDIR\${EXE_NAME}" "" "$INSTDIR\${EXE_NAME}" 0

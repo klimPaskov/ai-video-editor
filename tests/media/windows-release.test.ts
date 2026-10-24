@@ -22,7 +22,9 @@ import {
 import {
   isExcludedPath,
   keepFile,
+  stageLockfile,
   unpinnedPackages,
+  type Lock,
 } from "../../scripts/windows/dependencies.ts";
 import { integrityMatches } from "../../scripts/windows/download.ts";
 import {
@@ -455,4 +457,28 @@ test("NSIS strings escape dollar signs and reject quotes; versions become quad f
   assert.equal(versionQuad("0.0.1"), "0.0.1.0");
   assert.equal(versionQuad("1.2.3-beta.1"), "1.2.3.0");
   assert.throws(() => versionQuad("one"));
+});
+
+test("the staging lockfile is the root lockfile's own pins for production dependencies only", async () => {
+  const rootLock = JSON.parse(
+    await readFile(join(root, "package-lock.json"), "utf8"),
+  ) as Lock;
+  const staged = stageLockfile(rootLock, {
+    "@huggingface/transformers": "4.3.0",
+  });
+  assert.deepEqual(staged.packages[""]?.dependencies, {
+    "@huggingface/transformers": "4.3.0",
+  });
+  // Pinned Windows native packages are present; workspace links are not.
+  assert.ok(staged.packages["node_modules/@img/sharp-win32-x64"]?.integrity);
+  assert.ok(staged.packages["node_modules/onnxruntime-node"]?.integrity);
+  for (const key of Object.keys(staged.packages))
+    assert.ok(key === "" || key.startsWith("node_modules/"), key);
+  assert.ok(
+    !Object.keys(staged.packages).some((key) =>
+      key.includes("@ai-video-editor/"),
+    ),
+  );
+  // Every staged entry is the root entry itself, so npm ci cannot drift.
+  assert.deepEqual(unpinnedPackages(staged, rootLock), []);
 });
