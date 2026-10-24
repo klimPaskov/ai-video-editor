@@ -1,3 +1,5 @@
+import { assertThemeChoice, type ThemeChoice } from "./theme.ts";
+
 export interface Preferences {
   interfaceScale: 1 | 1.25 | 1.5 | 2;
   /**
@@ -7,6 +9,8 @@ export interface Preferences {
    * to material free of copyright restrictions.
    */
   assetPolicy?: AssetPolicy;
+  /** The interface theme (ADR 0024); Light Canvas when absent. */
+  theme?: ThemeChoice;
 }
 
 export type AssetPolicy = "any" | "copyright_free";
@@ -20,7 +24,8 @@ export function assertPreferences(
     typeof value !== "object" ||
     Array.isArray(value) ||
     Object.keys(value).some(
-      (key) => key !== "interfaceScale" && key !== "assetPolicy",
+      (key) =>
+        key !== "interfaceScale" && key !== "assetPolicy" && key !== "theme",
     ) ||
     !Object.hasOwn(value, "interfaceScale") ||
     !("interfaceScale" in value) ||
@@ -33,6 +38,7 @@ export function assertPreferences(
     !assetPolicies.includes(value.assetPolicy as AssetPolicy)
   )
     throw new Error("Choose which material Claude may use.");
+  if ("theme" in value) assertThemeChoice(value.theme);
 }
 
 /** The asset policy in effect: any material unless the user chose otherwise. */

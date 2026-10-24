@@ -4,6 +4,10 @@
 
 The app should feel focused, direct, and easy to learn. Use current creator-tool patterns as reference for restraint and workflow clarity. Do not copy another product's branding, wording, assets, or exact composition.
 
+## Themes (ADR 0024)
+
+Light Canvas is the default; Studio Dark, Cinematic (a different layout: the video fills the window, controls float over it), Paper and Custom are chosen in Settings. Colours come from CSS variables on the document element (`data-theme`, `data-layout`); components use only variables, so every theme and every custom palette applies everywhere. Each step shows its main action and puts the rest under a disclosure.
+
 ## Window structure
 
 The normal project window has four areas:

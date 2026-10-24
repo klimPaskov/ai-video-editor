@@ -26,3 +26,4 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0021: the editor is a harness for Claude: a per-project workspace and Claude Code's confined file and helper tools (amends 0018)
 - 0022: Windows release: cross-packaged win32-x64, bundled LGPL FFmpeg, Windows Codex client, per-user NSIS installer, release fuses, unsigned until a certificate exists
 - 0023: music and sound effects as undoable draft layers from project audio files, mixed at export
+- 0024: a minimal interface with selectable themes (Light Canvas default; Cinematic changes the layout)

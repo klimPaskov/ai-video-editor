@@ -271,6 +271,13 @@
             <p class="timeline-summary"></p>
           </div>
           <div class="stage-panel">
+            <div id="next-step" class="next-step" hidden>
+              <button
+                id="next-step-button"
+                class="primary large"
+                type="button"
+              ></button>
+            </div>
             <section id="auto-edit-actions" class="auto-edit-actions" hidden>
               <div id="auto-all" class="auto-all">
                 <p class="auto-all-lead">
@@ -780,6 +787,40 @@
           </button>
         </nav>
         <div id="appearance-settings">
+          <div class="theme-field">
+            <span id="theme-label" class="field-label">Theme</span>
+            <div
+              id="theme-tiles"
+              class="theme-tiles"
+              role="radiogroup"
+              aria-labelledby="theme-label"
+            ></div>
+            <fieldset id="custom-theme" class="custom-theme" hidden>
+              <legend>Custom colours</legend>
+              <label for="custom-background"
+                >Background <input id="custom-background" type="color"
+              /></label>
+              <label for="custom-surface"
+                >Cards <input id="custom-surface" type="color"
+              /></label>
+              <label for="custom-text"
+                >Text <input id="custom-text" type="color"
+              /></label>
+              <label for="custom-accent"
+                >Accent <input id="custom-accent" type="color"
+              /></label>
+              <label for="custom-layout"
+                >Layout
+                <select id="custom-layout">
+                  <option value="classic">Classic</option>
+                  <option value="cinematic">
+                    Cinematic (video fills the window)
+                  </option>
+                </select></label
+              >
+              <p id="custom-problem" role="alert" hidden></p>
+            </fieldset>
+          </div>
           <label for="interface-scale">Interface size</label
           ><select id="interface-scale">
             <option value="1">100%</option>

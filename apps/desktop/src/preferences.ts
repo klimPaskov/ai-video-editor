@@ -80,6 +80,7 @@ export class PreferencesStore {
       return {
         interfaceScale: value.interfaceScale,
         ...(value.assetPolicy ? { assetPolicy: value.assetPolicy } : {}),
+        ...(value.theme ? { theme: structuredClone(value.theme) } : {}),
       };
     } finally {
       await handle.close();
@@ -100,6 +101,7 @@ export class PreferencesStore {
     const snapshot: Preferences = {
       interfaceScale: value.interfaceScale,
       ...(value.assetPolicy ? { assetPolicy: value.assetPolicy } : {}),
+      ...(value.theme ? { theme: structuredClone(value.theme) } : {}),
     };
     return this.serialize(async () => {
       let staged: string | undefined;

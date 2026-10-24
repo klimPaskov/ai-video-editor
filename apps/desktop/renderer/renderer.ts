@@ -19,6 +19,13 @@ import { setupExportPanel } from "./export-panel.ts";
 import { setupPlayback } from "./playback.ts";
 import { setupMagicPanel } from "./magic-panel.ts";
 import { setupAutoPanel } from "./auto-panel.ts";
+import {
+  applyRememberedTheme,
+  applyTheme,
+  rememberTheme,
+  setupThemeSettings,
+} from "./theme-settings.ts";
+import { defaultThemeChoice } from "../../../packages/domain/src/theme.ts";
 import { setupRecordPanel } from "./record-panel.ts";
 import { reconcileProjectDraft } from "./project-draft.ts";
 import { pollTranscriptionView } from "./transcription-state.ts";
@@ -53,6 +60,7 @@ import type {
   TranscriptionProjectView,
   TranscriptionSourceResult,
 } from "../../../packages/domain/src/transcription.ts";
+applyRememberedTheme();
 declare global {
   interface Window {
     desktop: DesktopBridge;
@@ -227,6 +235,11 @@ const stageLabels: Record<ProjectStage, string> = {
   review: "Review",
   export: "Export",
 };
+const nextStepButton = element<HTMLButtonElement>("next-step-button");
+let nextStepTarget: ProjectStage | undefined;
+nextStepButton.addEventListener("click", () => {
+  if (nextStepTarget) void navigate(nextStepTarget);
+});
 const stageSelect = element<HTMLSelectElement>("stage-select");
 const stageButtons = new Map<ProjectStage, HTMLButtonElement>();
 for (const stage of Object.keys(stageLabels) as ProjectStage[]) {
@@ -277,6 +290,17 @@ function renderStage(): void {
     const number = button.querySelector(".step-number");
     if (number) number.textContent = index < current ? "✓" : String(index + 1);
   }
+  // One clear way forward from the steps that have nothing else to do.
+  const forward =
+    activeProject?.stage === "record_import"
+      ? (["auto_edit", "Continue to Auto Edit"] as const)
+      : activeProject?.stage === "review"
+        ? (["export", "Continue to Export"] as const)
+        : null;
+  element("next-step").hidden = !forward;
+  nextStepButton.textContent = forward?.[1] ?? "";
+  nextStepButton.disabled = navigating;
+  nextStepTarget = forward?.[0];
   renderEditTools();
   renderDraftIntegrityAction();
   renderTranscriptionActions();
@@ -3091,6 +3115,7 @@ const settingsButton = element<HTMLButtonElement>("settings");
 const settingsDialog = element<HTMLDialogElement>("settings-dialog");
 const scaleSelect = element<HTMLSelectElement>("interface-scale");
 const assetPolicySelect = element<HTMLSelectElement>("asset-policy");
+const themeSettings = setupThemeSettings();
 // The material Claude may use is saved as soon as it changes.
 assetPolicySelect.addEventListener("change", async () => {
   assetPolicySelect.disabled = true;
@@ -3768,6 +3793,7 @@ async function openSettings(): Promise<void> {
   resetSettingsSection();
   settingsDialog.showModal();
   scaleSelect.disabled = true;
+  themeSettings.enable(false);
   element("close-settings").focus();
   try {
     const reply = await window.desktop.getPreferences();
@@ -3775,6 +3801,8 @@ async function openSettings(): Promise<void> {
     if (!reply.ok) throw new Error("load");
     scaleSelect.value = String(reply.value.interfaceScale);
     assetPolicySelect.value = reply.value.assetPolicy ?? "any";
+    themeSettings.load(reply.value.theme);
+    themeSettings.enable(true);
     scaleSelect.disabled = false;
     element<HTMLButtonElement>("save-settings").disabled = false;
     if (!element("appearance-settings").hidden) scaleSelect.focus();
@@ -3800,6 +3828,7 @@ settingsDialog.addEventListener("cancel", (event) => {
   if (savingPreferences) event.preventDefault();
 });
 settingsDialog.addEventListener("close", () => {
+  themeSettings.revert();
   settingsLoad++;
   settingsButton.disabled = false;
   if (restoreInspector && selected) setInspector(true);
@@ -3831,17 +3860,25 @@ async function savePreferences(): Promise<void> {
     control.disabled = true;
   });
   try {
-    // Keep the asset choice; this form saves the interface size.
+    // This form saves the interface size, the material choice and the theme.
+    const theme = themeSettings.current();
+    if (theme.problem) {
+      message.textContent = theme.problem;
+      message.hidden = false;
+      return;
+    }
     const value = {
       interfaceScale: Number(scaleSelect.value),
       assetPolicy: assetPolicySelect.value,
+      theme: theme.choice,
     };
     assertPreferences(value);
     const reply = await window.desktop.setPreferences(value);
     if (!reply.ok) throw new Error("save");
+    themeSettings.saved(theme.choice);
     savingPreferences = false;
     settingsDialog.close();
-    showToast("Interface size saved");
+    showToast("Settings saved");
   } catch {
     message.textContent =
       "Settings could not be saved. Your previous interface size is unchanged. Try again.";
@@ -3942,6 +3979,12 @@ void window.desktop
       showError(
         "Saved interface settings could not be loaded. Open Settings to retry.",
       );
+    else {
+      const theme = reply.value.theme ?? defaultThemeChoice;
+      applyTheme(theme);
+      rememberTheme(theme);
+      themeSettings.saved(theme);
+    }
   })
   .catch(() =>
     showError(

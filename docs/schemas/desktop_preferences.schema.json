@@ -5,12 +5,95 @@
   "description": "Stored atomically in the main-owned userData/preferences/preferences.json. Missing file defaults to 100%; malformed settings are reported and retained. No project or media data is stored here.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["interfaceScale"],
+  "required": [
+    "interfaceScale"
+  ],
   "properties": {
-    "interfaceScale": { "type": "number", "enum": [1, 1.25, 1.5, 2] },
+    "interfaceScale": {
+      "type": "number",
+      "enum": [
+        1,
+        1.25,
+        1.5,
+        2
+      ]
+    },
     "assetPolicy": {
-      "enum": ["any", "copyright_free"],
+      "enum": [
+        "any",
+        "copyright_free"
+      ],
       "description": "Which media Claude may use: any material including copyrighted (the default when absent) or copyright-free material only."
+    },
+    "theme": {
+      "description": "The interface theme (ADR 0024). Light Canvas when absent. A custom theme holds exactly four #rrggbb colours and a layout; the palette is derived from them in the renderer's style sheet. Custom colours must keep text readable (contrast 4.5:1 on the background and cards, 3:1 for white on the accent).",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ],
+          "properties": {
+            "id": {
+              "enum": [
+                "light_canvas",
+                "studio_dark",
+                "paper",
+                "cinematic"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "custom"
+          ],
+          "properties": {
+            "id": {
+              "const": "custom"
+            },
+            "custom": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "background",
+                "surface",
+                "text",
+                "accent",
+                "layout"
+              ],
+              "properties": {
+                "background": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-f]{6}$"
+                },
+                "surface": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-f]{6}$"
+                },
+                "text": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-f]{6}$"
+                },
+                "accent": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-f]{6}$"
+                },
+                "layout": {
+                  "enum": [
+                    "classic",
+                    "cinematic"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

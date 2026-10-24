@@ -1,30 +1,39 @@
 /* AI Video Editor: one dark theme, one accent, an 8 px grid. */
 :root {
-  color-scheme: dark;
-  --bg: #0b0d13;
-  --surface: #12151e;
-  --surface-2: #181c27;
-  --surface-3: #212636;
-  --surface-hover: #272d3f;
-  --border: #252a39;
-  --border-strong: #363d54;
-  --text: #eceef4;
-  --text-2: #a4aabb;
-  --text-3: #767d92;
-  --accent: #6d4aff;
-  --accent-hover: #5c3bef;
-  --accent-text: #c2b3ff;
-  --accent-soft: rgb(123 92 255 / 16%);
-  --danger: #ff6d6d;
-  --danger-text: #ffb1ab;
-  --danger-soft: rgb(255 109 109 / 12%);
-  --record: #ff4d5e;
-  --success: #45d39a;
-  --radius-sm: 8px;
-  --radius: 10px;
-  --radius-lg: 14px;
-  --header: 56px;
-  --focus: #b9a8ff;
+  /* Light Canvas, the default theme (ADR 0024). */
+  color-scheme: light;
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --surface-2: #f1f0ec;
+  --surface-3: #ebeae5;
+  --surface-hover: #e2e0d9;
+  --border: #e4e2dc;
+  --border-strong: #cbc8be;
+  --text: #14161c;
+  --text-2: #484e5e;
+  --text-3: #636a7c;
+  --accent: #1766f0;
+  --accent-hover: #0f55d4;
+  --accent-text: #0b57d0;
+  --accent-soft: rgb(23 102 240 / 10%);
+  --on-accent: #ffffff;
+  --danger: #d92d3a;
+  --danger-text: #b3202c;
+  --danger-soft: rgb(217 45 58 / 10%);
+  --record: #e5303f;
+  --success: #14835a;
+  --shadow: 0 1px 2px rgb(20 22 28 / 6%), 0 10px 28px rgb(20 22 28 / 7%);
+  --shadow-lg: 0 24px 70px rgb(20 22 28 / 22%);
+  --scrim: rgb(20 22 28 / 40%);
+  --clip: #1766f0;
+  --clip-current: #0f55d4;
+  --clip-second: #5b7fb8;
+  --clip-text: #ffffff;
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --header: 64px;
+  --focus: #1766f0;
   font-family:
     "Inter",
     "Segoe UI Variable Text",
@@ -37,6 +46,121 @@
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+}
+:root[data-theme="studio_dark"] {
+  color-scheme: dark;
+  --bg: #0b0d13;
+  --surface: #12151e;
+  --surface-2: #181c27;
+  --surface-3: #212636;
+  --surface-hover: #272d3f;
+  --border: #252a39;
+  --border-strong: #363d54;
+  --text: #eceef4;
+  --text-2: #a4aabb;
+  --text-3: #8a91a6;
+  --accent: #6d4aff;
+  --accent-hover: #5c3bef;
+  --accent-text: #c2b3ff;
+  --accent-soft: rgb(123 92 255 / 16%);
+  --on-accent: #ffffff;
+  --danger: #ff6d6d;
+  --danger-text: #ffb1ab;
+  --danger-soft: rgb(255 109 109 / 12%);
+  --record: #ff4d5e;
+  --success: #45d39a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 28px rgb(0 0 0 / 28%);
+  --shadow-lg: 0 24px 80px rgb(0 0 0 / 55%);
+  --scrim: rgb(4 5 9 / 72%);
+  --clip: #43349a;
+  --clip-current: #5a49bf;
+  --clip-second: #2a529c;
+  --clip-text: #dcd4ff;
+  --focus: #b9a8ff;
+}
+:root[data-theme="paper"] {
+  color-scheme: light;
+  --bg: #f3ece0;
+  --surface: #fbf7ef;
+  --surface-2: #f1e9db;
+  --surface-3: #e9dfcd;
+  --surface-hover: #ddd0b8;
+  --border: #e2d6c0;
+  --border-strong: #c9b998;
+  --text: #2a2118;
+  --text-2: #55473a;
+  --text-3: #6f604d;
+  --accent: #b5532a;
+  --accent-hover: #9a4420;
+  --accent-text: #8f3d1a;
+  --accent-soft: rgb(181 83 42 / 12%);
+  --on-accent: #ffffff;
+  --danger: #c0392b;
+  --danger-text: #a02a1e;
+  --danger-soft: rgb(192 57 43 / 10%);
+  --record: #c0392b;
+  --success: #2e7d4f;
+  --shadow: 0 1px 2px rgb(42 33 24 / 8%), 0 10px 28px rgb(42 33 24 / 8%);
+  --shadow-lg: 0 24px 70px rgb(42 33 24 / 28%);
+  --scrim: rgb(42 33 24 / 40%);
+  --clip: #b5532a;
+  --clip-current: #9a4420;
+  --clip-second: #8a6d4a;
+  --clip-text: #ffffff;
+  --focus: #b5532a;
+}
+:root[data-theme="cinematic"] {
+  color-scheme: dark;
+  --bg: #07080b;
+  --surface: #14161c;
+  --surface-2: #1b1e26;
+  --surface-3: #242833;
+  --surface-hover: #2d3240;
+  --border: #272a34;
+  --border-strong: #3a3f4e;
+  --text: #f2f2f4;
+  --text-2: #b6b8c3;
+  --text-3: #8f929f;
+  --accent: #c8481c;
+  --accent-hover: #b03c14;
+  --accent-text: #ffb089;
+  --accent-soft: rgb(232 96 45 / 18%);
+  --on-accent: #ffffff;
+  --danger: #ff6d6d;
+  --danger-text: #ffb1ab;
+  --danger-soft: rgb(255 109 109 / 12%);
+  --record: #ff4d5e;
+  --success: #45d39a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 36px rgb(0 0 0 / 45%);
+  --shadow-lg: 0 24px 80px rgb(0 0 0 / 65%);
+  --scrim: rgb(4 5 9 / 76%);
+  --clip: #b8431a;
+  --clip-current: #d95a24;
+  --clip-second: #8a5a3a;
+  --clip-text: #fff4ec;
+  --focus: #ffb089;
+}
+/* A custom theme: four colours chosen by the user; the rest is derived. */
+:root[data-theme="custom"] {
+  --bg: var(--c-bg);
+  --surface: var(--c-surface);
+  --surface-2: color-mix(in srgb, var(--c-text) 4%, var(--c-surface));
+  --surface-3: color-mix(in srgb, var(--c-text) 8%, var(--c-surface));
+  --surface-hover: color-mix(in srgb, var(--c-text) 13%, var(--c-surface));
+  --border: color-mix(in srgb, var(--c-text) 14%, var(--c-bg));
+  --border-strong: color-mix(in srgb, var(--c-text) 28%, var(--c-bg));
+  --text: var(--c-text);
+  --text-2: color-mix(in srgb, var(--c-text) 78%, var(--c-bg));
+  --text-3: color-mix(in srgb, var(--c-text) 62%, var(--c-bg));
+  --accent: var(--c-accent);
+  --accent-hover: color-mix(in srgb, var(--c-accent) 86%, black);
+  --accent-text: color-mix(in srgb, var(--c-accent) 70%, var(--c-text));
+  --accent-soft: color-mix(in srgb, var(--c-accent) 16%, transparent);
+  --clip: var(--c-accent);
+  --clip-current: color-mix(in srgb, var(--c-accent) 86%, black);
+  --clip-second: color-mix(in srgb, var(--c-accent) 55%, var(--c-text));
+  --clip-text: var(--on-accent);
+  --focus: var(--c-accent);
 }
 * {
   box-sizing: border-box;
@@ -133,7 +257,7 @@ summary:focus-visible {
 .primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
 }
 .primary:hover:not(:disabled) {
@@ -333,14 +457,14 @@ main {
   font-size: 16px;
   font-weight: 600;
   background:
-    radial-gradient(120% 140% at 0% 0%, rgb(123 92 255 / 12%), transparent 60%),
+    radial-gradient(120% 140% at 0% 0%, var(--accent-soft), transparent 60%),
     var(--surface);
   border-color: var(--border);
   border-radius: var(--radius-lg);
 }
 .action-tile:hover:not(:disabled) {
   background:
-    radial-gradient(120% 140% at 0% 0%, rgb(123 92 255 / 20%), transparent 60%),
+    radial-gradient(120% 140% at 0% 0%, var(--accent-soft), transparent 70%),
     var(--surface-2);
   border-color: var(--border-strong);
 }
@@ -455,8 +579,7 @@ main {
   display: block;
   aspect-ratio: 16 / 9;
   background:
-    linear-gradient(135deg, rgb(123 92 255 / 18%), rgb(79 124 255 / 6%)),
-    var(--surface-2);
+    linear-gradient(135deg, var(--accent-soft), transparent), var(--surface-2);
   overflow: hidden;
 }
 .thumb canvas {
@@ -698,10 +821,10 @@ details.more[open] {
   border-color: transparent;
 }
 .assistant-toggle:hover:not(:disabled) {
-  background: rgb(123 92 255 / 26%);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 .assistant-toggle[aria-expanded="true"] {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
 }
 .workspace {
@@ -888,7 +1011,7 @@ dd {
 .codex-message.user {
   align-self: flex-end;
   background: var(--accent-soft);
-  border-color: rgb(123 92 255 / 28%);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
   border-radius: 12px 12px 4px 12px;
 }
 .codex-message strong {
@@ -1052,24 +1175,25 @@ dd {
   display: flex;
   align-items: center;
   overflow: hidden;
-  color: #dcd4ff;
+  color: var(--clip-text);
   font-size: 11px;
   white-space: nowrap;
   text-overflow: ellipsis;
-  background: #43349a;
+  background: var(--clip);
 }
 .timeline-clip.cut {
   box-shadow: inset 1px 0 0 rgb(10 11 16 / 70%);
 }
 .timeline-clip.second-source {
-  color: #cfe0ff;
-  background: #2a529c;
+  color: var(--clip-text);
+  background: var(--clip-second);
 }
 .timeline-clip.current {
-  background-color: #5a49bf;
+  background-color: var(--clip-current);
 }
 .timeline-clip.second-source.current {
-  background-color: #3a69bf;
+  background-color: var(--clip-current);
+  filter: brightness(1.12);
 }
 .timeline-marks {
   position: absolute;
@@ -1883,7 +2007,7 @@ dd {
   background: var(--surface-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 8px 30px rgb(0 0 0 / 40%);
+  box-shadow: var(--shadow);
 }
 
 /* Dialogs */
@@ -1895,10 +2019,10 @@ dialog {
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
-  box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
+  box-shadow: var(--shadow-lg);
 }
 dialog::backdrop {
-  background: rgb(4 5 9 / 72%);
+  background: var(--scrim);
 }
 .dialog-actions {
   display: flex;
@@ -2285,4 +2409,286 @@ button.large {
 }
 .auto-all p {
   margin: 0;
+}
+
+/* Themes (ADR 0024): refinements shared by every palette */
+:root {
+  --glass: color-mix(in srgb, var(--bg) 74%, transparent);
+}
+button {
+  min-height: 38px;
+  border-radius: var(--radius-sm);
+}
+.primary {
+  border-radius: 999px;
+}
+button.large {
+  min-height: 48px;
+  padding: 0 28px;
+  font-size: 16px;
+}
+.preview,
+.player-bar,
+.timeline-track,
+.auto-edit-actions,
+.transcript-edit-panel,
+.edit-actions,
+.review-actions,
+.export-actions,
+#inspector,
+#codex-drawer,
+.card-grid li {
+  box-shadow: var(--shadow);
+}
+.next-step {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+.auto-all,
+.auto-all-actions {
+  align-items: center;
+}
+.auto-all {
+  text-align: center;
+}
+#auto-all-status,
+#auto-all-error {
+  max-width: 560px;
+}
+
+/* Settings: theme choice */
+.theme-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.field-label {
+  font-weight: 600;
+}
+.theme-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.theme-tile {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+}
+.theme-tile[aria-checked="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.theme-picture {
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--tile-bg);
+  border-radius: 8px;
+}
+.theme-picture > span {
+  position: absolute;
+}
+.tp-bar {
+  left: 8%;
+  right: 8%;
+  top: 8%;
+  height: 7%;
+  background: var(--tile-card);
+  border-radius: 4px;
+}
+.tp-frame {
+  left: 8%;
+  right: 8%;
+  top: 24%;
+  bottom: 32%;
+  background: var(--tile-card);
+  border-radius: 6px;
+}
+.tp-dock {
+  left: 8%;
+  right: 8%;
+  bottom: 9%;
+  height: 12%;
+  background: var(--tile-card);
+  border-radius: 5px;
+}
+.tp-pill {
+  left: 50%;
+  bottom: 12%;
+  width: 30%;
+  height: 7%;
+  transform: translateX(-50%);
+  background: var(--tile-accent);
+  border-radius: 999px;
+}
+.theme-picture[data-floating="true"] .tp-frame {
+  inset: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--tile-accent) 22%, var(--tile-bg));
+}
+.theme-picture[data-floating="true"] .tp-bar {
+  left: 22%;
+  right: 22%;
+  border-radius: 999px;
+  opacity: 0.8;
+}
+.theme-picture[data-floating="true"] .tp-dock {
+  left: 14%;
+  right: 14%;
+  opacity: 0.9;
+}
+.theme-name {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.custom-theme {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.custom-theme legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.custom-theme label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.custom-theme input[type="color"] {
+  width: 48px;
+  height: 32px;
+  padding: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+.custom-theme #custom-problem {
+  grid-column: 1 / -1;
+}
+
+/* The Cinematic layout: the video fills the window and the controls float
+   over it as frosted glass. A custom theme can use it with any colours. */
+html[data-layout="cinematic"] header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 8;
+  background: transparent;
+  border-bottom: 0;
+  pointer-events: none;
+}
+html[data-layout="cinematic"] header > * {
+  pointer-events: auto;
+}
+html[data-layout="cinematic"] header nav {
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  border-radius: 999px;
+  padding: 2px 6px;
+}
+html[data-layout="cinematic"] main {
+  overflow: hidden;
+}
+html[data-layout="cinematic"] #viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  gap: 0;
+  padding: 0;
+}
+html[data-layout="cinematic"] .workspace {
+  position: absolute;
+  inset: 0;
+  gap: 0;
+}
+html[data-layout="cinematic"] .preview {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+html[data-layout="cinematic"] #inspector,
+html[data-layout="cinematic"] #codex-drawer {
+  position: relative;
+  z-index: 6;
+  margin: 76px 16px 220px 0;
+  background: var(--glass);
+  backdrop-filter: blur(18px);
+}
+html[data-layout="cinematic"] .source-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 7;
+  width: max-content;
+  max-width: calc(100% - 340px);
+  padding: 6px 10px;
+  transform: translateX(-50%);
+  background: var(--glass);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+html[data-layout="cinematic"] #frame-controls {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  z-index: 7;
+  width: min(940px, calc(100% - 40px));
+  max-height: calc(100% - 100px);
+  overflow-y: auto;
+  padding: 12px;
+  transform: translateX(-50%);
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+html[data-layout="cinematic"] #frame-controls .player-bar,
+html[data-layout="cinematic"] #frame-controls .timeline-track,
+html[data-layout="cinematic"] #frame-controls .auto-edit-actions,
+html[data-layout="cinematic"] #frame-controls .transcript-edit-panel,
+html[data-layout="cinematic"] #frame-controls .edit-actions,
+html[data-layout="cinematic"] #frame-controls .review-actions,
+html[data-layout="cinematic"] #frame-controls .export-actions {
+  background: transparent;
+  box-shadow: none;
+}
+html[data-layout="cinematic"] #frame-controls .auto-edit-actions,
+html[data-layout="cinematic"] #frame-controls .edit-actions,
+html[data-layout="cinematic"] #frame-controls .review-actions,
+html[data-layout="cinematic"] #frame-controls .export-actions {
+  border: 0;
+}
+.theme-name {
+  font-size: 11.5px;
+  line-height: 1.2;
+  white-space: normal;
+}
+html[data-layout="cinematic"] #source-name,
+html[data-layout="cinematic"] #add-footage {
+  display: none;
+}
+html[data-layout="cinematic"] .source-bar {
+  max-width: calc(100% - 560px);
+}
+@media (max-width: 1180px) {
+  html[data-layout="cinematic"] header .brand span:last-child {
+    display: none;
+  }
 }
