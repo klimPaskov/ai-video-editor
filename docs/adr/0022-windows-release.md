@@ -108,3 +108,7 @@ Everything below is untested: the items in "Not verified", plus the standard rel
 - A clean Windows 10/11 image for the release checks in `docs/24_INSTALLER_RELEASE.md`.
 - An app icon (`.ico`); the exe currently carries Electron's default icon.
 - Hosting for the FFmpeg source and recipe mirror beside releases; legal review of H.264 and notices.
+
+## Addendum (2026-10-25): rebuilt from the final source
+
+The release build was repeated from the committed tree after the interface redesign, sound layers and one-click edit (`node scripts/build_desktop.mjs --platform win32 --release` in the guest, installer 0.0.1). The Wine smoke test passed again: silent install of 2,526 files in 135 s, the installed tree equal to the packaged tree (2,525 files compared, 0 problems), the Start-menu shortcut and the Apps and features entry written, the installed `ffmpeg.exe` running, an upgrade install leaving 2,526 files, and the silent uninstall removing the folder, shortcut and registry key while leaving the user project folder untouched. Same limits as above: Wine only, nothing ran on real Windows, the installer is unsigned.
