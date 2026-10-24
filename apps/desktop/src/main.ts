@@ -1598,10 +1598,15 @@ async function start(): Promise<void> {
         (snapshot.draft.timeline.frame_rate.denominator * 1_000_000) /
           snapshot.draft.timeline.frame_rate.numerator,
       );
-      const { plan } = await planDraft(drafts, mediaExecutables.ffprobe, projectId, {
-        startUs: 0,
-        endUs: Math.min(snapshot.draft.timeline.duration_us, frameUs),
-      });
+      const { plan } = await planDraft(
+        drafts,
+        mediaExecutables.ffprobe,
+        projectId,
+        {
+          startUs: 0,
+          endUs: Math.min(snapshot.draft.timeline.duration_us, frameUs),
+        },
+      );
       return checkComposition({
         stageUrl: `${origin}/stage.html`,
         sha256,
@@ -1634,13 +1639,18 @@ async function start(): Promise<void> {
       null;
     try {
       const rate = (await drafts.snapshot(projectId)).draft.timeline.frame_rate;
-      const { plan } = await planDraft(drafts, mediaExecutables.ffprobe, projectId, {
-        startUs: 0,
-        endUs: Math.min(
-          timeline.duration_us,
-          Math.ceil((rate.denominator * 1_000_000) / rate.numerator),
-        ),
-      });
+      const { plan } = await planDraft(
+        drafts,
+        mediaExecutables.ffprobe,
+        projectId,
+        {
+          startUs: 0,
+          endUs: Math.min(
+            timeline.duration_us,
+            Math.ceil((rate.denominator * 1_000_000) / rate.numerator),
+          ),
+        },
+      );
       const video = plan.format.video;
       frame = {
         width: video.width,
