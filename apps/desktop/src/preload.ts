@@ -3,6 +3,7 @@ import {
   assertCodexSelection,
 } from "../../../packages/domain/src/codex-view.ts";
 import {
+  assertClaudeFullEditRequest,
   assertClaudeSelection,
   assertClaudeThreadProjectRequest,
   assertClaudeThreadSendRequest,
@@ -43,6 +44,13 @@ import {
   assertAudioSettingsRequest,
   assertAudioSettingsUpdate,
 } from "../../../packages/domain/src/audio-settings.ts";
+import {
+  assertSoundAddRequest,
+  assertSoundRemoveRequest,
+  assertSoundUpdateRequest,
+  assertSoundsRequest,
+  assertSoundsView,
+} from "../../../packages/domain/src/sound-view.ts";
 import {
   assertShortClipRequest,
   assertShortClipsView,
@@ -88,6 +96,7 @@ import {
   assertProjectRequest,
   assertTwoSourceProjectRequest,
   assertProjectNavigation,
+  assertProjectRename,
   assertProjectView,
   assertProjectList,
 } from "../../../packages/domain/src/project-view.ts";
@@ -216,6 +225,10 @@ const bridge: DesktopBridge = {
     assertClaudeSelection(value);
     return invoke(channels.claudeSelect, value, assertClaudeView);
   },
+  selectClaudeRoughCutModel: (value) => {
+    assertClaudeSelection(value);
+    return invoke(channels.claudeSelectRoughCut, value, assertClaudeView);
+  },
   openClaudeInstallGuide: () =>
     invoke(channels.claudeInstallGuide, undefined, (value) => {
       if (value !== null) throw new Error("Invalid install guide response");
@@ -239,6 +252,18 @@ const bridge: DesktopBridge = {
       request,
       assertClaudeThreadView,
     );
+  },
+  startClaudeFullEdit: (request) => {
+    assertClaudeFullEditRequest(request);
+    return invoke(
+      channels.claudeFullEditStart,
+      request,
+      assertClaudeThreadView,
+    );
+  },
+  undoClaudeFullEdit: (request) => {
+    assertClaudeThreadProjectRequest(request);
+    return invoke(channels.claudeFullEditUndo, request, assertClaudeThreadView);
   },
   getCodex: () => invoke(channels.codexGet, undefined, assertCodexView),
   reconnectCodex: () =>
@@ -321,6 +346,22 @@ const bridge: DesktopBridge = {
   setAudioSettings: (request) => {
     assertAudioSettingsUpdate(request);
     return invoke(channels.audioSet, request, assertAudioSettings);
+  },
+  getSounds: (request) => {
+    assertSoundsRequest(request);
+    return invoke(channels.soundsGet, request, assertSoundsView);
+  },
+  addSound: (request) => {
+    assertSoundAddRequest(request);
+    return invoke(channels.soundsAdd, request, assertSoundsView);
+  },
+  updateSound: (request) => {
+    assertSoundUpdateRequest(request);
+    return invoke(channels.soundsUpdate, request, assertSoundsView);
+  },
+  removeSound: (request) => {
+    assertSoundRemoveRequest(request);
+    return invoke(channels.soundsRemove, request, assertSoundsView);
   },
   getShortClips: (request) => {
     assertShortProjectRequest(request);
@@ -451,6 +492,16 @@ const bridge: DesktopBridge = {
   navigateProject: (request) => {
     assertProjectNavigation(request);
     return invoke(channels.projectNavigate, request, assertProjectView);
+  },
+  renameProject: (request) => {
+    assertProjectRename(request);
+    return invoke(channels.projectRename, request, assertProjectView);
+  },
+  deleteProject: (request) => {
+    assertProjectRequest(request);
+    return invoke(channels.projectDelete, request, (value) => {
+      if (value !== null) throw new Error("Invalid response");
+    });
   },
   verifyDraftIntegrity: (request) => {
     assertProjectRequest(request);

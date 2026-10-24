@@ -224,6 +224,11 @@ class DesktopIpcContractTests(unittest.TestCase):
             value = {'interfaceScale': scale}
             self.valid({'channel': 'preferences:get', 'response': {'ok': True, 'value': value}})
             self.valid({'channel': 'preferences:set', 'payload': value, 'response': {'ok': True, 'value': value}})
+        for policy in ['any', 'copyright_free']:
+            value = {'interfaceScale': 1, 'assetPolicy': policy}
+            self.valid({'channel': 'preferences:set', 'payload': value, 'response': {'ok': True, 'value': value}})
+        for policy in ['', 'none', None, True]:
+            self.invalid({'channel': 'preferences:set', 'payload': {'interfaceScale': 1, 'assetPolicy': policy}, 'response': {'ok': True, 'value': {'interfaceScale': 1}}})
         self.valid({'channel': 'preferences:get', 'response': {'ok': False, 'message': 'Settings could not be loaded.'}})
         self.valid({'channel': 'preferences:set', 'payload': {'interfaceScale': 1}, 'response': {'ok': False, 'message': 'Settings could not be saved.'}})
 
@@ -390,6 +395,32 @@ class DesktopIpcContractTests(unittest.TestCase):
         selection['payload']['command'] = 'unsafe'
         self.invalid(selection)
 
+    def test_project_rename_and_delete_are_path_free_and_bounded(self):
+        view = self.project_view()
+        project_id = view['id']
+        renamed = deepcopy(view)
+        renamed['name'] = 'Weekly update'
+        self.valid({'channel': 'projects:rename', 'payload': {'id': project_id, 'name': 'Weekly update'},
+                    'response': {'ok': True, 'value': renamed}})
+        self.valid({'channel': 'projects:rename', 'payload': {'id': project_id, 'name': 'x' * 160},
+                    'response': {'ok': False, 'message': 'The project could not be renamed.'}})
+        for name in ['', ' lead', 'trail ', 'a/b', 'a\\b', 'line\nbreak', 'x' * 161, None, 7]:
+            self.invalid({'channel': 'projects:rename', 'payload': {'id': project_id, 'name': name},
+                          'response': {'ok': True, 'value': renamed}})
+        for payload in [{'id': project_id}, {'id': '../project', 'name': 'A'},
+                        {'id': project_id, 'name': 'A', 'path': '/private/project'}]:
+            self.invalid({'channel': 'projects:rename', 'payload': payload,
+                          'response': {'ok': True, 'value': renamed}})
+        self.valid({'channel': 'projects:delete', 'payload': {'id': project_id},
+                    'response': {'ok': True, 'value': None}})
+        self.valid({'channel': 'projects:delete', 'payload': {'id': project_id},
+                    'response': {'ok': False, 'message': 'Close the project before deleting it.'}})
+        for payload in [{}, {'id': '../project'}, {'id': project_id, 'path': '/private/project'}, None]:
+            self.invalid({'channel': 'projects:delete', 'payload': payload,
+                          'response': {'ok': True, 'value': None}})
+        self.invalid({'channel': 'projects:delete', 'payload': {'id': project_id},
+                      'response': {'ok': True, 'value': view}})
+
     def test_project_close_and_codex_conversation_channels_are_explicit(self):
         project_id = '11111111-1111-4111-8111-111111111111'
         self.valid({
@@ -554,11 +585,17 @@ class DesktopIpcContractTests(unittest.TestCase):
             'account': {'billing': 'subscription', 'plan': 'max'},
             'models': [{'value': 'default', 'label': 'Default (recommended)', 'detail': 'Opus 5.5', 'efforts': ['high']}],
             'selection': {'model': 'default', 'effort': None},
+            'roughCutSelection': {'model': 'haiku', 'effort': None},
             'message': None,
         }
         self.valid({'channel': 'claude:get', 'response': {'ok': True, 'value': signed_in}})
         self.valid({'channel': 'claude:select', 'payload': {'model': 'sonnet', 'effort': 'high'},
                     'response': {'ok': True, 'value': signed_in}})
+        self.valid({'channel': 'claude:select-rough-cut', 'payload': {'model': 'haiku', 'effort': None},
+                    'response': {'ok': True, 'value': signed_in}})
+        missing = deepcopy(signed_in)
+        del missing['roughCutSelection']
+        self.invalid({'channel': 'claude:get', 'response': {'ok': True, 'value': missing}})
         self.valid({'channel': 'claude:install-guide', 'response': {'ok': True, 'value': None}})
         for key, value in [('email', 'person@example.com'), ('executable', '/usr/bin/claude')]:
             leaked = deepcopy(signed_in)
@@ -569,12 +606,37 @@ class DesktopIpcContractTests(unittest.TestCase):
         self.invalid({'channel': 'claude:get', 'response': {'ok': True, 'value': priced}})
         signed_out = dict(signed_in, status='signed_out')
         self.invalid({'channel': 'claude:get', 'response': {'ok': True, 'value': signed_out}})
-        signed_out.update(account=None, models=[], selection=None)
+        signed_out.update(account=None, models=[], selection=None, roughCutSelection=None)
         self.valid({'channel': 'claude:get', 'response': {'ok': True, 'value': signed_out}})
         self.invalid({'channel': 'claude:sign-in', 'payload': {'code': '1234'},
                       'response': {'ok': True, 'value': signed_out}})
         self.invalid({'channel': 'claude:select', 'payload': {'model': 'default', 'effort': 'ultra'},
                       'response': {'ok': True, 'value': signed_in}})
+
+    def test_sound_layers_are_path_free_and_bounded(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        layer = {'sound_id': 'sound-1', 'name': 'Theme', 'kind': 'music', 'file_name': 'theme',
+                 'asset_id': 'asset-1', 'asset_start_us': 0, 'fade_in_us': 1000000, 'fade_out_us': 2000000,
+                 'gain_db': -18, 'duck_db': 12, 'loop': True, 'timeline_range': {'start_us': 0, 'end_us': 9000000}}
+        view = dict(request, layers=[layer, dict(layer, sound_id='sound-2', kind='effect', timeline_range=None)])
+        calls = [('sounds:get', request),
+                 ('sounds:add', dict(request, kind='effect', start_us=2500000)),
+                 ('sounds:update', dict(request, sound_id='sound-1', gain_db=-24, duck_db=0)),
+                 ('sounds:remove', dict(request, sound_id='sound-1'))]
+        for channel, payload in calls:
+            self.valid({'channel': channel, 'payload': payload, 'response': {'ok': True, 'value': view}})
+            self.valid({'channel': channel, 'payload': payload, 'response': {'ok': False, 'message': 'Open this project first.'}})
+        for wrong in [dict(request, kind='ambience', start_us=0), dict(request, kind='music', start_us=-1),
+                      dict(request, kind='music', start_us=0, path='/music/x.mp3'),
+                      dict(request, sound_id='sound-1', gain_db=40, duck_db=0),
+                      dict(request, sound_id='sound-1', gain_db=-6, duck_db=31),
+                      dict(request, sound_id='../x')]:
+            self.invalid({'channel': 'sounds:add', 'payload': wrong, 'response': {'ok': True, 'value': view}})
+        for bad in [dict(view, layers=[dict(layer, path='/music/theme.mp3')]),
+                    dict(view, layers=[dict(layer, gain_db=-6.5)]),
+                    dict(view, layers=[dict(layer, kind='ambience')]),
+                    dict(view, layers=[dict(layer, timeline_range={'start_us': 5, 'end_us': 5, 'x': 1})])]:
+            self.invalid({'channel': 'sounds:get', 'payload': request, 'response': {'ok': True, 'value': bad}})
 
 if __name__ == '__main__':
     unittest.main()

@@ -69,3 +69,5 @@ Committing a revision freezes the timeline, transcript, effect settings, assets,
 ## Deletion
 
 Project deletion requires confirmation and never deletes externally referenced source files. Cleanup previews every managed path before deletion.
+
+Implemented (2026-10-17): Home renames and deletes closed projects. A rename changes only `name` (and `updated_at`) in `project.json`; the immutable baseline keeps the original name and reads still require every other field to match it. Deleting asks for confirmation in the dialog, then removes the project's app-owned side files (its Claude and API-provider conversations, caption, audio and short-clip choices, and export records) and finally its folder, renamed to `.removing-<id>` first so an interrupted removal finishes on the next listing. Anything unexpected in those places (a link, a folder where a file belongs, a non-record file) stops the removal. Sources stay in the media library with their transcripts and playback proxies; original and exported files are never touched. The Codex thread binding is left in Codex's own records. Duplicate, archive and a per-path cleanup preview remain open.

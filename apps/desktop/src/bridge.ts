@@ -26,6 +26,13 @@ import type {
   AudioSettingsUpdate,
 } from "../../../packages/domain/src/audio-settings.ts";
 import type {
+  SoundAddRequest,
+  SoundRemoveRequest,
+  SoundUpdateRequest,
+  SoundsRequest,
+  SoundsView,
+} from "../../../packages/domain/src/sound-view.ts";
+import type {
   ShortClipRequest,
   ShortClipsView,
   ShortExportRequest,
@@ -57,6 +64,7 @@ import type {
   ProjectView,
   ProjectRequest,
   ProjectNavigation,
+  ProjectRename,
   TwoSourceProjectRequest,
   ManualTrimRequest,
   ManualSplitRequest,
@@ -96,6 +104,7 @@ import type {
 } from "../../../packages/domain/src/transcription.ts";
 
 import type {
+  ClaudeFullEditRequest,
   ClaudeSelection,
   ClaudeThreadProjectRequest,
   ClaudeThreadSendRequest,
@@ -111,6 +120,7 @@ export interface DesktopBridge {
   cancelClaudeSignIn(): Promise<Reply<ClaudeView>>;
   signOutClaude(): Promise<Reply<ClaudeView>>;
   selectClaudeModel(value: ClaudeSelection): Promise<Reply<ClaudeView>>;
+  selectClaudeRoughCutModel(value: ClaudeSelection): Promise<Reply<ClaudeView>>;
   openClaudeInstallGuide(): Promise<Reply<null>>;
   getClaudeThread(
     request: ClaudeThreadProjectRequest,
@@ -122,6 +132,12 @@ export interface DesktopBridge {
     request: ClaudeThreadSendRequest,
   ): Promise<Reply<ClaudeThreadView>>;
   interruptClaudeThread(
+    request: ClaudeThreadProjectRequest,
+  ): Promise<Reply<ClaudeThreadView>>;
+  startClaudeFullEdit(
+    request: ClaudeFullEditRequest,
+  ): Promise<Reply<ClaudeThreadView>>;
+  undoClaudeFullEdit(
     request: ClaudeThreadProjectRequest,
   ): Promise<Reply<ClaudeThreadView>>;
   getApiThread(request: ApiThreadProjectRequest): Promise<Reply<ApiThreadView>>;
@@ -189,6 +205,11 @@ export interface DesktopBridge {
     request: AudioSettingsRequest,
   ): Promise<Reply<AudioSettings>>;
   setAudioSettings(request: AudioSettingsUpdate): Promise<Reply<AudioSettings>>;
+  getSounds(request: SoundsRequest): Promise<Reply<SoundsView>>;
+  /** Opens a file dialog; resolves with the unchanged view when cancelled. */
+  addSound(request: SoundAddRequest): Promise<Reply<SoundsView>>;
+  updateSound(request: SoundUpdateRequest): Promise<Reply<SoundsView>>;
+  removeSound(request: SoundRemoveRequest): Promise<Reply<SoundsView>>;
   getShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
   findShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
   discardShortClip(request: ShortClipRequest): Promise<Reply<ShortClipsView>>;
@@ -236,6 +257,8 @@ export interface DesktopBridge {
   openProject(request: ProjectRequest): Promise<Reply<ProjectView>>;
   closeProject(request: ProjectRequest): Promise<Reply<null>>;
   navigateProject(request: ProjectNavigation): Promise<Reply<ProjectView>>;
+  renameProject(request: ProjectRename): Promise<Reply<ProjectView>>;
+  deleteProject(request: ProjectRequest): Promise<Reply<null>>;
   verifyDraftIntegrity(
     request: ProjectRequest,
   ): Promise<Reply<ProjectDraftIntegrityView>>;
@@ -280,6 +303,10 @@ export const channels = Object.freeze({
   projectManualGraphicRemove: "projects:manual-graphic-remove",
   audioGet: "audio:get",
   audioSet: "audio:set",
+  soundsGet: "sounds:get",
+  soundsAdd: "sounds:add",
+  soundsUpdate: "sounds:update",
+  soundsRemove: "sounds:remove",
   shortsGet: "shorts:get",
   shortsFind: "shorts:find",
   shortsDiscard: "shorts:discard",
@@ -313,11 +340,14 @@ export const channels = Object.freeze({
   claudeCancelSignIn: "claude:cancel-sign-in",
   claudeSignOut: "claude:sign-out",
   claudeSelect: "claude:select",
+  claudeSelectRoughCut: "claude:select-rough-cut",
   claudeInstallGuide: "claude:install-guide",
   claudeThreadGet: "claude-thread:get",
   claudeThreadOpen: "claude-thread:open",
   claudeThreadSend: "claude-thread:send",
   claudeThreadInterrupt: "claude-thread:interrupt",
+  claudeFullEditStart: "claude-thread:full-edit",
+  claudeFullEditUndo: "claude-thread:undo-full-edit",
   apiThreadGet: "api-thread:get",
   apiThreadOpen: "api-thread:open",
   apiThreadSend: "api-thread:send",
@@ -347,6 +377,8 @@ export const channels = Object.freeze({
   projectOpen: "projects:open",
   projectClose: "projects:close",
   projectNavigate: "projects:navigate",
+  projectRename: "projects:rename",
+  projectDelete: "projects:delete",
   projectIntegrityCheck: "projects:verify-draft-integrity",
   projectFrame: "projects:frame",
   projectManualTrim: "projects:manual-trim",

@@ -13,6 +13,7 @@ const paths: Record<string, string> = {
     "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8ZM19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7Z",
   info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11v6M12 7.5v.5",
   close: "M6 6l12 12M18 6 6 18",
+  more: "M5.5 12h1M11.5 12h1M17.5 12h1",
   "frame-back": "M18 6 10 12l8 6V6ZM6 6v12",
   "frame-forward": "M6 6l8 6-8 6V6ZM18 6v12",
   play: "M7 4.5v15L19.5 12 7 4.5Z",

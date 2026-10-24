@@ -202,6 +202,16 @@ export class MediaLibrary {
     Promise<PresentationTiming>
   >();
   private readonly thumbnails = new Map<string, Promise<MediaFrame>>();
+  /**
+   * Sources fully verified in this process, keyed by their file identity and
+   * change times. Hashing a long recording on every draft read made each edit
+   * cost seconds; any change to the file (content, size, times, replacement)
+   * changes the key and forces a full re-verification.
+   */
+  private readonly verifiedFiles = new Map<
+    string,
+    { key: string; value: VerifiedLibrarySource }
+  >();
   constructor(
     root: string,
     options: { ffmpeg?: string; ffprobe?: string } = {},
@@ -253,6 +263,24 @@ export class MediaLibrary {
     const entry = await this.entry(id);
     const managedPath = join(this.root, "assets", entry.source.file);
     const stat = await lstat(managedPath);
+    const key = [
+      stat.dev,
+      stat.ino,
+      stat.size,
+      stat.mtimeMs,
+      stat.ctimeMs,
+      stat.nlink,
+      // The stored record too: changed measurements must be re-checked.
+      createHash("sha256").update(JSON.stringify(entry)).digest("hex"),
+    ].join(":");
+    const known = this.verifiedFiles.get(id);
+    if (
+      known?.key === key &&
+      stat.isFile() &&
+      !stat.isSymbolicLink() &&
+      stat.nlink === 1
+    )
+      return structuredClone(known.value);
     if (
       !stat.isFile() ||
       stat.isSymbolicLink() ||
@@ -303,7 +331,7 @@ export class MediaLibrary {
         "FIDELITY_MISMATCH",
         "The managed source changed during verification.",
       );
-    return {
+    const value: VerifiedLibrarySource = {
       summary: { ...entry.summary },
       originalPath: entry.source.originalPath,
       managedPath,
@@ -311,6 +339,8 @@ export class MediaLibrary {
       sizeBytes: entry.source.size,
       probe: structuredClone(entry.probe),
     };
+    this.verifiedFiles.set(id, { key, value: structuredClone(value) });
+    return value;
   }
   async prepareSpeechAudio(
     id: string,
@@ -523,12 +553,10 @@ export class MediaLibrary {
         "UNSUPPORTED_PROFILE",
         "This source is preserved, but its preview color or precision path is not yet verified.",
       );
-    const path = join(this.root, "assets", entry.source.file);
-    if ((await hash(path, signal)) !== entry.source.sha256)
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "The managed source has changed.",
-      );
+    // Verified once per file identity; re-hashing a long recording for every
+    // preview frame cost about as much as decoding the frame.
+    const path = (await this.verifiedSource(id)).managedPath;
+    signal?.throwIfAborted();
     const timingKey = `${id}:${entry.source.sha256}`;
     let timing = this.presentationTimings.get(timingKey);
     if (!timing) {

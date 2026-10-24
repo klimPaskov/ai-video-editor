@@ -180,6 +180,81 @@
         "delete project",
         "approve export"
       ]
+    },
+    {
+      "name": "graphics.set",
+      "mode": "mutation",
+      "description": "Add or replace one HTML/CSS motion graphic anchored to the source moment at an output time, validated for content safety (no scripts, forms, embedded documents or network resources), with shared undo.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "graphics.remove",
+      "mode": "mutation",
+      "description": "Remove one motion graphic by ID with shared undo.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "captions.configure",
+      "mode": "mutation",
+      "description": "Set the draft's caption choices (on, style, size, position, burn-in) with shared undo; caption text stays derived from the transcript.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "audio.configure",
+      "mode": "mutation",
+      "description": "Set the draft's export audio treatment (loudness normalisation, noise reduction) with shared undo; sources are unchanged.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "media.get_frames",
+      "mode": "read",
+      "description": "Render 1–3 small JPEG pictures of the active draft at output times through the export compositor (zooms, motion graphics, captions as shown) so an assistant can check its work; analysis only, never part of the master.",
+      "undoable": false,
+      "user_confirmation": "none",
+      "allowed_scope": "bounded_media",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
     }
   ]
 }

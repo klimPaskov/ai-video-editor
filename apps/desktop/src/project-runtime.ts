@@ -107,6 +107,10 @@ export async function invokeWithProjectDraftRefresh<T>(options: {
     options.toolName === "speed.set" ||
     options.toolName === "graphics.set" ||
     options.toolName === "graphics.remove" ||
+    options.toolName === "captions.configure" ||
+    options.toolName === "audio.configure" ||
+    options.toolName === "sound.set" ||
+    options.toolName === "sound.remove" ||
     options.toolName === "timeline.undo" ||
     options.toolName === "timeline.redo";
   try {

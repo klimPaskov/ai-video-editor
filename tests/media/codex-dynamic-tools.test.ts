@@ -26,7 +26,7 @@ function outputText(response: DynamicToolCallResponse): string {
   return item.text;
 }
 
-test("host-defined namespace exposes exactly the reviewed twelve guarded schemas", () => {
+test("host-defined namespace exposes exactly the reviewed seventeen guarded schemas", () => {
   const projectId = "project-1";
   const specs = buildCodexVideoEditDynamicTools(projectId);
   assert.equal(specs.length, 1);
@@ -49,6 +49,11 @@ test("host-defined namespace exposes exactly the reviewed twelve guarded schemas
       "zoom_set",
       "zoom_remove",
       "speed_set",
+      "graphics_set",
+      "graphics_remove",
+      "captions_configure",
+      "audio_configure",
+      "media_get_frames",
     ],
   );
   for (const [index, tool] of namespace.tools.entries()) {
@@ -85,7 +90,7 @@ test("foreign, malformed and oversized host calls never reach the editor", () =>
     { ...valid, callId: "" },
     { ...valid, extra: "outside contract" },
     { ...valid, arguments: ["unexpected"] },
-    { ...valid, arguments: { body: "x".repeat(17 * 1024) } },
+    { ...valid, arguments: { body: "x".repeat(65 * 1024) } },
   ];
   for (const value of invalid)
     assert.throws(
@@ -157,4 +162,36 @@ test("only a valid active project ID is added to the refusal", () => {
     new CodexVideoEditToolError("stale_draft", "project-1").message,
     "The draft changed before this edit could be applied. Refresh and try again.",
   );
+});
+
+test("rendered pictures reach Codex host tools as input images", async () => {
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64");
+  const call = decodeOwnedDynamicToolCall({
+    ...request(),
+    tool: "media_get_frames",
+    arguments: {
+      schema_version: "1.0",
+      project_id: "project-1",
+      times_us: [0],
+    },
+  });
+  assert.equal(call.name, "media.get_frames");
+  const response = await invokeOwnedDynamicTool(call, async () => ({
+    schema_version: "1.0",
+    frames: [
+      {
+        time_us: 0,
+        width: 640,
+        height: 360,
+        mime_type: "image/jpeg",
+        data_base64: jpeg,
+      },
+    ],
+  }));
+  assert.equal(response.success, true);
+  assert.deepEqual(response.contentItems[1], {
+    type: "inputImage",
+    imageUrl: `data:image/jpeg;base64,${jpeg}`,
+  });
+  assert.doesNotMatch(outputText(response), /data_base64/u);
 });

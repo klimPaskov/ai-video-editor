@@ -42,11 +42,16 @@ export function graphicsSegments(
   const gapFrames = Math.round(
     (mergeGapSeconds * frameRate.numerator) / frameRate.denominator,
   );
+  // Clamped to the output: a graphic that began before a rendered window
+  // (negative start) is drawn only from the window's first frame.
   const frameAt = (us: number) =>
-    Math.min(
-      frameCount,
-      Math.ceil(
-        (us * frameRate.numerator) / (frameRate.denominator * 1_000_000),
+    Math.max(
+      0,
+      Math.min(
+        frameCount,
+        Math.ceil(
+          (us * frameRate.numerator) / (frameRate.denominator * 1_000_000),
+        ),
       ),
     );
   const ranges = intervals

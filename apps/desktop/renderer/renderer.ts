@@ -4,6 +4,8 @@ import { setupTimelineStrip } from "./timeline-strip.ts";
 import { setupCaptions } from "./captions-panel.ts";
 import { setupShortsPanel } from "./shorts-panel.ts";
 import { setupAudioPanel } from "./audio-panel.ts";
+import { setupSoundPanel } from "./sound-panel.ts";
+import { setupSoundPreview } from "./sound-preview.ts";
 import { mediaRect, setupZoomPreview } from "./zoom-preview.ts";
 import { setupGraphicsPreview } from "./graphics-preview.ts";
 import {
@@ -55,6 +57,27 @@ declare global {
     desktop: DesktopBridge;
   }
 }
+/**
+ * Pixel bytes of a frame. A preview frame is tens of megabytes of base64, so
+ * the built-in decoder is used where Chromium has it.
+ */
+function framePixels(base64: string): Uint8ClampedArray<ArrayBuffer> {
+  const native = (
+    Uint8Array as unknown as {
+      fromBase64?: (text: string) => Uint8Array<ArrayBuffer>;
+    }
+  ).fromBase64;
+  if (native) {
+    const bytes = native(base64);
+    return new Uint8ClampedArray(bytes.buffer, bytes.byteOffset, bytes.length);
+  }
+  const text = atob(base64);
+  const bytes = new Uint8ClampedArray(text.length);
+  for (let index = 0; index < text.length; index++)
+    bytes[index] = text.charCodeAt(index);
+  return bytes;
+}
+
 function element<T extends HTMLElement>(id: string): T {
   const value = document.getElementById(id);
   if (!value) throw new Error("Missing control");
@@ -1264,6 +1287,11 @@ const captions = setupCaptions({ preview: canvas.parentElement! });
 const zoomPreview = setupZoomPreview(canvas.parentElement!);
 const graphicsPreview = setupGraphicsPreview(canvas.parentElement!);
 const audioPanel = setupAudioPanel();
+const soundPreview = setupSoundPreview({ projectId: () => activeProject?.id });
+const soundPanel = setupSoundPanel({
+  position: () => Number(seek.value),
+  changed: (layers) => soundPreview.layers(layers),
+});
 function refreshZoom(us = Number(seek.value)): void {
   const project = selected?.previewAvailable ? activeProject : undefined;
   zoomPreview.render(project, us);
@@ -1271,7 +1299,8 @@ function refreshZoom(us = Number(seek.value)): void {
 }
 function refreshCaptions(): void {
   refreshZoom();
-  audioPanel.render(activeProject?.id);
+  audioPanel.render(activeProject?.id, activeProject?.draft.sequence);
+  soundPanel.render(activeProject?.id, activeProject?.draft.sequence);
   captions.render(
     selected?.previewAvailable ? activeProject : undefined,
     transcriptionView,
@@ -1648,17 +1677,13 @@ function thumbnail(mediaId: string, name: string): HTMLElement {
     canvas.height = frame.height;
     canvas.setAttribute("aria-hidden", "true");
     canvas.dataset.thumbnailFor = name;
-    canvas.getContext("2d")?.putImageData(
-      new ImageData(
-        Uint8ClampedArray.from(atob(frame.rgbaBase64), (character) =>
-          character.charCodeAt(0),
-        ),
-        frame.width,
-        frame.height,
-      ),
-      0,
-      0,
-    );
+    canvas
+      .getContext("2d")
+      ?.putImageData(
+        new ImageData(framePixels(frame.rgbaBase64), frame.width, frame.height),
+        0,
+        0,
+      );
     box.prepend(canvas);
   });
   return box;
@@ -1667,6 +1692,106 @@ function time(value: number): string {
   const seconds = value / 1_000_000;
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(3).padStart(6, "0")}`;
 }
+const projectDialog = element<HTMLDialogElement>("project-dialog"),
+  projectNameInput = element<HTMLInputElement>("project-name");
+let projectOptions: { project: ProjectView; opener: HTMLElement } | null = null;
+let projectBusy = false;
+function projectDialogError(message: string | null): void {
+  const error = element("project-dialog-error");
+  error.textContent = message ?? "";
+  error.hidden = message === null;
+}
+function showProjectView(deleting: boolean): void {
+  element("project-rename-view").hidden = deleting;
+  element("project-delete-view").hidden = !deleting;
+  element("project-dialog-title").textContent = deleting
+    ? "Delete project?"
+    : "Project";
+  projectDialogError(null);
+  (deleting ? element("project-delete-cancel") : projectNameInput).focus();
+}
+/** Rename and delete for a closed project on Home. */
+function openProjectOptions(project: ProjectView, opener: HTMLElement): void {
+  projectOptions = { project, opener };
+  projectNameInput.value = project.name;
+  element("project-delete-text").textContent =
+    `"${project.name}" and its edits, conversations and project choices will be deleted. Your recordings stay in Media, and exported videos are not touched.`;
+  projectDialog.showModal();
+  showProjectView(false);
+  projectNameInput.select();
+}
+function closeProjectOptions(): void {
+  if (projectBusy) return;
+  projectDialog.close();
+}
+projectDialog.addEventListener("close", () => {
+  const opener = projectOptions?.opener;
+  projectOptions = null;
+  if (opener?.isConnected) opener.focus();
+});
+projectDialog.addEventListener("cancel", (event) => {
+  if (projectBusy) event.preventDefault();
+});
+for (const id of ["project-dialog-close", "project-cancel"])
+  element(id).addEventListener("click", closeProjectOptions);
+projectNameInput.addEventListener("input", () => projectDialogError(null));
+element("project-delete").addEventListener("click", () =>
+  showProjectView(true),
+);
+element("project-delete-cancel").addEventListener("click", () =>
+  showProjectView(false),
+);
+async function projectAction(
+  work: (project: ProjectView) => Promise<Reply<unknown>>,
+): Promise<void> {
+  const current = projectOptions;
+  if (!current || projectBusy) return;
+  projectBusy = true;
+  for (const control of projectDialog.querySelectorAll("button, input"))
+    (control as HTMLButtonElement | HTMLInputElement).disabled = true;
+  try {
+    const reply = await work(current.project);
+    if (!reply.ok) {
+      projectDialogError(reply.message);
+      return;
+    }
+    projectBusy = false;
+    projectOptions = null;
+    projectDialog.close();
+    await loadLibrary();
+    // Focus returns to the project's options, or to Import after a delete.
+    const card = document.querySelector<HTMLElement>(
+      `#projects [data-project-options="${current.project.id}"]`,
+    );
+    (card ?? element("import")).focus();
+  } catch {
+    projectDialogError("The project could not be changed. Try again.");
+  } finally {
+    projectBusy = false;
+    for (const control of projectDialog.querySelectorAll("button, input"))
+      (control as HTMLButtonElement | HTMLInputElement).disabled = false;
+  }
+}
+element("project-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = projectNameInput.value.trim();
+  if (!name || name.length > 160 || /[\x00-\x1f\x7f/\\]/u.test(name)) {
+    projectDialogError("Use a name of up to 160 characters without slashes.");
+    return;
+  }
+  if (name === projectOptions?.project.name) {
+    closeProjectOptions();
+    return;
+  }
+  void projectAction((project) =>
+    window.desktop.renameProject({ id: project.id, name }),
+  );
+});
+element("project-delete-confirm").addEventListener("click", () => {
+  void projectAction((project) =>
+    window.desktop.deleteProject({ id: project.id }),
+  );
+});
 async function loadLibrary(): Promise<void> {
   const generation = ++loadingHome;
   const [reply, projects] = await Promise.all([
@@ -1700,7 +1825,16 @@ async function loadLibrary(): Promise<void> {
       button.addEventListener("click", () => {
         void openProject(project.id, button);
       });
-      row.append(button);
+      const options = document.createElement("button");
+      options.type = "button";
+      options.className = "card-options";
+      options.dataset.icon = "more";
+      options.dataset.projectOptions = project.id;
+      options.setAttribute("aria-label", `Options for ${project.name}`);
+      options.addEventListener("click", () =>
+        openProjectOptions(project, options),
+      );
+      row.append(button, options);
       list.append(row);
     }
   }
@@ -1895,10 +2029,7 @@ async function decodeFrames(): Promise<void> {
         }
         frame = reply.value;
       }
-      const bytes = Uint8ClampedArray.from(
-        atob(frame.rgbaBase64),
-        (character) => character.charCodeAt(0),
-      );
+      const bytes = framePixels(frame.rgbaBase64);
       canvas.width = frame.width;
       canvas.height = frame.height;
       canvas
@@ -2080,6 +2211,7 @@ const playback = setupPlayback({
     timelineStrip.playhead(us);
     captions.position(us);
     refreshZoom(us);
+    soundPreview.follow(us);
     if (previewEndUs !== undefined && us >= previewEndUs) {
       previewEndUs = undefined;
       playback.stop();
@@ -2087,8 +2219,12 @@ const playback = setupPlayback({
     previous.disabled = us <= 0;
     next.disabled = us >= Number(seek.max);
   },
-  stopped: (us) => requestFrame(us),
+  stopped: (us) => {
+    soundPreview.stop();
+    requestFrame(us);
+  },
   changed: (playing) => {
+    if (!playing) soundPreview.stop();
     playButton.dataset.icon = playing ? "pause" : "play";
     playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
     playButton.setAttribute("aria-pressed", String(playing));
@@ -2931,6 +3067,31 @@ const codexDrawerButton = element<HTMLButtonElement>("codex-drawer-button");
 const settingsButton = element<HTMLButtonElement>("settings");
 const settingsDialog = element<HTMLDialogElement>("settings-dialog");
 const scaleSelect = element<HTMLSelectElement>("interface-scale");
+const assetPolicySelect = element<HTMLSelectElement>("asset-policy");
+// The material Claude may use is saved as soon as it changes.
+assetPolicySelect.addEventListener("change", async () => {
+  assetPolicySelect.disabled = true;
+  try {
+    const current = await window.desktop.getPreferences();
+    if (!current.ok) throw new Error("load");
+    const value = {
+      ...current.value,
+      assetPolicy: assetPolicySelect.value,
+    };
+    assertPreferences(value);
+    const reply = await window.desktop.setPreferences(value);
+    if (!reply.ok) throw new Error("save");
+    showToast(
+      value.assetPolicy === "copyright_free"
+        ? "Claude will use copyright-free material only"
+        : "Claude may use any material",
+    );
+  } catch {
+    showToast("The material setting could not be saved. Try again.");
+  } finally {
+    assetPolicySelect.disabled = false;
+  }
+});
 const resetSettingsSection = setupCodexSettings(settingsDialog);
 let savingPreferences = false;
 let settingsLoad = 0;
@@ -3138,6 +3299,7 @@ function renderClaudeThread(view: ClaudeThreadView): void {
   }
   activity.hidden = activity.childElementCount === 0;
   element("claude-api-notice").hidden = view.billing !== "api";
+  renderFullEdit(view);
   element<HTMLButtonElement>("open-codex-thread").hidden =
     view.status !== "closed";
   element<HTMLFormElement>("codex-thread-form").hidden =
@@ -3159,6 +3321,27 @@ function renderClaudeThread(view: ClaudeThreadView): void {
   issue.hidden = !issue.textContent;
   if (nextIssue && revealIssue) issue.scrollIntoView({ block: "nearest" });
   messages.scrollTop = messages.scrollHeight;
+}
+/** The whole-video edit controls under the Claude conversation. */
+function renderFullEdit(view: ClaudeThreadView): void {
+  const idle = view.status === "ready" || view.status === "failed";
+  const section = element<HTMLDetailsElement>("claude-full-edit");
+  section.hidden = !claudeSelected() || !idle;
+  element("start-full-edit").textContent =
+    view.fullEdit?.status === "finished"
+      ? "Polish with Claude"
+      : "Edit with Claude";
+  const run = view.fullEdit;
+  const result = element("full-edit-result");
+  result.hidden = !claudeSelected() || !idle || !run || run.changes === 0;
+  element("full-edit-changes").textContent = run
+    ? `Full edit: ${run.changes} ${run.changes === 1 ? "change" : "changes"}`
+    : "";
+  const undo = element<HTMLButtonElement>("undo-full-edit");
+  undo.hidden = !run?.undoable;
+  undo.disabled = !run?.undoable;
+  if (view.status === "running" && run?.status === "running")
+    element("codex-thread-status").textContent = "Claude is editing the video…";
 }
 function renderAssistantReply(
   route: string,
@@ -3189,11 +3372,70 @@ assistantProvider.addEventListener("change", () => {
   clearAssistantDisplay();
   if (!codexDrawer.hidden) void pollCodex(++codexPollGeneration);
 });
+element<HTMLFormElement>("claude-full-edit-form").addEventListener(
+  "submit",
+  async (event) => {
+    event.preventDefault();
+    const project = activeProject;
+    if (
+      !project ||
+      !claudeSelected() ||
+      (claudeThreadView?.status !== "ready" &&
+        claudeThreadView?.status !== "failed")
+    )
+      return;
+    const value = (id: string) => element<HTMLInputElement>(id).value.trim();
+    const reply = await window.desktop.startClaudeFullEdit({
+      schema_version: "1.0",
+      project_id: project.id,
+      brief: {
+        goal: value("full-edit-goal"),
+        audience: value("full-edit-audience"),
+        style: value("full-edit-style"),
+        level: element<HTMLSelectElement>("full-edit-level").value as
+          "tidy" | "polished" | "bold",
+      },
+    });
+    if (activeProject?.id !== project.id || !claudeSelected()) return;
+    if (reply.ok) {
+      element<HTMLDetailsElement>("claude-full-edit").open = false;
+      renderClaudeThread(reply.value);
+    } else {
+      const issue = element("codex-thread-error");
+      issue.textContent = reply.message;
+      issue.hidden = false;
+    }
+  },
+);
+element<HTMLButtonElement>("undo-full-edit").addEventListener(
+  "click",
+  async () => {
+    const project = activeProject;
+    if (!project || !claudeSelected() || !claudeThreadView?.fullEdit?.undoable)
+      return;
+    const button = element<HTMLButtonElement>("undo-full-edit");
+    button.disabled = true;
+    const reply = await window.desktop.undoClaudeFullEdit({
+      schema_version: "1.0",
+      project_id: project.id,
+    });
+    if (activeProject?.id !== project.id || !claudeSelected()) return;
+    if (reply.ok) renderClaudeThread(reply.value);
+    else {
+      button.disabled = false;
+      const issue = element("codex-thread-error");
+      issue.textContent = reply.message;
+      issue.hidden = false;
+    }
+  },
+);
 function syncAssistantNotices(): void {
   element("api-turn-notice").hidden = selectedApiProvider() === null;
   element("codex-context-notice").hidden = assistantRoute() !== "codex";
   element("claude-context-notice").hidden = !claudeSelected();
   element("claude-api-notice").hidden = true;
+  element("claude-full-edit").hidden = true;
+  element("full-edit-result").hidden = true;
 }
 function setCodexDrawer(open: boolean): void {
   codexDrawer.hidden = !open;
@@ -3303,6 +3545,7 @@ element("open-codex-thread").addEventListener("click", async () => {
         streaming: null,
         billing: null,
         message: null,
+        fullEdit: null,
       });
     else if (provider)
       renderApiThread({
@@ -3508,6 +3751,7 @@ async function openSettings(): Promise<void> {
     if (!settingsDialog.open || load !== settingsLoad) return;
     if (!reply.ok) throw new Error("load");
     scaleSelect.value = String(reply.value.interfaceScale);
+    assetPolicySelect.value = reply.value.assetPolicy ?? "any";
     scaleSelect.disabled = false;
     element<HTMLButtonElement>("save-settings").disabled = false;
     if (!element("appearance-settings").hidden) scaleSelect.focus();
@@ -3564,7 +3808,11 @@ async function savePreferences(): Promise<void> {
     control.disabled = true;
   });
   try {
-    const value = { interfaceScale: Number(scaleSelect.value) };
+    // Keep the asset choice; this form saves the interface size.
+    const value = {
+      interfaceScale: Number(scaleSelect.value),
+      assetPolicy: assetPolicySelect.value,
+    };
     assertPreferences(value);
     const reply = await window.desktop.setPreferences(value);
     if (!reply.ok) throw new Error("save");

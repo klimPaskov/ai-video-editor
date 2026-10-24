@@ -1,10 +1,8 @@
-import { randomUUID } from "node:crypto";
 import {
   mapCutsToOutput,
   planMagicWandCuts,
   type MagicSourceInput,
   type MagicWandPreset,
-  type OutputCut,
 } from "../../../packages/domain/src/magic-wand.ts";
 import {
   assertMagicWandView,
@@ -21,7 +19,10 @@ import type {
   TranscriptionProjectRequest,
   TranscriptionProjectView,
 } from "../../../packages/domain/src/transcription.ts";
-import { CodexVideoEditToolError } from "../../../packages/codex-tools/src/service.ts";
+import {
+  roughCutRequest,
+  type RoughCutEvidence,
+} from "./rough-cut-playbook.ts";
 
 type Transcriptions = {
   get(request: TranscriptionJobRequest): Promise<TranscriptionProjectView>;
@@ -37,11 +38,30 @@ type ToolInvoker = (
   input: unknown,
 ) => Promise<unknown>;
 
+/** How a rough-cut run by Claude ended, as Magic Edit reports it. */
+export type RoughCutOutcome =
+  "completed" | "stopped" | "signIn" | "limit" | "failed";
+
+/** The assistant that makes the rough cut; main backs it with Claude. */
+export interface RoughCutEditor {
+  /** Starts the run, or returns the reason it cannot start. */
+  start(
+    projectId: string,
+    preset: MagicWandPreset,
+    request: string,
+  ): Promise<RoughCutOutcome | null>;
+  /** Null while the run is going, then how it ended. */
+  outcome(projectId: string): RoughCutOutcome | null;
+  stop(projectId: string): Promise<void>;
+}
+
 interface DraftSummary {
   draft_id: string;
   base_revision_id: string;
   draft_sequence: number;
   timeline_sha256: string;
+  duration_us: number;
+  operation_ids: string[];
   clips: {
     source_id: string;
     source_start_us: number;
@@ -58,13 +78,6 @@ interface Job {
   stop: boolean;
 }
 
-const batchSize = 16;
-const presetNames: Record<MagicWandPreset, string> = {
-  gentle: "Gentle",
-  balanced: "Balanced",
-  tight: "Tight",
-};
-
 function draftOf(value: unknown): DraftSummary {
   const record = value as { draft?: DraftSummary } & DraftSummary;
   const draft = record.draft ?? record;
@@ -78,13 +91,16 @@ function draftOf(value: unknown): DraftSummary {
 }
 
 /**
- * Main-owned Magic Edit: local transcript evidence in, guarded undoable
- * ripple deletes out. One run per project; Stop takes effect between
- * transactions so every applied batch is a complete, undoable commit.
+ * Main-owned Magic Edit: the rough cut. Main transcribes locally and finds
+ * pauses, fillers and repeated wording; Claude then makes the story edit
+ * through the guarded cutting tools, using that analysis only as evidence.
+ * Nothing is cut mechanically. One run per project; Stop stops Claude's turn
+ * and every committed cut stays undoable.
  */
 export class DesktopMagicWand {
   private readonly transcriptions: Transcriptions;
   private readonly invoke: ToolInvoker;
+  private readonly editor: RoughCutEditor;
   private readonly views = new Map<string, MagicWandView>();
   private readonly jobs = new Map<string, Job>();
   private readonly pollMs: number;
@@ -92,10 +108,12 @@ export class DesktopMagicWand {
   constructor(
     transcriptions: Transcriptions,
     invoke: ToolInvoker,
+    editor: RoughCutEditor,
     options: { pollMs?: number } = {},
   ) {
     this.transcriptions = transcriptions;
     this.invoke = invoke;
+    this.editor = editor;
     this.pollMs = options.pollMs ?? 500;
   }
 
@@ -134,7 +152,11 @@ export class DesktopMagicWand {
 
   stop(projectId: string): MagicWandView {
     const job = this.jobs.get(projectId);
-    if (job) job.stop = true;
+    if (job) {
+      job.stop = true;
+      if (this.get(projectId).status === "applying")
+        void this.editor.stop(projectId).catch(() => undefined);
+    }
     return this.get(projectId);
   }
 
@@ -147,29 +169,24 @@ export class DesktopMagicWand {
     job: Job,
     status: "completed" | "stopped" | "failed",
     message: string | null,
-    applied: OutputCut[],
-    leftForReview: number,
+    change: { removedUs: number; cuts: number } | null,
   ): void {
-    const kinds = applied.flatMap((range) => range.kinds);
     this.set(job.projectId, {
       status,
       projectId: job.projectId,
       preset: job.preset,
       progress: null,
+      // Measured from the draft: what Claude's committed cuts removed.
       summary:
-        status === "failed" && applied.length === 0
+        !change || (status === "failed" && change.cuts === 0)
           ? null
           : {
-              removedUs: applied.reduce(
-                (sum, range) => sum + (range.end_us - range.start_us),
-                0,
-              ),
-              cuts: applied.length,
-              pauses: kinds.filter((kind) => kind === "pause").length,
-              fillers: kinds.filter((kind) => kind === "filler").length,
-              repeatedTakes: kinds.filter((kind) => kind === "repeated_take")
-                .length,
-              leftForReview,
+              removedUs: change.removedUs,
+              cuts: change.cuts,
+              pauses: 0,
+              fillers: 0,
+              repeatedTakes: 0,
+              leftForReview: 0,
             },
       message,
     });
@@ -214,12 +231,23 @@ export class DesktopMagicWand {
   }
 
   private async run(job: Job): Promise<void> {
-    const applied: OutputCut[] = [];
-    let leftForReview = 0;
+    const summary = { schema_version: "1.0", project_id: job.projectId };
+    let before: DraftSummary | null = null;
+    const change = async () => {
+      if (!before) return null;
+      const after = draftOf(
+        await this.invoke(job.projectId, "timeline.get_summary", summary),
+      );
+      const known = new Set(before.operation_ids);
+      return {
+        removedUs: Math.max(0, before.duration_us - after.duration_us),
+        cuts: after.operation_ids.filter((id) => !known.has(id)).length,
+      };
+    };
     try {
       const transcription = await this.transcript(job);
       if (!transcription) {
-        this.end(job, "stopped", magicWandIssues.stopped, applied, 0);
+        this.end(job, "stopped", magicWandIssues.stopped, null);
         return;
       }
       const inputs: MagicSourceInput[] = transcription.results.map(
@@ -234,108 +262,74 @@ export class DesktopMagicWand {
           ),
         }),
       );
+      // Evidence for Claude, mapped onto the current edit; not cuts.
       const plan = planMagicWandCuts(inputs, job.preset);
-      leftForReview = plan.leftForReview;
-      const summary = { schema_version: "1.0", project_id: job.projectId };
-      let draft = draftOf(
+      before = draftOf(
         await this.invoke(job.projectId, "timeline.get_summary", summary),
       );
-      const ranges = mapCutsToOutput(plan.cuts, draft.clips);
-      if (ranges.length === 0) {
-        this.end(
-          job,
-          "completed",
-          magicWandIssues.nothing,
-          applied,
-          leftForReview,
-        );
+      const clips = before.clips;
+      const evidence: RoughCutEvidence[] = plan.cuts
+        .flatMap((cut) =>
+          mapCutsToOutput([cut], clips).flatMap((range) =>
+            range.kinds.map((kind) => ({
+              kind,
+              sourceId: cut.sourceId,
+              sourceStartUs: cut.startUs,
+              sourceEndUs: cut.endUs,
+              startUs: range.start_us,
+              endUs: range.end_us,
+            })),
+          ),
+        )
+        .sort((a, b) => a.startUs - b.startUs);
+      if (job.stop) {
+        this.end(job, "stopped", magicWandIssues.stopped, null);
         return;
       }
       this.set(job.projectId, {
         ...this.get(job.projectId),
         status: "applying",
-        progress: 0,
+        progress: null,
       });
-      const passGroup = `magic-${randomUUID()}`;
-      const kinds = new Set(ranges.flatMap((range) => range.kinds));
-      const reason = `Magic Edit (${presetNames[job.preset]}): ${[
-        kinds.has("pause") ? "shortened long pauses" : null,
-        kinds.has("filler") ? "removed isolated fillers" : null,
-        kinds.has("repeated_take") ? "removed an earlier repeated take" : null,
-      ]
-        .filter(Boolean)
-        .join(", ")}.`;
-      let expectedSequence = draft.draft_sequence;
-      // Latest first: every remaining range is earlier than the ones removed.
-      for (let index = 0; index < ranges.length; index += batchSize) {
-        if (job.stop) {
-          this.end(
-            job,
-            "stopped",
-            magicWandIssues.stopped,
-            applied,
-            leftForReview,
-          );
-          return;
-        }
-        draft = draftOf(
-          await this.invoke(job.projectId, "timeline.get_summary", summary),
-        );
-        if (draft.draft_sequence !== expectedSequence) {
-          this.end(
-            job,
-            "failed",
-            magicWandIssues.changed,
-            applied,
-            leftForReview,
-          );
-          return;
-        }
-        const batch = ranges.slice(index, index + batchSize);
-        const freshness = {
-          schema_version: "1.0",
-          request_id: `magic-${randomUUID()}`,
-          project_id: job.projectId,
-          draft_id: draft.draft_id,
-          base_revision_id: draft.base_revision_id,
-          expected_sequence: draft.draft_sequence,
-          expected_timeline_sha256: draft.timeline_sha256,
-          pass_group_id: passGroup,
-          reason,
-        };
-        const result =
-          batch.length === 1
-            ? await this.invoke(job.projectId, "cut.delete_range", {
-                ...freshness,
-                start_us: batch[0]!.start_us,
-                end_us: batch[0]!.end_us,
-              })
-            : await this.invoke(job.projectId, "cut.delete_ranges", {
-                ...freshness,
-                ranges: batch.map((range) => ({
-                  start_us: range.start_us,
-                  end_us: range.end_us,
-                })),
-              });
-        expectedSequence = draftOf(result).draft_sequence;
-        applied.push(...batch);
-        this.set(job.projectId, {
-          ...this.get(job.projectId),
-          progress: Math.min(1, applied.length / ranges.length),
-        });
+      const refused = await this.editor.start(
+        job.projectId,
+        job.preset,
+        roughCutRequest(job.preset, evidence),
+      );
+      let outcome = refused;
+      while (!outcome) {
+        await new Promise((resolve) => setTimeout(resolve, this.pollMs));
+        outcome = this.editor.outcome(job.projectId);
       }
-      this.end(job, "completed", null, applied, leftForReview);
+      const changed = await change();
+      if (outcome === "completed")
+        this.end(
+          job,
+          "completed",
+          changed?.cuts ? null : magicWandIssues.nothing,
+          changed,
+        );
+      else if (outcome === "stopped")
+        this.end(job, "stopped", magicWandIssues.stopped, changed);
+      else
+        this.end(
+          job,
+          "failed",
+          outcome === "signIn"
+            ? magicWandIssues.claude
+            : outcome === "limit"
+              ? magicWandIssues.limit
+              : magicWandIssues.failed,
+          changed,
+        );
     } catch (error) {
       const message =
         error instanceof Error &&
         (error.message === magicWandIssues.noAudio ||
           error.message === magicWandIssues.transcription)
           ? error.message
-          : error instanceof CodexVideoEditToolError &&
-              (error.code === "stale_draft" || error.code === "edit_conflict")
-            ? magicWandIssues.changed
-            : magicWandIssues.failed;
-      this.end(job, "failed", message, applied, leftForReview);
+          : magicWandIssues.failed;
+      this.end(job, "failed", message, await change().catch(() => null));
     }
   }
 }

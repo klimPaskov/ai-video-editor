@@ -123,11 +123,12 @@
               <option value="gemini">Gemini API</option>
             </select>
             <p id="claude-context-notice">
-              Requests and the project information Claude reads through the
-              editor's tools are sent to Anthropic. Speech work may include
-              bounded local transcript text; earlier messages in this
-              conversation are included in later turns. Source audio and video
-              stay on this device.
+              Requests and what Claude reads are sent to Anthropic: project and
+              timeline details, the whole edited transcript (Claude keeps it in
+              its project workspace), and small pictures of your edit that it
+              asks to see, which show your footage. Earlier messages in this
+              conversation are included in later turns. Your source audio and
+              video files stay on this device.
             </p>
             <p id="claude-api-notice" hidden>
               This Claude Code sign-in uses Anthropic Console API billing, so
@@ -135,9 +136,11 @@
             </p>
             <p id="codex-context-notice" hidden>
               Requests and the project information Codex reads are sent to
-              OpenAI. Speech work may include bounded local transcript text;
+              OpenAI, including small pictures of your edit when it asks to see
+              them. Speech work may include bounded local transcript text;
               transcript pages may remain in this conversation and be included
-              in later turns. Source audio and video stay on this device.
+              in later turns. Your source audio and video files stay on this
+              device.
             </p>
             <p id="codex-thread-status" role="status"></p>
             <div id="codex-thread-messages" aria-live="polite"></div>
@@ -150,6 +153,40 @@
               model calls; source audio and video stay on this device.
             </p>
             <button id="open-codex-thread">Open conversation</button>
+            <details id="claude-full-edit" hidden>
+              <summary>Edit the whole video</summary>
+              <form id="claude-full-edit-form">
+                <label for="full-edit-goal">What it is for</label>
+                <input
+                  id="full-edit-goal"
+                  type="text"
+                  maxlength="300"
+                  placeholder="A short product update for customers"
+                />
+                <label for="full-edit-audience">Who watches it</label>
+                <input id="full-edit-audience" type="text" maxlength="300" />
+                <label for="full-edit-style">Style</label>
+                <input
+                  id="full-edit-style"
+                  type="text"
+                  maxlength="300"
+                  placeholder="Calm and clean"
+                />
+                <label for="full-edit-level">How far to go</label>
+                <select id="full-edit-level">
+                  <option value="tidy">Tidy</option>
+                  <option value="polished" selected>Polished</option>
+                  <option value="bold">Bold</option>
+                </select>
+                <button type="submit" id="start-full-edit" class="primary">
+                  Edit with Claude
+                </button>
+              </form>
+            </details>
+            <div id="full-edit-result" hidden>
+              <span id="full-edit-changes"></span>
+              <button type="button" id="undo-full-edit">Undo all</button>
+            </div>
             <form id="codex-thread-form" hidden>
               <label for="codex-thread-input" class="visually-hidden"
                 >Request an edit</label
@@ -281,6 +318,17 @@
                 <p id="audio-note" class="muted">
                   Applied when exporting. Your recording is not changed.
                 </p>
+              </div>
+              <div id="sound-card" class="captions-card">
+                <div class="captions-controls">
+                  <span class="card-title" data-icon="audio">Sound</span>
+                  <button type="button" id="sound-add-music">Add music</button>
+                  <button type="button" id="sound-add-effect">
+                    Add sound effect here
+                  </button>
+                </div>
+                <div id="sound-list" class="sound-list" hidden></div>
+                <p id="sound-note" class="muted" role="status" hidden></p>
               </div>
               <div id="captions-card" class="captions-card">
                 <div class="captions-controls">
@@ -695,8 +743,9 @@
             Claude runs through Claude Code on this device. You sign in through
             Anthropic in your browser; this app never receives your password or
             sign-in token. During a turn you start, Claude may receive your
-            request, project and timeline details and bounded local transcript
-            pages. Source audio and video stay on this device.
+            request, project and timeline details, the whole edited transcript
+            and small pictures of your edit (which show your footage). Your
+            source audio and video files stay on this device.
           </p>
           <div class="codex-actions">
             <button type="button" id="claude-sign-in" hidden>
@@ -713,11 +762,22 @@
           </div>
           <p id="claude-error" role="alert" hidden></p>
           <div id="claude-model-settings" hidden>
-            <label for="claude-model">Default model</label
+            <label for="claude-model">Production model</label
             ><select id="claude-model"></select>
             <label for="claude-effort">Effort</label
             ><select id="claude-effort"></select>
+            <label for="claude-rough-cut-model">Rough cut model</label
+            ><select id="claude-rough-cut-model"></select>
           </div>
+          <label for="asset-policy">Material Claude may use</label
+          ><select id="asset-policy">
+            <option value="any">Any material, including copyrighted</option>
+            <option value="copyright_free">Copyright-free material only</option>
+          </select>
+          <p id="asset-policy-note" class="field-note">
+            Copyrighted material can get a video claimed, muted or blocked on
+            some platforms.
+          </p>
         </section>
         <section id="codex-settings" aria-label="Codex account" hidden>
           <p id="codex-account" role="status"></p>
@@ -811,6 +871,49 @@
             Save
           </button>
         </div>
+      </form>
+    </dialog>
+    <dialog id="project-dialog" aria-labelledby="project-dialog-title">
+      <form id="project-form">
+        <div class="panel-header">
+          <h2 id="project-dialog-title">Project</h2>
+          <button
+            type="button"
+            id="project-dialog-close"
+            class="icon-button"
+            data-icon="close"
+            aria-label="Close project options"
+          ></button>
+        </div>
+        <div id="project-rename-view">
+          <label class="field-label" for="project-name">Name</label>
+          <input
+            type="text"
+            id="project-name"
+            maxlength="160"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <div class="dialog-actions project-actions">
+            <button type="button" id="project-delete" class="ghost danger">
+              Delete project…</button
+            ><span class="source-bar-spacer"></span
+            ><button type="button" id="project-cancel">Cancel</button
+            ><button type="submit" class="primary" id="project-save">
+              Save
+            </button>
+          </div>
+        </div>
+        <div id="project-delete-view" hidden>
+          <p id="project-delete-text"></p>
+          <div class="dialog-actions">
+            <button type="button" id="project-delete-cancel">Cancel</button
+            ><button type="button" id="project-delete-confirm" class="danger">
+              Delete
+            </button>
+          </div>
+        </div>
+        <p id="project-dialog-error" role="alert" hidden></p>
       </form>
     </dialog>
     <dialog id="record-dialog" aria-labelledby="record-title">

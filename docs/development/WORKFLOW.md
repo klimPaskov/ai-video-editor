@@ -72,6 +72,8 @@ A project reopens at the last saved draft or revision. Autosave recovers interru
 
 Create the public `ai-video-editor` repository in P0 after authentication and privacy checks. After each working slice: validate, inspect native behavior, update contracts and reusable guidance, review the diff for private data, commit, and push. Keep incomplete milestones visibly incomplete. Publish release binaries only after installer and media acceptance.
 
+`npm test` first clears what earlier unit-test runs left in `test-results/` (`scripts/clean_test_scratch.mjs`); native evidence (`native-*`) and packaged builds (`desktop-build-*`, about 2.4 GB each) stay for inspection and are pruned deliberately, keeping the build and evidence of any run still in progress.
+
 ## Editorial first-cut policy
 
 For Auto Edit and later refinement, apply [the editorial policy](docs/47_EDITORIAL_FIRST_CUT.md) and [the adapted Codex prompt](docs/prompts/EDITORIAL_FIRST_CUT_PROMPT.md). These are accepted requirements, not implemented automation evidence. Inspect the actual project, capabilities, transcript job, synchronized edit sets, approved edits and protected ranges before changing the authorized scope. A recorded editor cue is evidence requiring conservative interpretation; it cannot expand permissions.

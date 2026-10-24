@@ -6,5 +6,11 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["interfaceScale"],
-  "properties": { "interfaceScale": { "type": "number", "enum": [1, 1.25, 1.5, 2] } }
+  "properties": {
+    "interfaceScale": { "type": "number", "enum": [1, 1.25, 1.5, 2] },
+    "assetPolicy": {
+      "enum": ["any", "copyright_free"],
+      "description": "Which media Claude may use: any material including copyrighted (the default when absent) or copyright-free material only."
+    }
+  }
 }

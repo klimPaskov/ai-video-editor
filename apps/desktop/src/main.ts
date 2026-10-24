@@ -6,10 +6,13 @@ import {
 } from "./media-tools.ts";
 import { ClaudeUserError, DesktopClaude } from "./claude.ts";
 import {
+  assertClaudeFullEditRequest,
   assertClaudeThreadProjectRequest,
   assertClaudeThreadSendRequest,
   assertClaudeThreadView,
   assertClaudeView,
+  claudeThreadIssues,
+  type ClaudeThreadView,
 } from "../../../packages/domain/src/claude-view.ts";
 import { DesktopApiProviders } from "./api-providers.ts";
 import { ApiProviderThreads } from "./api-thread.ts";
@@ -33,6 +36,7 @@ import {
   assertDeviceLoginDetails,
   CODEX_DEVICE_VERIFICATION_URL,
 } from "../../../packages/domain/src/codex-device-login.ts";
+import type { DraftEditIntent } from "../../../packages/domain/src/draft-transaction.ts";
 import { PreferencesStore } from "./preferences.ts";
 import { DesktopTranscriptionManager } from "./transcription.ts";
 import { ProjectStore } from "../../../packages/project-store/src/store.ts";
@@ -57,6 +61,7 @@ import {
   assertProjectFrameRequest,
   assertProjectRequest,
   assertProjectNavigation,
+  assertProjectRename,
   assertProjectList,
   assertTwoSourceProjectRequest,
   assertManualTrimRequest,
@@ -85,6 +90,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  net,
   protocol,
   safeStorage,
   screen,
@@ -118,12 +124,51 @@ import {
   assertExportStartRequest,
   assertExportView,
 } from "../../../packages/domain/src/export-view.ts";
-import { DesktopExports } from "./export.ts";
-import { DesktopMagicWand } from "./magic-wand.ts";
+import { DesktopExports, planDraft } from "./export.ts";
+import {
+  DesktopMagicWand,
+  type RoughCutEditor,
+  type RoughCutOutcome,
+} from "./magic-wand.ts";
 import { DesktopRecorder, RecordingError } from "./recording.ts";
 import { DesktopPlaybackProxies } from "./playback-proxies.ts";
 import { CaptionSettingsStore } from "./caption-settings.ts";
 import { ProjectSettingsStore } from "./project-settings.ts";
+import { removeProjectSideFiles } from "./project-removal.ts";
+import {
+  assertSoundAddRequest,
+  assertSoundRemoveRequest,
+  assertSoundUpdateRequest,
+  assertSoundsRequest,
+  assertSoundsView,
+  type SoundsView,
+} from "../../../packages/domain/src/sound-view.ts";
+import {
+  buildSoundLayer,
+  SoundBuildError,
+  soundIntervals,
+} from "../../../packages/domain/src/sounds.ts";
+import {
+  SoundAssetError,
+  SoundAssetStore,
+} from "../../../packages/project-store/src/sounds.ts";
+import { probeSoundFile } from "../../../packages/media-engine/src/sound-probe.ts";
+import { sweepPartialExports, sweepTemporaryFolders } from "./private-notes.ts";
+import { roughCutTools } from "./rough-cut-playbook.ts";
+import {
+  writeClaudeWorkspace,
+  type WorkspaceTimeline,
+} from "./claude-workspace.ts";
+import { claudeGuides } from "./claude-guides.ts";
+import { effectiveAssetPolicy } from "../../../packages/domain/src/preferences.ts";
+import {
+  cachedPackageFile,
+  serveComposition,
+  storeComposition,
+} from "./composition-server.ts";
+import { importComposition, packageFile } from "./composition-import.ts";
+import { mirrorUserSkills, userSkillsDirectory } from "./claude-skills.ts";
+import type { LocalTranscript } from "../../../packages/domain/src/transcription.ts";
 import {
   assertAudioSettings,
   assertAudioSettingsRequest,
@@ -170,8 +215,48 @@ import type { ClipSpeed } from "../../../packages/domain/src/speed.ts";
 import { zoomSourceRange } from "../../../packages/domain/src/zoom.ts";
 import { graphicAnchor } from "../../../packages/domain/src/graphics.ts";
 import { renderGraphicsTrack } from "./graphics-render.ts";
+import { renderDraftFrames } from "./frame-render.ts";
+import { checkComposition } from "./composition-check.ts";
+import { toolCallTimeoutMs } from "../../../packages/codex-tools/src/frames.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
+/** The only page a sealed composition frame may load: a sealed page by hash. */
+const compositionFrameUrl = new RegExp(
+  `^${appIdentity.urlScheme}://composition/[a-f0-9]{64}[.]html$`,
+  "u",
+);
+
+/**
+ * Downloads one exact pinned jsDelivr file (a composition library or a
+ * Fontsource font); callers validate the URL and cache the bytes.
+ */
+async function fetchPinnedFile(address: string): Promise<Buffer> {
+  const limit = 8 * 1024 * 1024;
+  const response = await net.fetch(address, {
+    redirect: "error",
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (
+    !response.ok ||
+    !response.body ||
+    Number(response.headers.get("content-length") ?? 0) > limit
+  )
+    throw new Error("File unavailable");
+  // Read the body as it arrives and stop at the limit, whatever the headers
+  // claim.
+  const chunks: Buffer[] = [];
+  let received = 0;
+  for await (const chunk of response.body) {
+    received += chunk.length;
+    if (received > limit) throw new Error("File too large");
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+/** Sealed HyperFrames compositions, stored by hash (ADR 0021). */
+const compositionsRoot = () =>
+  path.join(app.getPath("userData"), "compositions");
 const page = `${origin}/index.html`;
 class UserFacingError extends Error {}
 let window: BrowserWindow | undefined;
@@ -190,6 +275,13 @@ let resolvePlaybackSource:
   | ((
       projectId: string,
       sourceId: string,
+    ) => Promise<{ path: string; mime: string } | null>)
+  | undefined;
+/** Resolves a project audio file for the preview; set once services start. */
+let resolveSoundPreview:
+  | ((
+      projectId: string,
+      assetId: string,
     ) => Promise<{ path: string; mime: string } | null>)
   | undefined;
 let servicesClosed = false;
@@ -240,6 +332,10 @@ const userDataPath = existsSync(legacyUserDataPath)
 mkdirSync(userDataPath, { recursive: true });
 app.setPath("userData", userDataPath);
 app.enableSandbox();
+// Compositions may draw with WebGL (three.js, shaders). A machine without a
+// usable GPU (or with a blocked driver) gets Chromium's software renderer
+// instead of no WebGL at all, so previews and exports still work.
+app.commandLine.appendSwitch("enable-unsafe-swiftshader");
 protocol.registerSchemesAsPrivileged([
   {
     scheme: appIdentity.urlScheme,
@@ -247,6 +343,10 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       supportFetchAPI: true,
+      // Sealed compositions (opaque-origin frames) load ES modules and fetch
+      // pinned package files from the composition host: cross-origin
+      // requests, which the host answers with CORS headers.
+      corsEnabled: true,
       // Range requests let the preview <video> seek inside a source.
       stream: true,
     },
@@ -291,11 +391,10 @@ async function servePlaybackSource(
   projectId: string,
   sourceId: string,
   request: Request,
+  resolve = resolvePlaybackSource,
 ): Promise<Response> {
   const notFound = () => new Response("Not found", { status: 404 });
-  const resolved = await resolvePlaybackSource?.(projectId, sourceId).catch(
-    () => null,
-  );
+  const resolved = await resolve?.(projectId, sourceId).catch(() => null);
   if (!resolved) return notFound();
   let size: number;
   try {
@@ -459,14 +558,50 @@ async function start(): Promise<void> {
     if (!bytes.length) throw new Error("Required renderer resource is empty");
     assets.set(route, { bytes, mime: mime! });
   }
+  // Sealed HyperFrames compositions and their pinned libraries (ADR 0021).
+  const compositionPackaged = {
+    runtime: await readFile(
+      path.join(
+        app.getAppPath(),
+        "renderer",
+        "vendor",
+        "hyperframes-runtime.js",
+      ),
+    ),
+    bridge: await readFile(
+      path.join(app.getAppPath(), "renderer", "stage-bridge.js"),
+    ),
+  };
   protocol.handle(appIdentity.urlScheme, async (request) => {
     const url = new URL(request.url);
+    if (url.host === "composition") {
+      if (request.method !== "GET" || url.search)
+        return new Response("Not found", { status: 404 });
+      return serveComposition(url.pathname, {
+        scheme: appIdentity.urlScheme,
+        compositions: compositionsRoot(),
+        libraryCache: path.join(app.getPath("userData"), "library-cache"),
+        packaged: compositionPackaged,
+        fetchLibrary: fetchPinnedFile,
+      });
+    }
     const media =
       /^\/media\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})$/u.exec(
         url.pathname,
       );
     if (media && url.host === "app" && !url.search && request.method === "GET")
       return servePlaybackSource(media[1]!, media[2]!, request);
+    const sound =
+      /^\/sounds\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})$/u.exec(
+        url.pathname,
+      );
+    if (sound && url.host === "app" && !url.search && request.method === "GET")
+      return servePlaybackSource(
+        sound[1]!,
+        sound[2]!,
+        request,
+        resolveSoundPreview,
+      );
     const asset = assets.get(url.pathname);
     if (request.method !== "GET" || url.host !== "app" || url.search || !asset)
       return new Response("Not found", { status: 404 });
@@ -476,8 +611,9 @@ async function start(): Promise<void> {
         "Content-Security-Policy":
           url.pathname === "/stage.html"
             ? // Graphics: their own inline styles and data: images; no
-              // scripts, network, frames, forms or navigation.
-              "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+              // scripts, network, forms or navigation. The only frames are
+              // sealed compositions, which run in their own opaque origin.
+              `default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'self'; frame-src ${appIdentity.urlScheme}://composition; base-uri 'none'; form-action 'none'`
             : "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'",
       },
     });
@@ -487,6 +623,29 @@ async function start(): Promise<void> {
   );
   session.defaultSession.setPermissionCheckHandler(() => false);
   session.defaultSession.on("will-download", (event) => event.preventDefault());
+  // The app's pages (and the sealed compositions in them) never reach the
+  // network: they load packaged content over the app scheme only. This
+  // default-deny filter sits under each page's Content Security Policy as a
+  // second layer, for channels a policy may not cover (preconnect, WebSocket,
+  // WebRTC signalling). The main process's own downloads of pinned package
+  // files (net.fetch) belong to no page and pass.
+  session.defaultSession.webRequest.onBeforeRequest(
+    {
+      urls: ["http://*/*", "https://*/*", "ws://*/*", "wss://*/*", "ftp://*/*"],
+    },
+    (details, callback) =>
+      callback({ cancel: details.webContentsId !== undefined }),
+  );
+  app.on("web-contents-created", (_event, contents) => {
+    // No WebRTC connection can be made, so no address can leak through ICE.
+    contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
+    // Nothing in any window, the hidden export and check windows included,
+    // navigates a frame away from the app's own pages.
+    contents.on("will-frame-navigate", (event) => {
+      if (!event.url.startsWith(`${appIdentity.urlScheme}://`))
+        event.preventDefault();
+    });
+  });
   const preferences = new PreferencesStore(
     path.join(app.getPath("userData"), "preferences"),
   );
@@ -515,6 +674,12 @@ async function start(): Promise<void> {
   const projectRoot = path.join(userData, "project-store");
   const projects = new ProjectStore(projectRoot, library);
   const drafts = new DraftTransactionStore(projectRoot, projects);
+  // The project's music and sound effects: copied in, hashed, never changed.
+  const soundAssets = new SoundAssetStore(projectRoot, (file, signal) =>
+    probeSoundFile(file, {
+      ...(signal ? { signal } : {}),
+    }),
+  );
   const projectRuntime = new DesktopProjectRuntime(drafts, library);
   const captionSettings = new CaptionSettingsStore(
     path.join(userData, "caption-settings"),
@@ -524,19 +689,271 @@ async function start(): Promise<void> {
     assertAudioSettings,
     defaultAudioSettings,
   );
+  // Caption and audio choices are part of the draft, so they share Undo with
+  // every other edit. Projects whose draft has none yet keep the per-project
+  // choice saved by earlier versions (read only) until the first change.
+  const sameSettings = (a: object, b: object) =>
+    Object.keys(a).length === Object.keys(b).length &&
+    Object.entries(a).every(
+      ([key, value]) => (b as Record<string, unknown>)[key] === value,
+    );
+  const effectiveCaptions = async (projectId: string) =>
+    (await drafts.snapshot(projectId)).draft.timeline.captions ??
+    (await captionSettings.get(projectId));
+  const effectiveAudio = async (projectId: string) =>
+    (await drafts.snapshot(projectId)).draft.timeline.audio ??
+    (await audioSettings.get(projectId));
+  const setDraftPresentation = async <T extends object>(
+    projectId: string,
+    kind: "captions" | "audio",
+    settings: T,
+  ): Promise<T> => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { draft } = await drafts.snapshot(projectId);
+      const current =
+        kind === "captions"
+          ? await effectiveCaptions(projectId)
+          : await effectiveAudio(projectId);
+      if (sameSettings(current, settings)) return settings;
+      try {
+        await invokeWithProjectDraftRefresh({
+          toolName:
+            kind === "captions" ? "captions.configure" : "audio.configure",
+          projectId,
+          activeProjectId: () => activeProjectId,
+          drafts,
+          notify: publishDraftNotice,
+          work: () =>
+            drafts.applyManual({
+              schema_version: "1.0",
+              request_id: randomUUID(),
+              project_id: projectId,
+              draft_id: draft.draft_id,
+              base_revision_id: draft.base_revision_id,
+              expected_sequence: draft.draft_sequence,
+              expected_timeline_sha256: draft.timeline_sha256,
+              pass_group: { pass_group_id: randomUUID(), kind },
+              reason:
+                kind === "captions" ? "Change captions." : "Change audio.",
+              operations: [
+                kind === "captions"
+                  ? { type: "set_captions", captions: settings as never }
+                  : { type: "set_audio", audio: settings as never },
+              ],
+            }),
+        });
+        return settings;
+      } catch (error) {
+        if (error instanceof DraftTransactionError && error.code === "stale")
+          continue;
+        if (error instanceof DraftTransactionError)
+          throw new UserFacingError(error.message);
+        throw error;
+      }
+    }
+    throw new UserFacingError("The draft changed. Try again.");
+  };
   register(channels.audioGet, async (request) => {
     assertAudioSettingsRequest(request);
-    return audioSettings.get(request.project_id);
+    return effectiveAudio(request.project_id);
   });
   register(channels.audioSet, async (request) => {
     assertAudioSettingsUpdate(request);
     if (activeProjectId !== request.project_id)
       throw new UserFacingError("Open this project before changing audio.");
-    return audioSettings.set(request.project_id, request.settings);
+    return setDraftPresentation(request.project_id, "audio", request.settings);
+  });
+  /** The Sound card: the draft's layers, where they play and their files. */
+  const soundsView = async (projectId: string): Promise<SoundsView> => {
+    const { draft } = await drafts.snapshot(projectId);
+    const sounds = draft.timeline.sounds ?? [];
+    const assets = new Map(
+      (await soundAssets.list(projectId)).map((asset) => [
+        asset.asset_id,
+        asset,
+      ]),
+    );
+    const placed = soundIntervals(
+      sounds,
+      draft.timeline.clips.map((clip) => ({
+        sourceId: clip.source_id,
+        timelineStartUs: clip.timeline_start_us,
+        timelineEndUs: clip.timeline_end_us,
+        sourceStartUs: clip.source_start_us,
+        sourceEndUs: clip.source_end_us,
+        ...(clip.speed ? { speed: clip.speed } : {}),
+      })),
+      draft.timeline.duration_us,
+    );
+    const view: SoundsView = {
+      schema_version: "1.0",
+      project_id: projectId,
+      layers: sounds.map((sound) => {
+        const interval = placed.find((item) => item.soundId === sound.sound_id);
+        return {
+          sound_id: sound.sound_id,
+          name: sound.name,
+          kind: sound.kind,
+          file_name: assets.get(sound.asset_id)?.name ?? sound.name,
+          asset_id: sound.asset_id,
+          asset_start_us: sound.asset_start_us,
+          fade_in_us: interval?.fadeInUs ?? sound.fade_in_us,
+          fade_out_us: interval?.fadeOutUs ?? sound.fade_out_us,
+          gain_db: sound.gain_db,
+          duck_db: sound.duck_db,
+          loop: sound.loop,
+          timeline_range: interval
+            ? { start_us: interval.startUs, end_us: interval.endUs }
+            : null,
+        };
+      }),
+    };
+    assertSoundsView(view);
+    return view;
+  };
+  /** One undoable manual change to the draft's sound layers. */
+  const changeSounds = async (
+    projectId: string,
+    reason: string,
+    operation: (
+      draft: Awaited<ReturnType<typeof drafts.snapshot>>["draft"],
+    ) => DraftEditIntent | null,
+  ): Promise<void> => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before changing sound.");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { draft } = await drafts.snapshot(projectId);
+      const next = operation(draft);
+      if (!next) return;
+      try {
+        await invokeWithProjectDraftRefresh({
+          toolName: "sound.set",
+          projectId,
+          activeProjectId: () => activeProjectId,
+          drafts,
+          notify: publishDraftNotice,
+          work: () =>
+            drafts.applyManual({
+              schema_version: "1.0",
+              request_id: randomUUID(),
+              project_id: projectId,
+              draft_id: draft.draft_id,
+              base_revision_id: draft.base_revision_id,
+              expected_sequence: draft.draft_sequence,
+              expected_timeline_sha256: draft.timeline_sha256,
+              pass_group: { pass_group_id: randomUUID(), kind: "audio" },
+              reason,
+              operations: [next],
+            }),
+        });
+        return;
+      } catch (error) {
+        if (error instanceof DraftTransactionError && error.code === "stale")
+          continue;
+        if (error instanceof DraftTransactionError)
+          throw new UserFacingError(error.message);
+        throw error;
+      }
+    }
+    throw new UserFacingError("The draft changed. Try again.");
+  };
+  register(channels.soundsGet, async (request) => {
+    assertSoundsRequest(request);
+    return soundsView(request.project_id);
+  });
+  let addingSound = false;
+  register(channels.soundsAdd, async (request) => {
+    assertSoundAddRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before adding sound.");
+    if (addingSound || !window)
+      throw new UserFacingError("A sound is already being added.");
+    addingSound = true;
+    try {
+      const selected = await dialog.showOpenDialog(window, {
+        title: request.kind === "music" ? "Add music" : "Add sound effect",
+        properties: ["openFile"],
+        filters: [
+          {
+            name: "Audio",
+            extensions: ["mp3", "wav", "flac", "ogg", "m4a", "aac", "opus"],
+          },
+        ],
+      });
+      const file = selected.filePaths[0];
+      if (selected.canceled || !file) return soundsView(request.project_id);
+      let asset;
+      try {
+        asset = await soundAssets.import(request.project_id, file);
+      } catch (error) {
+        if (error instanceof SoundAssetError)
+          throw new UserFacingError(error.message);
+        throw error;
+      }
+      await changeSounds(request.project_id, "Add sound.", (draft) => {
+        try {
+          return {
+            type: "set_sound",
+            sound: buildSoundLayer(
+              {
+                name: asset.name,
+                kind: request.kind,
+                asset,
+                startUs: Math.min(
+                  request.start_us,
+                  Math.max(0, draft.timeline.duration_us - 1),
+                ),
+              },
+              draft.timeline,
+              () => `sound-${randomUUID().replaceAll("-", "")}`,
+            ),
+          };
+        } catch (error) {
+          if (error instanceof SoundBuildError)
+            throw new UserFacingError(error.message);
+          throw error;
+        }
+      });
+      return soundsView(request.project_id);
+    } finally {
+      addingSound = false;
+    }
+  });
+  register(channels.soundsUpdate, async (request) => {
+    assertSoundUpdateRequest(request);
+    await changeSounds(request.project_id, "Change sound.", (draft) => {
+      const current = draft.timeline.sounds?.find(
+        (item) => item.sound_id === request.sound_id,
+      );
+      if (!current) throw new UserFacingError("That sound was removed.");
+      if (
+        current.gain_db === request.gain_db &&
+        current.duck_db === request.duck_db
+      )
+        return null;
+      return {
+        type: "set_sound",
+        sound: {
+          ...current,
+          gain_db: request.gain_db,
+          duck_db: request.duck_db,
+        },
+      };
+    });
+    return soundsView(request.project_id);
+  });
+  register(channels.soundsRemove, async (request) => {
+    assertSoundRemoveRequest(request);
+    await changeSounds(request.project_id, "Remove sound.", (draft) =>
+      draft.timeline.sounds?.some((item) => item.sound_id === request.sound_id)
+        ? { type: "remove_sound", sound_id: request.sound_id }
+        : null,
+    );
+    return soundsView(request.project_id);
   });
   /** Captions for the current draft when they are on and a transcript exists. */
   const draftCaptions = async (projectId: string) => {
-    const settings = await captionSettings.get(projectId);
+    const settings = await effectiveCaptions(projectId);
     if (!settings.enabled) return null;
     const view = await transcription!.get({
       schema_version: "1.0",
@@ -578,8 +995,8 @@ async function start(): Promise<void> {
         timelineSha256: project.draft.timelineSha256,
       };
     },
-    captionSettings: (projectId) => captionSettings.get(projectId),
-    audioSettings: (projectId) => audioSettings.get(projectId),
+    captionSettings: effectiveCaptions,
+    audioSettings: effectiveAudio,
     defaultDirectory: () => app.getPath("videos"),
     chooseDestination: async (defaultPath) => {
       if (!window) return null;
@@ -635,13 +1052,17 @@ async function start(): Promise<void> {
   });
   register(channels.captionsGet, async (request) => {
     assertCaptionSettingsRequest(request);
-    return captionSettings.get(request.project_id);
+    return effectiveCaptions(request.project_id);
   });
   register(channels.captionsSet, async (request) => {
     assertCaptionSettingsUpdate(request);
     if (activeProjectId !== request.project_id)
       throw new UserFacingError("Open this project before changing captions.");
-    return captionSettings.set(request.project_id, request.settings);
+    return setDraftPresentation(
+      request.project_id,
+      "captions",
+      request.settings,
+    );
   });
   recorder = new DesktopRecorder({
     ...mediaExecutables,
@@ -756,12 +1177,19 @@ async function start(): Promise<void> {
     assertEmptyRequest(request);
     return recording(() => recorder!.cancel());
   });
+  // Leftovers of an export or picture render that was interrupted last time.
+  void sweepTemporaryFolders().catch(() => undefined);
+  void sweepPartialExports(path.join(userData, "exports")).catch(
+    () => undefined,
+  );
   exports = new DesktopExports({
     ...mediaExecutables,
     renderGraphics: (request) =>
       renderGraphicsTrack(request, `${origin}/stage.html`),
     captions: draftCaptions,
-    audio: (projectId) => audioSettings.get(projectId),
+    audio: effectiveAudio,
+    soundFile: async (projectId, assetId, sha256) =>
+      (await soundAssets.resolve(projectId, assetId, sha256)).path,
     drafts,
     recordRoot: path.join(userData, "exports"),
     defaultDirectory: () => app.getPath("videos"),
@@ -813,6 +1241,42 @@ async function start(): Promise<void> {
     assertPlaybackView(value);
     return value;
   });
+  const verifiedSoundPreviews = new Map<
+    string,
+    { path: string; size: number; mtimeMs: number }
+  >();
+  resolveSoundPreview = async (projectId, assetId) => {
+    if (activeProjectId !== projectId) return null;
+    // Hashing a long file for every byte-range request would stall playback:
+    // verify once, and again only when the file's size or time changes.
+    const key = `${projectId}/${assetId}`;
+    const known = verifiedSoundPreviews.get(key);
+    let file: { path: string };
+    const info = known ? await stat(known.path).catch(() => null) : null;
+    if (known && info?.size === known.size && info.mtimeMs === known.mtimeMs)
+      file = known;
+    else {
+      file = await soundAssets.resolve(projectId, assetId);
+      const after = await stat(file.path);
+      verifiedSoundPreviews.set(key, {
+        path: file.path,
+        size: after.size,
+        mtimeMs: after.mtimeMs,
+      });
+    }
+    const extension = path.extname(file.path).toLowerCase();
+    const mime =
+      {
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".flac": "audio/flac",
+        ".ogg": "audio/ogg",
+        ".opus": "audio/ogg",
+        ".m4a": "audio/mp4",
+        ".aac": "audio/aac",
+      }[extension] ?? "application/octet-stream";
+    return { path: file.path, mime };
+  };
   resolvePlaybackSource = async (projectId, sourceId) => {
     if (activeProjectId !== projectId) return null;
     const { project } = await drafts.snapshotWithProject(projectId);
@@ -935,6 +1399,35 @@ async function start(): Promise<void> {
     if (!window || window.isDestroyed()) return;
     window.webContents.send(channels.projectDraftChanged, notice);
   };
+  // Rendered pictures for media.get_frames, through the export compositor.
+  // One render at a time keeps offscreen graphics and FFmpeg work bounded.
+  let frameQueue: Promise<unknown> = Promise.resolve();
+  const renderFramesForTool = (
+    projectId: string,
+    timesUs: number[],
+    maxWidth: number,
+    layout: "frames" | "sheet" = "frames",
+  ) => {
+    // The assistant stops waiting after the tool-call limit; a render it
+    // gave up on stops too instead of holding up the next request.
+    const signal = AbortSignal.timeout(toolCallTimeoutMs);
+    const work = frameQueue.then(() =>
+      renderDraftFrames({
+        ...mediaExecutables,
+        drafts,
+        projectId,
+        timesUs,
+        maxWidth,
+        signal,
+        sheet: layout === "sheet",
+        captions: () => draftCaptions(projectId),
+        renderGraphics: (request) =>
+          renderGraphicsTrack(request, `${origin}/stage.html`),
+      }),
+    );
+    frameQueue = work.catch(() => undefined);
+    return work;
+  };
   const invokeCodexTool = async (
     name: unknown,
     input: unknown,
@@ -958,6 +1451,7 @@ async function start(): Promise<void> {
           drafts,
           "codex",
           readTranscriptForTool,
+          renderFramesForTool,
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
@@ -979,8 +1473,40 @@ async function start(): Promise<void> {
   );
   // Claude reaches the same guarded tool service through its own broker, so
   // every Claude transaction is attributed to the Claude origin.
-  // Magic Edit commits through the same guarded tools as the assistants,
-  // attributed to its own origin so its cuts share Undo/Redo.
+  // Magic Edit reads the draft through the guarded tools as its own origin;
+  // the rough cut itself is Claude's story edit (claude origin, shared Undo).
+  const roughCutOutcome = (view: ClaudeThreadView): RoughCutOutcome | null =>
+    view.status === "running" || view.status === "interrupting"
+      ? null
+      : view.status === "ready"
+        ? "completed"
+        : view.message === claudeThreadIssues.stopped
+          ? "stopped"
+          : view.message === claudeThreadIssues.signIn ||
+              view.message === claudeThreadIssues.model
+            ? "signIn"
+            : view.message === claudeThreadIssues.limit
+              ? "limit"
+              : "failed";
+  const roughCutEditor: RoughCutEditor = {
+    async start(projectId, preset, request) {
+      if (!claude || activeProjectId !== projectId) return "failed";
+      if ((await claude.get()).status !== "signed_in") return "signIn";
+      try {
+        return roughCutOutcome(
+          await claude.startRoughCut(projectId, preset, request),
+        );
+      } catch {
+        return "failed";
+      }
+    },
+    outcome: (projectId) =>
+      claude ? roughCutOutcome(claude.getThread(projectId)) : "failed",
+    async stop(projectId) {
+      if (claude?.runKind(projectId) === "rough_cut")
+        await claude.interruptThread(projectId);
+    },
+  };
   const magicWand = new DesktopMagicWand(
     transcription!,
     async (projectId, name, input) => {
@@ -1001,6 +1527,7 @@ async function start(): Promise<void> {
         notify: publishDraftNotice,
       });
     },
+    roughCutEditor,
   );
   magicWandBusy = (projectId) => magicWand.busy(projectId);
   register(channels.magicGet, async (request) => {
@@ -1025,10 +1552,161 @@ async function start(): Promise<void> {
     assertMagicWandView(value);
     return value;
   });
+  // A HyperFrames composition from Claude's workspace, sealed and stored by
+  // hash so the stage can play it (ADR 0021).
+  const importCompositionForClaude = async (
+    projectId: string,
+    relativePath: string,
+  ) => {
+    if (!claude) throw new Error("Claude is unavailable");
+    const imported = await importComposition(
+      claude.workspaceFor(projectId),
+      relativePath,
+      {
+        // Pinned package files (fonts, stylesheets), cached with the libraries.
+        fetchPackage: (url) => {
+          const pinned = packageFile(url);
+          if (!pinned) throw new Error("Not a pinned package file");
+          return cachedPackageFile(
+            path.join(app.getPath("userData"), "library-cache"),
+            pinned,
+            fetchPinnedFile,
+          );
+        },
+      },
+    );
+    await storeComposition(compositionsRoot(), imported.sha256, imported.html);
+    return { sha256: imported.sha256 };
+  };
+  // composition.check: the sealed composition in the stage at the video's
+  // size, audited and pictured; it shares the picture queue.
+  const checkCompositionForClaude = async (
+    projectId: string,
+    relativePath: string,
+    timesUs: number[] | null,
+    cellWidth: number,
+  ) => {
+    const { sha256 } = await importCompositionForClaude(
+      projectId,
+      relativePath,
+    );
+    const signal = AbortSignal.timeout(toolCallTimeoutMs);
+    const work = frameQueue.then(async () => {
+      if (signal.aborted) throw new Error("Cancelled.");
+      const snapshot = await drafts.snapshot(projectId);
+      const frameUs = Math.ceil(
+        (snapshot.draft.timeline.frame_rate.denominator * 1_000_000) /
+          snapshot.draft.timeline.frame_rate.numerator,
+      );
+      const { plan } = await planDraft(drafts, mediaExecutables.ffprobe, projectId, {
+        startUs: 0,
+        endUs: Math.min(snapshot.draft.timeline.duration_us, frameUs),
+      });
+      return checkComposition({
+        stageUrl: `${origin}/stage.html`,
+        sha256,
+        width: plan.format.video.width,
+        height: plan.format.video.height,
+        timesUs,
+        cellWidth,
+        ffmpeg: mediaExecutables.ffmpeg,
+        signal,
+      });
+    });
+    frameQueue = work.catch(() => undefined);
+    return work;
+  };
+  // The project workspace Claude works in (ADR 0021): the committed edit as
+  // files. Writes for one project run one at a time, newest last.
+  const workspaceWrites = new Map<string, Promise<void>>();
+  const writeWorkspace = async (projectId: string, directory: string) => {
+    const service = new CodexVideoEditToolService(projectId, drafts, "claude");
+    const request = { schema_version: "1.0" as const, project_id: projectId };
+    const timeline = (await service.invoke(
+      "timeline.get_summary",
+      request,
+    )) as WorkspaceTimeline;
+    const project = (await service.invoke("project.get_summary", request)) as {
+      sources: Array<{ source_id: string }>;
+    };
+    // The frame compositions play in: the exported video's size and rate.
+    let frame: { width: number; height: number; frame_rate: string } | null =
+      null;
+    try {
+      const rate = (await drafts.snapshot(projectId)).draft.timeline.frame_rate;
+      const { plan } = await planDraft(drafts, mediaExecutables.ffprobe, projectId, {
+        startUs: 0,
+        endUs: Math.min(
+          timeline.duration_us,
+          Math.ceil((rate.denominator * 1_000_000) / rate.numerator),
+        ),
+      });
+      const video = plan.format.video;
+      frame = {
+        width: video.width,
+        height: video.height,
+        frame_rate: `${video.frameRate.numerator}/${video.frameRate.denominator}`,
+      };
+    } catch {
+      // Left out when the sources cannot be probed.
+    }
+    let transcripts: LocalTranscript[] = [];
+    try {
+      const view = await transcription!.get({ ...request, job_id: null });
+      if (view.job.status === "completed")
+        transcripts = view.results.map((result) => result.transcript);
+    } catch {
+      // No transcript yet: edit.md says so.
+    }
+    await writeClaudeWorkspace(directory, {
+      timeline,
+      project: frame ? { ...project, frame } : project,
+      transcripts,
+      sourceNames: new Map(
+        project.sources.map((source, index) => [
+          source.source_id,
+          `recording ${index + 1}`,
+        ]),
+      ),
+      guides: claudeGuides,
+    });
+  };
+  const refreshClaudeWorkspace = (
+    projectId: string,
+    directory: string,
+    required = false,
+  ): Promise<void> => {
+    const next = (workspaceWrites.get(projectId) ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => writeWorkspace(projectId, directory));
+    workspaceWrites.set(projectId, next);
+    return required ? next : next.catch(() => undefined);
+  };
   const invokeClaudeTool = async (name: unknown, input: unknown) => {
     if (!activeProjectId) throw new CodexVideoEditToolError("inactive_project");
     const projectId = activeProjectId;
-    return invokeWithProjectDraftRefresh({
+    // Captured before the call so an edit that lands after Stop still
+    // belongs to its full edit.
+    const run = claude?.fullEditRun(projectId) ?? null;
+    // A rough cut only reads, cuts and looks; it never decorates.
+    if (
+      claude?.runKind(projectId) === "rough_cut" &&
+      !roughCutTools.has(name as string)
+    )
+      throw new CodexVideoEditToolError("tool_not_available");
+    const target =
+      input && typeof input === "object"
+        ? (input as { target_transaction_id?: unknown }).target_transaction_id
+        : undefined;
+    // During a full edit Claude may only undo its own edits, so Undo all can
+    // always restore what was there before the run.
+    if (
+      run &&
+      name === "timeline.undo" &&
+      !claude!.fullEditIncludes(projectId, target)
+    )
+      throw new CodexVideoEditToolError("edit_conflict");
+    const value = await invokeWithProjectDraftRefresh({
       toolName: name,
       projectId,
       activeProjectId: () => activeProjectId,
@@ -1038,10 +1716,38 @@ async function start(): Promise<void> {
           drafts,
           "claude",
           readTranscriptForTool,
+          renderFramesForTool,
+          importCompositionForClaude,
+          checkCompositionForClaude,
+          soundAssets,
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
     });
+    // A full edit's Undo all needs every edit its tools applied.
+    if (
+      run &&
+      value &&
+      typeof value === "object" &&
+      (value as { status?: unknown }).status === "committed"
+    ) {
+      if (name === "timeline.undo") claude?.recordUndo(projectId, target, run);
+      else
+        claude?.recordCommit(
+          projectId,
+          (value as { transaction_id?: unknown }).transaction_id,
+          run,
+        );
+    }
+    // Claude reads the edit from its workspace; keep it current.
+    if (
+      claude &&
+      value &&
+      typeof value === "object" &&
+      (value as { status?: unknown }).status === "committed"
+    )
+      void refreshClaudeWorkspace(projectId, claude.workspaceFor(projectId));
+    return value;
   };
   claudeBroker = await CodexMcpBroker.open(
     path.join(userData, "claude-mcp-runtime"),
@@ -1054,8 +1760,50 @@ async function start(): Promise<void> {
   claude = new DesktopClaude(userData, {
     platform: process.platform,
     env: process.env,
+    prepareWorkspace: (projectId, directory) =>
+      refreshClaudeWorkspace(projectId, directory, true),
+    assetPolicy: async () =>
+      effectiveAssetPolicy(
+        await new PreferencesStore(
+          path.join(app.getPath("userData"), "preferences"),
+        ).read(),
+      ),
+    // The user's own Claude Code skills, mirrored into the app's profile.
+    userSkills: async () =>
+      (
+        await mirrorUserSkills(
+          userSkillsDirectory(process.env, app.getPath("home")),
+          path.join(userData, "claude", "skills-plugin"),
+        )
+      )?.directory ?? null,
     openExternal: (url) => shell.openExternal(url),
     mcpRuntime: () => claudeMcpRuntime,
+    history: {
+      newest: async (projectId) =>
+        (await drafts.snapshot(projectId)).undo_transaction_id,
+      undo: async (projectId, transactionId) => {
+        const { draft } = await drafts.snapshot(projectId);
+        await invokeWithProjectDraftRefresh({
+          toolName: "timeline.undo",
+          projectId,
+          activeProjectId: () => activeProjectId,
+          drafts,
+          notify: publishDraftNotice,
+          work: () =>
+            drafts.undoManual({
+              schema_version: "1.0",
+              request_id: randomUUID(),
+              project_id: projectId,
+              draft_id: draft.draft_id,
+              base_revision_id: draft.base_revision_id,
+              expected_sequence: draft.draft_sequence,
+              expected_timeline_sha256: draft.timeline_sha256,
+              target_transaction_id: transactionId,
+              reason: "Undo the full AI edit.",
+            }),
+        });
+      },
+    },
   });
   const apiClient = new ApiProviderClient();
   const apiProviders = new DesktopApiProviders(
@@ -1173,6 +1921,9 @@ async function start(): Promise<void> {
   register(channels.claudeSelect, async (request) =>
     claudeView(() => claude!.select(request as never)),
   );
+  register(channels.claudeSelectRoughCut, async (request) =>
+    claudeView(() => claude!.selectRoughCut(request as never)),
+  );
   register(channels.claudeInstallGuide, async (request) => {
     assertEmptyRequest(request);
     await claude!.openInstallGuide();
@@ -1272,6 +2023,22 @@ async function start(): Promise<void> {
     }
     return null;
   });
+  register(channels.projectRename, async (request) => {
+    assertProjectRename(request);
+    await projects.rename(request.id, request.name);
+    return projectRuntime.view(request.id);
+  });
+  // Deleting is an explicit Home action on a closed project. Its sources
+  // stay in Media; conversations and per-project choices go with it.
+  register(channels.projectDelete, async (request) => {
+    assertProjectRequest(request);
+    if (activeProjectId === request.id)
+      throw new UserFacingError("Close the project before deleting it.");
+    await projects.open(request.id);
+    await removeProjectSideFiles(userData, request.id);
+    await projects.remove(request.id);
+    return null;
+  });
   register(channels.projectNavigate, async (request) => {
     assertProjectNavigation(request);
     if (activeProjectId !== request.id) throw new Error("Inactive project");
@@ -1359,9 +2126,32 @@ async function start(): Promise<void> {
   register(channels.claudeThreadGet, async (request) => {
     assertClaudeThreadProjectRequest(request);
     await activeCodexProject(request.project_id);
-    const value = claude!.getThread(request.project_id);
+    const value = await claude!.getThreadWithHistory(request.project_id);
     assertClaudeThreadView(value);
     return value;
+  });
+  register(channels.claudeFullEditStart, async (request) => {
+    assertClaudeFullEditRequest(request);
+    await activeCodexProject(request.project_id);
+    const value = await claude!.startFullEdit(
+      request.project_id,
+      request.brief,
+    );
+    assertClaudeThreadView(value);
+    return value;
+  });
+  register(channels.claudeFullEditUndo, async (request) => {
+    assertClaudeThreadProjectRequest(request);
+    await activeCodexProject(request.project_id);
+    try {
+      const value = await claude!.undoFullEdit(request.project_id);
+      assertClaudeThreadView(value);
+      return value;
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
   });
   register(channels.claudeThreadOpen, async (request) => {
     assertClaudeThreadProjectRequest(request);
@@ -2225,9 +3015,14 @@ async function start(): Promise<void> {
   window.removeMenu();
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
-  // The only frame is the graphics stage; nothing may navigate it away.
+  // The only frames are the graphics stage and the sealed compositions in
+  // it; nothing may navigate them elsewhere.
   window.webContents.on("will-frame-navigate", (event) => {
-    if (!event.isMainFrame && event.url !== `${origin}/stage.html`)
+    if (
+      !event.isMainFrame &&
+      event.url !== `${origin}/stage.html` &&
+      !compositionFrameUrl.test(event.url)
+    )
       event.preventDefault();
   });
   window.webContents.on("will-attach-webview", (event) =>

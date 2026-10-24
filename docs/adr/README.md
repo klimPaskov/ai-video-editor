@@ -20,5 +20,9 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0015: fixed Gemini API-key provider
 - 0016: Luna/high Codex subscription default and current official runtime
 - 0017: AI Video Editor product and repository identity
-- 0018: Claude account sign-in as the default AI connection through the user's unmodified Claude Code CLI; signed-in acceptance pending
+- 0018: Claude account sign-in as the default AI connection through the user's unmodified Claude Code CLI; signed-in edit/Undo/Stop/restart passed, app-button sign-in completion pending
+- 0019: full AI edit with motion graphics
+- 0020: the rough cut (Magic Edit) is always an AI story edit; local analysis is evidence only
+- 0021: the editor is a harness for Claude: a per-project workspace and Claude Code's confined file and helper tools (amends 0018)
 - 0022: Windows release: cross-packaged win32-x64, bundled LGPL FFmpeg, Windows Codex client, per-user NSIS installer, release fuses, unsigned until a certificate exists
+- 0023: music and sound effects as undoable draft layers from project audio files, mixed at export

@@ -13,6 +13,13 @@ import {
   CodexVideoEditToolError,
   type CodexVideoEditToolErrorCode,
 } from "./service.ts";
+import { toolCallTimeoutMs } from "./frames.ts";
+
+/** A connection must send its request within `idleMs`; the call may then run `callMs`. */
+interface BrokerTimeouts {
+  idleMs: number;
+  callMs: number;
+}
 
 const MAX_FRAME_BYTES = 1024 * 1024;
 const tokenPattern = /^[a-f0-9]{64}$/u;
@@ -107,13 +114,20 @@ export class CodexMcpBroker {
   private readonly endpoint: string;
   private readonly token: string;
   private readonly invoke: ToolInvoker;
+  private readonly timeouts: BrokerTimeouts;
   private readonly sockets = new Set<Socket>();
   private closed = false;
 
-  private constructor(endpoint: string, token: string, invoke: ToolInvoker) {
+  private constructor(
+    endpoint: string,
+    token: string,
+    invoke: ToolInvoker,
+    timeouts: BrokerTimeouts,
+  ) {
     this.endpoint = endpoint;
     this.token = token;
     this.invoke = invoke;
+    this.timeouts = timeouts;
     this.server = createServer((socket) => this.accept(socket));
     this.server.maxConnections = 8;
   }
@@ -121,6 +135,7 @@ export class CodexMcpBroker {
   static async open(
     rootAbsolute: string,
     invoke: ToolInvoker,
+    timeouts: Partial<BrokerTimeouts> = {},
   ): Promise<CodexMcpBroker> {
     if (!isAbsolute(rootAbsolute))
       throw new Error("Invalid MCP runtime directory");
@@ -148,6 +163,7 @@ export class CodexMcpBroker {
       endpoint,
       randomBytes(32).toString("hex"),
       invoke,
+      { idleMs: 35_000, callMs: toolCallTimeoutMs, ...timeouts },
     );
     await new Promise<void>((resolveListen, reject) => {
       const failed = (error: Error) => reject(error);
@@ -178,7 +194,7 @@ export class CodexMcpBroker {
       return;
     }
     this.sockets.add(socket);
-    socket.setTimeout(35_000, () => socket.destroy());
+    socket.setTimeout(this.timeouts.idleMs, () => socket.destroy());
     socket.once("close", () => this.sockets.delete(socket));
     let buffer = Buffer.alloc(0);
     let handled = false;
@@ -197,6 +213,8 @@ export class CodexMcpBroker {
         return socket.destroy();
       handled = true;
       socket.pause();
+      // The request is in: the call itself may take longer (pictures).
+      socket.setTimeout(this.timeouts.callMs);
       void this.handle(buffer.subarray(0, newline))
         .then((reply) => {
           const encoded = Buffer.from(`${JSON.stringify(reply)}\n`);

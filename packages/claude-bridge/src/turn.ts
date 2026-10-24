@@ -34,8 +34,54 @@ const activityLabels: Record<string, { label: string; mutating: boolean }> = {
   zoom_set: { label: "Setting a zoom", mutating: true },
   zoom_remove: { label: "Removing a zoom", mutating: true },
   speed_set: { label: "Changing playback speed", mutating: true },
+  graphics_set: { label: "Adding a graphic", mutating: true },
+  graphics_remove: { label: "Removing a graphic", mutating: true },
+  captions_configure: { label: "Setting captions", mutating: true },
+  audio_configure: { label: "Setting audio", mutating: true },
+  media_get_frames: { label: "Looking at the edit", mutating: false },
+  composition_check: { label: "Checking a composition", mutating: false },
+  sound_list: { label: "Looking at the audio files", mutating: false },
+  sound_set: { label: "Placing music or a sound", mutating: true },
+  sound_remove: { label: "Removing a sound", mutating: true },
   timeline_undo: { label: "Undoing the last edit", mutating: true },
 };
+
+/**
+ * Claude Code's own tools a turn may use (ADR 0021). Restricted mode confines
+ * the file tools to the project workspace; tools that run commands or code
+ * and web access are never named, so they stay off.
+ */
+export const claudeBuiltInTools = Object.freeze([
+  "Read",
+  "Write",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Task",
+]);
+
+const builtInLabels: Record<string, { label: string; mutating: boolean }> = {
+  Read: { label: "Reading the workspace", mutating: false },
+  Write: { label: "Writing notes", mutating: false },
+  Edit: { label: "Editing notes", mutating: false },
+  Glob: { label: "Searching the workspace", mutating: false },
+  Grep: { label: "Searching the workspace", mutating: false },
+  Task: { label: "Asking a helper", mutating: false },
+  Agent: { label: "Asking a helper", mutating: false },
+};
+
+/**
+ * Claude Code reports its helper tool as "Task" in the init inventory but
+ * names the call "Agent"; both are the same allowed tool.
+ */
+const builtInCallNames: Readonly<Record<string, string>> = { Task: "Agent" };
+
+/** A subagent the app defines for Claude Code's Task tool. */
+export interface ClaudeAgentDefinition {
+  description: string;
+  prompt: string;
+  tools: readonly string[];
+}
 
 const maxText = 32 * 1024;
 const activityId = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
@@ -59,11 +105,27 @@ function clean(text: string): string {
  */
 export class ClaudeTurnProjection {
   readonly allowedTools: ReadonlySet<string>;
+  /** Names a tool call may carry: the allowed tools and their call aliases. */
+  private readonly callNames: Set<string>;
   readonly serverName: string;
   private readonly sessionId: string;
+  /** True when the turn loads skills (the user's own, ADR 0021). */
+  private readonly allowSkills: boolean;
   private initialized = false;
   private finished: ClaudeTurnOutcome | null = null;
   private violationFound = false;
+  /** What stopped the turn for its tools: names only, never content. */
+  violationDetail: {
+    type: string;
+    subtype: string | null;
+    tools: string[];
+    fromHelper: boolean;
+  } | null = null;
+  /**
+   * Why a turn failed, for private diagnostics only (never shown to users):
+   * the result event's own fields and how the process ended.
+   */
+  failureDetail: Record<string, unknown> | null = null;
   private interruptRequested = false;
   private live = "";
   private readonly segments: string[] = [];
@@ -74,10 +136,15 @@ export class ClaudeTurnProjection {
     allowedTools: Iterable<string>;
     serverName: string;
     sessionId: string;
+    allowSkills?: boolean;
   }) {
     this.allowedTools = new Set(input.allowedTools);
+    this.callNames = new Set(this.allowedTools);
+    for (const [listed, called] of Object.entries(builtInCallNames))
+      if (this.allowedTools.has(listed)) this.callNames.add(called);
     this.serverName = input.serverName;
     this.sessionId = input.sessionId;
+    this.allowSkills = input.allowSkills ?? false;
   }
 
   get ready(): boolean {
@@ -118,14 +185,22 @@ export class ClaudeTurnProjection {
     };
   }
 
-  private validateInit(message: Record<string, unknown>): boolean {
+  /**
+   * The turn's first init must list exactly the allowed tools. A later init
+   * (a new step of the turn, or a helper starting with its own smaller set)
+   * may list fewer, but never a tool outside them.
+   */
+  private validateInit(
+    message: Record<string, unknown>,
+    first: boolean,
+  ): boolean {
     const tools = message.tools;
     const servers = message.mcp_servers;
     if (
-      message.session_id !== this.sessionId ||
+      (first && message.session_id !== this.sessionId) ||
       message.permissionMode !== "dontAsk" ||
       !Array.isArray(tools) ||
-      tools.length !== this.allowedTools.size ||
+      (first && tools.length !== this.allowedTools.size) ||
       tools.some(
         (tool) => typeof tool !== "string" || !this.allowedTools.has(tool),
       ) ||
@@ -142,8 +217,10 @@ export class ClaudeTurnProjection {
       return false;
     for (const key of ["skills", "slash_commands"]) {
       const value = message[key];
-      if (value !== undefined && (!Array.isArray(value) || value.length))
-        return false;
+      if (value === undefined) continue;
+      if (!Array.isArray(value)) return false;
+      // Skills only guide Claude; the tool inventory above is what limits it.
+      if (value.length && !this.allowSkills) return false;
     }
     return true;
   }
@@ -152,7 +229,21 @@ export class ClaudeTurnProjection {
   handle(message: Record<string, unknown>): boolean {
     if (this.finished) return true;
     if (message.type === "system" && message.subtype === "init") {
-      if (this.initialized || !this.validateInit(message)) {
+      // Claude Code starts a new step of the turn (for example when a
+      // helper starts or reports back) with another init; each is checked.
+      if (!this.validateInit(message, !this.initialized)) {
+        this.violationDetail = {
+          type: "system",
+          subtype: "init",
+          tools: Array.isArray(message.tools)
+            ? message.tools
+                .filter((tool): tool is string => typeof tool === "string")
+                .slice(0, 64)
+            : [],
+          fromHelper:
+            message.parent_tool_use_id !== null &&
+            message.parent_tool_use_id !== undefined,
+        };
         this.violationFound = true;
         this.fail("tools");
         return false;
@@ -190,7 +281,13 @@ export class ClaudeTurnProjection {
           text.push(block.text);
         if (block.type === "tool_use") {
           const name = typeof block.name === "string" ? block.name : "";
-          if (!this.allowedTools.has(name)) {
+          if (!this.callNames.has(name)) {
+            this.violationDetail = {
+              type: "assistant",
+              subtype: null,
+              tools: [name.slice(0, 120)],
+              fromHelper: false,
+            };
             this.violationFound = true;
             this.fail("tools");
             return false;
@@ -199,11 +296,21 @@ export class ClaudeTurnProjection {
             typeof block.id === "string" && activityId.test(block.id)
               ? block.id
               : `tool-${randomUUID()}`;
-          const short = name.slice(`mcp__${this.serverName}__`.length);
-          const known = activityLabels[short] ?? {
+          const prefix = `mcp__${this.serverName}__`;
+          const known = (name.startsWith(prefix)
+            ? activityLabels[name.slice(prefix.length)]
+            : builtInLabels[name]) ?? {
             label: "Using an editor tool",
             mutating: true,
           };
+          // Long runs make many calls: forget the oldest finished one so
+          // pending edits stay tracked for the uncertain-outcome check.
+          if (!this.activityMap.has(id) && this.activityMap.size >= 32)
+            for (const [key, item] of this.activityMap)
+              if (item.complete) {
+                this.activityMap.delete(key);
+                break;
+              }
           if (!this.activityMap.has(id) && this.activityMap.size < 32)
             this.activityMap.set(id, {
               id,
@@ -241,6 +348,15 @@ export class ClaudeTurnProjection {
       }
       const subtype = message.subtype;
       const terminal = message.terminal_reason;
+      this.failureDetail = {
+        resultSubtype: subtype ?? null,
+        isError: message.is_error ?? null,
+        terminalReason: terminal ?? null,
+        stopReason: message.stop_reason ?? null,
+        assistantError: this.lastError,
+        streamedText: this.streaming.length,
+        result: String(message.result ?? "").slice(0, 400),
+      };
       if (message.is_error !== true && subtype === "success") {
         const text = this.streaming;
         if (text) this.finished = { kind: "completed", text };
@@ -275,6 +391,12 @@ export class ClaudeTurnProjection {
   /** The process ended; settle a turn that produced no result event. */
   closed(resumed: boolean): ClaudeTurnOutcome {
     if (this.finished) return this.finished;
+    this.failureDetail ??= {
+      closedWithoutResult: true,
+      initialized: this.initialized,
+      pendingMutation: this.pendingMutation,
+      interruptRequested: this.interruptRequested,
+    };
     if (!this.initialized) this.fail(resumed ? "resume" : "failed");
     else if (this.pendingMutation) this.fail("uncertain");
     else this.fail(this.interruptRequested ? "stopped" : "failed");
@@ -289,6 +411,11 @@ export interface ClaudeTurnOptions {
   mcpConfigPath: string;
   serverName: string;
   allowedTools: readonly string[];
+  /** Claude Code's own tools for this turn; none keeps them all off. */
+  builtInTools?: readonly string[];
+  agents?: Readonly<Record<string, ClaudeAgentDefinition>>;
+  /** Plugin folders whose skills the turn loads (the user's own skills). */
+  pluginDirs?: readonly string[];
   model: string;
   effort: ClaudeEffort | null;
   systemPrompt: string;
@@ -305,13 +432,29 @@ export function claudeTurnArguments(
     "runtime" | "cwd" | "env" | "onUpdate" | "text"
   >,
 ): string[] {
+  const builtIns = options.builtInTools ?? [];
+  const session = [...restrictedSessionArguments];
+  if (builtIns.length) {
+    // Restricted mode confines the file tools to the working directory.
+    const at = session.indexOf("--tools");
+    session.splice(at, 2, "--restricted", "--tools", builtIns.join(","));
+  }
+  const plugins = options.pluginDirs ?? [];
+  if (plugins.length) {
+    // Skills load only with slash commands on; tools stay as listed.
+    session.splice(session.indexOf("--disable-slash-commands"), 1);
+    for (const directory of plugins) session.push("--plugin-dir", directory);
+  }
   return [
-    ...restrictedSessionArguments,
+    ...session,
     "--include-partial-messages",
     "--mcp-config",
     options.mcpConfigPath,
     "--allowedTools",
-    options.allowedTools.join(","),
+    [...options.allowedTools, ...builtIns].join(","),
+    ...(options.agents && Object.keys(options.agents).length
+      ? ["--agents", JSON.stringify(options.agents)]
+      : []),
     "--model",
     options.model,
     ...(options.effort ? ["--effort", options.effort] : []),
@@ -331,10 +474,14 @@ export class ClaudeTurn {
   readonly done: Promise<ClaudeTurnOutcome>;
   private readonly child: ChildProcess;
   private stopping = false;
+  /** The end of the process's error output and how it exited (private). */
+  private stderrTail = "";
+  private exit: { code: number | null; signal: string | null } | null = null;
 
   constructor(options: ClaudeTurnOptions) {
     this.projection = new ClaudeTurnProjection({
-      allowedTools: options.allowedTools,
+      allowedTools: [...options.allowedTools, ...(options.builtInTools ?? [])],
+      allowSkills: Boolean(options.pluginDirs?.length),
       serverName: options.serverName,
       sessionId: options.sessionId,
     });
@@ -346,9 +493,13 @@ export class ClaudeTurn {
         env: options.env,
         shell: false,
         windowsHide: true,
-        stdio: ["pipe", "pipe", "ignore"],
+        stdio: ["pipe", "pipe", "pipe"],
       },
     );
+    this.child.stderr?.setEncoding("utf8");
+    this.child.stderr?.on("data", (chunk: string) => {
+      this.stderrTail = (this.stderrTail + chunk).slice(-2000);
+    });
     let resultTimer: ReturnType<typeof setTimeout> | undefined;
     const reader = new JsonLineReader(
       (message) => {
@@ -374,7 +525,10 @@ export class ClaudeTurn {
         resolve(this.projection.closed(options.resume));
       };
       this.child.once("error", settle);
-      this.child.once("close", settle);
+      this.child.once("close", (code, signal) => {
+        this.exit = { code, signal };
+        settle();
+      });
     });
     this.child.stdin?.write(
       `${JSON.stringify({
@@ -383,6 +537,15 @@ export class ClaudeTurn {
         parent_tool_use_id: null,
       })}\n`,
     );
+  }
+
+  /** What is known about why the turn ended, for a private failure note. */
+  diagnostics(): Record<string, unknown> {
+    return {
+      ...this.projection.failureDetail,
+      exit: this.exit,
+      stderrTail: this.stderrTail,
+    };
   }
 
   /** Requests a graceful interrupt, then stops the process if it does not end. */

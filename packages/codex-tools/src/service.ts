@@ -15,6 +15,22 @@ import {
   zoomLimits,
   zoomSourceRange,
 } from "../../domain/src/zoom.ts";
+import { assistantGraphicLimits, frameToolLimits } from "./frames.ts";
+import {
+  assertGraphicContent,
+  GraphicContentError,
+  graphicAnchor,
+  graphicContentReasons,
+  graphicIntervals,
+  graphicLimits,
+} from "../../domain/src/graphics.ts";
+import {
+  buildSoundLayer,
+  SoundBuildError,
+  soundIntervals,
+  type SoundAsset,
+  type SoundLayer,
+} from "../../domain/src/sounds.ts";
 
 export const codexVideoEditToolNames = [
   "project.get_summary",
@@ -29,9 +45,84 @@ export const codexVideoEditToolNames = [
   "zoom.set",
   "zoom.remove",
   "speed.set",
+  "graphics.set",
+  "graphics.remove",
+  "captions.configure",
+  "audio.configure",
+  "media.get_frames",
 ] as const;
 
+/**
+ * Tools only Claude's route offers: they work on files in Claude's project
+ * workspace (ADR 0021), which the other routes do not have.
+ */
+export const claudeOnlyToolNames = [
+  "composition.check",
+  "sound.list",
+  "sound.set",
+  "sound.remove",
+] as const;
+/** Claude's guarded editor tools: the shared tools plus its own. */
+export const claudeEditorToolNames = [
+  ...codexVideoEditToolNames,
+  ...claudeOnlyToolNames,
+] as const;
+
+/** Rendered pictures of the edit; the app renders, the tool only validates. */
+/**
+ * Reads a composition file (free-form or HyperFrames) from the assistant's workspace, seals
+ * and stores it, and returns its hash. Throws an error named
+ * "CompositionError" with a reason the assistant can act on.
+ */
+export type CompositionImporter = (
+  projectId: string,
+  path: string,
+) => Promise<{ sha256: string }>;
+
+export type FrameRenderer = (
+  projectId: string,
+  timesUs: number[],
+  maxWidth: number,
+  /** "sheet" tiles every time into one picture, in reading order. */
+  layout?: "frames" | "sheet",
+) => Promise<
+  {
+    timeUs: number;
+    width: number;
+    height: number;
+    mimeType: "image/jpeg";
+    dataBase64: string;
+  }[]
+>;
+
 export type CodexVideoEditToolName = (typeof codexVideoEditToolNames)[number];
+export type ClaudeEditorToolName = (typeof claudeEditorToolNames)[number];
+
+/**
+ * Loads a workspace composition in the sealed stage at the video's size,
+ * audits it at each composition time (or at evenly spread times) and tiles
+ * those moments into one picture. Throws an error named "CompositionError"
+ * when the file cannot be sealed.
+ */
+export type CompositionChecker = (
+  projectId: string,
+  path: string,
+  timesUs: number[] | null,
+  cellWidth: number,
+) => Promise<{
+  report: Record<string, unknown>;
+  sheet: {
+    width: number;
+    height: number;
+    mimeType: "image/jpeg";
+    dataBase64: string;
+  } | null;
+}>;
+
+/** The project's audio files (music and sound effects), for sound layers. */
+export interface SoundCatalog {
+  list(projectId: string): Promise<SoundAsset[]>;
+}
 
 type DraftTransactions = {
   snapshot(projectId: string): Promise<DraftReadResult>;
@@ -66,6 +157,10 @@ export type CodexVideoEditToolErrorCode =
   | "storage_unavailable"
   | "outcome_unknown"
   | "transcript_unavailable"
+  | "graphic_rejected"
+  | "composition_rejected"
+  | "sound_rejected"
+  | "frame_unavailable"
   | "service_unavailable";
 
 const messages: Record<CodexVideoEditToolErrorCode, string> = {
@@ -83,6 +178,12 @@ const messages: Record<CodexVideoEditToolErrorCode, string> = {
     "The edit may have been saved. Reopen the project before retrying.",
   transcript_unavailable:
     "A completed local transcript is not available for that source and range.",
+  frame_unavailable:
+    "The frames could not be rendered. Use 1–3 output times inside the edit and try again.",
+  graphic_rejected:
+    "The graphic was rejected. Use inline HTML and CSS without scripts, forms, embedded documents or network resources.",
+  composition_rejected: "The composition could not be used.",
+  sound_rejected: "The sound could not be used.",
   service_unavailable:
     "The editing service is unavailable. Reopen the project and try again.",
 };
@@ -96,13 +197,27 @@ export class CodexVideoEditToolError extends Error {
    * `activeProjectId` lets a refused cross-project call name the one project
    * the caller may use, so a model that mistyped the ID can correct itself.
    */
-  constructor(code: CodexVideoEditToolErrorCode, activeProjectId?: string) {
+  constructor(
+    code: CodexVideoEditToolErrorCode,
+    activeProjectId?: string,
+    graphicReason?: string,
+  ) {
     super(
       code === "inactive_project" &&
         activeProjectId !== undefined &&
         idPattern.test(activeProjectId)
         ? `${messages[code]} The active project_id is "${activeProjectId}".`
-        : messages[code],
+        : // Only the validator's own fixed reasons are echoed to the model.
+          code === "graphic_rejected" &&
+            graphicReason !== undefined &&
+            graphicContentReasons.has(graphicReason)
+          ? `${messages[code]} ${graphicReason}`
+          : // A composition's own problem (its file, or its script error),
+            // so Claude can fix what it wrote.
+            (code === "composition_rejected" || code === "sound_rejected") &&
+              graphicReason !== undefined
+            ? `${messages[code]} ${graphicReason.replace(/[\u0000-\u001f\u007f]/gu, " ").slice(0, 400)}`
+            : messages[code],
     );
     this.name = "CodexVideoEditToolError";
     this.code = code;
@@ -210,16 +325,24 @@ function freshness(
 
 function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
   const zooms = draft.timeline.zooms ?? [];
-  const visible = zoomIntervals(
-    zooms,
-    draft.timeline.clips.map((clip) => ({
-      sourceId: clip.source_id,
-      timelineStartUs: clip.timeline_start_us,
-      timelineEndUs: clip.timeline_end_us,
-      sourceStartUs: clip.source_start_us,
-      sourceEndUs: clip.source_end_us,
-      ...(clip.speed ? { speed: clip.speed } : {}),
-    })),
+  const clipMap = draft.timeline.clips.map((clip) => ({
+    sourceId: clip.source_id,
+    timelineStartUs: clip.timeline_start_us,
+    timelineEndUs: clip.timeline_end_us,
+    sourceStartUs: clip.source_start_us,
+    sourceEndUs: clip.source_end_us,
+    ...(clip.speed ? { speed: clip.speed } : {}),
+  }));
+  const visible = zoomIntervals(zooms, clipMap);
+  const placedGraphics = graphicIntervals(
+    draft.timeline.graphics ?? [],
+    clipMap,
+    draft.timeline.duration_us,
+  );
+  const placedSounds = soundIntervals(
+    draft.timeline.sounds ?? [],
+    clipMap,
+    draft.timeline.duration_us,
   );
   return {
     schema_version: "1.0" as const,
@@ -265,6 +388,61 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
     })),
     zoom_ids: [...draft.timeline.zoom_ids],
     speed_ids: [...draft.timeline.speed_ids],
+    // Null: the draft has no choice of its own; the project's earlier
+    // per-project choice or the default applies until one is set.
+    captions: draft.timeline.captions
+      ? {
+          enabled: draft.timeline.captions.enabled,
+          style: draft.timeline.captions.style,
+          size: draft.timeline.captions.size,
+          position: draft.timeline.captions.position,
+          burn_in: draft.timeline.captions.burnIn,
+        }
+      : null,
+    audio: draft.timeline.audio ? { ...draft.timeline.audio } : null,
+    graphics: (draft.timeline.graphics ?? []).map((graphic) => {
+      const placed = placedGraphics.find(
+        (interval) => interval.graphicId === graphic.graphic_id,
+      );
+      return {
+        graphic_id: graphic.graphic_id,
+        name: graphic.name,
+        layer: graphic.layer,
+        duration_us: graphic.duration_us,
+        source_id: graphic.source_id,
+        source_us: graphic.source_us,
+        // Null when the anchor moment was cut away and the graphic is hidden.
+        timeline_range: placed
+          ? { start_us: placed.startUs, end_us: placed.endUs }
+          : null,
+        html_bytes: new TextEncoder().encode(graphic.html).length,
+        css_bytes: new TextEncoder().encode(graphic.css).length,
+      };
+    }),
+    // Music and sound effects; empty when the draft has none.
+    sounds: (draft.timeline.sounds ?? []).map((sound) => {
+      const placed = placedSounds.find(
+        (interval) => interval.soundId === sound.sound_id,
+      );
+      return {
+        sound_id: sound.sound_id,
+        name: sound.name,
+        kind: sound.kind,
+        asset_id: sound.asset_id,
+        asset_start_us: sound.asset_start_us,
+        duration_us: sound.duration_us,
+        gain_db: sound.gain_db,
+        fade_in_us: sound.fade_in_us,
+        fade_out_us: sound.fade_out_us,
+        duck_db: sound.duck_db,
+        loop: sound.loop,
+        follows_cuts: sound.start.type === "source",
+        // Null when the anchor moment was cut away and the layer is silent.
+        timeline_range: placed
+          ? { start_us: placed.startUs, end_us: placed.endUs }
+          : null,
+      };
+    }),
     undo_transaction_id: undoId,
   };
 }
@@ -311,18 +489,30 @@ export class CodexVideoEditToolService {
   private readonly drafts: DraftTransactions;
   private readonly origin: ToolEditOrigin;
   private readonly transcriptReader: TranscriptReader | undefined;
+  private readonly frameRenderer: FrameRenderer | undefined;
+  private readonly compositionImporter: CompositionImporter | undefined;
+  private readonly compositionChecker: CompositionChecker | undefined;
+  private readonly soundCatalog: SoundCatalog | undefined;
 
   constructor(
     activeProjectId: string,
     drafts: DraftTransactions,
     origin: ToolEditOrigin = "codex",
     transcriptReader?: TranscriptReader,
+    frameRenderer?: FrameRenderer,
+    compositionImporter?: CompositionImporter,
+    compositionChecker?: CompositionChecker,
+    soundCatalog?: SoundCatalog,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
     this.drafts = drafts;
     this.origin = origin;
     this.transcriptReader = transcriptReader;
+    this.frameRenderer = frameRenderer;
+    this.compositionImporter = compositionImporter;
+    this.compositionChecker = compositionChecker;
+    this.soundCatalog = soundCatalog;
   }
 
   private applier():
@@ -373,6 +563,24 @@ export class CodexVideoEditToolService {
           return await this.removeZoom(input);
         case "speed.set":
           return await this.setSpeed(input);
+        case "graphics.set":
+          return await this.setGraphic(input);
+        case "graphics.remove":
+          return await this.removeGraphic(input);
+        case "captions.configure":
+          return await this.configureCaptions(input);
+        case "audio.configure":
+          return await this.configureAudio(input);
+        case "media.get_frames":
+          return await this.getFrames(input);
+        case "composition.check":
+          return await this.checkComposition(input);
+        case "sound.list":
+          return await this.listSounds(input);
+        case "sound.set":
+          return await this.setSound(input);
+        case "sound.remove":
+          return await this.removeSound(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -449,9 +657,9 @@ export class CodexVideoEditToolService {
     const sourceId = request.source_id,
       expectedTranscriptId = request.transcript_id,
       sourceStartUs = request.source_start_us,
-      sourceEndUs = request.source_end_us,
       offset = request.offset,
       limit = request.limit;
+    const sourceEndUs = request.source_end_us;
     id(sourceId);
     if (expectedTranscriptId !== undefined) id(expectedTranscriptId);
     integer(sourceStartUs);
@@ -475,12 +683,15 @@ export class CodexVideoEditToolService {
         (expectedTranscriptId === undefined ||
           item.transcript.transcript_id === expectedTranscriptId),
     );
-    if (!result || sourceEndUs > result.transcript.duration_us)
+    if (!result || sourceStartUs >= result.transcript.duration_us)
       reject("transcript_unavailable");
+    // A range to the recording's end may overshoot the transcript's (audio)
+    // duration slightly; read up to where the transcript ends.
+    const endUs = Math.min(sourceEndUs, result.transcript.duration_us);
 
     const matchingWords = result.transcript.segments.flatMap((segment) =>
       segment.words.filter(
-        (word) => word.end_us > sourceStartUs && word.start_us < sourceEndUs,
+        (word) => word.end_us > sourceStartUs && word.start_us < endUs,
       ),
     );
     if (offset > matchingWords.length) reject("invalid_request");
@@ -508,7 +719,7 @@ export class CodexVideoEditToolService {
         duration_us: result.transcript.duration_us,
         requested_source_range: {
           start_us: sourceStartUs,
-          end_us: sourceEndUs,
+          end_us: endUs,
         },
         draft: {
           draft_id: draft.draft.draft_id,
@@ -901,6 +1112,646 @@ export class CodexVideoEditToolService {
       operations: [{ type: "remove_zoom", zoom_id: request.zoom_id }],
     });
     return safeMutation(result, "Zoom removed from the active draft.");
+  }
+
+  /**
+   * Same semantics as the manual graphic: `start_us` is an output time that
+   * main anchors to the source moment shown there, so the graphic follows
+   * later cuts. With graphic_id the graphic is replaced in place.
+   */
+  private async setGraphic(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      [
+        "schema_version",
+        "request_id",
+        "project_id",
+        "draft_id",
+        "base_revision_id",
+        "expected_sequence",
+        "expected_timeline_sha256",
+        "pass_group_id",
+        "reason",
+        "start_us",
+        "duration_us",
+        "name",
+        "layer",
+      ],
+      ["graphic_id", "html", "css", "composition_path"],
+    );
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    // Either an HTML/CSS fragment or a composition file, never both.
+    const composing = request.composition_path !== undefined;
+    if (
+      composing
+        ? request.html !== undefined || request.css !== undefined
+        : request.html === undefined || request.css === undefined
+    )
+      reject("invalid_request");
+    let graphicId: string | null = null;
+    if (request.graphic_id !== undefined) {
+      id(request.graphic_id);
+      graphicId = request.graphic_id;
+    }
+    integer(request.start_us);
+    integer(request.duration_us, graphicLimits.minDurationUs);
+    if (request.duration_us > graphicLimits.maxDurationUs)
+      reject("invalid_request");
+    integer(request.layer);
+    if (request.layer > graphicLimits.maxLayer) reject("invalid_request");
+    if (
+      typeof request.name !== "string" ||
+      !request.name.trim() ||
+      request.name.length > graphicLimits.maxNameChars ||
+      /[\u0000-\u001f\u007f]/u.test(request.name)
+    )
+      reject("invalid_request");
+    let composition: string | null = null;
+    if (composing) {
+      if (
+        typeof request.composition_path !== "string" ||
+        !request.composition_path ||
+        request.composition_path.length > 260
+      )
+        reject("invalid_request");
+      if (!this.compositionImporter) reject("tool_not_available");
+      try {
+        composition = (
+          await this.compositionImporter(
+            this.activeProjectId,
+            request.composition_path,
+          )
+        ).sha256;
+      } catch (error) {
+        throw new CodexVideoEditToolError(
+          "composition_rejected",
+          undefined,
+          error instanceof Error && error.name === "CompositionError"
+            ? error.message
+            : "The composition file could not be read.",
+        );
+      }
+    } else if (
+      typeof request.html !== "string" ||
+      typeof request.css !== "string" ||
+      new TextEncoder().encode(request.html).length >
+        assistantGraphicLimits.maxHtmlBytes ||
+      new TextEncoder().encode(request.css).length >
+        assistantGraphicLimits.maxCssBytes
+    )
+      reject("invalid_request");
+    try {
+      if (!composition)
+        assertGraphicContent(request.html as string, request.css as string);
+    } catch (error) {
+      if (error instanceof GraphicContentError)
+        throw new CodexVideoEditToolError(
+          "graphic_rejected",
+          undefined,
+          error.message,
+        );
+      throw error;
+    }
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    // Anchor against the exact head the caller read; the commit re-checks it.
+    const { draft } = await this.drafts.snapshot(this.activeProjectId);
+    if (
+      draft.draft_id !== request.draft_id ||
+      draft.base_revision_id !== request.base_revision_id ||
+      draft.draft_sequence !== request.expected_sequence ||
+      draft.timeline_sha256 !== request.expected_timeline_sha256
+    )
+      reject("stale_draft");
+    if (
+      graphicId !== null &&
+      !draft.timeline.graphics?.some((item) => item.graphic_id === graphicId)
+    )
+      reject("edit_conflict");
+    const anchor = graphicAnchor(draft.timeline.clips, request.start_us);
+    if (!anchor) reject("invalid_request");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "graphics" },
+      reason: request.reason,
+      operations: [
+        {
+          type: "set_graphic",
+          graphic: {
+            graphic_id:
+              graphicId ?? `graphic-${randomUUID().replaceAll("-", "")}`,
+            name: request.name.trim(),
+            source_id: anchor.source_id,
+            source_us: anchor.source_us,
+            duration_us: request.duration_us,
+            layer: request.layer,
+            html: composition ? "" : (request.html as string),
+            css: composition ? "" : (request.css as string),
+            ...(composition ? { composition_sha256: composition } : {}),
+          },
+        },
+      ],
+    });
+    return safeMutation(
+      result,
+      graphicId === null
+        ? "Graphic added to the active draft."
+        : "Graphic replaced on the active draft.",
+    );
+  }
+
+  private async presentation(
+    request: Record<string, unknown>,
+    kind: "captions" | "audio",
+    settings: Record<string, unknown>,
+  ): Promise<unknown> {
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const { draft, undo_transaction_id } = await this.drafts.snapshot(
+      this.activeProjectId,
+    );
+    if (
+      draft.draft_id !== request.draft_id ||
+      draft.base_revision_id !== request.base_revision_id ||
+      draft.draft_sequence !== request.expected_sequence ||
+      draft.timeline_sha256 !== request.expected_timeline_sha256
+    )
+      reject("stale_draft");
+    const current = (
+      kind === "captions" ? draft.timeline.captions : draft.timeline.audio
+    ) as Record<string, unknown> | undefined;
+    if (
+      current &&
+      Object.keys(settings).every((key) => current[key] === settings[key])
+    )
+      return {
+        status: "unchanged" as const,
+        draft: safeDraft(draft, undo_transaction_id),
+        summary:
+          kind === "captions"
+            ? "Captions already use these choices."
+            : "Audio already uses these choices.",
+      };
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind },
+      reason: request.reason,
+      operations: [
+        kind === "captions"
+          ? { type: "set_captions", captions: settings }
+          : { type: "set_audio", audio: settings },
+      ],
+    });
+    return safeMutation(
+      result,
+      kind === "captions"
+        ? "Caption choices changed on the active draft."
+        : "Audio treatment changed on the active draft.",
+    );
+  }
+
+  private async configureCaptions(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "enabled",
+      "style",
+      "size",
+      "position",
+      "burn_in",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    if (
+      typeof request.enabled !== "boolean" ||
+      typeof request.burn_in !== "boolean" ||
+      !["plain", "highlight", "minimal"].includes(request.style as string) ||
+      !["small", "medium", "large"].includes(request.size as string) ||
+      !["bottom", "top"].includes(request.position as string)
+    )
+      reject("invalid_request");
+    return this.presentation(request, "captions", {
+      enabled: request.enabled,
+      style: request.style,
+      size: request.size,
+      position: request.position,
+      burnIn: request.burn_in,
+    });
+  }
+
+  /** Rendered pictures of the current edit at output times; reads only. */
+  private async getFrames(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      ["schema_version", "project_id", "times_us"],
+      ["max_width", "layout"],
+    );
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    const sheet = request.layout === "sheet";
+    if (request.layout !== undefined && request.layout !== "frames" && !sheet)
+      reject("invalid_request");
+    const times = request.times_us;
+    if (
+      !Array.isArray(times) ||
+      times.length < (sheet ? 2 : 1) ||
+      times.length >
+        (sheet ? frameToolLimits.maxSheetFrames : frameToolLimits.maxFrames) ||
+      times.some((time) => !Number.isSafeInteger(time) || time < 0)
+    )
+      reject("invalid_request");
+    let maxWidth: number = sheet
+      ? frameToolLimits.defaultSheetCellWidth
+      : frameToolLimits.defaultWidth;
+    if (request.max_width !== undefined) {
+      integer(request.max_width, frameToolLimits.minWidth);
+      if (
+        request.max_width >
+        (sheet ? frameToolLimits.maxSheetCellWidth : frameToolLimits.maxWidth)
+      )
+        reject("invalid_request");
+      maxWidth = request.max_width;
+    }
+    if (!this.frameRenderer) reject("tool_not_available");
+    const { draft } = await this.drafts.snapshot(this.activeProjectId);
+    if (times.some((time) => (time as number) >= draft.timeline.duration_us))
+      reject("invalid_request");
+    let frames: Awaited<ReturnType<FrameRenderer>>;
+    try {
+      frames = await this.frameRenderer(
+        this.activeProjectId,
+        times as number[],
+        maxWidth,
+        sheet ? "sheet" : "frames",
+      );
+    } catch (error) {
+      // A composition's own script or load error goes back to its author.
+      if (error instanceof Error && error.name === "CompositionRenderError")
+        throw new CodexVideoEditToolError(
+          "composition_rejected",
+          undefined,
+          `It did not render: ${error.message}`,
+        );
+      reject("frame_unavailable");
+    }
+    // The pictures are of the reported state only if nothing changed while
+    // they were rendered (rendering waits behind other picture requests).
+    const after = (await this.drafts.snapshot(this.activeProjectId)).draft;
+    if (
+      after.draft_id !== draft.draft_id ||
+      after.draft_sequence !== draft.draft_sequence ||
+      after.timeline_sha256 !== draft.timeline_sha256
+    )
+      reject("stale_draft");
+    return {
+      schema_version: "1.0",
+      project_id: this.activeProjectId,
+      draft_sequence: draft.draft_sequence,
+      timeline_sha256: draft.timeline_sha256,
+      // Pictures include zooms, motion graphics and captions as shown.
+      frames: frames.map((frame) => ({
+        time_us: frame.timeUs,
+        width: frame.width,
+        height: frame.height,
+        mime_type: frame.mimeType,
+        data_base64: frame.dataBase64,
+      })),
+    };
+  }
+
+  private async checkComposition(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      ["schema_version", "project_id", "composition_path"],
+      ["times_us", "max_width"],
+    );
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    if (
+      typeof request.composition_path !== "string" ||
+      !request.composition_path ||
+      request.composition_path.length > 260
+    )
+      reject("invalid_request");
+    let times: number[] | null = null;
+    if (request.times_us !== undefined) {
+      const value = request.times_us;
+      if (
+        !Array.isArray(value) ||
+        value.length < 2 ||
+        value.length > frameToolLimits.maxSheetFrames ||
+        value.some((time) => !Number.isSafeInteger(time) || time < 0) ||
+        value.some((time, index) => index > 0 && time <= value[index - 1])
+      )
+        reject("invalid_request");
+      times = value as number[];
+    }
+    let cellWidth: number = frameToolLimits.defaultSheetCellWidth;
+    if (request.max_width !== undefined) {
+      integer(request.max_width, frameToolLimits.minWidth);
+      if (request.max_width > frameToolLimits.maxSheetCellWidth)
+        reject("invalid_request");
+      cellWidth = request.max_width;
+    }
+    if (!this.compositionChecker) reject("tool_not_available");
+    let checked: Awaited<ReturnType<CompositionChecker>>;
+    try {
+      checked = await this.compositionChecker(
+        this.activeProjectId,
+        request.composition_path,
+        times,
+        cellWidth,
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === "CompositionError")
+        throw new CodexVideoEditToolError(
+          "composition_rejected",
+          undefined,
+          error.message,
+        );
+      reject("frame_unavailable");
+    }
+    return {
+      schema_version: "1.0",
+      project_id: this.activeProjectId,
+      composition_path: request.composition_path,
+      ...checked.report,
+      // The audited moments, tiled four across in reading order.
+      frames: checked.sheet
+        ? [
+            {
+              width: checked.sheet.width,
+              height: checked.sheet.height,
+              mime_type: checked.sheet.mimeType,
+              data_base64: checked.sheet.dataBase64,
+            },
+          ]
+        : [],
+    };
+  }
+
+  private async listSounds(input: unknown): Promise<unknown> {
+    const request = exact(input, ["schema_version", "project_id"]);
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    if (!this.soundCatalog) reject("tool_not_available");
+    const assets = await this.soundCatalog.list(this.activeProjectId);
+    return {
+      schema_version: "1.0",
+      project_id: this.activeProjectId,
+      assets: assets.map((asset) => ({
+        asset_id: asset.asset_id,
+        name: asset.name,
+        duration_us: asset.duration_us,
+        sample_rate: asset.sample_rate,
+        channels: asset.channels,
+      })),
+    };
+  }
+
+  private async setSound(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      [
+        "schema_version",
+        "request_id",
+        "project_id",
+        "draft_id",
+        "base_revision_id",
+        "expected_sequence",
+        "expected_timeline_sha256",
+        "pass_group_id",
+        "reason",
+        "name",
+        "kind",
+        "asset_id",
+        "start_us",
+      ],
+      [
+        "sound_id",
+        "follows_cuts",
+        "asset_start_us",
+        "duration_us",
+        "gain_db",
+        "fade_in_us",
+        "fade_out_us",
+        "duck_db",
+        "loop",
+      ],
+    );
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    id(request.asset_id);
+    integer(request.start_us);
+    if (request.kind !== "music" && request.kind !== "effect")
+      reject("invalid_request");
+    if (request.sound_id !== undefined) id(request.sound_id);
+    if (
+      request.follows_cuts !== undefined &&
+      typeof request.follows_cuts !== "boolean"
+    )
+      reject("invalid_request");
+    if (request.loop !== undefined && typeof request.loop !== "boolean")
+      reject("invalid_request");
+    for (const key of [
+      "asset_start_us",
+      "duration_us",
+      "gain_db",
+      "fade_in_us",
+      "fade_out_us",
+      "duck_db",
+    ])
+      if (request[key] !== undefined && !Number.isSafeInteger(request[key]))
+        reject("invalid_request");
+    if (!this.soundCatalog) reject("tool_not_available");
+    const asset = (await this.soundCatalog.list(this.activeProjectId)).find(
+      (item) => item.asset_id === request.asset_id,
+    );
+    if (!asset)
+      throw new CodexVideoEditToolError(
+        "sound_rejected",
+        undefined,
+        "That audio file is not in the project. Call sound.list for the files you can use.",
+      );
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const { draft } = await this.drafts.snapshot(this.activeProjectId);
+    if (
+      draft.draft_id !== request.draft_id ||
+      draft.base_revision_id !== request.base_revision_id ||
+      draft.draft_sequence !== request.expected_sequence ||
+      draft.timeline_sha256 !== request.expected_timeline_sha256
+    )
+      reject("stale_draft");
+    const soundId = (request.sound_id as string | undefined) ?? null;
+    if (
+      soundId !== null &&
+      !draft.timeline.sounds?.some((item) => item.sound_id === soundId)
+    )
+      reject("edit_conflict");
+    const optional = (key: string): number | undefined =>
+      request[key] === undefined ? undefined : (request[key] as number);
+    let layer: SoundLayer;
+    try {
+      layer = buildSoundLayer(
+        {
+          ...(soundId !== null ? { soundId } : {}),
+          name: typeof request.name === "string" ? request.name : "",
+          kind: request.kind as SoundLayer["kind"],
+          asset,
+          startUs: request.start_us as number,
+          followsCuts: request.follows_cuts as boolean | undefined,
+          assetStartUs: optional("asset_start_us"),
+          durationUs: optional("duration_us"),
+          gainDb: optional("gain_db"),
+          fadeInUs: optional("fade_in_us"),
+          fadeOutUs: optional("fade_out_us"),
+          duckDb: optional("duck_db"),
+          loop: request.loop as boolean | undefined,
+        },
+        draft.timeline,
+        () => `sound-${randomUUID().replaceAll("-", "")}`,
+      );
+    } catch (error) {
+      if (error instanceof SoundBuildError)
+        throw new CodexVideoEditToolError(
+          "sound_rejected",
+          undefined,
+          error.message,
+        );
+      throw error;
+    }
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "audio" },
+      reason: request.reason,
+      operations: [{ type: "set_sound", sound: layer }],
+    });
+    return safeMutation(
+      result,
+      soundId === null
+        ? "Sound added to the active draft."
+        : "Sound replaced on the active draft.",
+    );
+  }
+
+  private async removeSound(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "sound_id",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    id(request.sound_id);
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "audio" },
+      reason: request.reason,
+      operations: [{ type: "remove_sound", sound_id: request.sound_id }],
+    });
+    return safeMutation(result, "Sound removed from the active draft.");
+  }
+
+  private async configureAudio(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "normalize",
+      "denoise",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    if (
+      typeof request.normalize !== "boolean" ||
+      typeof request.denoise !== "boolean"
+    )
+      reject("invalid_request");
+    return this.presentation(request, "audio", {
+      normalize: request.normalize,
+      denoise: request.denoise,
+    });
+  }
+
+  private async removeGraphic(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "graphic_id",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    id(request.graphic_id);
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "graphics" },
+      reason: request.reason,
+      operations: [{ type: "remove_graphic", graphic_id: request.graphic_id }],
+    });
+    return safeMutation(result, "Graphic removed from the active draft.");
   }
 
   private async setSpeed(input: unknown): Promise<unknown> {

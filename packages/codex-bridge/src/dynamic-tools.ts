@@ -1,4 +1,5 @@
 import type { DynamicToolCallParams } from "./generated/v2/DynamicToolCallParams.ts";
+import { splitFrameResult } from "../../codex-tools/src/frames.ts";
 import type { DynamicToolCallResponse } from "./generated/v2/DynamicToolCallResponse.ts";
 import type { DynamicToolSpec } from "./generated/v2/DynamicToolSpec.ts";
 import type { JsonValue } from "./generated/serde_json/JsonValue.ts";
@@ -13,7 +14,8 @@ export const CODEX_EDITOR_NAMESPACE = "codex_video_edit";
 export type DynamicToolAccess = "project_editor" | "native_child_read_only";
 export const nativeChildReadOnlyToolNames: ReadonlySet<CodexVideoEditToolName> =
   new Set(["project.get_summary", "timeline.get_summary"]);
-const MAX_INPUT_BYTES = 16 * 1024;
+// Covers the largest reviewed input (a 24 KiB + 24 KiB graphic) with room.
+const MAX_INPUT_BYTES = 64 * 1024;
 const MAX_OUTPUT_BYTES = 256 * 1024;
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/u;
 
@@ -31,6 +33,11 @@ const dynamicNames: Record<CodexVideoEditToolName, string> = {
   "zoom.set": "zoom_set",
   "zoom.remove": "zoom_remove",
   "speed.set": "speed_set",
+  "graphics.set": "graphics_set",
+  "graphics.remove": "graphics_remove",
+  "captions.configure": "captions_configure",
+  "audio.configure": "audio_configure",
+  "media.get_frames": "media_get_frames",
 };
 const internalNames = new Map(
   Object.entries(dynamicNames).map(([internal, wire]) => [
@@ -177,6 +184,23 @@ export async function invokeOwnedDynamicTool(
 ): Promise<DynamicToolCallResponse> {
   try {
     const value = await invoke(call.name, call.arguments, access);
+    const pictures =
+      call.name === "media.get_frames" ? splitFrameResult(value) : null;
+    if (pictures) {
+      const text = JSON.stringify(pictures.metadata);
+      if (Buffer.byteLength(text) > MAX_OUTPUT_BYTES)
+        return safeError("outcome_unknown");
+      return {
+        contentItems: [
+          { type: "inputText", text },
+          ...pictures.images.map((image) => ({
+            type: "inputImage" as const,
+            imageUrl: `data:${image.mimeType};base64,${image.data}`,
+          })),
+        ],
+        success: true,
+      };
+    }
     const text = JSON.stringify(value);
     if (typeof text !== "string" || Buffer.byteLength(text) > MAX_OUTPUT_BYTES)
       return safeError("outcome_unknown");

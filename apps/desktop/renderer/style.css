@@ -401,6 +401,55 @@ main {
   background: var(--surface-2);
   border-color: var(--border-strong);
 }
+.card-grid li {
+  position: relative;
+}
+/* The options button sits over the card picture, apart from the card. */
+.card-grid .card-options {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: rgb(10 11 16 / 64%);
+  border-color: transparent;
+  overflow: visible;
+}
+.card-grid .card-options:hover:not(:disabled) {
+  background: rgb(10 11 16 / 84%);
+  border-color: transparent;
+}
+.danger {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+  font-weight: 600;
+}
+.ghost.danger {
+  color: var(--danger-text);
+  background: transparent;
+  border-color: transparent;
+  font-weight: 500;
+}
+.ghost.danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+.project-actions {
+  align-items: center;
+}
+#project-name {
+  width: 100%;
+}
+#project-delete-text {
+  margin: 0;
+  line-height: 1.5;
+}
 .thumb {
   position: relative;
   display: block;
@@ -716,6 +765,30 @@ dd {
   color: var(--accent-text);
   font-size: 13px;
 }
+#claude-full-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#claude-full-edit-form label {
+  font-size: 12px;
+  color: var(--text-2);
+}
+#claude-full-edit-form button {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+#full-edit-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+#full-edit-result[hidden] {
+  display: none;
+}
 #codex-thread-messages {
   flex: 1 0 120px;
   min-height: 120px;
@@ -893,11 +966,15 @@ dd {
   position: absolute;
   inset: 4px;
 }
+.timeline-clips {
+  border-radius: 5px;
+  overflow: hidden;
+}
+/* Parts sit edge to edge as one bar; a hairline marks each cut. */
 .timeline-clip {
   position: absolute;
   top: 0;
   bottom: 0;
-  min-width: 2px;
   padding: 0 8px;
   display: flex;
   align-items: center;
@@ -905,17 +982,21 @@ dd {
   color: #dcd4ff;
   font-size: 11px;
   white-space: nowrap;
-  background: linear-gradient(180deg, #4b3aa5, #3a2d84);
-  border: 1px solid #6a55d6;
-  border-radius: 5px;
+  text-overflow: ellipsis;
+  background: #43349a;
+}
+.timeline-clip.cut {
+  box-shadow: inset 1px 0 0 rgb(10 11 16 / 70%);
 }
 .timeline-clip.second-source {
   color: #cfe0ff;
-  background: linear-gradient(180deg, #2f5aa8, #23447f);
-  border-color: #4f7fd8;
+  background: #2a529c;
 }
 .timeline-clip.current {
-  box-shadow: inset 0 0 0 1px #fff;
+  background-color: #5a49bf;
+}
+.timeline-clip.second-source.current {
+  background-color: #3a69bf;
 }
 .timeline-marks {
   position: absolute;
@@ -975,8 +1056,8 @@ dd {
 .timeline-clip.sped {
   background-image: repeating-linear-gradient(
     135deg,
-    rgb(255 255 255 / 6%) 0 6px,
-    transparent 6px 12px
+    rgb(255 255 255 / 10%) 0 4px,
+    transparent 4px 8px
   );
 }
 .timeline-speed {
@@ -1290,6 +1371,35 @@ dd {
 .captions-controls select {
   width: auto;
   min-width: 120px;
+}
+.sound-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sound-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+}
+.sound-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.sound-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.sound-level {
+  font-size: 12px;
+  text-align: right;
+}
+.sound-where {
+  font-size: 12px;
+  text-align: right;
 }
 .switch {
   display: inline-flex;
@@ -1860,6 +1970,11 @@ dialog::backdrop {
   color: var(--text-2);
   font-size: 13px;
   font-weight: 500;
+}
+.field-note {
+  margin: 4px 0 0;
+  color: var(--text-3);
+  font-size: 12px;
 }
 .choice-grid {
   display: grid;
