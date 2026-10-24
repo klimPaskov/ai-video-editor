@@ -20,6 +20,7 @@ AI Video Editor is a standalone desktop recorder and editor for screen recording
 - **Magic Edit** makes a safe first cut: long pauses, filler words and repeated takes, at a gentle, balanced or tight setting.
 - Captions from the transcript in three styles, with an .srt file or burned into the video.
 - Audio cleanup: even out loudness and reduce background noise.
+- Music and sound effects from your own audio files, with volume, lowering under speech and Undo; they are mixed into the export.
 
 **Edit**
 - Trim, split, cut a marked range, or restore removed footage.
@@ -41,7 +42,7 @@ AI Video Editor is a standalone desktop recorder and editor for screen recording
 Each project moves through five steps. Only the current step's tools are shown.
 
 1. **Record or Import**: start a recording or bring in a video.
-2. **Auto Edit**: transcribe, run Magic Edit, set captions and audio.
+2. **Auto Edit**: transcribe, run Magic Edit, set captions, audio and sound.
 3. **Edit**: refine by hand or with the assistant.
 4. **Review**: watch the edit and verify the draft.
 5. **Export**: save the master or an MP4, or make short clips.
