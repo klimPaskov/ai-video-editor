@@ -18,6 +18,7 @@ import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { setupExportPanel } from "./export-panel.ts";
 import { setupPlayback } from "./playback.ts";
 import { setupMagicPanel } from "./magic-panel.ts";
+import { setupAutoPanel } from "./auto-panel.ts";
 import { setupRecordPanel } from "./record-panel.ts";
 import { reconcileProjectDraft } from "./project-draft.ts";
 import { pollTranscriptionView } from "./transcription-state.ts";
@@ -1016,11 +1017,19 @@ function syncTranscriptionPolling(): void {
   }
 }
 const magicPanel = setupMagicPanel(() => void loadTranscription());
+const autoPanel = setupAutoPanel({
+  onFinished: () => void loadTranscription(),
+  review: () => void navigate("review"),
+  presetValue: () =>
+    element<HTMLSelectElement>("magic-preset").value as
+      "gentle" | "balanced" | "tight",
+});
 function renderTranscriptionActions(): void {
   refreshCaptions();
   const project = activeProject;
   const visible = project?.stage === "auto_edit";
   magicPanel.render(project, visible);
+  autoPanel.render(project, visible);
   const view =
     transcriptionView?.project_id === project?.id
       ? transcriptionView

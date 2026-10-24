@@ -272,36 +272,37 @@
           </div>
           <div class="stage-panel">
             <section id="auto-edit-actions" class="auto-edit-actions" hidden>
-              <div id="magic-edit" class="magic-edit">
-                <div class="magic-edit-controls">
-                  <span class="card-title" data-icon="wand"
-                    ><label for="magic-preset">Magic Edit</label></span
-                  >
-                  <select id="magic-preset">
-                    <option value="gentle">Gentle</option>
-                    <option value="balanced" selected>Balanced</option>
-                    <option value="tight">Tight</option>
-                  </select>
+              <div id="auto-all" class="auto-all">
+                <p class="auto-all-lead">
+                  Claude cuts the video, adds graphics and captions, and
+                  balances the sound.
+                </p>
+                <div class="auto-all-actions">
                   <button
-                    id="magic-start"
-                    class="primary"
+                    id="auto-all-start"
+                    class="primary large"
                     type="button"
                     data-icon="wand"
                   >
-                    Run Magic Edit
+                    Edit my video
                   </button>
-                  <button id="magic-stop" type="button" hidden>Stop</button>
+                  <button id="auto-all-stop" type="button" hidden>Stop</button>
+                  <button
+                    id="auto-all-review"
+                    class="primary large"
+                    type="button"
+                    hidden
+                  >
+                    Review
+                  </button>
                 </div>
-                <p id="magic-note"></p>
                 <progress
-                  id="magic-progress"
-                  max="1000"
-                  value="0"
-                  aria-label="Magic Edit progress"
+                  id="auto-all-progress"
+                  aria-label="Edit progress"
                   hidden
                 ></progress>
-                <p id="magic-status" role="status" hidden></p>
-                <p id="magic-error" role="alert" hidden></p>
+                <p id="auto-all-status" role="status" hidden></p>
+                <p id="auto-all-error" role="alert" hidden></p>
               </div>
               <progress
                 id="transcription-progress"
@@ -310,10 +311,41 @@
                 aria-label="Local transcription progress"
                 hidden
               ></progress>
-              <p id="transcription-status" role="status" hidden></p>
               <p id="transcription-error" role="alert" hidden></p>
               <details id="auto-edit-more" class="more">
                 <summary>More options</summary>
+                <p id="transcription-status" role="status" hidden></p>
+                <div id="magic-edit" class="magic-edit">
+                  <div class="magic-edit-controls">
+                    <span class="card-title" data-icon="wand"
+                      ><label for="magic-preset">Magic Edit</label></span
+                    >
+                    <select id="magic-preset">
+                      <option value="gentle">Gentle</option>
+                      <option value="balanced" selected>Balanced</option>
+                      <option value="tight">Tight</option>
+                    </select>
+                    <button
+                      id="magic-start"
+                      class="primary"
+                      type="button"
+                      data-icon="wand"
+                    >
+                      Run Magic Edit
+                    </button>
+                    <button id="magic-stop" type="button" hidden>Stop</button>
+                  </div>
+                  <p id="magic-note"></p>
+                  <progress
+                    id="magic-progress"
+                    max="1000"
+                    value="0"
+                    aria-label="Magic Edit progress"
+                    hidden
+                  ></progress>
+                  <p id="magic-status" role="status" hidden></p>
+                  <p id="magic-error" role="alert" hidden></p>
+                </div>
                 <div id="audio-card" class="captions-card">
                   <div class="captions-controls">
                     <span class="card-title" data-icon="audio">Audio</span>

@@ -26,6 +26,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
 import type { ElectronApplication, Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { appIdentity } from "../../packages/domain/src/app-identity.ts";
@@ -145,6 +146,7 @@ async function seek(page: Page, us: number) {
 try {
   await dialogs(electron, null);
   let page = await electron.firstWindow();
+  await openDisclosures(page);
   // The app checks Claude Code's status after launch.
   await expect
     .poll(
@@ -353,6 +355,7 @@ try {
   electron = await launch();
   await dialogs(electron, null);
   page = await electron.firstWindow();
+  await openDisclosures(page);
   await openProject(page, current.id);
   current = await project(page);
   assert.deepEqual(
