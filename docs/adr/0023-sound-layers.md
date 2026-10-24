@@ -22,4 +22,4 @@ The editor could cut, retime, caption and normalise a recording and lay motion g
 
 - Draft, snapshot and transaction schemas gain `sounds`, `sound_layer` and `sound_operation`; IPC gains `sounds:get|add|update|remove`.
 - The manual Sound card exposes volume and "lower under speech" per layer and removal; richer controls (fades, trim, start time) are reachable through the assistant or later UI work.
-- Not done: waveform display, per-layer preview ducking, loudness normalisation of the final mix, loop crossfades, audio-only project sources.
+- Not done: sound layers in short clips, waveform display, per-layer preview ducking, loudness normalisation of the final mix, loop crossfades, audio-only project sources.
