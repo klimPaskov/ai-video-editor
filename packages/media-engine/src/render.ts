@@ -6,6 +6,10 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { once } from "node:events";
 import type { Readable, Writable } from "node:stream";
 import { MediaError, runProcess } from "./process.ts";
+import {
+  deliveryVideoArguments,
+  selectDeliveryEncoder,
+} from "./delivery-encoder.ts";
 import { atempoChain } from "../../domain/src/speed.ts";
 import type { PresentationTiming } from "./presentation-timing.ts";
 import type { MediaExecutables } from "./lossless.ts";
@@ -1031,6 +1035,10 @@ export async function exportDraft(
           frameBytes: plan.frameBytes,
           color: video.color,
         };
+    const deliveryEncoder =
+      profile === "smaller_mp4"
+        ? await selectDeliveryEncoder(executables.ffmpeg)
+        : null;
     const encoderArgs = [
       ...quiet,
       "-f",
@@ -1088,12 +1096,11 @@ export async function exportDraft(
             "matroska",
           ]
         : [
-            "-c:v",
-            "libx264",
-            "-preset",
-            "medium",
-            "-crf",
-            "18",
+            ...deliveryVideoArguments(deliveryEncoder!, {
+              width: target.width,
+              height: target.height,
+              frameRate: video.frameRate,
+            }),
             "-pix_fmt",
             "yuv420p",
             ...colorArgs(target.color),

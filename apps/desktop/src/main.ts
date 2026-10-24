@@ -1,4 +1,9 @@
 import { DesktopCodex } from "./codex.ts";
+import {
+  MediaToolsError,
+  pathWithMediaTools,
+  resolveMediaTools,
+} from "./media-tools.ts";
 import { ClaudeUserError, DesktopClaude } from "./claude.ts";
 import {
   assertClaudeThreadProjectRequest,
@@ -425,6 +430,14 @@ function pickArea(display: Electron.Display) {
 }
 
 async function start(): Promise<void> {
+  // The verified bundled FFmpeg/ffprobe (Windows installs) or the system pair.
+  const mediaTools = await resolveMediaTools(process.resourcesPath);
+  const toolsPath = pathWithMediaTools(mediaTools, process.env.PATH);
+  if (toolsPath !== undefined) process.env.PATH = toolsPath;
+  const mediaExecutables = {
+    ffmpeg: mediaTools.ffmpeg,
+    ffprobe: mediaTools.ffprobe,
+  };
   const files = new Map([
     ["/index.html", ["index.html", "text/html; charset=utf-8"]],
     ["/renderer.js", ["renderer.js", "text/javascript; charset=utf-8"]],
@@ -495,7 +508,10 @@ async function start(): Promise<void> {
     return value;
   });
   const userData = app.getPath("userData");
-  const library = new MediaLibrary(path.join(userData, "media-library"));
+  const library = new MediaLibrary(
+    path.join(userData, "media-library"),
+    mediaExecutables,
+  );
   const projectRoot = path.join(userData, "project-store");
   const projects = new ProjectStore(projectRoot, library);
   const drafts = new DraftTransactionStore(projectRoot, projects);
@@ -538,6 +554,7 @@ async function start(): Promise<void> {
     return cues.length ? { cues, settings } : null;
   };
   shortClips = new DesktopShortClips({
+    ...mediaExecutables,
     root: path.join(userData, "short-clips"),
     renderGraphics: (request) =>
       renderGraphicsTrack(request, `${origin}/stage.html`),
@@ -627,6 +644,7 @@ async function start(): Promise<void> {
     return captionSettings.set(request.project_id, request.settings);
   });
   recorder = new DesktopRecorder({
+    ...mediaExecutables,
     root: path.join(userData, "recordings"),
     platform: process.platform,
     env: process.env,
@@ -739,6 +757,7 @@ async function start(): Promise<void> {
     return recording(() => recorder!.cancel());
   });
   exports = new DesktopExports({
+    ...mediaExecutables,
     renderGraphics: (request) =>
       renderGraphicsTrack(request, `${origin}/stage.html`),
     captions: draftCaptions,
@@ -766,6 +785,7 @@ async function start(): Promise<void> {
     },
   });
   playbackProxies = new DesktopPlaybackProxies({
+    ffmpeg: mediaExecutables.ffmpeg,
     root: path.join(userData, "playback-proxies"),
   });
   const playbackSources = async (projectId: string) => {
@@ -2303,10 +2323,12 @@ async function start(): Promise<void> {
     startupWindow.show();
   }
 }
-async function showStartupFailure(): Promise<void> {
+async function showStartupFailure(error?: unknown): Promise<void> {
   if (quitting) return;
   const message =
-    "The local application files could not be loaded. Reinstall the application and try again.";
+    error instanceof MediaToolsError
+      ? error.message
+      : "The local application files could not be loaded. Reinstall the application and try again.";
   // Generic diagnostics contain no source paths, credentials or project details.
   console.error(`ai-video-editor: ${message}`);
   try {
