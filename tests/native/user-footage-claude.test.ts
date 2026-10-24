@@ -4,7 +4,8 @@
  *
  * node tests/native/user-footage-claude.test.ts <packaged-executable>
  *   <claude-bin-dir> <profile-config-root> <first.mp4> <second.mp4> [--export]
- *   [--continue <project-id> [--no-edit]]
+ *   [--continue <project-id> [--no-edit]] [--level tidy|polished|bold]
+ *   [--brief "<style line, at most 300 characters>"]
  *
  * The profile is a private config root whose Claude Code sign-in the user
  * completed themselves (docs/48); no credential is copied. The run imports the
@@ -37,6 +38,15 @@ assert.ok(
   "Executable, Claude bin directory, profile and both recordings are required",
 );
 const exportMaster = process.argv.includes("--export");
+/** The value after a flag, or null. */
+const flagValue = (name: string): string | null => {
+  const at = process.argv.indexOf(name);
+  return at > 0 ? (process.argv[at + 1] ?? null) : null;
+};
+// A style line for the full edit's brief (at most 300 characters) and its
+// level (tidy, polished or bold); polished without a line by default.
+const briefStyle = flagValue("--brief");
+const briefLevel = flagValue("--level") ?? "polished";
 const continueAt = process.argv.indexOf("--continue");
 const continueProject = continueAt > 0 ? process.argv[continueAt + 1] : null;
 assert.ok(continueAt < 0 || continueProject, "--continue needs a project id");
@@ -253,13 +263,8 @@ try {
       .poll(async () => (await thread()).status, { timeout: 120_000 })
       .toMatch(/^(ready|failed)$/u);
     await page.locator("#claude-full-edit summary").click();
-    await page.locator("#full-edit-level").selectOption("polished");
-    if (continueProject)
-      await page
-        .locator("#full-edit-style")
-        .fill(
-          "Continue the production you started (see notes.md): finish the remaining graphics and your review. Pictures inside long graphics now render quickly; the earlier failures were an app bug, now fixed.",
-        );
+    await page.locator("#full-edit-level").selectOption(briefLevel);
+    if (briefStyle) await page.locator("#full-edit-style").fill(briefStyle);
     await page.screenshot({ path: join(evidence, "full-edit-brief.png") });
     await page.locator("#start-full-edit").click();
     const journal = join(folder, "draft", "journal");

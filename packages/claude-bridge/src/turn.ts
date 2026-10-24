@@ -118,6 +118,11 @@ export class ClaudeTurnProjection {
     tools: string[];
     fromHelper: boolean;
   } | null = null;
+  /**
+   * Why a turn failed, for private diagnostics only (never shown to users):
+   * the result event's own fields and how the process ended.
+   */
+  failureDetail: Record<string, unknown> | null = null;
   private interruptRequested = false;
   private live = "";
   private readonly segments: string[] = [];
@@ -340,6 +345,15 @@ export class ClaudeTurnProjection {
       }
       const subtype = message.subtype;
       const terminal = message.terminal_reason;
+      this.failureDetail = {
+        resultSubtype: subtype ?? null,
+        isError: message.is_error ?? null,
+        terminalReason: terminal ?? null,
+        stopReason: message.stop_reason ?? null,
+        assistantError: this.lastError,
+        streamedText: this.streaming.length,
+        result: String(message.result ?? "").slice(0, 400),
+      };
       if (message.is_error !== true && subtype === "success") {
         const text = this.streaming;
         if (text) this.finished = { kind: "completed", text };
@@ -374,6 +388,12 @@ export class ClaudeTurnProjection {
   /** The process ended; settle a turn that produced no result event. */
   closed(resumed: boolean): ClaudeTurnOutcome {
     if (this.finished) return this.finished;
+    this.failureDetail ??= {
+      closedWithoutResult: true,
+      initialized: this.initialized,
+      pendingMutation: this.pendingMutation,
+      interruptRequested: this.interruptRequested,
+    };
     if (!this.initialized) this.fail(resumed ? "resume" : "failed");
     else if (this.pendingMutation) this.fail("uncertain");
     else this.fail(this.interruptRequested ? "stopped" : "failed");
@@ -451,6 +471,9 @@ export class ClaudeTurn {
   readonly done: Promise<ClaudeTurnOutcome>;
   private readonly child: ChildProcess;
   private stopping = false;
+  /** The end of the process's error output and how it exited (private). */
+  private stderrTail = "";
+  private exit: { code: number | null; signal: string | null } | null = null;
 
   constructor(options: ClaudeTurnOptions) {
     this.projection = new ClaudeTurnProjection({
@@ -467,9 +490,13 @@ export class ClaudeTurn {
         env: options.env,
         shell: false,
         windowsHide: true,
-        stdio: ["pipe", "pipe", "ignore"],
+        stdio: ["pipe", "pipe", "pipe"],
       },
     );
+    this.child.stderr?.setEncoding("utf8");
+    this.child.stderr?.on("data", (chunk: string) => {
+      this.stderrTail = (this.stderrTail + chunk).slice(-2000);
+    });
     let resultTimer: ReturnType<typeof setTimeout> | undefined;
     const reader = new JsonLineReader(
       (message) => {
@@ -495,7 +522,10 @@ export class ClaudeTurn {
         resolve(this.projection.closed(options.resume));
       };
       this.child.once("error", settle);
-      this.child.once("close", settle);
+      this.child.once("close", (code, signal) => {
+        this.exit = { code, signal };
+        settle();
+      });
     });
     this.child.stdin?.write(
       `${JSON.stringify({
@@ -504,6 +534,15 @@ export class ClaudeTurn {
         parent_tool_use_id: null,
       })}\n`,
     );
+  }
+
+  /** What is known about why the turn ended, for a private failure note. */
+  diagnostics(): Record<string, unknown> {
+    return {
+      ...this.projection.failureDetail,
+      exit: this.exit,
+      stderrTail: this.stderrTail,
+    };
   }
 
   /** Requests a graceful interrupt, then stops the process if it does not end. */

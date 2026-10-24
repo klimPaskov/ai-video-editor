@@ -2103,6 +2103,153 @@ test("graphics are reversible draft edits that survive reopen", async () => {
   assert.deepEqual(await readFile(source), sourceBytes);
 });
 
+test("sound layers are reversible draft edits that survive reopen", async () => {
+  const { projects, projectStore, baseline, source } = await fixture();
+  const sourceBytes = await readFile(source);
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  const music = {
+    sound_id: "sound-music-001",
+    name: "Intro music",
+    kind: "music" as const,
+    asset_id: "asset-music-001",
+    asset_sha256: "a".repeat(64),
+    asset_start_us: 0,
+    duration_us: 900_000,
+    start: { type: "output" as const, start_us: 0 },
+    gain_db: -18,
+    fade_in_us: 100_000,
+    fade_out_us: 200_000,
+    duck_db: 12,
+    loop: true,
+  };
+  const effect = {
+    ...music,
+    sound_id: "sound-effect-001",
+    name: "Whoosh",
+    kind: "effect" as const,
+    asset_id: "asset-effect-001",
+    asset_sha256: "b".repeat(64),
+    duration_us: 300_000,
+    start: {
+      type: "source" as const,
+      source_id: baseline.source.source_id,
+      source_us: 400_000,
+    },
+    gain_db: -6,
+    fade_in_us: 0,
+    fade_out_us: 0,
+    duck_db: 0,
+    loop: false,
+  };
+  const pass = { pass_group_id: "pass-sounds-001", kind: "audio" as const };
+  const added = await store.applyManual(
+    trim(initial, {
+      request_id: "request-sound-add-001",
+      pass_group: pass,
+      reason: "Add a music bed.",
+      operations: [{ type: "set_sound", sound: music }],
+    }),
+  );
+  assert.equal(added.transaction.operations[0]?.operation_type, "sound");
+  assert.deepEqual(added.draft.timeline.sounds, [music]);
+  const second = await store.applyManual(
+    trim(added.draft, {
+      request_id: "request-sound-add-002",
+      pass_group: pass,
+      reason: "Add a whoosh.",
+      operations: [{ type: "set_sound", sound: effect }],
+    }),
+  );
+  // Layers are kept in a stable order by id.
+  assert.deepEqual(
+    second.draft.timeline.sounds?.map((sound) => sound.sound_id),
+    ["sound-effect-001", "sound-music-001"],
+  );
+  // Malformed layers, a source moment outside its source, fades longer than
+  // the layer, a repeat of the same layer and an unknown removal are refused.
+  let attempt = 0;
+  for (const operation of [
+    { type: "set_sound" as const, sound: { ...music, gain_db: 13 } },
+    { type: "set_sound" as const, sound: { ...music, duration_us: 10 } },
+    {
+      type: "set_sound" as const,
+      sound: { ...music, fade_in_us: 800_000, fade_out_us: 800_000 },
+    },
+    {
+      type: "set_sound" as const,
+      sound: {
+        ...effect,
+        start: { ...effect.start, source_us: 5_000_000 },
+      },
+    },
+    { type: "set_sound" as const, sound: { ...music, extra: true } as never },
+    { type: "set_sound" as const, sound: music },
+    { type: "remove_sound" as const, sound_id: "sound-missing-001" },
+  ])
+    await assert.rejects(async () =>
+      store.applyManual(
+        trim(second.draft, {
+          request_id: `request-sound-bad-${++attempt}`,
+          pass_group: pass,
+          operations: [operation],
+        }),
+      ),
+    );
+  const changed = await store.applyManual(
+    trim(second.draft, {
+      request_id: "request-sound-change-001",
+      pass_group: pass,
+      reason: "Quieter music.",
+      operations: [{ type: "set_sound", sound: { ...music, gain_db: -24 } }],
+    }),
+  );
+  assert.equal(
+    changed.draft.timeline.sounds?.find(
+      (sound) => sound.sound_id === "sound-music-001",
+    )?.gain_db,
+    -24,
+  );
+  const removed = await store.applyManual(
+    trim(changed.draft, {
+      request_id: "request-sound-remove-001",
+      pass_group: pass,
+      reason: "Remove the whoosh.",
+      operations: [{ type: "remove_sound", sound_id: "sound-effect-001" }],
+    }),
+  );
+  assert.deepEqual(
+    removed.draft.timeline.sounds?.map((sound) => sound.sound_id),
+    ["sound-music-001"],
+  );
+  const undone = await store.undoManual(
+    undo(
+      removed.draft,
+      removed.transaction.transaction_id,
+      "request-sound-undo-001",
+    ),
+  );
+  assert.equal(undone.draft.timeline.sounds?.length, 2);
+  const redone = await store.redoManual(
+    redo(
+      undone.draft,
+      undone.transaction.transaction_id,
+      "request-sound-redo-001",
+    ),
+  );
+  assert.equal(redone.draft.timeline.sounds?.length, 1);
+  const reopened = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopened.draft, redone.draft);
+  assert.deepEqual(await readFile(source), sourceBytes);
+});
+
 test("caption and audio choices are undoable draft edits that survive reopen", async () => {
   const { projects, projectStore, baseline } = await fixture();
   const store = new DraftTransactionStore(
