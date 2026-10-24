@@ -24,6 +24,13 @@ import {
   graphicIntervals,
   graphicLimits,
 } from "../../domain/src/graphics.ts";
+import {
+  buildSoundLayer,
+  SoundBuildError,
+  soundIntervals,
+  type SoundAsset,
+  type SoundLayer,
+} from "../../domain/src/sounds.ts";
 
 export const codexVideoEditToolNames = [
   "project.get_summary",
@@ -49,7 +56,12 @@ export const codexVideoEditToolNames = [
  * Tools only Claude's route offers: they work on files in Claude's project
  * workspace (ADR 0021), which the other routes do not have.
  */
-export const claudeOnlyToolNames = ["composition.check"] as const;
+export const claudeOnlyToolNames = [
+  "composition.check",
+  "sound.list",
+  "sound.set",
+  "sound.remove",
+] as const;
 /** Claude's guarded editor tools: the shared tools plus its own. */
 export const claudeEditorToolNames = [
   ...codexVideoEditToolNames,
@@ -107,6 +119,11 @@ export type CompositionChecker = (
   } | null;
 }>;
 
+/** The project's audio files (music and sound effects), for sound layers. */
+export interface SoundCatalog {
+  list(projectId: string): Promise<SoundAsset[]>;
+}
+
 type DraftTransactions = {
   snapshot(projectId: string): Promise<DraftReadResult>;
   snapshotWithProject(projectId: string): Promise<DraftProjectReadResult>;
@@ -142,6 +159,7 @@ export type CodexVideoEditToolErrorCode =
   | "transcript_unavailable"
   | "graphic_rejected"
   | "composition_rejected"
+  | "sound_rejected"
   | "frame_unavailable"
   | "service_unavailable";
 
@@ -165,6 +183,7 @@ const messages: Record<CodexVideoEditToolErrorCode, string> = {
   graphic_rejected:
     "The graphic was rejected. Use inline HTML and CSS without scripts, forms, embedded documents or network resources.",
   composition_rejected: "The composition could not be used.",
+  sound_rejected: "The sound could not be used.",
   service_unavailable:
     "The editing service is unavailable. Reopen the project and try again.",
 };
@@ -195,7 +214,8 @@ export class CodexVideoEditToolError extends Error {
           ? `${messages[code]} ${graphicReason}`
           : // A composition's own problem (its file, or its script error),
             // so Claude can fix what it wrote.
-            code === "composition_rejected" && graphicReason !== undefined
+            (code === "composition_rejected" || code === "sound_rejected") &&
+              graphicReason !== undefined
             ? `${messages[code]} ${graphicReason.replace(/[\u0000-\u001f\u007f]/gu, " ").slice(0, 400)}`
             : messages[code],
     );
@@ -319,6 +339,11 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
     clipMap,
     draft.timeline.duration_us,
   );
+  const placedSounds = soundIntervals(
+    draft.timeline.sounds ?? [],
+    clipMap,
+    draft.timeline.duration_us,
+  );
   return {
     schema_version: "1.0" as const,
     project_id: draft.project_id,
@@ -394,6 +419,30 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
         css_bytes: new TextEncoder().encode(graphic.css).length,
       };
     }),
+    // Music and sound effects; empty when the draft has none.
+    sounds: (draft.timeline.sounds ?? []).map((sound) => {
+      const placed = placedSounds.find(
+        (interval) => interval.soundId === sound.sound_id,
+      );
+      return {
+        sound_id: sound.sound_id,
+        name: sound.name,
+        kind: sound.kind,
+        asset_id: sound.asset_id,
+        asset_start_us: sound.asset_start_us,
+        duration_us: sound.duration_us,
+        gain_db: sound.gain_db,
+        fade_in_us: sound.fade_in_us,
+        fade_out_us: sound.fade_out_us,
+        duck_db: sound.duck_db,
+        loop: sound.loop,
+        follows_cuts: sound.start.type === "source",
+        // Null when the anchor moment was cut away and the layer is silent.
+        timeline_range: placed
+          ? { start_us: placed.startUs, end_us: placed.endUs }
+          : null,
+      };
+    }),
     undo_transaction_id: undoId,
   };
 }
@@ -443,6 +492,7 @@ export class CodexVideoEditToolService {
   private readonly frameRenderer: FrameRenderer | undefined;
   private readonly compositionImporter: CompositionImporter | undefined;
   private readonly compositionChecker: CompositionChecker | undefined;
+  private readonly soundCatalog: SoundCatalog | undefined;
 
   constructor(
     activeProjectId: string,
@@ -452,6 +502,7 @@ export class CodexVideoEditToolService {
     frameRenderer?: FrameRenderer,
     compositionImporter?: CompositionImporter,
     compositionChecker?: CompositionChecker,
+    soundCatalog?: SoundCatalog,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
@@ -461,6 +512,7 @@ export class CodexVideoEditToolService {
     this.frameRenderer = frameRenderer;
     this.compositionImporter = compositionImporter;
     this.compositionChecker = compositionChecker;
+    this.soundCatalog = soundCatalog;
   }
 
   private applier():
@@ -523,6 +575,12 @@ export class CodexVideoEditToolService {
           return await this.getFrames(input);
         case "composition.check":
           return await this.checkComposition(input);
+        case "sound.list":
+          return await this.listSounds(input);
+        case "sound.set":
+          return await this.setSound(input);
+        case "sound.remove":
+          return await this.removeSound(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -1450,6 +1508,190 @@ export class CodexVideoEditToolService {
           ]
         : [],
     };
+  }
+
+  private async listSounds(input: unknown): Promise<unknown> {
+    const request = exact(input, ["schema_version", "project_id"]);
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    if (!this.soundCatalog) reject("tool_not_available");
+    const assets = await this.soundCatalog.list(this.activeProjectId);
+    return {
+      schema_version: "1.0",
+      project_id: this.activeProjectId,
+      assets: assets.map((asset) => ({
+        asset_id: asset.asset_id,
+        name: asset.name,
+        duration_us: asset.duration_us,
+        sample_rate: asset.sample_rate,
+        channels: asset.channels,
+      })),
+    };
+  }
+
+  private async setSound(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      [
+        "schema_version",
+        "request_id",
+        "project_id",
+        "draft_id",
+        "base_revision_id",
+        "expected_sequence",
+        "expected_timeline_sha256",
+        "pass_group_id",
+        "reason",
+        "name",
+        "kind",
+        "asset_id",
+        "start_us",
+      ],
+      [
+        "sound_id",
+        "follows_cuts",
+        "asset_start_us",
+        "duration_us",
+        "gain_db",
+        "fade_in_us",
+        "fade_out_us",
+        "duck_db",
+        "loop",
+      ],
+    );
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    id(request.asset_id);
+    integer(request.start_us);
+    if (request.kind !== "music" && request.kind !== "effect")
+      reject("invalid_request");
+    if (request.sound_id !== undefined) id(request.sound_id);
+    if (
+      request.follows_cuts !== undefined &&
+      typeof request.follows_cuts !== "boolean"
+    )
+      reject("invalid_request");
+    if (request.loop !== undefined && typeof request.loop !== "boolean")
+      reject("invalid_request");
+    for (const key of [
+      "asset_start_us",
+      "duration_us",
+      "gain_db",
+      "fade_in_us",
+      "fade_out_us",
+      "duck_db",
+    ])
+      if (request[key] !== undefined && !Number.isSafeInteger(request[key]))
+        reject("invalid_request");
+    if (!this.soundCatalog) reject("tool_not_available");
+    const asset = (await this.soundCatalog.list(this.activeProjectId)).find(
+      (item) => item.asset_id === request.asset_id,
+    );
+    if (!asset)
+      throw new CodexVideoEditToolError(
+        "sound_rejected",
+        undefined,
+        "That audio file is not in the project. Call sound.list for the files you can use.",
+      );
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const { draft } = await this.drafts.snapshot(this.activeProjectId);
+    if (
+      draft.draft_id !== request.draft_id ||
+      draft.base_revision_id !== request.base_revision_id ||
+      draft.draft_sequence !== request.expected_sequence ||
+      draft.timeline_sha256 !== request.expected_timeline_sha256
+    )
+      reject("stale_draft");
+    const soundId = (request.sound_id as string | undefined) ?? null;
+    if (
+      soundId !== null &&
+      !draft.timeline.sounds?.some((item) => item.sound_id === soundId)
+    )
+      reject("edit_conflict");
+    const optional = (key: string): number | undefined =>
+      request[key] === undefined ? undefined : (request[key] as number);
+    let layer: SoundLayer;
+    try {
+      layer = buildSoundLayer(
+        {
+          ...(soundId !== null ? { soundId } : {}),
+          name: typeof request.name === "string" ? request.name : "",
+          kind: request.kind as SoundLayer["kind"],
+          asset,
+          startUs: request.start_us as number,
+          followsCuts: request.follows_cuts as boolean | undefined,
+          assetStartUs: optional("asset_start_us"),
+          durationUs: optional("duration_us"),
+          gainDb: optional("gain_db"),
+          fadeInUs: optional("fade_in_us"),
+          fadeOutUs: optional("fade_out_us"),
+          duckDb: optional("duck_db"),
+          loop: request.loop as boolean | undefined,
+        },
+        draft.timeline,
+        () => `sound-${randomUUID().replaceAll("-", "")}`,
+      );
+    } catch (error) {
+      if (error instanceof SoundBuildError)
+        throw new CodexVideoEditToolError(
+          "sound_rejected",
+          undefined,
+          error.message,
+        );
+      throw error;
+    }
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "audio" },
+      reason: request.reason,
+      operations: [{ type: "set_sound", sound: layer }],
+    });
+    return safeMutation(
+      result,
+      soundId === null
+        ? "Sound added to the active draft."
+        : "Sound replaced on the active draft.",
+    );
+  }
+
+  private async removeSound(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "sound_id",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    id(request.sound_id);
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "audio" },
+      reason: request.reason,
+      operations: [{ type: "remove_sound", sound_id: request.sound_id }],
+    });
+    return safeMutation(result, "Sound removed from the active draft.");
   }
 
   private async configureAudio(input: unknown): Promise<unknown> {

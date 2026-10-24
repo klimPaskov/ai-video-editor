@@ -40,6 +40,9 @@ const activityLabels: Record<string, { label: string; mutating: boolean }> = {
   audio_configure: { label: "Setting audio", mutating: true },
   media_get_frames: { label: "Looking at the edit", mutating: false },
   composition_check: { label: "Checking a composition", mutating: false },
+  sound_list: { label: "Looking at the audio files", mutating: false },
+  sound_set: { label: "Placing music or a sound", mutating: true },
+  sound_remove: { label: "Removing a sound", mutating: true },
   timeline_undo: { label: "Undoing the last edit", mutating: true },
 };
 

@@ -4,6 +4,8 @@ import { setupTimelineStrip } from "./timeline-strip.ts";
 import { setupCaptions } from "./captions-panel.ts";
 import { setupShortsPanel } from "./shorts-panel.ts";
 import { setupAudioPanel } from "./audio-panel.ts";
+import { setupSoundPanel } from "./sound-panel.ts";
+import { setupSoundPreview } from "./sound-preview.ts";
 import { mediaRect, setupZoomPreview } from "./zoom-preview.ts";
 import { setupGraphicsPreview } from "./graphics-preview.ts";
 import {
@@ -1285,6 +1287,11 @@ const captions = setupCaptions({ preview: canvas.parentElement! });
 const zoomPreview = setupZoomPreview(canvas.parentElement!);
 const graphicsPreview = setupGraphicsPreview(canvas.parentElement!);
 const audioPanel = setupAudioPanel();
+const soundPreview = setupSoundPreview({ projectId: () => activeProject?.id });
+const soundPanel = setupSoundPanel({
+  position: () => Number(seek.value),
+  changed: (layers) => soundPreview.layers(layers),
+});
 function refreshZoom(us = Number(seek.value)): void {
   const project = selected?.previewAvailable ? activeProject : undefined;
   zoomPreview.render(project, us);
@@ -1293,6 +1300,7 @@ function refreshZoom(us = Number(seek.value)): void {
 function refreshCaptions(): void {
   refreshZoom();
   audioPanel.render(activeProject?.id, activeProject?.draft.sequence);
+  soundPanel.render(activeProject?.id, activeProject?.draft.sequence);
   captions.render(
     selected?.previewAvailable ? activeProject : undefined,
     transcriptionView,
@@ -2203,6 +2211,7 @@ const playback = setupPlayback({
     timelineStrip.playhead(us);
     captions.position(us);
     refreshZoom(us);
+    soundPreview.follow(us);
     if (previewEndUs !== undefined && us >= previewEndUs) {
       previewEndUs = undefined;
       playback.stop();
@@ -2210,8 +2219,12 @@ const playback = setupPlayback({
     previous.disabled = us <= 0;
     next.disabled = us >= Number(seek.max);
   },
-  stopped: (us) => requestFrame(us),
+  stopped: (us) => {
+    soundPreview.stop();
+    requestFrame(us);
+  },
   changed: (playing) => {
+    if (!playing) soundPreview.stop();
     playButton.dataset.icon = playing ? "pause" : "play";
     playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
     playButton.setAttribute("aria-pressed", String(playing));

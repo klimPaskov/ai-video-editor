@@ -259,6 +259,12 @@
       "$ref": "#/$defs/caption_settings",
       "description": "The draft's caption choices. Omitted until the first change; the project's earlier per-project choice or the default applies until then."
     },
+    "sounds": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/sound_layer" },
+      "description": "Draft music and sound effects mixed into the export audio (ADR 0023). Omitted when the draft has none."
+    },
     "audio": {
       "$ref": "#/$defs/audio_settings",
       "description": "The draft's export audio treatment. Omitted until the first change, like captions."
@@ -299,6 +305,52 @@
         "normalize": { "type": "boolean" },
         "denoise": { "type": "boolean" }
       }
+    },
+    "sound_layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sound_id", "name", "kind", "asset_id", "asset_sha256", "asset_start_us",
+        "duration_us", "start", "gain_db", "fade_in_us", "fade_out_us", "duck_db", "loop"
+      ],
+      "properties": {
+        "sound_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "kind": { "enum": ["music", "effect"] },
+        "asset_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "asset_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "asset_start_us": { "type": "integer", "minimum": 0, "maximum": 14400000000 },
+        "duration_us": { "type": "integer", "minimum": 50000, "maximum": 14400000000 },
+        "start": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "start_us"],
+              "properties": {
+                "type": { "const": "output" },
+                "start_us": { "type": "integer", "minimum": 0, "maximum": 14400000000 }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "source_id", "source_us"],
+              "properties": {
+                "type": { "const": "source" },
+                "source_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+                "source_us": { "type": "integer", "minimum": 0 }
+              }
+            }
+          ]
+        },
+        "gain_db": { "type": "integer", "minimum": -60, "maximum": 12 },
+        "fade_in_us": { "type": "integer", "minimum": 0, "maximum": 14400000000 },
+        "fade_out_us": { "type": "integer", "minimum": 0, "maximum": 14400000000 },
+        "duck_db": { "type": "integer", "minimum": 0, "maximum": 30 },
+        "loop": { "type": "boolean" }
+      },
+      "description": "A music bed or sound effect from one of the project's audio files, named by id and SHA-256. Fades together may not exceed the duration. An output start is a fixed time; a source start follows cuts and is silent when its moment was cut away. duck_db lowers the layer while the edit's own speech plays."
     },
     "graphic_effect": {
       "type": "object",

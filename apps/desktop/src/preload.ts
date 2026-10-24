@@ -45,6 +45,13 @@ import {
   assertAudioSettingsUpdate,
 } from "../../../packages/domain/src/audio-settings.ts";
 import {
+  assertSoundAddRequest,
+  assertSoundRemoveRequest,
+  assertSoundUpdateRequest,
+  assertSoundsRequest,
+  assertSoundsView,
+} from "../../../packages/domain/src/sound-view.ts";
+import {
   assertShortClipRequest,
   assertShortClipsView,
   assertShortExportRequest,
@@ -339,6 +346,22 @@ const bridge: DesktopBridge = {
   setAudioSettings: (request) => {
     assertAudioSettingsUpdate(request);
     return invoke(channels.audioSet, request, assertAudioSettings);
+  },
+  getSounds: (request) => {
+    assertSoundsRequest(request);
+    return invoke(channels.soundsGet, request, assertSoundsView);
+  },
+  addSound: (request) => {
+    assertSoundAddRequest(request);
+    return invoke(channels.soundsAdd, request, assertSoundsView);
+  },
+  updateSound: (request) => {
+    assertSoundUpdateRequest(request);
+    return invoke(channels.soundsUpdate, request, assertSoundsView);
+  },
+  removeSound: (request) => {
+    assertSoundRemoveRequest(request);
+    return invoke(channels.soundsRemove, request, assertSoundsView);
   },
   getShortClips: (request) => {
     assertShortProjectRequest(request);

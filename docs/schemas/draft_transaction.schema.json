@@ -65,7 +65,8 @@
           { "$ref": "#/$defs/speed_operation" },
           { "$ref": "#/$defs/graphic_operation" },
           { "$ref": "#/$defs/captions_operation" },
-          { "$ref": "#/$defs/audio_operation" }
+          { "$ref": "#/$defs/audio_operation" },
+          { "$ref": "#/$defs/sound_operation" }
         ]
       }
     },
@@ -154,6 +155,21 @@
         "properties": {
           "operations": {
             "contains": { "$ref": "#/$defs/audio_operation" }
+          }
+        },
+        "required": ["operations"]
+      },
+      "then": {
+        "properties": {
+          "operations": { "minItems": 1, "maxItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operations": {
+            "contains": { "$ref": "#/$defs/sound_operation" }
           }
         },
         "required": ["operations"]
@@ -497,6 +513,37 @@
         }
       },
       "description": "Replaces the draft's export audio treatment, like captions_operation."
+    },
+    "sound_operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "operation_type", "action", "sound_id", "sound", "before", "after", "inverse"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "operation_id": { "$ref": "#/$defs/id" },
+        "operation_type": { "const": "sound" },
+        "action": { "enum": ["set", "remove"] },
+        "sound_id": { "$ref": "#/$defs/id" },
+        "sound": {
+          "oneOf": [
+            { "$ref": "timeline.schema.json#/$defs/sound_layer" },
+            { "type": "null" }
+          ]
+        },
+        "before": { "type": "array", "maxItems": 64, "items": { "$ref": "timeline.schema.json#/$defs/sound_layer" } },
+        "after": { "type": "array", "maxItems": 64, "items": { "$ref": "timeline.schema.json#/$defs/sound_layer" } },
+        "inverse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "sounds", "expected_after_sha256"],
+          "properties": {
+            "type": { "const": "restore_sounds" },
+            "sounds": { "type": "array", "maxItems": 64, "items": { "$ref": "timeline.schema.json#/$defs/sound_layer" } },
+            "expected_after_sha256": { "$ref": "#/$defs/hash" }
+          }
+        }
+      },
+      "description": "Adds or replaces one sound layer (set) or removes one (remove, sound null). It is the only operation in its transaction; its inverse restores the previous layers and the clip map is unchanged."
     },
     "graphic_operation": {
       "type": "object",

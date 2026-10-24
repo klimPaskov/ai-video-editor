@@ -115,6 +115,7 @@ test("the workspace holds the edit, the guides and nothing outside it", async ()
     assert.deepEqual((await readdir(join(directory, "guides"))).sort(), [
       "motion-design.md",
       "production.md",
+      "sound.md",
       "story-edit.md",
     ]);
     assert.match(

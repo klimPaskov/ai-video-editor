@@ -6,6 +6,7 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { once } from "node:events";
 import type { Readable, Writable } from "node:stream";
 import { MediaError, runProcess } from "./process.ts";
+import { mixSoundLayers, type SoundMixLayer } from "./sound-mix.ts";
 import { atempoChain } from "../../domain/src/speed.ts";
 import type { PresentationTiming } from "./presentation-timing.ts";
 import type { MediaExecutables } from "./lossless.ts";
@@ -568,6 +569,23 @@ export function planExport(
 
 const quiet = ["-hide_banner", "-loglevel", "error", "-nostdin"];
 
+/**
+ * Time allowed for one pass over the audio. It grows with the audio's length
+ * and is generous, because a computer busy with other work can run several
+ * times slower than usual; a fixed 30 s limit made a long edit's loudness
+ * pass fail on a loaded machine.
+ */
+export function audioPassTimeoutMs(
+  sampleCount: number,
+  sampleRate: number,
+): number {
+  const seconds = sampleCount / sampleRate;
+  return Math.min(
+    4 * 3_600_000,
+    Math.max(120_000, Math.round(60_000 + seconds * 3_000)),
+  );
+}
+
 /** Retimes a graphics segment so its first frame is output frame `startFrame`. */
 /**
  * Threads for the compositor's filter graph. Every graphics input adds a
@@ -726,6 +744,11 @@ export interface ExportRequest {
   compose?: ExportComposition;
   /** Speech cleanup applied to the assembled audio before encoding. */
   audioCleanup?: { normalize: boolean; denoise: boolean };
+  /**
+   * Music and sound effects mixed into the assembled audio after the speech
+   * cleanup (the caller has verified each file). The recording needs audio.
+   */
+  sounds?: { layers: readonly SoundMixLayer[] };
 }
 
 export interface ExportComposition {
@@ -793,6 +816,7 @@ async function cleanAudio(options: {
     const target = "I=-16:TP=-1.5:LRA=11";
     const measured = await runProcess({
       executable: options.ffmpeg,
+      timeoutMs: audioPassTimeoutMs(options.sampleCount, audio.sampleRate),
       args: [
         "-hide_banner",
         "-nostdin",
@@ -831,6 +855,7 @@ async function cleanAudio(options: {
   const processed = join(options.staging, "processed-audio.raw");
   await runProcess({
     executable: options.ffmpeg,
+    timeoutMs: audioPassTimeoutMs(options.sampleCount, audio.sampleRate),
     args: [
       ...quiet,
       ...input,
@@ -944,6 +969,10 @@ export async function exportDraft(
     );
   };
   try {
+    if (request.sounds?.layers.length && !audio)
+      unsupported(
+        "Music and sound effects need a recording that has audio to mix them into.",
+      );
     const version = await runProcess({
       executable: executables.ffmpeg,
       args: ["-version"],
@@ -1052,6 +1081,10 @@ export async function exportDraft(
             }
             await runProcess({
               executable: executables.ffmpeg,
+              timeoutMs: audioPassTimeoutMs(
+                clip.outputSamples,
+                audio.sampleRate,
+              ),
               args: [
                 ...quiet,
                 "-f",
@@ -1108,6 +1141,18 @@ export async function exportDraft(
           ...(signal ? { signal } : {}),
         });
       }
+      // Music and effects go in after the speech has been cleaned, so they
+      // keep their own level; the mix becomes the canonical audio.
+      if (request.sounds?.layers.length)
+        canonicalAudioSha256 = await mixSoundLayers({
+          ffmpeg: executables.ffmpeg,
+          audio,
+          audioPath,
+          staging,
+          sampleCount: plan.sampleCount,
+          layers: request.sounds.layers,
+          ...(signal ? { signal } : {}),
+        });
     }
 
     // 2. Canonical video frames streamed straight into the encoder.
@@ -1447,6 +1492,7 @@ export async function exportDraft(
       (
         await runProcess({
           executable: executables.ffprobe,
+          timeoutMs: 300_000,
           args: [
             "-v",
             "error",

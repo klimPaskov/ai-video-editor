@@ -34,11 +34,24 @@ The bar is a high-budget production: graphics that feel designed by a studio for
 - Ask the motion-reviewer helper to critique it against notes.md and this bar, then revise until it would pass a senior motion designer's review.
 `;
 
+const soundGuide = `# Sound guide
+
+Music and sound effects come only from audio files the user added to the project. You cannot download, generate or find sound; sound.list shows exactly what exists. With no files, leave sound alone.
+
+## Use
+- Music is a bed: sound.set kind "music" starts it where the mood should change, loops to the end, sits at -18 dB, fades in and out and lowers 12 dB under speech. For a speech-led video keep it well below the voice (-18 to -24 dB); raise it only in passages with no speech, such as an intro or outro.
+- An effect is one short sound at a moment (a whoosh as a graphic enters, a hit on a reveal). It is anchored to the footage moment so it follows later cuts. Keep effects few, short and matched to something visible; ask whether the video is better without it.
+- Give each layer a descriptive name, replace by sound_id when revising so a change stays one undoable step, and check the result in timeline.get_summary (sounds, with the range each one covers).
+- Choose where in the file a layer starts with asset_start_us when the file opens with a long intro or silence.
+- The recording must have audio; layers are mixed in at export after speech cleanup and loudness normalisation.
+`;
+
 /** The guides main writes into every project workspace. */
 export const claudeGuides: Readonly<Record<string, string>> = Object.freeze({
   "story-edit.md": roughCutPlaybook,
   "production.md": fullEditPlaybook,
   "motion-design.md": motionDesignGuide,
+  "sound.md": soundGuide,
 });
 
 const editorTool = (name: string) => `mcp__ai_video_editor__${name}`;

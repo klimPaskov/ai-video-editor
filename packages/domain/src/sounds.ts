@@ -9,6 +9,7 @@
  * hash, so a draft stays self-verifying and the export refuses a file whose
  * bytes changed.
  */
+import { graphicAnchor } from "./graphics.ts";
 import { viewTimelineAt } from "./speed.ts";
 
 export type SoundKind = "music" | "effect";
@@ -305,4 +306,98 @@ export function soundIntervals(
 /** The linear gain of a level in dB. */
 export function linearGain(db: number): number {
   return 10 ** (db / 20);
+}
+
+/** A request for a layer is not usable; the message says what to change. */
+export class SoundBuildError extends Error {}
+
+export interface SoundLayerRequest {
+  /** The existing layer to replace; omitted for a new one. */
+  soundId?: string;
+  name: string;
+  kind: SoundKind;
+  asset: SoundAsset;
+  /** Output time the layer starts at (or, for a cut-following one, the moment shown there). */
+  startUs: number;
+  followsCuts?: boolean | undefined;
+  assetStartUs?: number | undefined;
+  durationUs?: number | undefined;
+  gainDb?: number | undefined;
+  fadeInUs?: number | undefined;
+  fadeOutUs?: number | undefined;
+  duckDb?: number | undefined;
+  loop?: boolean | undefined;
+}
+
+/**
+ * A valid layer from a request, with the defaults every route shares. Music
+ * is a bed: it starts at an output time, repeats to the end of the edit, sits
+ * at -18 dB, fades in and out and lowers 12 dB under speech. An effect is a
+ * short sound at a moment: anchored to the source moment shown there so it
+ * follows later cuts, played once at -6 dB, never ducked.
+ */
+export function buildSoundLayer(
+  request: SoundLayerRequest,
+  timeline: {
+    duration_us: number;
+    clips: Parameters<typeof graphicAnchor>[0];
+  },
+  newId: () => string,
+): SoundLayer {
+  const music = request.kind === "music";
+  const assetStart = request.assetStartUs ?? 0;
+  if (assetStart >= request.asset.duration_us)
+    throw new SoundBuildError(
+      "asset_start_us is past the end of that audio file.",
+    );
+  const loop = request.loop ?? music;
+  const remaining = Math.max(0, timeline.duration_us - request.startUs);
+  const duration =
+    request.durationUs ??
+    (loop
+      ? remaining
+      : Math.min(
+          remaining,
+          Math.max(0, request.asset.duration_us - assetStart),
+        ));
+  let start: SoundStart;
+  if (request.followsCuts ?? !music) {
+    const anchor = graphicAnchor(timeline.clips, request.startUs);
+    if (!anchor) throw new SoundBuildError("start_us is outside the edit.");
+    start = {
+      type: "source",
+      source_id: anchor.source_id,
+      source_us: anchor.source_us,
+    };
+  } else {
+    if (request.startUs >= timeline.duration_us)
+      throw new SoundBuildError("start_us is outside the edit.");
+    start = { type: "output", start_us: request.startUs };
+  }
+  const layer: SoundLayer = {
+    sound_id: request.soundId ?? newId(),
+    name: request.name.trim(),
+    kind: request.kind,
+    asset_id: request.asset.asset_id,
+    asset_sha256: request.asset.sha256,
+    asset_start_us: assetStart,
+    duration_us: duration,
+    start,
+    gain_db: request.gainDb ?? (music ? -18 : -6),
+    fade_in_us: request.fadeInUs ?? (music ? 1_000_000 : 0),
+    fade_out_us: request.fadeOutUs ?? (music ? 2_000_000 : 0),
+    duck_db: request.duckDb ?? (music ? 12 : 0),
+    loop,
+  };
+  // Fades may not outlast a short layer: shorten them, never refuse.
+  layer.fade_in_us = Math.min(layer.fade_in_us, Math.floor(duration / 2));
+  layer.fade_out_us = Math.min(layer.fade_out_us, duration - layer.fade_in_us);
+  try {
+    assertSoundLayer(layer);
+  } catch {
+    throw new SoundBuildError(
+      `Check the values: gain_db ${soundLimits.minGainDb} to ${soundLimits.maxGainDb}, duck_db 0 to ${soundLimits.maxDuckDb}, duration_us ${soundLimits.minDurationUs} or more, asset_start_us inside the file, a name of 1 to ${soundLimits.maxNameChars} characters.`,
+    );
+  }
+  return layer;
 }

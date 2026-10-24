@@ -31,6 +31,7 @@ import {
   assertDeviceLoginDetails,
   CODEX_DEVICE_VERIFICATION_URL,
 } from "../../../packages/domain/src/codex-device-login.ts";
+import type { DraftEditIntent } from "../../../packages/domain/src/draft-transaction.ts";
 import { PreferencesStore } from "./preferences.ts";
 import { DesktopTranscriptionManager } from "./transcription.ts";
 import { ProjectStore } from "../../../packages/project-store/src/store.ts";
@@ -129,6 +130,24 @@ import { DesktopPlaybackProxies } from "./playback-proxies.ts";
 import { CaptionSettingsStore } from "./caption-settings.ts";
 import { ProjectSettingsStore } from "./project-settings.ts";
 import { removeProjectSideFiles } from "./project-removal.ts";
+import {
+  assertSoundAddRequest,
+  assertSoundRemoveRequest,
+  assertSoundUpdateRequest,
+  assertSoundsRequest,
+  assertSoundsView,
+  type SoundsView,
+} from "../../../packages/domain/src/sound-view.ts";
+import {
+  buildSoundLayer,
+  SoundBuildError,
+  soundIntervals,
+} from "../../../packages/domain/src/sounds.ts";
+import {
+  SoundAssetError,
+  SoundAssetStore,
+} from "../../../packages/project-store/src/sounds.ts";
+import { probeSoundFile } from "../../../packages/media-engine/src/sound-probe.ts";
 import { sweepPartialExports, sweepTemporaryFolders } from "./private-notes.ts";
 import { roughCutTools } from "./rough-cut-playbook.ts";
 import {
@@ -253,6 +272,13 @@ let resolvePlaybackSource:
       sourceId: string,
     ) => Promise<{ path: string; mime: string } | null>)
   | undefined;
+/** Resolves a project audio file for the preview; set once services start. */
+let resolveSoundPreview:
+  | ((
+      projectId: string,
+      assetId: string,
+    ) => Promise<{ path: string; mime: string } | null>)
+  | undefined;
 let servicesClosed = false;
 let recorder: DesktopRecorder | undefined;
 let playbackProxies: DesktopPlaybackProxies | undefined;
@@ -360,11 +386,10 @@ async function servePlaybackSource(
   projectId: string,
   sourceId: string,
   request: Request,
+  resolve = resolvePlaybackSource,
 ): Promise<Response> {
   const notFound = () => new Response("Not found", { status: 404 });
-  const resolved = await resolvePlaybackSource?.(projectId, sourceId).catch(
-    () => null,
-  );
+  const resolved = await resolve?.(projectId, sourceId).catch(() => null);
   if (!resolved) return notFound();
   let size: number;
   try {
@@ -553,6 +578,17 @@ async function start(): Promise<void> {
       );
     if (media && url.host === "app" && !url.search && request.method === "GET")
       return servePlaybackSource(media[1]!, media[2]!, request);
+    const sound =
+      /^\/sounds\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})$/u.exec(
+        url.pathname,
+      );
+    if (sound && url.host === "app" && !url.search && request.method === "GET")
+      return servePlaybackSource(
+        sound[1]!,
+        sound[2]!,
+        request,
+        resolveSoundPreview,
+      );
     const asset = assets.get(url.pathname);
     if (request.method !== "GET" || url.host !== "app" || url.search || !asset)
       return new Response("Not found", { status: 404 });
@@ -622,6 +658,12 @@ async function start(): Promise<void> {
   const projectRoot = path.join(userData, "project-store");
   const projects = new ProjectStore(projectRoot, library);
   const drafts = new DraftTransactionStore(projectRoot, projects);
+  // The project's music and sound effects: copied in, hashed, never changed.
+  const soundAssets = new SoundAssetStore(projectRoot, (file, signal) =>
+    probeSoundFile(file, {
+      ...(signal ? { signal } : {}),
+    }),
+  );
   const projectRuntime = new DesktopProjectRuntime(drafts, library);
   const captionSettings = new CaptionSettingsStore(
     path.join(userData, "caption-settings"),
@@ -704,6 +746,194 @@ async function start(): Promise<void> {
     if (activeProjectId !== request.project_id)
       throw new UserFacingError("Open this project before changing audio.");
     return setDraftPresentation(request.project_id, "audio", request.settings);
+  });
+  /** The Sound card: the draft's layers, where they play and their files. */
+  const soundsView = async (projectId: string): Promise<SoundsView> => {
+    const { draft } = await drafts.snapshot(projectId);
+    const sounds = draft.timeline.sounds ?? [];
+    const assets = new Map(
+      (await soundAssets.list(projectId)).map((asset) => [
+        asset.asset_id,
+        asset,
+      ]),
+    );
+    const placed = soundIntervals(
+      sounds,
+      draft.timeline.clips.map((clip) => ({
+        sourceId: clip.source_id,
+        timelineStartUs: clip.timeline_start_us,
+        timelineEndUs: clip.timeline_end_us,
+        sourceStartUs: clip.source_start_us,
+        sourceEndUs: clip.source_end_us,
+        ...(clip.speed ? { speed: clip.speed } : {}),
+      })),
+      draft.timeline.duration_us,
+    );
+    const view: SoundsView = {
+      schema_version: "1.0",
+      project_id: projectId,
+      layers: sounds.map((sound) => {
+        const interval = placed.find((item) => item.soundId === sound.sound_id);
+        return {
+          sound_id: sound.sound_id,
+          name: sound.name,
+          kind: sound.kind,
+          file_name: assets.get(sound.asset_id)?.name ?? sound.name,
+          asset_id: sound.asset_id,
+          asset_start_us: sound.asset_start_us,
+          fade_in_us: interval?.fadeInUs ?? sound.fade_in_us,
+          fade_out_us: interval?.fadeOutUs ?? sound.fade_out_us,
+          gain_db: sound.gain_db,
+          duck_db: sound.duck_db,
+          loop: sound.loop,
+          timeline_range: interval
+            ? { start_us: interval.startUs, end_us: interval.endUs }
+            : null,
+        };
+      }),
+    };
+    assertSoundsView(view);
+    return view;
+  };
+  /** One undoable manual change to the draft's sound layers. */
+  const changeSounds = async (
+    projectId: string,
+    reason: string,
+    operation: (
+      draft: Awaited<ReturnType<typeof drafts.snapshot>>["draft"],
+    ) => DraftEditIntent | null,
+  ): Promise<void> => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before changing sound.");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { draft } = await drafts.snapshot(projectId);
+      const next = operation(draft);
+      if (!next) return;
+      try {
+        await invokeWithProjectDraftRefresh({
+          toolName: "sound.set",
+          projectId,
+          activeProjectId: () => activeProjectId,
+          drafts,
+          notify: publishDraftNotice,
+          work: () =>
+            drafts.applyManual({
+              schema_version: "1.0",
+              request_id: randomUUID(),
+              project_id: projectId,
+              draft_id: draft.draft_id,
+              base_revision_id: draft.base_revision_id,
+              expected_sequence: draft.draft_sequence,
+              expected_timeline_sha256: draft.timeline_sha256,
+              pass_group: { pass_group_id: randomUUID(), kind: "audio" },
+              reason,
+              operations: [next],
+            }),
+        });
+        return;
+      } catch (error) {
+        if (error instanceof DraftTransactionError && error.code === "stale")
+          continue;
+        if (error instanceof DraftTransactionError)
+          throw new UserFacingError(error.message);
+        throw error;
+      }
+    }
+    throw new UserFacingError("The draft changed. Try again.");
+  };
+  register(channels.soundsGet, async (request) => {
+    assertSoundsRequest(request);
+    return soundsView(request.project_id);
+  });
+  let addingSound = false;
+  register(channels.soundsAdd, async (request) => {
+    assertSoundAddRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before adding sound.");
+    if (addingSound || !window)
+      throw new UserFacingError("A sound is already being added.");
+    addingSound = true;
+    try {
+      const selected = await dialog.showOpenDialog(window, {
+        title: request.kind === "music" ? "Add music" : "Add sound effect",
+        properties: ["openFile"],
+        filters: [
+          {
+            name: "Audio",
+            extensions: ["mp3", "wav", "flac", "ogg", "m4a", "aac", "opus"],
+          },
+        ],
+      });
+      const file = selected.filePaths[0];
+      if (selected.canceled || !file) return soundsView(request.project_id);
+      let asset;
+      try {
+        asset = await soundAssets.import(request.project_id, file);
+      } catch (error) {
+        if (error instanceof SoundAssetError)
+          throw new UserFacingError(error.message);
+        throw error;
+      }
+      await changeSounds(request.project_id, "Add sound.", (draft) => {
+        try {
+          return {
+            type: "set_sound",
+            sound: buildSoundLayer(
+              {
+                name: asset.name,
+                kind: request.kind,
+                asset,
+                startUs: Math.min(
+                  request.start_us,
+                  Math.max(0, draft.timeline.duration_us - 1),
+                ),
+              },
+              draft.timeline,
+              () => `sound-${randomUUID().replaceAll("-", "")}`,
+            ),
+          };
+        } catch (error) {
+          if (error instanceof SoundBuildError)
+            throw new UserFacingError(error.message);
+          throw error;
+        }
+      });
+      return soundsView(request.project_id);
+    } finally {
+      addingSound = false;
+    }
+  });
+  register(channels.soundsUpdate, async (request) => {
+    assertSoundUpdateRequest(request);
+    await changeSounds(request.project_id, "Change sound.", (draft) => {
+      const current = draft.timeline.sounds?.find(
+        (item) => item.sound_id === request.sound_id,
+      );
+      if (!current) throw new UserFacingError("That sound was removed.");
+      if (
+        current.gain_db === request.gain_db &&
+        current.duck_db === request.duck_db
+      )
+        return null;
+      return {
+        type: "set_sound",
+        sound: {
+          ...current,
+          gain_db: request.gain_db,
+          duck_db: request.duck_db,
+        },
+      };
+    });
+    return soundsView(request.project_id);
+  });
+  register(channels.soundsRemove, async (request) => {
+    assertSoundRemoveRequest(request);
+    await changeSounds(request.project_id, "Remove sound.", (draft) =>
+      draft.timeline.sounds?.some((item) => item.sound_id === request.sound_id)
+        ? { type: "remove_sound", sound_id: request.sound_id }
+        : null,
+    );
+    return soundsView(request.project_id);
   });
   /** Captions for the current draft when they are on and a transcript exists. */
   const draftCaptions = async (projectId: string) => {
@@ -939,6 +1169,8 @@ async function start(): Promise<void> {
       renderGraphicsTrack(request, `${origin}/stage.html`),
     captions: draftCaptions,
     audio: effectiveAudio,
+    soundFile: async (projectId, assetId, sha256) =>
+      (await soundAssets.resolve(projectId, assetId, sha256)).path,
     drafts,
     recordRoot: path.join(userData, "exports"),
     defaultDirectory: () => app.getPath("videos"),
@@ -989,6 +1221,42 @@ async function start(): Promise<void> {
     assertPlaybackView(value);
     return value;
   });
+  const verifiedSoundPreviews = new Map<
+    string,
+    { path: string; size: number; mtimeMs: number }
+  >();
+  resolveSoundPreview = async (projectId, assetId) => {
+    if (activeProjectId !== projectId) return null;
+    // Hashing a long file for every byte-range request would stall playback:
+    // verify once, and again only when the file's size or time changes.
+    const key = `${projectId}/${assetId}`;
+    const known = verifiedSoundPreviews.get(key);
+    let file: { path: string };
+    const info = known ? await stat(known.path).catch(() => null) : null;
+    if (known && info?.size === known.size && info.mtimeMs === known.mtimeMs)
+      file = known;
+    else {
+      file = await soundAssets.resolve(projectId, assetId);
+      const after = await stat(file.path);
+      verifiedSoundPreviews.set(key, {
+        path: file.path,
+        size: after.size,
+        mtimeMs: after.mtimeMs,
+      });
+    }
+    const extension = path.extname(file.path).toLowerCase();
+    const mime =
+      {
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".flac": "audio/flac",
+        ".ogg": "audio/ogg",
+        ".opus": "audio/ogg",
+        ".m4a": "audio/mp4",
+        ".aac": "audio/aac",
+      }[extension] ?? "application/octet-stream";
+    return { path: file.path, mime };
+  };
   resolvePlaybackSource = async (projectId, sourceId) => {
     if (activeProjectId !== projectId) return null;
     const { project } = await drafts.snapshotWithProject(projectId);
@@ -1430,6 +1698,7 @@ async function start(): Promise<void> {
           renderFramesForTool,
           importCompositionForClaude,
           checkCompositionForClaude,
+          soundAssets,
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,

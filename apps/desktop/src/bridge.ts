@@ -26,6 +26,13 @@ import type {
   AudioSettingsUpdate,
 } from "../../../packages/domain/src/audio-settings.ts";
 import type {
+  SoundAddRequest,
+  SoundRemoveRequest,
+  SoundUpdateRequest,
+  SoundsRequest,
+  SoundsView,
+} from "../../../packages/domain/src/sound-view.ts";
+import type {
   ShortClipRequest,
   ShortClipsView,
   ShortExportRequest,
@@ -198,6 +205,11 @@ export interface DesktopBridge {
     request: AudioSettingsRequest,
   ): Promise<Reply<AudioSettings>>;
   setAudioSettings(request: AudioSettingsUpdate): Promise<Reply<AudioSettings>>;
+  getSounds(request: SoundsRequest): Promise<Reply<SoundsView>>;
+  /** Opens a file dialog; resolves with the unchanged view when cancelled. */
+  addSound(request: SoundAddRequest): Promise<Reply<SoundsView>>;
+  updateSound(request: SoundUpdateRequest): Promise<Reply<SoundsView>>;
+  removeSound(request: SoundRemoveRequest): Promise<Reply<SoundsView>>;
   getShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
   findShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
   discardShortClip(request: ShortClipRequest): Promise<Reply<ShortClipsView>>;
@@ -291,6 +303,10 @@ export const channels = Object.freeze({
   projectManualGraphicRemove: "projects:manual-graphic-remove",
   audioGet: "audio:get",
   audioSet: "audio:set",
+  soundsGet: "sounds:get",
+  soundsAdd: "sounds:add",
+  soundsUpdate: "sounds:update",
+  soundsRemove: "sounds:remove",
   shortsGet: "shorts:get",
   shortsFind: "shorts:find",
   shortsDiscard: "shorts:discard",

@@ -24,3 +24,4 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0019: full AI edit with motion graphics
 - 0020: the rough cut (Magic Edit) is always an AI story edit; local analysis is evidence only
 - 0021: the editor is a harness for Claude: a per-project workspace and Claude Code's confined file and helper tools (amends 0018)
+- 0023: music and sound effects as undoable draft layers from project audio files, mixed at export

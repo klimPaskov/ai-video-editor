@@ -21,6 +21,7 @@ import {
 } from "../../packages/domain/src/zoom.ts";
 import { probePresentationTiming } from "../../packages/media-engine/src/presentation-timing.ts";
 import {
+  audioPassTimeoutMs,
   compositorThreads,
   exportDraft,
   planExport,
@@ -1542,3 +1543,199 @@ test("the compositor's threads shrink as graphics inputs grow", () => {
   for (const inputs of [1, 10, 21, 30, 48, 96])
     assert.ok(inputs * 2 * compositorThreads(inputs) <= 200);
 });
+
+test("an audio pass may take longer the longer the audio is, within bounds", () => {
+  // Never below two minutes, however short; about 3 s per second of audio
+  // above that; never beyond four hours.
+  assert.equal(audioPassTimeoutMs(48_000, 48_000), 120_000);
+  assert.equal(audioPassTimeoutMs(48_000 * 900, 48_000), 60_000 + 900 * 3_000);
+  assert.ok(audioPassTimeoutMs(48_000 * 900, 48_000) > 30_000 * 50);
+  assert.equal(audioPassTimeoutMs(48_000 * 10_000_000, 48_000), 4 * 3_600_000);
+});
+
+test(
+  "music and effects are mixed into a lossless master, ducked under speech, and verified",
+  { timeout: 180_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-sounds-"));
+    try {
+      // Speech stand-in: a 440 Hz tone for the first 3 s, then silence.
+      const input = await source(directory, "talk.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=30:duration=6",
+        "-f",
+        "lavfi",
+        "-i",
+        "aevalsrc=0.3*sin(2*PI*440*t)*lt(t\\,3):s=48000:d=6",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "rgb",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-c:a",
+        "pcm_s16le",
+      ]);
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 0,
+            sourceEndUs: 6_000_000,
+          },
+        ],
+        [input],
+      );
+      const music = join(directory, "music.wav");
+      await runProcess({
+        executable: "ffmpeg",
+        args: [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-nostdin",
+          "-f",
+          "lavfi",
+          "-i",
+          "aevalsrc=0.5*sin(2*PI*880*t)|0.5*sin(2*PI*880*t):s=44100:d=6",
+          "-y",
+          music,
+        ],
+        timeoutMs: 60_000,
+      });
+      const master = join(directory, "mixed.mkv");
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: master,
+        replace: false,
+        sounds: {
+          layers: [
+            {
+              path: music,
+              startUs: 0,
+              endUs: 6_000_000,
+              assetStartUs: 0,
+              gainDb: -6,
+              fadeInUs: 0,
+              fadeOutUs: 0,
+              duckDb: 12,
+              loop: false,
+            },
+          ],
+        },
+      });
+      // The master's decoded audio is exactly the mix that was rendered.
+      assert.equal(evidence.samplesEqual, true);
+      assert.equal(evidence.audioSampleCount, plan.sampleCount);
+      const decoded = (
+        await runProcess({
+          executable: "ffmpeg",
+          args: [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-i",
+            master,
+            "-map",
+            "0:a:0",
+            "-f",
+            "s16le",
+            "-ac",
+            "1",
+            "-",
+          ],
+          maxOutputBytes: 64 * 1024 * 1024,
+        })
+      ).stdout;
+      const level = (frequency: number, from: number, to: number) => {
+        let real = 0;
+        let imaginary = 0;
+        for (let index = from * 48_000; index < to * 48_000; index++) {
+          const value = decoded.readInt16LE(index * 2) / 32768;
+          const phase = (2 * Math.PI * frequency * index) / 48_000;
+          real += value * Math.cos(phase);
+          imaginary -= value * Math.sin(phase);
+        }
+        return (2 * Math.hypot(real, imaginary)) / ((to - from) * 48_000);
+      };
+      // The recording is mono, so the stereo music folds down to it (its two
+      // equal channels add: 3 dB louder).
+      const full = 0.5 * 10 ** (-6 / 20) * Math.SQRT2;
+      const within = (actual: number, expected: number, share: number) =>
+        assert.ok(
+          Math.abs(actual - expected) <= expected * share,
+          `${actual} is not near ${expected}`,
+        );
+      // After the speech: the music at its full level; under it: 12 dB lower.
+      within(level(880, 4.2, 5.8), full, 0.1);
+      within(level(880, 1.0, 2.5), full * 10 ** (-12 / 20), 0.25);
+      within(level(440, 1.0, 2.5), 0.3, 0.1);
+      // Without audio there is nothing to mix into, said plainly.
+      const silent = await source(directory, "silent.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=30:duration=2",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "rgb",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+      ]);
+      await assert.rejects(
+        exportDraft({
+          plan: planExport(
+            [
+              {
+                sourceId: silent.sourceId,
+                sourceStartUs: 0,
+                sourceEndUs: 2_000_000,
+              },
+            ],
+            [silent],
+          ),
+          profile: "lossless_master",
+          outputPath: join(directory, "none.mkv"),
+          replace: false,
+          sounds: {
+            layers: [
+              {
+                path: music,
+                startUs: 0,
+                endUs: 2_000_000,
+                assetStartUs: 0,
+                gainDb: 0,
+                fadeInUs: 0,
+                fadeOutUs: 0,
+                duckDb: 0,
+                loop: false,
+              },
+            ],
+          },
+        }),
+        (error: Error) =>
+          (error as { code?: string }).code === "UNSUPPORTED_PROFILE" &&
+          /audio/u.test(error.message),
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

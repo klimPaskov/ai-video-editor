@@ -1372,6 +1372,35 @@ dd {
   width: auto;
   min-width: 120px;
 }
+.sound-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sound-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+}
+.sound-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.sound-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.sound-level {
+  font-size: 12px;
+  text-align: right;
+}
+.sound-where {
+  font-size: 12px;
+  text-align: right;
+}
 .switch {
   display: inline-flex;
   align-items: center;

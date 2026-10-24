@@ -2087,3 +2087,196 @@ test("composition.check reports the stage's audit and its picture, Claude only",
     expectCode("tool_not_available"),
   );
 });
+
+test("sound.list, sound.set and sound.remove manage music and effects for Claude only", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const music = {
+    asset_id: "asset-music-001",
+    name: "Theme",
+    sha256: "a".repeat(64),
+    duration_us: 400_000,
+    sample_rate: 44_100,
+    channels: 2,
+    size_bytes: 1000,
+  };
+  const claude = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { list: async () => [music] },
+  );
+  const listed = (await claude.invoke("sound.list", {
+    schema_version: "1.0",
+    project_id: projectId,
+  })) as { assets: Record<string, unknown>[] };
+  assert.deepEqual(listed.assets, [
+    {
+      asset_id: "asset-music-001",
+      name: "Theme",
+      duration_us: 400_000,
+      sample_rate: 44_100,
+      channels: 2,
+    },
+  ]);
+  const summary = async () =>
+    (await claude.invoke("timeline.get_summary", {
+      schema_version: "1.0",
+      project_id: projectId,
+    })) as { sounds: Record<string, unknown>[] };
+  assert.deepEqual((await summary()).sounds, []);
+
+  const sound = (snapshot: Snapshot, requestId: string, more = {}) => ({
+    ...head(snapshot, requestId),
+    pass_group_id: "assistant-sound-001",
+    name: "Theme",
+    kind: "music",
+    asset_id: "asset-music-001",
+    start_us: 0,
+    ...more,
+  });
+  // A music bed with its defaults: repeats over the edit, -18 dB, ducks.
+  const bed = (await claude.invoke(
+    "sound.set",
+    sound(await drafts.snapshot(projectId), "sound-music-001"),
+  )) as { status: string };
+  assert.equal(bed.status, "committed");
+  const stored = (await drafts.snapshot(projectId)).draft.timeline.sounds![0]!;
+  assert.deepEqual(
+    {
+      kind: stored.kind,
+      start: stored.start,
+      gain: stored.gain_db,
+      duck: stored.duck_db,
+      loop: stored.loop,
+      asset: stored.asset_sha256,
+    },
+    {
+      kind: "music",
+      start: { type: "output", start_us: 0 },
+      gain: -18,
+      duck: 12,
+      loop: true,
+      asset: "a".repeat(64),
+    },
+  );
+  assert.equal(
+    stored.duration_us,
+    (await drafts.snapshot(projectId)).draft.timeline.duration_us,
+  );
+  // An effect follows cuts (anchored to a source moment) and plays once.
+  const whoosh = (await claude.invoke(
+    "sound.set",
+    sound(await drafts.snapshot(projectId), "sound-effect-001", {
+      kind: "effect",
+      name: "Whoosh",
+      start_us: 300_000,
+      gain_db: -3,
+    }),
+  )) as { status: string };
+  assert.equal(whoosh.status, "committed");
+  const effect = (await drafts.snapshot(projectId)).draft.timeline.sounds!.find(
+    (item) => item.kind === "effect",
+  )!;
+  assert.equal(effect.start.type, "source");
+  assert.equal(effect.loop, false);
+  assert.equal(effect.gain_db, -3);
+  assert.equal(effect.duration_us, 400_000);
+  assert.equal(effect.duck_db, 0);
+  const shown = (await summary()).sounds;
+  assert.equal(shown.length, 2);
+  assert.deepEqual(
+    shown
+      .map((item) => [item.kind, item.follows_cuts])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    [
+      ["effect", true],
+      ["music", false],
+    ],
+  );
+  assert.ok(shown.every((item) => item.timeline_range !== null));
+  // Replacing by id changes the layer; removing by id removes it.
+  const quieter = (await claude.invoke(
+    "sound.set",
+    sound(await drafts.snapshot(projectId), "sound-music-002", {
+      sound_id: stored.sound_id,
+      gain_db: -24,
+      fade_in_us: 10_000_000,
+    }),
+  )) as { status: string };
+  assert.equal(quieter.status, "committed");
+  const replaced = (
+    await drafts.snapshot(projectId)
+  ).draft.timeline.sounds!.find((item) => item.sound_id === stored.sound_id)!;
+  assert.equal(replaced.gain_db, -24);
+  // A fade longer than the layer is shortened, not refused.
+  assert.ok(replaced.fade_in_us + replaced.fade_out_us <= replaced.duration_us);
+  const removed = (await claude.invoke("sound.remove", {
+    ...head(await drafts.snapshot(projectId), "sound-remove-001"),
+    pass_group_id: "assistant-sound-001",
+    sound_id: effect.sound_id,
+  })) as { status: string };
+  assert.equal(removed.status, "committed");
+  assert.equal((await summary()).sounds.length, 1);
+
+  // Refusals: an unknown file, impossible values, a start outside the edit,
+  // an unknown layer to replace, a stale head, and extra fields.
+  const refusals: [Record<string, unknown>, string][] = [
+    [{ asset_id: "asset-other-001" }, "sound_rejected"],
+    [{ gain_db: 40 }, "sound_rejected"],
+    [{ duck_db: 99 }, "sound_rejected"],
+    [{ duration_us: 10 }, "sound_rejected"],
+    [{ asset_start_us: 99_000_000 }, "sound_rejected"],
+    [{ start_us: 99_000_000 }, "sound_rejected"],
+    [{ name: " " }, "sound_rejected"],
+    [{ sound_id: "sound-unknown-001" }, "edit_conflict"],
+    [{ kind: "ambience" }, "invalid_request"],
+    [{ gain_db: 1.5 }, "invalid_request"],
+    [{ extra: true }, "invalid_request"],
+  ];
+  let attempt = 0;
+  for (const [patch, code] of refusals)
+    await assert.rejects(
+      claude.invoke(
+        "sound.set",
+        sound(
+          await drafts.snapshot(projectId),
+          `sound-bad-${++attempt}`,
+          patch,
+        ),
+      ),
+      expectCode(code as never),
+      JSON.stringify(patch),
+    );
+  const stale = await drafts.snapshot(projectId);
+  await claude.invoke("sound.remove", {
+    ...head(stale, "sound-remove-002"),
+    pass_group_id: "assistant-sound-001",
+    sound_id: stored.sound_id,
+  });
+  await assert.rejects(
+    claude.invoke("sound.set", sound(stale, "sound-stale-001")),
+    expectCode("stale_draft"),
+  );
+  await assert.rejects(
+    claude.invoke("sound.remove", {
+      ...head(await drafts.snapshot(projectId), "sound-remove-003"),
+      pass_group_id: "assistant-sound-001",
+      sound_id: "sound-unknown-001",
+    }),
+  );
+
+  // Other routes have no audio files to offer, so no sound tools.
+  for (const origin of ["codex", "api_provider"] as const)
+    await assert.rejects(
+      new CodexVideoEditToolService(projectId, drafts, origin).invoke(
+        "sound.list",
+        { schema_version: "1.0", project_id: projectId },
+      ),
+      expectCode("tool_not_available"),
+    );
+});

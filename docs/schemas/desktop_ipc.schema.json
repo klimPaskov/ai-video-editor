@@ -3086,6 +3086,64 @@
           ]
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "enum": [
+            "sounds:get",
+            "sounds:add",
+            "sounds:update",
+            "sounds:remove"
+          ]
+        },
+        "payload": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/soundsRequest"
+            },
+            {
+              "$ref": "#/$defs/soundAddRequest"
+            },
+            {
+              "$ref": "#/$defs/soundUpdateRequest"
+            },
+            {
+              "$ref": "#/$defs/soundRemoveRequest"
+            }
+          ]
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/soundsView"
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "$defs": {
@@ -4232,7 +4290,9 @@
             "A clip refers to an unknown source.",
             "This source has no video stream.",
             "This source cannot be read.",
-            "Graphics cannot be drawn on video of this precision yet."
+            "Graphics cannot be drawn on video of this precision yet.",
+            "Music and sound effects need a recording that has audio to mix them into.",
+            "A music or sound file of this video is missing or was changed. Add it again in Edit."
           ]
         }
       }
@@ -6954,6 +7014,229 @@
         }
       },
       "description": "Starts a full AI edit, or a polish run after a finished one. The brief is the user's description of the video, not instructions to the app."
+    },
+    "soundsRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      }
+    },
+    "soundAddRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "kind",
+        "start_us"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "kind": {
+          "enum": [
+            "music",
+            "effect"
+          ]
+        },
+        "start_us": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 14400000000
+        }
+      }
+    },
+    "soundUpdateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "sound_id",
+        "gain_db",
+        "duck_db"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "sound_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "gain_db": {
+          "type": "integer",
+          "minimum": -60,
+          "maximum": 12
+        },
+        "duck_db": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        }
+      }
+    },
+    "soundRemoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "sound_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "sound_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      }
+    },
+    "soundsView": {
+      "description": "Music and sound effects in the draft, with where each plays. No file path is included; audio files are chosen in a dialog owned by the main process.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "layers"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "layers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "sound_id",
+              "name",
+              "kind",
+              "file_name",
+              "asset_id",
+              "asset_start_us",
+              "fade_in_us",
+              "fade_out_us",
+              "gain_db",
+              "duck_db",
+              "loop",
+              "timeline_range"
+            ],
+            "properties": {
+              "sound_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "kind": {
+                "enum": [
+                  "music",
+                  "effect"
+                ]
+              },
+              "file_name": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "asset_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+              },
+              "asset_start_us": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 14400000000
+              },
+              "fade_in_us": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 14400000000
+              },
+              "fade_out_us": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 14400000000
+              },
+              "gain_db": {
+                "type": "integer",
+                "minimum": -60,
+                "maximum": 12
+              },
+              "duck_db": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 30
+              },
+              "loop": {
+                "type": "boolean"
+              },
+              "timeline_range": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "start_us",
+                      "end_us"
+                    ],
+                    "properties": {
+                      "start_us": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 14400000000
+                      },
+                      "end_us": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 14400000000
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

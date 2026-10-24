@@ -613,5 +613,30 @@ class DesktopIpcContractTests(unittest.TestCase):
         self.invalid({'channel': 'claude:select', 'payload': {'model': 'default', 'effort': 'ultra'},
                       'response': {'ok': True, 'value': signed_in}})
 
+    def test_sound_layers_are_path_free_and_bounded(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        layer = {'sound_id': 'sound-1', 'name': 'Theme', 'kind': 'music', 'file_name': 'theme',
+                 'asset_id': 'asset-1', 'asset_start_us': 0, 'fade_in_us': 1000000, 'fade_out_us': 2000000,
+                 'gain_db': -18, 'duck_db': 12, 'loop': True, 'timeline_range': {'start_us': 0, 'end_us': 9000000}}
+        view = dict(request, layers=[layer, dict(layer, sound_id='sound-2', kind='effect', timeline_range=None)])
+        calls = [('sounds:get', request),
+                 ('sounds:add', dict(request, kind='effect', start_us=2500000)),
+                 ('sounds:update', dict(request, sound_id='sound-1', gain_db=-24, duck_db=0)),
+                 ('sounds:remove', dict(request, sound_id='sound-1'))]
+        for channel, payload in calls:
+            self.valid({'channel': channel, 'payload': payload, 'response': {'ok': True, 'value': view}})
+            self.valid({'channel': channel, 'payload': payload, 'response': {'ok': False, 'message': 'Open this project first.'}})
+        for wrong in [dict(request, kind='ambience', start_us=0), dict(request, kind='music', start_us=-1),
+                      dict(request, kind='music', start_us=0, path='/music/x.mp3'),
+                      dict(request, sound_id='sound-1', gain_db=40, duck_db=0),
+                      dict(request, sound_id='sound-1', gain_db=-6, duck_db=31),
+                      dict(request, sound_id='../x')]:
+            self.invalid({'channel': 'sounds:add', 'payload': wrong, 'response': {'ok': True, 'value': view}})
+        for bad in [dict(view, layers=[dict(layer, path='/music/theme.mp3')]),
+                    dict(view, layers=[dict(layer, gain_db=-6.5)]),
+                    dict(view, layers=[dict(layer, kind='ambience')]),
+                    dict(view, layers=[dict(layer, timeline_range={'start_us': 5, 'end_us': 5, 'x': 1})])]:
+            self.invalid({'channel': 'sounds:get', 'payload': request, 'response': {'ok': True, 'value': bad}})
+
 if __name__ == '__main__':
     unittest.main()

@@ -220,12 +220,15 @@ test("turn arguments disable built-in tools, settings and prompts", () => {
   assert.equal(value("--session-id"), "11111111-2222-4333-8444-555555555555");
   assert.equal(value("--effort"), "high");
   assert.ok(!args.includes("--resume"));
-  assert.equal(claudeEditorTools.length, 18);
+  assert.equal(claudeEditorTools.length, 21);
   for (const name of [
     "zoom_set",
     "zoom_remove",
     "speed_set",
     "composition_check",
+    "sound_list",
+    "sound_set",
+    "sound_remove",
   ])
     assert.ok(claudeEditorTools.includes(`mcp__ai_video_editor__${name}`));
   for (const name of claudeEditorTools)

@@ -517,6 +517,87 @@ export const claudeOnlyMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: claudeOnlyToolNames[1],
+    description:
+      "List the audio files (music and sound effects) in the project that sound layers can use: asset_id, name, length, sample rate and channels. The user adds files in Edit; you cannot download, generate or find sound yourself, so these are all there is. Nothing is read from the files except what is listed.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[2],
+    description:
+      'Add or replace a sound layer: music or a sound effect from one of the project\'s audio files (see sound.list), as one undoable transaction. It is mixed into the audio at export (after speech cleanup) and in the preview. kind "music" is a bed: by default it starts at start_us in output time, repeats to fill the rest of the edit, sits at -18 dB, fades in 1 s and out 2 s and ducks 12 dB under speech. kind "effect" is a short sound at a moment: by default it is anchored to the source moment shown at start_us so it follows later cuts, plays once at -6 dB and does not duck. Override anything: follows_cuts, asset_start_us (where in the file it begins), duration_us (output time it plays), gain_db (-60 to 12, whole dB relative to the file), fade_in_us and fade_out_us, duck_db (0 to 30, how far the speech lowers it), loop. With sound_id the existing layer is replaced. Keep the speech clear: music well under it, effects short and motivated. The recording must have audio.',
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "name",
+        "kind",
+        "asset_id",
+        "start_us",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        sound_id: id,
+        name: { type: "string", minLength: 1, maxLength: 80 },
+        kind: { type: "string", enum: ["music", "effect"] },
+        asset_id: id,
+        start_us: { type: "integer", minimum: 0 },
+        follows_cuts: { type: "boolean" },
+        asset_start_us: { type: "integer", minimum: 0 },
+        duration_us: { type: "integer", minimum: 50000 },
+        gain_db: { type: "integer", minimum: -60, maximum: 12 },
+        fade_in_us: { type: "integer", minimum: 0 },
+        fade_out_us: { type: "integer", minimum: 0 },
+        duck_db: { type: "integer", minimum: 0, maximum: 30 },
+        loop: { type: "boolean" },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[3],
+    description:
+      "Remove one sound layer from the active draft by sound_id as one undoable transaction. The audio file stays in the project.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "sound_id"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        sound_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ] as const;
 
 /** Every tool Claude's editor server lists. */
