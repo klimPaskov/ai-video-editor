@@ -292,10 +292,11 @@ try {
     1.5,
   );
   await page.locator(`[data-project-id="${projectId}"]`).click();
-  await page.getByRole("button", { name: "Review", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Review", exact: true }),
-  ).toHaveAttribute("aria-current", "step");
+  // At a large interface size the steps are a list, otherwise buttons.
+  const stepButton = page.getByRole("button", { name: "Review", exact: true });
+  if (await stepButton.isVisible()) await stepButton.click();
+  else await page.locator("#stage-select").selectOption("review");
+  await expect(page.locator("#stage-select")).toHaveValue("review");
   const committedMetadata = await readFile(
     join(created.project.storage.project_root, "project.json"),
   );
@@ -363,9 +364,7 @@ try {
     1.5,
   );
   await page.locator(`[data-project-id="${projectId}"]`).click();
-  await expect(
-    page.getByRole("button", { name: "Review", exact: true }),
-  ).toHaveAttribute("aria-current", "step");
+  await expect(page.locator("#stage-select")).toHaveValue("review");
   assert.deepEqual(await readFile(baselinePath), baseline);
   assert.deepEqual(await readFile(preferencePath), preferences);
   assert.deepEqual(await readFile(managedPath), sourceBytes);
@@ -429,12 +428,12 @@ try {
       () =>
         instance.evaluate(({ BrowserWindow }) =>
           BrowserWindow.getAllWindows()[0]!.webContents.executeJavaScript(
-            `document.querySelector('button[aria-current="step"]')?.textContent.trim()`,
+            `document.getElementById('stage-select').value`,
           ),
         ),
       { timeout: 30_000 },
     )
-    .toBe("Review");
+    .toBe("review");
   assert.deepEqual(await readFile(baselinePath), baseline);
   assert.deepEqual(await readFile(preferencePath), preferences);
   assert.deepEqual(await readFile(managedPath), sourceBytes);

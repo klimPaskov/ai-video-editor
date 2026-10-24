@@ -2692,3 +2692,21 @@ html[data-layout="cinematic"] .source-bar {
     display: none;
   }
 }
+
+/* Narrower windows and larger interface sizes: finished and upcoming steps
+   show only their number, so every step stays in reach. */
+@media (max-width: 1240px) {
+  .stepper button:not([aria-current="step"]) .step-text {
+    display: none;
+  }
+  .stepper button {
+    padding: 0 6px;
+  }
+  .stepper button + button {
+    margin-left: 14px;
+  }
+  .stepper button + button::before {
+    left: -12px;
+    width: 10px;
+  }
+}

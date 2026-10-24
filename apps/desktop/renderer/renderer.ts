@@ -250,6 +250,7 @@ for (const stage of Object.keys(stageLabels) as ProjectStage[]) {
   number.className = "step-number";
   number.setAttribute("aria-hidden", "true");
   const text = document.createElement("span");
+  text.className = "step-text";
   text.setAttribute("aria-hidden", "true");
   text.textContent = stageLabels[stage];
   button.append(number, text);

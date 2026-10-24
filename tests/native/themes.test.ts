@@ -93,7 +93,36 @@ try {
   }, sourcePath);
   let page = await electron.firstWindow();
   await page.setViewportSize({ width: 1200, height: 800 });
+  const problems: string[] = [];
+  page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));
+  page.on("console", (message) => {
+    if (message.type() === "error") problems.push(`console: ${message.text()}`);
+  });
   // The default is Light Canvas.
+  try {
+    await expect
+      .poll(async () => (await themeOf(page)).theme, { timeout: 15_000 })
+      .toBe("light_canvas");
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      url: location.href,
+      html: document.documentElement.outerHTML.slice(0, 300),
+      alert: document.getElementById("error")?.textContent ?? null,
+    }));
+    const started = Date.now();
+    const direct = await Promise.race([
+      page.evaluate(() => window.desktop.getPreferences()),
+      new Promise((resolve) =>
+        setTimeout(() => resolve("still pending"), 10_000),
+      ),
+    ]);
+    Object.assign(state, { direct, directMs: Date.now() - started });
+    await writeFile(
+      join(evidence, "startup-failure.json"),
+      JSON.stringify({ state, problems }, null, 2),
+    );
+    throw error;
+  }
   await expect
     .poll(async () => (await themeOf(page)).theme)
     .toBe("light_canvas");
@@ -175,6 +204,7 @@ try {
   await page.locator("#custom-accent").fill("#ff8a3d");
   await page.locator("#custom-layout").selectOption("cinematic");
   await expect(page.locator("#custom-problem")).toBeHidden();
+  await expect(page.locator("#settings-error")).toBeHidden();
   assert.deepEqual(
     { ...(await themeOf(page)), background: undefined },
     { theme: "custom", layout: "cinematic", background: undefined },

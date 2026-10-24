@@ -212,6 +212,9 @@ export function setupThemeSettings(): {
 
   function preview(): void {
     paint();
+    // A refusal shown for earlier colours no longer applies.
+    const refusal = document.getElementById("settings-error");
+    if (refusal) refusal.hidden = true;
     // A palette that cannot be read is not shown; the problem is.
     if (selected !== "custom" || !customThemeProblem(customValue))
       applyTheme(value());
