@@ -1,6 +1,20 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { extname, isAbsolute, join, normalize, relative, sep } from "node:path";
+import {
+  asciiLower,
+  cssUrls,
+  fileAttributeLength,
+  hasCssImport,
+  mentionsCompositionId,
+  rewriteScriptUrls,
+  scanTag,
+  tokenize,
+  withoutWoffFallbacks,
+  type Attribute,
+  type RawToken,
+  type Token,
+} from "./composition-html.ts";
 
 /**
  * Turns a HyperFrames composition in Claude's workspace into one
@@ -171,6 +185,45 @@ async function workspaceFile(
 
 const external = /^(?:https?:|\/\/)/iu;
 
+/** A replacement for the page text from `start` up to `end`. */
+interface Edit {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** A script element rewritten as a whole. */
+interface SealedScript {
+  open: string;
+  body: string;
+  close: string;
+}
+
+/**
+ * The other attributes of a script tag whose `src` is being replaced
+ * (type="module" and so on), without integrity and crossorigin: the file is
+ * served locally. White space inside them is collapsed.
+ */
+function scriptAttributes(
+  source: string,
+  token: RawToken,
+  src: Attribute,
+): string {
+  const kept: string[] = [];
+  for (const attribute of scanTag(source, token.start + 1, true).attrs) {
+    if (
+      attribute.nameStart === src.nameStart ||
+      attribute.name === "integrity" ||
+      attribute.name === "crossorigin"
+    )
+      continue;
+    kept.push(
+      source.slice(attribute.nameStart, attribute.end).replace(/\s+/gu, " "),
+    );
+  }
+  return kept.length > 0 ? ` ${kept.join(" ")}` : "";
+}
+
 /**
  * Reads `relativePath` (inside `workspace`) and returns the sealed page.
  */
@@ -186,8 +239,21 @@ export async function importComposition(
     throw new CompositionError("The composition page is larger than 2 MiB.");
   const base = join(page.path, "..");
   let total = page.bytes.length;
+  // A file named many times is read once; every use still counts toward the
+  // size limit.
+  const read = new Map<string, { path: string; bytes: Buffer }>();
+  const workspaceFileOnce = async (
+    reference: string,
+  ): Promise<{ path: string; bytes: Buffer }> => {
+    let file = read.get(reference);
+    if (!file) {
+      file = await workspaceFile(workspace, base, reference);
+      read.set(reference, file);
+    }
+    return file;
+  };
   const dataUrl = async (reference: string): Promise<string> => {
-    const file = await workspaceFile(workspace, base, reference);
+    const file = await workspaceFileOnce(reference);
     total += file.bytes.length;
     if (total > limits.maxTotalBytes)
       throw new CompositionError(
@@ -201,7 +267,7 @@ export async function importComposition(
     return `data:${mime};base64,${file.bytes.toString("base64")}`;
   };
   const text = async (reference: string): Promise<string> => {
-    const file = await workspaceFile(workspace, base, reference);
+    const file = await workspaceFileOnce(reference);
     total += file.bytes.length;
     if (total > limits.maxTotalBytes)
       throw new CompositionError(
@@ -235,19 +301,16 @@ export async function importComposition(
   /** Inlines a stylesheet's files; `remote` is a package stylesheet's URL. */
   const inlineCss = async (css: string, remote?: string): Promise<string> => {
     // A font package's stylesheet lists a woff fallback; woff2 alone is enough.
-    if (remote)
-      css = css.replace(
-        /,\s*url\(\s*["']?[^)"']+\.woff["']?\s*\)\s*format\(\s*["']woff["']\s*\)/giu,
-        "",
-      );
-    let out = "";
+    if (remote) css = withoutWoffFallbacks(css);
+    const lower = asciiLower(css);
+    const parts: string[] = [];
     let last = 0;
-    for (const match of css.matchAll(/url\(\s*(["']?)([^)"']+)\1\s*\)/giu)) {
-      const reference = match[2]!.trim();
-      out += css.slice(last, match.index);
-      last = match.index! + match[0].length;
+    for (const match of cssUrls(css, lower)) {
+      const reference = match.reference.trim();
+      parts.push(css.slice(last, match.start));
+      last = match.end;
       if (reference.startsWith("data:") || reference.startsWith("#")) {
-        out += match[0];
+        parts.push(css.slice(match.start, match.end));
         continue;
       }
       const absolute = remote ? new URL(reference, remote).href : reference;
@@ -260,94 +323,107 @@ export async function importComposition(
           throw new CompositionError(
             `Compositions cannot load "${absolute.slice(0, 120)}" from the network. ${packageHelp}`,
           );
-        out += `url("data:${mime};base64,${(await fetched(absolute)).toString("base64")}")`;
+        parts.push(
+          `url("data:${mime};base64,${(await fetched(absolute)).toString("base64")}")`,
+        );
         continue;
       }
-      out += `url("${await dataUrl(reference)}")`;
+      parts.push(`url("${await dataUrl(reference)}")`);
     }
-    if (/@import\b/iu.test(css))
+    if (hasCssImport(lower))
       throw new CompositionError(
         "@import is not supported; inline the styles instead.",
       );
-    return out + css.slice(last);
+    parts.push(css.slice(last));
+    return parts.join("");
   };
 
-  let html = page.bytes.toString("utf8");
+  // The page is read once, left to right, into the few tokens that matter
+  // (scripts, styles, links and tags with file attributes); the passes below
+  // rewrite those tokens in the order the checks and fetches have always
+  // run, and everything else is copied through byte for byte.
+  const source = page.bytes.toString("utf8");
+  const lower = asciiLower(source);
+  const tokens = tokenize(source, lower);
   // A root with data-composition-id is a HyperFrames composition (played by
   // its runtime); any other page is free-form and draws itself in
   // window.__seek(seconds) or through animations the stage bridge seeks.
-  const hyperframes = /data-composition-id\s*=/iu.test(html);
-  /** The script tag's other attributes (type="module" and so on). */
-  const scriptAttributes = (before: string, after: string): string => {
-    const kept = `${before} ${after}`
-      .replace(/\s+/gu, " ")
-      .replace(
-        /\s*\b(?:integrity|crossorigin)(?:\s*=\s*(?:"[^"]*"|'[^']*'|\S+))?/giu,
-        "",
-      )
-      .trimEnd();
-    return kept && kept !== " "
-      ? kept.startsWith(" ")
-        ? kept
-        : ` ${kept}`
-      : "";
+  const hyperframes = mentionsCompositionId(lower);
+  const edits = new Map<Token, Edit[]>();
+  const edit = (token: Token, start: number, end: number, text: string) => {
+    const list = edits.get(token);
+    if (list) list.push({ start, end, text });
+    else edits.set(token, [{ start, end, text }]);
   };
+  const sealedScripts = new Map<RawToken, SealedScript>();
+
   // Scripts: pinned libraries from the local cache, workspace scripts inline.
-  const scripts: string[] = [];
-  for (const match of html.matchAll(
-    /<script\b([^>]*?)\bsrc\s*=\s*(["'])([^"']+)\2([^>]*)>\s*<\/script>/giu,
-  )) {
-    const source = match[3]!.trim();
-    if (external.test(source)) {
-      const route = libraryRoute(source);
+  for (const token of tokens) {
+    if (token.kind !== "script") continue;
+    const src = token.attrs.find(
+      (attribute) =>
+        attribute.name === "src" && attribute.valueEnd > attribute.valueStart,
+    );
+    if (!src || source.slice(token.bodyStart, token.bodyEnd).trim() !== "")
+      continue;
+    const reference = source.slice(src.valueStart, src.valueEnd).trim();
+    const attributes = scriptAttributes(source, token, src);
+    if (external.test(reference)) {
+      const route = libraryRoute(reference);
       if (!route)
         throw new CompositionError(
-          `"${source.slice(0, 120)}" cannot be loaded. ${packageHelp}`,
+          `"${reference.slice(0, 120)}" cannot be loaded. ${packageHelp}`,
         );
-      scripts.push(
-        `<script${scriptAttributes(match[1]!, match[4]!)} src="${route}"></script>`,
-      );
+      sealedScripts.set(token, {
+        open: `<script${attributes} src="${route}">`,
+        body: "",
+        close: "</script>",
+      });
     } else
-      scripts.push(
-        `<script${scriptAttributes(match[1]!, match[4]!)}>${(await text(source)).replace(/<\/script/giu, "<\\/script")}</script>`,
-      );
+      sealedScripts.set(token, {
+        open: `<script${attributes}>`,
+        body: (await text(reference)).replace(/<\/script/giu, "<\\/script"),
+        close: "</script>",
+      });
   }
-  let index = 0;
-  html = html.replace(
-    /<script\b([^>]*?)\bsrc\s*=\s*(["'])([^"']+)\2([^>]*)>\s*<\/script>/giu,
-    () => scripts[index++]!,
-  );
   // Inline scripts and import maps (and the workspace scripts inlined above):
   // pinned package URLs, in imports and strings, point at the local cache.
-  html = html.replace(
-    /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/giu,
-    (_whole, open: string, body: string, close: string) =>
-      `${open}${body.replace(
-        /https:\/\/cdn\.jsdelivr\.net\/[^\s"'`)\\<>]+/giu,
-        (url) => {
-          const route = libraryRoute(url);
-          if (!route)
-            throw new CompositionError(
-              `"${url.slice(0, 120)}" cannot be loaded. ${packageHelp}`,
-            );
-          return route;
-        },
-      )}${close}`,
-  );
-  // Script bodies are code, not markup: set them aside while the markup
-  // passes below inline files and check attributes, then put them back.
-  const codeBlocks: string[] = [];
-  html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, (whole) => {
-    codeBlocks.push(whole);
-    return `\u0000code${codeBlocks.length - 1}\u0000`;
-  });
+  for (const token of tokens) {
+    if (token.kind !== "script") continue;
+    const sealed = sealedScripts.get(token);
+    const body = sealed?.body ?? source.slice(token.bodyStart, token.bodyEnd);
+    const rewritten = rewriteScriptUrls(body, (url) => {
+      const route = libraryRoute(url);
+      if (!route)
+        throw new CompositionError(
+          `"${url.slice(0, 120)}" cannot be loaded. ${packageHelp}`,
+        );
+      return route;
+    });
+    if (rewritten !== body)
+      sealedScripts.set(token, {
+        open: sealed?.open ?? source.slice(token.start, token.bodyStart),
+        body: rewritten,
+        close: sealed?.close ?? source.slice(token.bodyEnd, token.end),
+      });
+  }
   // Stylesheets: workspace files inline; no network.
-  const sheets: string[] = [];
-  for (const match of html.matchAll(/<link\b[^>]*>/giu)) {
-    const tag = match[0];
-    const href = /\bhref\s*=\s*(["'])([^"']+)\1/iu.exec(tag)?.[2]?.trim();
-    if (!/\brel\s*=\s*(["']?)stylesheet\1/iu.test(tag) || !href) {
-      sheets.push(external.test(href ?? "") ? "" : tag);
+  for (const token of tokens) {
+    if (token.kind !== "tag" || token.name !== "link") continue;
+    const rel = token.attrs.find((attribute) => attribute.name === "rel");
+    const hrefAttribute = token.attrs.find(
+      (attribute) =>
+        attribute.name === "href" && attribute.valueEnd > attribute.valueStart,
+    );
+    const href = hrefAttribute
+      ? source.slice(hrefAttribute.valueStart, hrefAttribute.valueEnd).trim()
+      : undefined;
+    const stylesheet =
+      rel !== undefined &&
+      rel.valueStart >= 0 &&
+      lower.slice(rel.valueStart, rel.valueEnd) === "stylesheet";
+    if (!stylesheet || !href) {
+      if (external.test(href ?? "")) edit(token, token.start, token.end, "");
       continue;
     }
     if (external.test(href)) {
@@ -356,63 +432,94 @@ export async function importComposition(
         throw new CompositionError(
           `Compositions cannot load the stylesheet "${href.slice(0, 120)}" from the network. ${packageHelp}`,
         );
-      sheets.push(
+      edit(
+        token,
+        token.start,
+        token.end,
         `<style>${await inlineCss((await fetched(href)).toString("utf8"), href)}</style>`,
       );
       continue;
     }
-    sheets.push(`<style>${await inlineCss(await text(href))}</style>`);
-  }
-  index = 0;
-  html = html.replace(/<link\b[^>]*>/giu, () => sheets[index++]!);
-  // Inline styles and style attributes.
-  const styles: string[] = [];
-  for (const match of html.matchAll(/<style\b([^>]*)>([\s\S]*?)<\/style>/giu))
-    styles.push(`<style${match[1]}>${await inlineCss(match[2]!)}</style>`);
-  index = 0;
-  html = html.replace(
-    /<style\b([^>]*)>([\s\S]*?)<\/style>/giu,
-    () => styles[index++]!,
-  );
-  // Images and other media by attribute.
-  const attributes: string[] = [];
-  const attributePattern =
-    /\b(src|href|xlink:href|poster)\s*=\s*(["'])([^"']*)\2/giu;
-  for (const match of html.matchAll(attributePattern)) {
-    const value = match[3]!.trim();
-    if (
-      !value ||
-      value.startsWith("data:") ||
-      value.startsWith("#") ||
-      value.startsWith("/lib/") ||
-      value.startsWith("blob:")
-    ) {
-      attributes.push(match[0]);
-      continue;
-    }
-    if (external.test(value))
-      throw new CompositionError(
-        `Compositions cannot load "${value.slice(0, 120)}" from the network. Put the file in the workspace.`,
-      );
-    attributes.push(
-      `${match[1]}=${match[2]}${await dataUrl(value)}${match[2]}`,
+    edit(
+      token,
+      token.start,
+      token.end,
+      `<style>${await inlineCss(await text(href))}</style>`,
     );
   }
-  index = 0;
-  html = html.replace(attributePattern, () => attributes[index++]!);
+  // Inline styles.
+  for (const token of tokens) {
+    if (token.kind !== "style") continue;
+    edit(
+      token,
+      token.start,
+      token.end,
+      `<style${source.slice(token.start + 6, token.bodyStart - 1)}>${await inlineCss(source.slice(token.bodyStart, token.bodyEnd))}</style>`,
+    );
+  }
+  // Images and other media by attribute (not in script or style bodies).
+  for (const token of tokens) {
+    if (token.kind !== "tag" || edits.has(token)) continue;
+    for (const attribute of token.attrs) {
+      const keyLength = fileAttributeLength(attribute.name);
+      if (keyLength === 0 || attribute.valueStart < 0) continue;
+      const value = source
+        .slice(attribute.valueStart, attribute.valueEnd)
+        .trim();
+      if (
+        !value ||
+        value.startsWith("data:") ||
+        value.startsWith("#") ||
+        value.startsWith("/lib/") ||
+        value.startsWith("blob:")
+      )
+        continue;
+      if (external.test(value))
+        throw new CompositionError(
+          `Compositions cannot load "${value.slice(0, 120)}" from the network. Put the file in the workspace.`,
+        );
+      const quote = attribute.quote || '"';
+      edit(
+        token,
+        attribute.nameEnd - keyLength,
+        attribute.end,
+        `${source.slice(attribute.nameEnd - keyLength, attribute.nameEnd)}=${quote}${await dataUrl(value)}${quote}`,
+      );
+    }
+  }
   // The stage bridge comes first, after the HyperFrames runtime for a
   // HyperFrames composition. A transparent page over the video: its color
   // scheme matches the frame.
-  html = html.replace(
-    /\u0000code(\d+)\u0000/gu,
-    (_whole, at: string) => codeBlocks[Number(at)]!,
-  );
   const runtime = `<style>:root{color-scheme:normal!important}</style>${
     hyperframes ? '<script src="/lib/hyperframes-runtime.js"></script>' : ""
   }<script src="/lib/stage-bridge.js"></script>`;
-  html = /<head\b[^>]*>/iu.test(html)
-    ? html.replace(/<head\b[^>]*>/iu, (head) => `${head}${runtime}`)
-    : `${runtime}${html}`;
+  const head = tokens.find(
+    (token) => token.kind === "tag" && token.name === "head",
+  );
+  if (head) edit(head, head.end, head.end, runtime);
+
+  const parts: string[] = head ? [] : [runtime];
+  let last = 0;
+  for (const token of tokens) {
+    const sealed =
+      token.kind === "script" ? sealedScripts.get(token) : undefined;
+    if (sealed) {
+      parts.push(
+        source.slice(last, token.start),
+        sealed.open,
+        sealed.body,
+        sealed.close,
+      );
+      last = token.end;
+      continue;
+    }
+    for (const change of edits.get(token) ?? []) {
+      parts.push(source.slice(last, change.start), change.text);
+      last = change.end;
+    }
+  }
+  parts.push(source.slice(last));
+  const html = parts.join("");
   if (Buffer.byteLength(html) > limits.maxTotalBytes)
     throw new CompositionError(
       "The composition and its files are larger than 12 MiB.",
