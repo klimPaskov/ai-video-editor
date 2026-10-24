@@ -21,7 +21,9 @@ const paths: Record<string, string> = {
   stop: "M6 6h12v12H6Z",
   record: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z",
   "record-large":
-    "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
+    "M3 7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2ZM15 10l6-3v10l-6-3Z",
+  video:
+    "M3 7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2ZM15 10l6-3v10l-6-3Z",
   folder:
     "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z",
   "folder-large":

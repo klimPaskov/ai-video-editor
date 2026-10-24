@@ -39,6 +39,8 @@ assert.ok(
   "Executable, Claude bin directory, profile and both recordings are required",
 );
 const exportMaster = process.argv.includes("--export");
+/** With --export, make the smaller MP4 for sharing instead of the lossless master. */
+const exportMp4 = process.argv.includes("--mp4");
 /** The value after a flag, or null. */
 const flagValue = (name: string): string | null => {
   const at = process.argv.indexOf(name);
@@ -366,11 +368,16 @@ try {
 
   if (exportMaster) {
     mark("export-master");
-    const master = join(evidence, "Claude edit master.mkv");
+    const master = join(
+      process.env.EXPORT_DIR ?? evidence,
+      exportMp4 ? "Claude edit.mp4" : "Claude edit master.mkv",
+    );
     await dialogs(electron, master);
     await page.getByRole("button", { name: "Export", exact: true }).click();
+    if (exportMp4)
+      await page.locator("#export-profile").selectOption("smaller_mp4");
     await expect(page.locator("#export-profile")).toHaveValue(
-      "lossless_master",
+      exportMp4 ? "smaller_mp4" : "lossless_master",
     );
     await page.locator("#export-start").click();
     // Done, or failed: then the private failure note says why.
@@ -411,9 +418,11 @@ try {
       current.id,
     );
     assert.ok(done.ok);
-    assert.equal(done.value.result?.samplesEqual, true);
+    if (!exportMp4) assert.equal(done.value.result?.samplesEqual, true);
     await page.screenshot({ path: join(evidence, "export-master.png") });
-    result.master = { appVerifiedSampleEquality: true };
+    result.master = exportMp4
+      ? { smallerMp4: master }
+      : { appVerifiedSampleEquality: true };
   }
 
   mark("immutability");

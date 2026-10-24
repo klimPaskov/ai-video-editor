@@ -252,7 +252,7 @@ for (const stage of Object.keys(stageLabels) as ProjectStage[]) {
   const text = document.createElement("span");
   text.className = "step-text";
   text.setAttribute("aria-hidden", "true");
-  text.textContent = stageLabels[stage];
+  text.textContent = stage === "record_import" ? "Import" : stageLabels[stage];
   button.append(number, text);
   button.addEventListener("click", () => {
     void navigate(stage);
@@ -270,6 +270,7 @@ stageSelect.addEventListener("change", () => {
   void navigate(value);
 });
 function renderStage(): void {
+  viewer.dataset.stage = activeProject?.stage ?? "";
   element("project-navigation").hidden = !activeProject;
   addFootageButton.hidden =
     !activeProject ||
@@ -1602,6 +1603,9 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
     ) ??
     undefined;
   element("source-name").textContent = project.name;
+  element("source-duration").textContent = shortClock(
+    project.timeline.durationUs,
+  );
   element<HTMLButtonElement>("codex-drawer-button").hidden = false;
   setCodexDrawer(false);
   renderStage();
@@ -1735,6 +1739,11 @@ function thumbnail(mediaId: string, name: string): HTMLElement {
     box.prepend(canvas);
   });
   return box;
+}
+/** A length for a label: 9:40 (minutes and seconds). */
+function shortClock(us: number): string {
+  const seconds = Math.round(us / 1_000_000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 function time(value: number): string {
   const seconds = value / 1_000_000;
@@ -1959,6 +1968,7 @@ function select(media: MediaSummary): void {
   viewer.hidden = false;
   back.hidden = false;
   element("source-name").textContent = media.name;
+  element("source-duration").textContent = shortClock(media.durationUs);
   element("preview-label").textContent = activeProject
     ? "Project preview"
     : "Frame preview";

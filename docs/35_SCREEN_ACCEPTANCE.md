@@ -89,3 +89,7 @@
 - Runtime-discovered Codex models can be selected.
 - Only one settings section opens at a time.
 - Diagnostics remain separate.
+
+## Layout audit (2026-10-24)
+
+Every screen and dialog must pass `tests/native/layout.test.ts --enforce` in the packaged app for every theme at 1440x900, 1200x800 and 1000x700 (100%), and 1200x800 at 150% and 200%: no sideways page scroll, no control cut off by the window or by a container, no controls drawn over each other, no text cut off without an ellipsis, no target smaller than 20 px, and every text at least 4.5:1 (3:1 for large text) against what is behind it. A person also looks at the screenshots; the audit finds breakage, not taste.

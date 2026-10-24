@@ -13,6 +13,25 @@
         ><span class="brand-name">AI Video Editor</span></span
       >
       <nav aria-label="Application">
+        <button
+          id="codex-drawer-button"
+          class="assistant-toggle"
+          data-icon="sparkle"
+          aria-expanded="false"
+          aria-controls="codex-drawer"
+          hidden
+        >
+          Claude
+        </button>
+        <button
+          id="source-details"
+          class="icon-button"
+          data-icon="info"
+          title="Source details"
+          aria-label="Source details"
+          aria-expanded="false"
+          aria-controls="inspector"
+        ></button>
         <button id="back" class="ghost" data-icon="home" hidden>Home</button
         ><button id="settings" class="ghost" data-icon="settings">
           Settings
@@ -21,13 +40,27 @@
     </header>
     <main>
       <section id="home" aria-label="Home">
+        <h1 id="home-title">What are we making today?</h1>
         <div class="hero-actions">
-          <button id="record-new" class="action-tile" type="button" hidden>
-            <span class="tile-icon record" data-icon="record-large"></span>New
-            recording
+          <button
+            id="record-new"
+            class="action-tile"
+            type="button"
+            aria-label="New recording"
+            hidden
+          >
+            <span class="tile-icon record" data-icon="record-large"></span
+            ><span class="tile-title" aria-hidden="true">New recording</span
+            ><span class="tile-sub" aria-hidden="true"
+              >Capture your screen or camera</span
+            >
           </button>
-          <button id="import" class="action-tile">
-            <span class="tile-icon" data-icon="folder-large"></span>Import video
+          <button id="import" class="action-tile" aria-label="Import video">
+            <span class="tile-icon" data-icon="folder-large"></span
+            ><span class="tile-title" aria-hidden="true">Import video</span
+            ><span class="tile-sub" aria-hidden="true"
+              >Start with a video from your device</span
+            >
           </button>
         </div>
         <section
@@ -44,7 +77,7 @@
           </button>
         </section>
         <section id="projects-section" aria-label="Projects" hidden>
-          <h2>Projects</h2>
+          <h2>Recent</h2>
           <ul id="projects" class="card-grid" aria-label="Projects"></ul>
         </section>
         <section id="library-section" aria-label="Source library" hidden>
@@ -53,222 +86,224 @@
         </section>
       </section>
       <section id="viewer" aria-label="Imported video" hidden>
-        <div class="source-bar">
-          <strong id="source-name"></strong
-          ><button id="add-footage" class="ghost" data-icon="plus" hidden>
-            Add footage</button
-          ><span id="append-progress" role="status" hidden
-            >Importing footage…</span
-          ><span class="source-bar-spacer"></span>
-          <nav id="project-navigation" aria-label="Project stages" hidden>
-            <div id="stage-buttons" class="stepper"></div>
-            <select id="stage-select" aria-label="Project stage"></select>
-          </nav>
-          <span class="source-bar-spacer"></span
-          ><button
-            id="codex-drawer-button"
-            class="assistant-toggle"
-            data-icon="sparkle"
-            aria-expanded="false"
-            aria-controls="codex-drawer"
-            hidden
-          >
-            Claude</button
-          ><button
-            id="source-details"
-            class="icon-button"
-            data-icon="info"
-            title="Source details"
-            aria-label="Source details"
-            aria-expanded="false"
-            aria-controls="inspector"
-          ></button>
-        </div>
-        <div class="workspace">
-          <div class="preview">
-            <canvas id="frame" aria-label="Source frame"></canvas>
-            <p id="preview-message" hidden></p>
-            <p id="zoom-hint" class="zoom-hint" role="status" hidden>
-              Click the picture where the zoom should point. Esc cancels.
-            </p>
-          </div>
-          <aside id="inspector" aria-label="Source details" hidden>
-            <div class="panel-header">
-              <h2>Source</h2>
-              <button
-                id="close-inspector"
-                class="icon-button"
-                data-icon="close"
-                aria-label="Close source details"
-              ></button>
-            </div>
-            <dl id="source-properties"></dl>
-          </aside>
-          <aside id="codex-drawer" aria-label="Claude conversation" hidden>
-            <div class="panel-header">
-              <h2><span data-icon="sparkle"></span>Assistant</h2>
-              <button
-                id="close-codex"
-                class="icon-button"
-                data-icon="close"
-                aria-label="Close Claude"
-              ></button>
-            </div>
-            <label for="assistant-provider">Provider</label>
-            <select id="assistant-provider">
-              <option value="claude" selected>Claude</option>
-              <option value="codex">Codex</option>
-              <option value="deepseek">DeepSeek</option>
-              <option value="openai">OpenAI API</option>
-              <option value="gemini">Gemini API</option>
-            </select>
-            <p id="claude-context-notice">
-              Requests and what Claude reads are sent to Anthropic: project and
-              timeline details, the whole edited transcript (Claude keeps it in
-              its project workspace), and small pictures of your edit that it
-              asks to see, which show your footage. Earlier messages in this
-              conversation are included in later turns. Your source audio and
-              video files stay on this device.
-            </p>
-            <p id="claude-api-notice" hidden>
-              This Claude Code sign-in uses Anthropic Console API billing, so
-              each turn you send can use paid credits.
-            </p>
-            <p id="codex-context-notice" hidden>
-              Requests and the project information Codex reads are sent to
-              OpenAI, including small pictures of your edit when it asks to see
-              them. Speech work may include bounded local transcript text;
-              transcript pages may remain in this conversation and be included
-              in later turns. Your source audio and video files stay on this
-              device.
-            </p>
-            <p id="codex-thread-status" role="status"></p>
-            <div id="codex-thread-messages" aria-live="polite"></div>
-            <ul id="codex-thread-activity" aria-label="Assistant activity"></ul>
-            <p id="api-turn-notice" hidden>
-              Sending shares your request and project/timeline tool results with
-              this provider. Speech work may also share local transcript text;
-              transcript pages may remain in this conversation and be included
-              in later turns. API calls can use paid credits and up to four
-              model calls; source audio and video stay on this device.
-            </p>
-            <button id="open-codex-thread">Open conversation</button>
-            <details id="claude-full-edit" hidden>
-              <summary>Edit the whole video</summary>
-              <form id="claude-full-edit-form">
-                <label for="full-edit-goal">What it is for</label>
-                <input
-                  id="full-edit-goal"
-                  type="text"
-                  maxlength="300"
-                  placeholder="A short product update for customers"
-                />
-                <label for="full-edit-audience">Who watches it</label>
-                <input id="full-edit-audience" type="text" maxlength="300" />
-                <label for="full-edit-style">Style</label>
-                <input
-                  id="full-edit-style"
-                  type="text"
-                  maxlength="300"
-                  placeholder="Calm and clean"
-                />
-                <label for="full-edit-level">How far to go</label>
-                <select id="full-edit-level">
-                  <option value="tidy">Tidy</option>
-                  <option value="polished" selected>Polished</option>
-                  <option value="bold">Bold</option>
-                </select>
-                <button type="submit" id="start-full-edit" class="primary">
-                  Edit with Claude
-                </button>
-              </form>
-            </details>
-            <div id="full-edit-result" hidden>
-              <span id="full-edit-changes"></span>
-              <button type="button" id="undo-full-edit">Undo all</button>
-            </div>
-            <form id="codex-thread-form" hidden>
-              <label for="codex-thread-input" class="visually-hidden"
-                >Request an edit</label
-              >
-              <textarea
-                id="codex-thread-input"
-                rows="3"
-                maxlength="16384"
-              ></textarea>
-              <div class="codex-thread-actions">
-                <button type="button" id="interrupt-codex-thread" hidden>
-                  Stop
-                </button>
-                <button type="button" id="retry-codex-thread" hidden>
-                  Retry request
-                </button>
-                <button
-                  type="submit"
-                  id="send-codex-thread"
-                  class="primary"
-                  data-icon="send"
-                >
-                  Send
-                </button>
+        <nav id="project-navigation" aria-label="Project stages" hidden>
+          <div id="stage-buttons" class="stepper"></div>
+          <select id="stage-select" aria-label="Project stage"></select>
+        </nav>
+        <div class="stage-card">
+          <div class="stage-media">
+            <div class="workspace">
+              <div class="preview">
+                <canvas id="frame" aria-label="Source frame"></canvas>
+                <p id="preview-message" hidden></p>
+                <p id="zoom-hint" class="zoom-hint" role="status" hidden>
+                  Click the picture where the zoom should point. Esc cancels.
+                </p>
               </div>
-            </form>
-            <p id="codex-thread-error" role="alert" hidden></p>
-          </aside>
-        </div>
-        <div id="frame-controls">
-          <div class="player-bar">
-            <label id="preview-label" for="seek" class="visually-hidden"
-              >Frame preview</label
-            >
-            <div class="transport">
-              <button
-                id="previous"
-                class="icon-button"
-                data-icon="frame-back"
-                aria-label="Previous frame"
-              ></button
-              ><button
-                id="play"
-                class="play-button"
-                data-icon="play"
-                aria-label="Play"
-                hidden
-              ></button
-              ><button
-                id="next"
-                class="icon-button"
-                data-icon="frame-forward"
-                aria-label="Next frame"
-              ></button>
+              <aside id="inspector" aria-label="Source details" hidden>
+                <div class="panel-header">
+                  <h2>Source</h2>
+                  <button
+                    id="close-inspector"
+                    class="icon-button"
+                    data-icon="close"
+                    aria-label="Close source details"
+                  ></button>
+                </div>
+                <dl id="source-properties"></dl>
+              </aside>
+              <aside id="codex-drawer" aria-label="Claude conversation" hidden>
+                <div class="panel-header">
+                  <h2><span data-icon="sparkle"></span>Assistant</h2>
+                  <button
+                    id="close-codex"
+                    class="icon-button"
+                    data-icon="close"
+                    aria-label="Close Claude"
+                  ></button>
+                </div>
+                <label for="assistant-provider">Provider</label>
+                <select id="assistant-provider">
+                  <option value="claude" selected>Claude</option>
+                  <option value="codex">Codex</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openai">OpenAI API</option>
+                  <option value="gemini">Gemini API</option>
+                </select>
+                <p id="claude-context-notice">
+                  Requests and what Claude reads are sent to Anthropic: project
+                  and timeline details, the whole edited transcript (Claude
+                  keeps it in its project workspace), and small pictures of your
+                  edit that it asks to see, which show your footage. Earlier
+                  messages in this conversation are included in later turns.
+                  Your source audio and video files stay on this device.
+                </p>
+                <p id="claude-api-notice" hidden>
+                  This Claude Code sign-in uses Anthropic Console API billing,
+                  so each turn you send can use paid credits.
+                </p>
+                <p id="codex-context-notice" hidden>
+                  Requests and the project information Codex reads are sent to
+                  OpenAI, including small pictures of your edit when it asks to
+                  see them. Speech work may include bounded local transcript
+                  text; transcript pages may remain in this conversation and be
+                  included in later turns. Your source audio and video files
+                  stay on this device.
+                </p>
+                <p id="codex-thread-status" role="status"></p>
+                <div id="codex-thread-messages" aria-live="polite"></div>
+                <ul
+                  id="codex-thread-activity"
+                  aria-label="Assistant activity"
+                ></ul>
+                <p id="api-turn-notice" hidden>
+                  Sending shares your request and project/timeline tool results
+                  with this provider. Speech work may also share local
+                  transcript text; transcript pages may remain in this
+                  conversation and be included in later turns. API calls can use
+                  paid credits and up to four model calls; source audio and
+                  video stay on this device.
+                </p>
+                <button id="open-codex-thread">Open conversation</button>
+                <details id="claude-full-edit" hidden>
+                  <summary>Edit the whole video</summary>
+                  <form id="claude-full-edit-form">
+                    <label for="full-edit-goal">What it is for</label>
+                    <input
+                      id="full-edit-goal"
+                      type="text"
+                      maxlength="300"
+                      placeholder="A short product update for customers"
+                    />
+                    <label for="full-edit-audience">Who watches it</label>
+                    <input
+                      id="full-edit-audience"
+                      type="text"
+                      maxlength="300"
+                    />
+                    <label for="full-edit-style">Style</label>
+                    <input
+                      id="full-edit-style"
+                      type="text"
+                      maxlength="300"
+                      placeholder="Calm and clean"
+                    />
+                    <label for="full-edit-level">How far to go</label>
+                    <select id="full-edit-level">
+                      <option value="tidy">Tidy</option>
+                      <option value="polished" selected>Polished</option>
+                      <option value="bold">Bold</option>
+                    </select>
+                    <button type="submit" id="start-full-edit" class="primary">
+                      Edit with Claude
+                    </button>
+                  </form>
+                </details>
+                <div id="full-edit-result" hidden>
+                  <span id="full-edit-changes"></span>
+                  <button type="button" id="undo-full-edit">Undo all</button>
+                </div>
+                <form id="codex-thread-form" hidden>
+                  <label for="codex-thread-input" class="visually-hidden"
+                    >Request an edit</label
+                  >
+                  <textarea
+                    id="codex-thread-input"
+                    rows="3"
+                    maxlength="16384"
+                  ></textarea>
+                  <div class="codex-thread-actions">
+                    <button type="button" id="interrupt-codex-thread" hidden>
+                      Stop
+                    </button>
+                    <button type="button" id="retry-codex-thread" hidden>
+                      Retry request
+                    </button>
+                    <button
+                      type="submit"
+                      id="send-codex-thread"
+                      class="primary"
+                      data-icon="send"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </form>
+                <p id="codex-thread-error" role="alert" hidden></p>
+              </aside>
             </div>
-            <input
-              id="seek"
-              type="range"
-              min="0"
-              max="0"
-              value="0"
-              aria-label="Source position"
-            />
-            <span
-              id="playback-status"
-              class="playback-status"
-              role="status"
-              hidden
-            ></span>
-            <div id="preview-time">
-              <output id="time" for="seek"></output><span id="duration"></span>
+            <div id="frame-controls">
+              <div class="player-bar">
+                <label id="preview-label" for="seek" class="visually-hidden"
+                  >Frame preview</label
+                >
+                <div class="transport">
+                  <button
+                    id="previous"
+                    class="icon-button"
+                    data-icon="frame-back"
+                    aria-label="Previous frame"
+                  ></button
+                  ><button
+                    id="play"
+                    class="play-button"
+                    data-icon="play"
+                    aria-label="Play"
+                    hidden
+                  ></button
+                  ><button
+                    id="next"
+                    class="icon-button"
+                    data-icon="frame-forward"
+                    aria-label="Next frame"
+                  ></button>
+                </div>
+                <input
+                  id="seek"
+                  type="range"
+                  min="0"
+                  max="0"
+                  value="0"
+                  aria-label="Source position"
+                />
+                <span
+                  id="playback-status"
+                  class="playback-status"
+                  role="status"
+                  hidden
+                ></span>
+                <div id="preview-time">
+                  <output id="time" for="seek"></output
+                  ><span id="duration"></span>
+                </div>
+              </div>
+              <div id="timeline-strip" class="timeline-strip" hidden>
+                <div class="timeline-track" aria-hidden="true">
+                  <div class="timeline-clips"></div>
+                  <div class="timeline-zooms"></div>
+                  <div class="timeline-graphics"></div>
+                  <div class="timeline-marks"></div>
+                  <div class="timeline-playhead"></div>
+                </div>
+                <p class="timeline-summary"></p>
+              </div>
             </div>
-          </div>
-          <div id="timeline-strip" class="timeline-strip" hidden>
-            <div class="timeline-track" aria-hidden="true">
-              <div class="timeline-clips"></div>
-              <div class="timeline-zooms"></div>
-              <div class="timeline-graphics"></div>
-              <div class="timeline-marks"></div>
-              <div class="timeline-playhead"></div>
+            <div class="source-row">
+              <span
+                class="source-icon"
+                data-icon="video"
+                aria-hidden="true"
+              ></span>
+              <strong id="source-name"></strong>
+              <span id="source-duration" class="chip"></span>
+              <span id="append-progress" role="status" hidden
+                >Importing footage…</span
+              >
+              <span class="source-row-spacer"></span>
+              <button id="add-footage" class="outline" data-icon="plus" hidden>
+                Add footage
+              </button>
             </div>
-            <p class="timeline-summary"></p>
           </div>
           <div class="stage-panel">
             <div id="next-step" class="next-step" hidden>

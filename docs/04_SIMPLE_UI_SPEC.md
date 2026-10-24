@@ -18,7 +18,13 @@ The interface should feel like a focused creator tool. It should not look like a
 - Keep warnings close to the affected item.
 - Do not fill empty space with metrics or status cards.
 
-## Editor layout
+## Current interface (ADR 0024, 2026-10-24)
+
+The interface follows the Light Canvas reference designs (kept privately in `local-data/design-options/`): a plain application bar (logo, name, a quiet Claude button, source details, Home, Settings); a stepper row under it (five 40 px circles joined by long lines, labels below; done = outlined with a check, current = filled with a bold label); the picture, player bar and timeline together in one white rounded card; the step's one action below the card (Auto Edit: "Edit my video" pill and a "More options" disclosure; Import: file chip, duration, Add footage, then "Continue to Auto Edit"; Edit: a floating toolbar of icon-over-label tools with "More tools"; Review: Original, Edited and Clips figures with "Verify draft" and "Continue to Export"; Export: the card on the left, quality and Export… on the right with Short clips as a disclosure). Home is a headline, two large tiles (New recording, Import video) and the Recent projects. Themes (Light Canvas default, Studio Dark, Paper, Cinematic, Custom) are chosen in Settings; Cinematic lets the picture fill the window with frosted-glass controls.
+
+Deviations from the references, because the real app needs them: the picture's player bar has no volume or fullscreen control yet; the Edit timeline is one clip bar rather than a thumbnail filmstrip with a time ruler and Zoom/Graphic flags; Export keeps a quality dropdown instead of two selectable cards; at 820 px and narrower the stepper becomes a list.
+
+## Editor layout (earlier text, kept for the tool details)
 
 ### Top bar
 

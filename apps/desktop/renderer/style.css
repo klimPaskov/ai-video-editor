@@ -708,74 +708,6 @@ main {
   flex: 1;
   min-width: 8px;
 }
-.stepper {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.stepper button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 10px;
-  font-size: 13px;
-  color: var(--text-3, var(--text-2));
-  background: transparent;
-  border-color: transparent;
-  border-radius: 999px;
-}
-.stepper button {
-  position: relative;
-}
-.stepper button + button {
-  margin-left: 18px;
-}
-.stepper button + button::before {
-  content: "";
-  position: absolute;
-  left: -16px;
-  top: 50%;
-  width: 14px;
-  height: 1px;
-  background: var(--border);
-}
-.stepper .step-number {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 1.5px solid currentColor;
-  border-radius: 50%;
-  font-size: 12px;
-  line-height: 1;
-}
-.stepper button:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--surface-3);
-}
-.stepper button.done {
-  color: var(--text-2);
-}
-.stepper button.done .step-number {
-  color: var(--accent-text);
-  border-color: transparent;
-  background: var(--accent-soft);
-}
-.stepper [aria-current="step"],
-.stepper [aria-current="step"]:hover:not(:disabled) {
-  color: var(--text);
-  font-weight: 600;
-  background: var(--surface-3);
-}
-.stepper [aria-current="step"] .step-number {
-  color: #fff;
-  border-color: var(--accent);
-  background: var(--accent);
-}
-.stepper button:disabled {
-  opacity: 1;
-}
 details.more {
   flex-basis: 100%;
 }
@@ -2582,131 +2514,579 @@ button.large {
   grid-column: 1 / -1;
 }
 
+/* Layout (ADR 0024): Light Canvas as drawn in the reference designs */
+header {
+  height: 72px;
+  padding: 0 40px;
+  background: transparent;
+  border-bottom: 0;
+}
+.brand {
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--accent);
+  box-shadow: none;
+}
+.mark::after {
+  left: 12px;
+  top: 9px;
+  border-left-width: 11px;
+  border-top-width: 7px;
+  border-bottom-width: 7px;
+}
+header nav {
+  align-items: center;
+  gap: 8px;
+}
+header nav .ghost,
+header nav .icon-button {
+  min-height: 40px;
+  color: var(--text-2);
+  font-size: 15px;
+  background: transparent;
+  border-color: transparent;
+}
+header nav .ghost:hover:not(:disabled),
+header nav .icon-button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.assistant-toggle {
+  min-height: 40px;
+  padding: 0 16px;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-color: transparent;
+  border-radius: 999px;
+}
+.assistant-toggle:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.assistant-toggle[aria-expanded="true"],
+.assistant-toggle[aria-expanded="true"]:hover:not(:disabled) {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+/* The project page: steps, one card for the picture, the step's action below */
+#viewer {
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 40px 40px;
+  gap: 28px;
+}
+#project-navigation {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+}
+.stepper {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 0;
+}
+.stepper button,
+.stepper button:hover:not(:disabled) {
+  position: relative;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+  padding: 0;
+  color: var(--text-3);
+  font-size: 16px;
+  font-weight: 400;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.stepper button:hover:not(:disabled) {
+  color: var(--text);
+}
+.stepper button:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 20px;
+  left: calc(50% + 30px);
+  right: calc(-50% + 30px);
+  height: 1.5px;
+  background: var(--border-strong);
+}
+.stepper .step-number {
+  width: 40px;
+  height: 40px;
+  color: var(--text-2);
+  font-size: 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+}
+.stepper button.done {
+  color: var(--text-2);
+}
+.stepper button.done .step-number {
+  color: var(--accent-text);
+  background: var(--surface);
+  border-color: var(--accent);
+}
+.stepper [aria-current="step"],
+.stepper [aria-current="step"]:hover:not(:disabled) {
+  color: var(--text);
+  font-weight: 700;
+  background: transparent;
+}
+.stepper [aria-current="step"] .step-number {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.stage-card {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.stage-media {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: var(--surface);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+.workspace {
+  flex: none;
+  height: clamp(200px, 44vh, 600px);
+  min-height: 0;
+  gap: 16px;
+}
+.preview {
+  background: #000;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: none;
+}
+#inspector,
+#codex-drawer {
+  box-shadow: none;
+  background: var(--surface-2);
+  border: 0;
+  border-radius: 16px;
+}
+#frame-controls {
+  max-height: none;
+  gap: 12px;
+}
+.player-bar {
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.play-button {
+  color: var(--text);
+  background: transparent;
+  border: 0;
+}
+.play-button:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.timeline-track {
+  height: 56px;
+  background: var(--surface-2);
+  border: 0;
+  border-radius: 14px;
+  box-shadow: none;
+}
+.timeline-clips {
+  inset: 6px;
+  border-radius: 10px;
+}
+.source-row {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding-top: 4px;
+}
+#viewer[data-stage="record_import"] .source-row {
+  display: flex;
+}
+.source-icon {
+  display: grid;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 12px;
+}
+#source-name {
+  max-width: 50%;
+  font-size: 16px;
+  font-weight: 500;
+}
+.chip {
+  padding: 4px 12px;
+  color: var(--text-2);
+  font-size: 13px;
+  background: var(--surface-3);
+  border-radius: 999px;
+}
+.chip:empty {
+  display: none;
+}
+.source-row-spacer {
+  flex: 1;
+}
+button.outline {
+  min-height: 44px;
+  padding: 0 20px;
+  font-weight: 500;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 999px;
+}
+.stage-panel {
+  align-items: center;
+  overflow: visible;
+}
+.stage-panel > * {
+  width: 100%;
+}
+.auto-edit-actions,
+.review-actions {
+  max-width: 720px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.transcript-edit-panel,
+.export-actions {
+  border: 0;
+  border-radius: 20px;
+}
+.next-step,
+.auto-all {
+  align-items: center;
+  justify-content: center;
+}
+#auto-all-start,
+#next-step-button {
+  min-width: 280px;
+}
+.review-actions {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 16px;
+  max-width: none;
+}
+.review-actions .review-summary {
+  flex: 1 1 auto;
+}
+.edit-actions {
+  width: auto;
+  max-width: 100%;
+  padding: 10px 18px;
+  align-self: center;
+  justify-content: center;
+  gap: 4px;
+  background: var(--surface);
+  border: 0;
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+.edit-actions > .tool {
+  flex-direction: column;
+  gap: 6px;
+  min-width: 88px;
+  min-height: 72px;
+  color: var(--text);
+  font-size: 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 14px;
+}
+.edit-actions > .tool:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.edit-actions > .tool .icon {
+  width: 24px;
+  height: 24px;
+}
+#viewer[data-stage="export"] .stage-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+#viewer[data-stage="export"] .stage-panel {
+  align-items: stretch;
+}
+
+/* Home */
+#home {
+  max-width: 1180px;
+  padding: 16px 40px 64px;
+  gap: 48px;
+}
+#home-title {
+  margin: 24px 0 0;
+  font-size: clamp(32px, 5vw, 56px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  text-align: center;
+}
+.hero-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.action-tile,
+.action-tile:hover:not(:disabled) {
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-height: 200px;
+  padding: 32px;
+  text-align: center;
+  background: var(--surface);
+  border: 0;
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+.action-tile:hover:not(:disabled) {
+  box-shadow: var(--shadow-lg);
+}
+.tile-icon,
+.tile-icon.record {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 8px;
+  color: var(--accent);
+  background: transparent;
+}
+.tile-icon .icon {
+  width: 56px;
+  height: 56px;
+  stroke-width: 1.5;
+}
+.tile-title {
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.tile-sub {
+  color: var(--text-2);
+  font-size: 16px;
+  font-weight: 400;
+}
+#home section > h2 {
+  margin: 0 0 20px;
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+.card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+}
+.card-grid button,
+.card-grid button:hover:not(:disabled) {
+  padding: 16px;
+  gap: 14px;
+  background: var(--surface);
+  border: 0;
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+.card-grid .thumb {
+  border-radius: 16px;
+}
+.card-grid .card-body {
+  padding: 0 4px 4px;
+}
+.card-grid .card-body span {
+  font-size: 20px;
+  font-weight: 500;
+}
+.card-grid small {
+  font-size: 15px;
+}
+.card-grid .card-options {
+  top: 28px;
+  right: 28px;
+}
+dialog {
+  border-radius: 24px;
+}
+
 /* The Cinematic layout: the video fills the window and the controls float
    over it as frosted glass. A custom theme can use it with any colours. */
 html[data-layout="cinematic"] header {
   position: fixed;
   inset: 0 0 auto;
   z-index: 8;
-  background: transparent;
-  border-bottom: 0;
-  pointer-events: none;
 }
-html[data-layout="cinematic"] header > * {
-  pointer-events: auto;
-}
-html[data-layout="cinematic"] header nav {
-  background: var(--glass);
-  backdrop-filter: blur(14px);
-  border-radius: 999px;
-  padding: 2px 6px;
-}
-html[data-layout="cinematic"] main {
+html[data-layout="cinematic"] main:has(#viewer:not([hidden])) {
   overflow: hidden;
 }
 html[data-layout="cinematic"] #viewer {
   position: fixed;
   inset: 0;
   z-index: 1;
-  gap: 0;
+  max-width: none;
   padding: 0;
+  gap: 0;
+}
+html[data-layout="cinematic"] #project-navigation {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  z-index: 7;
+  width: min(640px, calc(100% - 32px));
+  padding: 12px 16px 10px;
+  transform: translateX(-50%);
+  background: var(--glass);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+}
+html[data-layout="cinematic"] .stage-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 0 20px;
+  pointer-events: none;
+}
+html[data-layout="cinematic"] .stage-media {
+  display: contents;
 }
 html[data-layout="cinematic"] .workspace {
   position: absolute;
   inset: 0;
+  height: auto;
   gap: 0;
+  pointer-events: auto;
 }
 html[data-layout="cinematic"] .preview {
-  border: 0;
   border-radius: 0;
-  box-shadow: none;
 }
 html[data-layout="cinematic"] #inspector,
 html[data-layout="cinematic"] #codex-drawer {
   position: relative;
   z-index: 6;
-  margin: 76px 16px 220px 0;
+  margin: 150px 16px 260px 0;
   background: var(--glass);
   backdrop-filter: blur(18px);
 }
-html[data-layout="cinematic"] .source-bar {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  z-index: 7;
-  width: max-content;
-  max-width: calc(100% - 340px);
-  padding: 6px 10px;
-  transform: translateX(-50%);
-  background: var(--glass);
-  backdrop-filter: blur(18px);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-}
-html[data-layout="cinematic"] #frame-controls {
-  position: absolute;
-  left: 50%;
-  bottom: 20px;
+html[data-layout="cinematic"] #frame-controls,
+html[data-layout="cinematic"] .stage-panel,
+html[data-layout="cinematic"] .source-row {
+  position: relative;
   z-index: 7;
   width: min(940px, calc(100% - 40px));
-  max-height: calc(100% - 100px);
-  overflow-y: auto;
+  margin: 0 auto;
   padding: 12px;
-  transform: translateX(-50%);
+  pointer-events: auto;
   background: var(--glass);
   backdrop-filter: blur(20px);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 20px;
   box-shadow: var(--shadow-lg);
 }
-html[data-layout="cinematic"] #frame-controls .player-bar,
-html[data-layout="cinematic"] #frame-controls .timeline-track,
-html[data-layout="cinematic"] #frame-controls .auto-edit-actions,
-html[data-layout="cinematic"] #frame-controls .transcript-edit-panel,
-html[data-layout="cinematic"] #frame-controls .edit-actions,
-html[data-layout="cinematic"] #frame-controls .review-actions,
-html[data-layout="cinematic"] #frame-controls .export-actions {
+html[data-layout="cinematic"] .stage-panel {
+  max-height: 45vh;
+  overflow-y: auto;
+}
+html[data-layout="cinematic"] .stage-panel:not(:has(> :not([hidden]))) {
+  display: none;
+}
+html[data-layout="cinematic"] .edit-actions,
+html[data-layout="cinematic"] .export-actions {
   background: transparent;
   box-shadow: none;
 }
-html[data-layout="cinematic"] #frame-controls .auto-edit-actions,
-html[data-layout="cinematic"] #frame-controls .edit-actions,
-html[data-layout="cinematic"] #frame-controls .review-actions,
-html[data-layout="cinematic"] #frame-controls .export-actions {
-  border: 0;
+html[data-layout="cinematic"] #viewer[data-stage="export"] .stage-card {
+  display: flex;
 }
+
 .theme-name {
   font-size: 11.5px;
   line-height: 1.2;
   white-space: normal;
 }
-html[data-layout="cinematic"] #source-name,
-html[data-layout="cinematic"] #add-footage {
+
+/* Reference details */
+.stepper .step-number {
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+}
+body:has(#home:not([hidden])) #source-details {
   display: none;
 }
-html[data-layout="cinematic"] .source-bar {
-  max-width: calc(100% - 560px);
+#viewer[data-stage="record_import"] #timeline-strip,
+#viewer[data-stage="auto_edit"] #timeline-strip {
+  display: none;
 }
-@media (max-width: 1180px) {
-  html[data-layout="cinematic"] header .brand span:last-child {
-    display: none;
-  }
+#viewer[data-stage="edit"] .workspace,
+#viewer[data-stage="review"] .workspace {
+  height: clamp(180px, 36vh, 560px);
 }
-
-/* Narrower windows and larger interface sizes: finished and upcoming steps
-   show only their number, so every step stays in reach. */
-@media (max-width: 1240px) {
-  .stepper button:not([aria-current="step"]) .step-text {
-    display: none;
-  }
-  .stepper button {
-    padding: 0 6px;
-  }
-  .stepper button + button {
-    margin-left: 14px;
-  }
-  .stepper button + button::before {
-    left: -12px;
-    width: 10px;
-  }
+#viewer[data-stage="review"] .stage-panel {
+  flex-flow: row wrap;
+  justify-content: space-between;
+  gap: 16px;
+}
+#viewer[data-stage="review"] .stage-panel > * {
+  width: auto;
+}
+#viewer[data-stage="review"] .review-actions {
+  flex: 1 1 420px;
+  order: 1;
+}
+#viewer[data-stage="review"] .next-step {
+  flex: 0 0 auto;
+  order: 2;
+}
+#viewer[data-stage="review"] #next-step-button {
+  min-width: 240px;
+}
+#viewer {
+  gap: 20px;
+}
+.stage-card {
+  gap: 20px;
+}
+#viewer[data-stage="edit"] .workspace,
+#viewer[data-stage="review"] .workspace {
+  height: clamp(170px, 32vh, 520px);
+}
+.auto-edit-actions > details.more > summary {
+  justify-content: center;
+  width: 100%;
 }
