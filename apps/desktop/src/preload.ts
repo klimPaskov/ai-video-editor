@@ -52,6 +52,11 @@ import {
   assertSoundsView,
 } from "../../../packages/domain/src/sound-view.ts";
 import {
+  assertCameraOffsetRequest,
+  assertCameraRequest,
+  assertCameraView,
+} from "../../../packages/domain/src/camera-view.ts";
+import {
   assertShortClipRequest,
   assertShortClipsView,
   assertShortExportRequest,
@@ -92,6 +97,8 @@ import {
   assertManualSpeedRequest,
   assertManualGraphicRequest,
   assertManualGraphicRemoveRequest,
+  assertManualLayoutRemoveRequest,
+  assertManualLayoutRequest,
   assertManualTransitionRequest,
   assertManualTransitionRemoveRequest,
   assertManualRestoreRangeRequest,
@@ -328,6 +335,38 @@ const bridge: DesktopBridge = {
       request,
       assertProjectDraftView,
     );
+  },
+  applyManualLayout: (request) => {
+    assertManualLayoutRequest(request);
+    return invoke(
+      channels.projectManualLayout,
+      request,
+      assertProjectDraftView,
+    );
+  },
+  removeManualLayout: (request) => {
+    assertManualLayoutRemoveRequest(request);
+    return invoke(
+      channels.projectManualLayoutRemove,
+      request,
+      assertProjectDraftView,
+    );
+  },
+  getCamera: (request) => {
+    assertCameraRequest(request);
+    return invoke(channels.cameraGet, request, assertCameraView);
+  },
+  chooseCamera: (request) => {
+    assertCameraRequest(request);
+    return invoke(channels.cameraChoose, request, assertCameraView);
+  },
+  setCameraOffset: (request) => {
+    assertCameraOffsetRequest(request);
+    return invoke(channels.cameraOffset, request, assertCameraView);
+  },
+  removeCamera: (request) => {
+    assertCameraRequest(request);
+    return invoke(channels.cameraRemove, request, assertCameraView);
   },
   applyManualTransition: (request) => {
     assertManualTransitionRequest(request);

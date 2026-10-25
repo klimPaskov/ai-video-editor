@@ -10,6 +10,9 @@ import {
   assertLayoutChange,
   layoutLimits,
   type LayoutChange,
+  type LayoutCorner,
+  type LayoutKind,
+  type LayoutShape,
 } from "./layouts.ts";
 import { isClipSpeed, speedLength } from "./speed.ts";
 import {
@@ -245,6 +248,38 @@ export interface ManualTransitionRequest {
   kind: TransitionKind;
   durationUs: number;
   color: string;
+}
+/**
+ * Changes how the camera and screen share the picture from output time
+ * `atUs` (or replaces layout change `layoutId`). Main anchors it to the
+ * recording's moment there.
+ */
+export interface ManualLayoutRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  layoutId: string | null;
+  atUs: number;
+  kind: LayoutKind;
+  corner: LayoutCorner;
+  size: number;
+  shape: LayoutShape;
+  faceZoom: number;
+  focusX: number;
+  focusY: number;
+  moveUs: number;
+}
+export interface ManualLayoutRemoveRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  layoutId: string;
 }
 export interface ManualTransitionRemoveRequest {
   schema_version: "1.0";
@@ -617,6 +652,65 @@ export function assertManualTransitionRequest(
     !/^#[0-9a-fA-F]{6}$/u.test(value.color)
   )
     invalid();
+}
+export function assertManualLayoutRequest(
+  value: unknown,
+): asserts value is ManualLayoutRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "layoutId",
+    "atUs",
+    "kind",
+    "corner",
+    "size",
+    "shape",
+    "faceZoom",
+    "focusX",
+    "focusY",
+    "moveUs",
+  ]);
+  assertManualHead(value);
+  if (value.layoutId !== null) opaqueId(value.layoutId);
+  integer(value.atUs);
+  // Checked as the change it becomes (its recording is filled in by main).
+  const change: Record<string, unknown> = {
+    layout_id: "layout-check",
+    source_id: "source-check",
+    source_us: 0,
+    kind: value.kind,
+    move_us: value.moveUs,
+  };
+  if (value.kind === "pip") {
+    change.corner = value.corner;
+    change.size = value.size;
+    change.shape = value.shape;
+  }
+  if (value.kind !== "screen") {
+    change.face_zoom = value.faceZoom;
+    change.focus_x = value.focusX;
+    change.focus_y = value.focusY;
+  }
+  assertLayoutChange(change);
+}
+export function assertManualLayoutRemoveRequest(
+  value: unknown,
+): asserts value is ManualLayoutRemoveRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "layoutId",
+  ]);
+  assertManualHead(value);
+  opaqueId(value.layoutId);
 }
 export function assertManualTransitionRemoveRequest(
   value: unknown,

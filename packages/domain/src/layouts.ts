@@ -262,7 +262,12 @@ export function layoutIntervals(
   const intervals: LayoutInterval[] = [];
   for (const item of found) {
     const last = intervals.at(-1);
-    const { order: _order, ...interval } = item;
+    const interval: LayoutInterval = {
+      layoutId: item.layoutId,
+      startUs: item.startUs,
+      moveUs: item.moveUs,
+      state: item.state,
+    };
     if (last && last.startUs === interval.startUs)
       intervals[intervals.length - 1] = interval;
     else intervals.push(interval);

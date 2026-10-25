@@ -33,6 +33,11 @@ import type {
   SoundsView,
 } from "../../../packages/domain/src/sound-view.ts";
 import type {
+  CameraOffsetRequest,
+  CameraRequest,
+  CameraView,
+} from "../../../packages/domain/src/camera-view.ts";
+import type {
   ShortClipRequest,
   ShortClipsView,
   ShortExportRequest,
@@ -78,6 +83,8 @@ import type {
   ManualSpeedRequest,
   ManualGraphicRequest,
   ManualGraphicRemoveRequest,
+  ManualLayoutRemoveRequest,
+  ManualLayoutRequest,
   ManualTransitionRequest,
   ManualTransitionRemoveRequest,
   ManualRestoreRangeRequest,
@@ -201,6 +208,17 @@ export interface DesktopBridge {
   removeManualGraphic(
     request: ManualGraphicRemoveRequest,
   ): Promise<Reply<ProjectDraftView>>;
+  applyManualLayout(
+    request: ManualLayoutRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  removeManualLayout(
+    request: ManualLayoutRemoveRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  getCamera(request: CameraRequest): Promise<Reply<CameraView>>;
+  /** Opens a file dialog; resolves with the unchanged view when cancelled. */
+  chooseCamera(request: CameraRequest): Promise<Reply<CameraView>>;
+  setCameraOffset(request: CameraOffsetRequest): Promise<Reply<CameraView>>;
+  removeCamera(request: CameraRequest): Promise<Reply<CameraView>>;
   applyManualTransition(
     request: ManualTransitionRequest,
   ): Promise<Reply<ProjectDraftView>>;
@@ -322,6 +340,12 @@ export const channels = Object.freeze({
   projectManualSpeed: "projects:manual-speed",
   projectManualGraphic: "projects:manual-graphic",
   projectManualGraphicRemove: "projects:manual-graphic-remove",
+  projectManualLayout: "projects:manual-layout",
+  projectManualLayoutRemove: "projects:manual-layout-remove",
+  cameraGet: "camera:get",
+  cameraChoose: "camera:choose",
+  cameraOffset: "camera:offset",
+  cameraRemove: "camera:remove",
   projectManualTransition: "projects:manual-transition",
   projectManualTransitionRemove: "projects:manual-transition-remove",
   audioGet: "audio:get",

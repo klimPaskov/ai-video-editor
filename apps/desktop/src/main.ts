@@ -51,6 +51,7 @@ import {
 import {
   CodexVideoEditToolError,
   CodexVideoEditToolService,
+  type CameraCatalog,
   type CodexVideoEditToolName,
   type ZoomTargeter,
 } from "../../../packages/codex-tools/src/service.ts";
@@ -74,6 +75,8 @@ import {
   assertManualSpeedRequest,
   assertManualGraphicRequest,
   assertManualGraphicRemoveRequest,
+  assertManualLayoutRemoveRequest,
+  assertManualLayoutRequest,
   assertManualTransitionRequest,
   assertManualTransitionRemoveRequest,
   assertManualRestoreRangeRequest,
@@ -148,6 +151,13 @@ import {
   type SoundsView,
 } from "../../../packages/domain/src/sound-view.ts";
 import {
+  assertCameraOffsetRequest,
+  assertCameraRequest,
+  assertCameraView,
+  idleCameraView,
+  type CameraView,
+} from "../../../packages/domain/src/camera-view.ts";
+import {
   buildSoundLayer,
   SoundBuildError,
   soundIntervals,
@@ -156,9 +166,12 @@ import {
   SoundAssetError,
   SoundAssetStore,
 } from "../../../packages/project-store/src/sounds.ts";
+import { CameraLinks } from "./camera-links.ts";
+import type { CameraSource } from "../../../packages/media-engine/src/camera-layer.ts";
+import { type LayoutChange } from "../../../packages/domain/src/layouts.ts";
 import { analyzeScreenActivity } from "../../../packages/media-engine/src/screen-activity.ts";
 import { zoomForTarget } from "../../../packages/domain/src/screen-activity.ts";
-import { timelineAt } from "../../../packages/domain/src/speed.ts";
+import { sourceAt, timelineAt } from "../../../packages/domain/src/speed.ts";
 import type { ActivityTarget } from "../../../packages/domain/src/screen-activity.ts";
 import { decodeEnergyTrack } from "../../../packages/media-engine/src/audio-energy.ts";
 import { probeSoundFile } from "../../../packages/media-engine/src/sound-probe.ts";
@@ -681,6 +694,7 @@ async function start(): Promise<void> {
     return value;
   });
   const userData = app.getPath("userData");
+  const cameraLinks = new CameraLinks(path.join(userData, "camera-links"));
   const library = new MediaLibrary(
     path.join(userData, "media-library"),
     mediaExecutables,
@@ -1248,6 +1262,7 @@ async function start(): Promise<void> {
   );
   exports = new DesktopExports({
     ...mediaExecutables,
+    camera: (projectId, sourceId) => cameraSourceFor(projectId, sourceId),
     renderGraphics: (request) =>
       renderGraphicsTrack(request, `${origin}/stage.html`),
     captions: draftCaptions,
@@ -1735,6 +1750,27 @@ async function start(): Promise<void> {
   };
   // Where things happen on screen, per recording (by hash): the evidence for
   // zooms. A recording is analysed once per app run.
+  const cameraSourceFor = async (
+    projectId: string,
+    sourceId: string,
+  ): Promise<CameraSource | null> => {
+    const link = await cameraLinks.forSource(projectId, sourceId);
+    if (!link) return null;
+    const media = await library.verifiedSource(link.mediaId);
+    const streams = media.probe.streams as Record<string, unknown>[];
+    const video = streams.find((stream) => stream.codec_type === "video");
+    if (!video) return null;
+    return {
+      path: media.managedPath,
+      width: Number(video.width),
+      height: Number(video.height),
+      offsetUs: link.offsetUs,
+    };
+  };
+  const cameraCatalog: CameraCatalog = {
+    has: async (projectId, sourceId) =>
+      (await cameraLinks.forSource(projectId, sourceId)) !== null,
+  };
   const activityBySource = new Map<string, Promise<ActivityTarget[]>>();
   const zoomTargeter: ZoomTargeter = {
     async targets(projectId, startUs, endUs) {
@@ -1922,6 +1958,7 @@ async function start(): Promise<void> {
             propose: (id, proposals) => shortClips!.propose(id, proposals),
           },
           zoomTargeter,
+          cameraCatalog,
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
@@ -2810,6 +2847,220 @@ async function start(): Promise<void> {
         throw new UserFacingError(error.message);
       throw error;
     }
+  });
+  register(channels.projectManualLayout, async (request) => {
+    assertManualLayoutRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    const { draft } = await drafts.snapshotWithProject(request.projectId);
+    if (
+      draft.draft_sequence !== request.expectedSequence ||
+      draft.timeline_sha256 !== request.expectedTimelineSha256
+    )
+      throw new UserFacingError("The draft changed. Try again.");
+    const clip = draft.timeline.clips.find(
+      (item) =>
+        request.atUs >= item.timeline_start_us &&
+        request.atUs < item.timeline_end_us,
+    );
+    if (!clip) throw new UserFacingError("There is no video at that point.");
+    if (
+      request.kind !== "screen" &&
+      !(await cameraLinks.forSource(request.projectId, clip.source_id))
+    )
+      throw new UserFacingError(
+        "Add a camera video first (Camera in More tools).",
+      );
+    const existing = request.layoutId
+      ? draft.timeline.layouts?.find(
+          (item) => item.layout_id === request.layoutId,
+        )
+      : undefined;
+    if (request.layoutId && !existing)
+      throw new UserFacingError("That layout change was removed.");
+    const layout: LayoutChange = {
+      layout_id:
+        request.layoutId ?? `layout-${randomUUID().replaceAll("-", "")}`,
+      // A change being edited keeps its moment.
+      source_id: existing?.source_id ?? clip.source_id,
+      source_us: existing?.source_us ?? sourceAt(clip, request.atUs),
+      kind: request.kind,
+      move_us: request.moveUs,
+      ...(request.kind === "pip"
+        ? {
+            corner: request.corner,
+            size: request.size,
+            shape: request.shape,
+          }
+        : {}),
+      ...(request.kind !== "screen"
+        ? {
+            face_zoom: request.faceZoom,
+            focus_x: request.focusX,
+            focus_y: request.focusY,
+          }
+        : {}),
+    };
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "layout.set",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "layout" },
+            reason: request.layoutId
+              ? "Change a layout."
+              : "Change the camera layout.",
+            operations: [{ type: "set_layout", layout }],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(
+          error.code === "conflict"
+            ? "That is already the layout there."
+            : error.message,
+        );
+      throw error;
+    }
+  });
+  register(channels.projectManualLayoutRemove, async (request) => {
+    assertManualLayoutRemoveRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "layout.remove",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "layout" },
+            reason: "Remove a layout change.",
+            operations: [
+              { type: "remove_layout", layout_id: request.layoutId },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  /** The first recording of the project: the one a camera goes with. */
+  const cameraScreenSource = async (projectId: string) => {
+    const { project } = await drafts.snapshotWithProject(projectId);
+    const sources =
+      project.schema_version === "1.1" ? project.sources : [project.source];
+    return sources[0]!.source_id;
+  };
+  const cameraView = async (projectId: string): Promise<CameraView> => {
+    const link = await cameraLinks.forSource(
+      projectId,
+      await cameraScreenSource(projectId),
+    );
+    if (!link) return idleCameraView(projectId);
+    const media = await library.verifiedSource(link.mediaId);
+    const video = (media.probe.streams as Record<string, unknown>[]).find(
+      (stream) => stream.codec_type === "video",
+    );
+    const view: CameraView = {
+      schema_version: "1.0",
+      project_id: projectId,
+      linked: true,
+      file_name: media.summary.name.slice(0, 255),
+      offset_us: link.offsetUs,
+      width: Number(video?.width ?? 1),
+      height: Number(video?.height ?? 1),
+    };
+    assertCameraView(view);
+    return view;
+  };
+  register(channels.cameraGet, async (request) => {
+    assertCameraRequest(request);
+    return cameraView(request.project_id);
+  });
+  let choosingCamera = false;
+  register(channels.cameraChoose, async (request) => {
+    assertCameraRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before adding a camera.");
+    if (choosingCamera || !window)
+      throw new UserFacingError("A camera video is already being added.");
+    choosingCamera = true;
+    try {
+      const selected = await dialog.showOpenDialog(window, {
+        title: "Add camera video",
+        properties: ["openFile"],
+        filters: [
+          { name: "Video", extensions: ["mkv", "mp4", "mov", "webm", "avi"] },
+        ],
+      });
+      const file = selected.filePaths[0];
+      if (selected.canceled || !file) return cameraView(request.project_id);
+      const media = await library.importFile(file);
+      const sourceId = await cameraScreenSource(request.project_id);
+      if (media.id === sourceId)
+        throw new UserFacingError(
+          "Choose the camera recording, not the screen recording.",
+        );
+      await cameraLinks.set(request.project_id, {
+        sourceId,
+        mediaId: media.id,
+        offsetUs: 0,
+      });
+      return cameraView(request.project_id);
+    } finally {
+      choosingCamera = false;
+    }
+  });
+  register(channels.cameraOffset, async (request) => {
+    assertCameraOffsetRequest(request);
+    const sourceId = await cameraScreenSource(request.project_id);
+    const link = await cameraLinks.forSource(request.project_id, sourceId);
+    if (!link) throw new UserFacingError("Add a camera video first.");
+    await cameraLinks.set(request.project_id, {
+      ...link,
+      offsetUs: request.offset_us,
+    });
+    return cameraView(request.project_id);
+  });
+  register(channels.cameraRemove, async (request) => {
+    assertCameraRequest(request);
+    const sourceId = await cameraScreenSource(request.project_id);
+    const { draft } = await drafts.snapshotWithProject(request.project_id);
+    if (
+      (draft.timeline.layouts ?? []).some(
+        (item) => item.source_id === sourceId && item.kind !== "screen",
+      )
+    )
+      throw new UserFacingError(
+        "Remove the camera layout changes first, or undo them.",
+      );
+    await cameraLinks.remove(request.project_id, sourceId);
+    return cameraView(request.project_id);
   });
   register(channels.projectManualTransition, async (request) => {
     assertManualTransitionRequest(request);

@@ -43,6 +43,15 @@ import {
   type GraphicInterval,
 } from "../../../packages/domain/src/graphics.ts";
 import { transitionGraphicIntervals } from "../../../packages/domain/src/transitions.ts";
+import {
+  layoutIntervals,
+  windowLayoutIntervals,
+  type LayoutInterval,
+} from "../../../packages/domain/src/layouts.ts";
+import {
+  renderCameraTrack,
+  type CameraSource,
+} from "../../../packages/media-engine/src/camera-layer.ts";
 import type { GraphicsRenderRequest, GraphicsTrack } from "./graphics-track.ts";
 import {
   soundIntervals,
@@ -112,6 +121,14 @@ export interface DesktopExportOptions {
   renderGraphics?: (
     request: GraphicsRenderRequest,
   ) => Promise<GraphicsTrack | null>;
+  /**
+   * The camera recording that goes with a recording of the project (its
+   * verified file, size and sync offset), or null when there is none.
+   */
+  camera?: (
+    projectId: string,
+    sourceId: string,
+  ) => Promise<CameraSource | null>;
 }
 
 interface Job {
@@ -124,6 +141,10 @@ interface Job {
   audio: AudioSettings;
   zooms: ZoomInterval[];
   graphics: GraphicInterval[];
+  /** Camera and screen arrangements in the exported output's own time. */
+  layouts: LayoutInterval[];
+  /** The recording whose camera the layouts show, with the camera file. */
+  camera: { sourceId: string; source: CameraSource } | null;
   /** Music and effects with their verified files, ready to mix. */
   sounds: SoundMixLayer[];
 }
@@ -158,6 +179,8 @@ export async function planDraft(
   zooms: ZoomInterval[];
   /** The draft's graphics in the exported output's own time. */
   graphics: GraphicInterval[];
+  /** The draft's camera layouts in the exported output's own time. */
+  layouts: LayoutInterval[];
   /** The draft's music and sound effects in the exported output's own time. */
   sounds: SoundInterval[];
 }> {
@@ -226,6 +249,19 @@ export async function planDraft(
           };
         })
     : allGraphics;
+  const allLayouts = layoutIntervals(
+    snapshot.draft.timeline.layouts ?? [],
+    mapped,
+  );
+  const layouts = window
+    ? windowLayoutIntervals(allLayouts, window.startUs, window.endUs).map(
+        (interval) => ({
+          ...interval,
+          startUs: Math.floor(interval.startUs / factor),
+          moveUs: Math.floor(interval.moveUs / factor),
+        }),
+      )
+    : allLayouts;
   const clips = window
     ? draftWindowClips(mapped, window.startUs, window.endUs).map((clip) =>
         factor === 1 ? clip : { ...clip, speed: (clip.speed ?? 1) * factor },
@@ -272,6 +308,7 @@ export async function planDraft(
     snapshot,
     zooms,
     graphics,
+    layouts,
     sounds,
   };
 }
@@ -355,7 +392,24 @@ export class DesktopExports {
       this.fail(projectId, profile, error);
       return this.get(projectId);
     }
-    const { plan, snapshot, zooms, graphics, sounds } = draft;
+    const { plan, snapshot, zooms, graphics, layouts, sounds } = draft;
+    // The camera that goes with the layouts' recording, found before the
+    // save dialog so a missing camera file stops the export early.
+    let camera: Job["camera"] = null;
+    if (layouts.length) {
+      const layoutSource = (snapshot.draft.timeline.layouts ?? []).find(
+        (item) => item.kind !== "screen",
+      )?.source_id;
+      if (layoutSource && this.options.camera) {
+        try {
+          const found = await this.options.camera(projectId, layoutSource);
+          if (found) camera = { sourceId: layoutSource, source: found };
+        } catch (error) {
+          this.fail(projectId, profile, error);
+          return this.get(projectId);
+        }
+      }
+    }
     const project = snapshot.project;
     const extension = profile === "lossless_master" ? ".mkv" : ".mp4";
     const suffix = profile === "lossless_master" ? "master" : "share";
@@ -429,6 +483,8 @@ export class DesktopExports {
       captions: captions && captions.cues.length ? captions : null,
       zooms,
       graphics,
+      layouts,
+      camera,
       sounds: soundLayers,
       projectId,
       profile,
@@ -464,14 +520,43 @@ export class DesktopExports {
     let evidence: ExportEvidence;
     let scratch: string | null = null;
     try {
-      // Graphics are rendered first, then composed over the frames.
+      // Graphics and the camera are rendered first, then composed over the
+      // frames: the camera goes under the graphics.
       let graphics: GraphicsTrack | null = null;
-      if (job.graphics.length) {
-        if (!this.options.renderGraphics)
-          throw new MediaError("UNSUPPORTED_PROFILE", exportIssues.failed);
+      if (job.camera || job.graphics.length)
         scratch = await mkdtemp(
           path.join(tmpdir(), "ai-video-editor-graphics-"),
         );
+      let cameraTrack: GraphicsTrack | null = null;
+      if (job.camera && scratch) {
+        const cameraScratch = scratch;
+        cameraTrack = await renderCameraTrack({
+          ffmpeg: this.options.ffmpeg ?? "ffmpeg",
+          directory: cameraScratch,
+          signal: job.controller.signal,
+          camera: job.camera.source,
+          cameraSourceId: job.camera.sourceId,
+          canvas: {
+            width: plan.format.video.width,
+            height: plan.format.video.height,
+          },
+          frameRate: plan.format.video.frameRate,
+          clips: plan.clips,
+          frameCount: plan.frameCount,
+          intervals: job.layouts,
+          onProgress: (fraction) => {
+            if (this.job !== job || this.view.status !== "running") return;
+            this.set({
+              ...this.view,
+              phase: "rendering",
+              fraction: Math.round(fraction * 250) / 1000,
+            });
+          },
+        });
+      }
+      if (job.graphics.length) {
+        if (!this.options.renderGraphics || !scratch)
+          throw new MediaError("UNSUPPORTED_PROFILE", exportIssues.failed);
         graphics = await this.options.renderGraphics({
           intervals: job.graphics,
           width: plan.format.video.width,
@@ -491,6 +576,10 @@ export class DesktopExports {
           },
         });
       }
+      if (cameraTrack && cameraTrack.segments.length)
+        graphics = {
+          segments: [...cameraTrack.segments, ...(graphics?.segments ?? [])],
+        };
       const share = graphics ? 0.75 : 1;
       evidence = await exportDraft({
         plan,
