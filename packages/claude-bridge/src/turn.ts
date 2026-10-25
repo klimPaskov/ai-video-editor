@@ -48,6 +48,7 @@ const activityLabels: Record<string, { label: string; mutating: boolean }> = {
   shorts_propose: { label: "Choosing short clips", mutating: false },
   graphics_component: { label: "Adding a designed graphic", mutating: true },
   layout_set: { label: "Changing the camera layout", mutating: true },
+  layout_plan: { label: "Planning the camera layout", mutating: false },
   layout_remove: { label: "Removing a layout change", mutating: true },
   zoom_targets: {
     label: "Finding where things happen on screen",

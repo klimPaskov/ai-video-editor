@@ -819,6 +819,26 @@ export const claudeOnlyMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: claudeOnlyToolNames[9],
+    description:
+      "Propose how the camera and the screen could share the picture over the whole edit, without changing it. The app uses where the screen changes (a dialog opens, text appears) and where each sentence of the speech starts: the speaker opens and closes the video full screen, sits in a corner (away from what is changing) while something is demonstrated, takes the whole picture while explaining with nothing changing on screen, and steps aside when the screen is too busy for the camera to fit. Each change has at_us (edit time), kind, corner, size, shape and a reason. Treat it as a draft: apply the changes you agree with using layout.set, adjust or skip the others (a quick look at pictures from media.get_frames helps), and keep changes few. Needs a camera recording of the video.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ] as const;
 
 /** Every tool Claude's editor server lists. */

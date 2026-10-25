@@ -2533,3 +2533,63 @@ test("layout.set and layout.remove change the camera arrangement, follow cuts an
     undefined,
   );
 });
+
+test("layout.plan proposes arrangements without changing the draft, and needs a camera", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const planner = {
+    plan: async () => ({
+      changes: [
+        { at_us: 0, kind: "camera" as const, reason: "The speaker opens." },
+        {
+          at_us: 6_000_000,
+          kind: "pip" as const,
+          corner: "bottom_right",
+          size: 0.24,
+          shape: "rounded",
+          reason: "Shown on screen.",
+        },
+      ],
+      activity_places: 3,
+    }),
+  };
+  const build = (has: boolean) =>
+    new CodexVideoEditToolService(
+      projectId,
+      drafts,
+      "claude",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { has: async () => has },
+      planner,
+    );
+  const request = {
+    schema_version: "1.0",
+    project_id: projectId,
+  };
+  await assert.rejects(
+    build(false).invoke("layout.plan", request),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "layout_rejected" &&
+      /no camera recording/u.test(error.message),
+  );
+  const before = (await drafts.snapshot(projectId)).draft.timeline_sha256;
+  const result = (await build(true).invoke("layout.plan", request)) as {
+    changes: { at_us: number }[];
+    summary: string;
+  };
+  assert.deepEqual(
+    result.changes.map((item) => item.at_us),
+    [0, 6_000_000],
+  );
+  assert.match(result.summary, /2 layout changes proposed from 3 places/u);
+  assert.equal(
+    (await drafts.snapshot(projectId)).draft.timeline_sha256,
+    before,
+  );
+});

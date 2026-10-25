@@ -34,6 +34,7 @@ import {
 } from "../../domain/src/graphics.ts";
 import {
   assertLayoutChange,
+  layoutIntervals,
   type LayoutChange,
 } from "../../domain/src/layouts.ts";
 import {
@@ -86,6 +87,7 @@ export const claudeOnlyToolNames = [
   "graphics.component",
   "layout.set",
   "layout.remove",
+  "layout.plan",
 ] as const;
 /** Claude's guarded editor tools: the shared tools plus its own. */
 export const claudeEditorToolNames = [
@@ -169,6 +171,8 @@ export interface ZoomTargeter {
     projectId: string,
     startUs: number,
     endUs: number,
+    /** At most this many, strongest first (40 by default). */
+    limit?: number,
   ): Promise<
     {
       start_us: number;
@@ -183,6 +187,25 @@ export interface ZoomTargeter {
       score: number;
     }[]
   >;
+}
+
+/**
+ * A proposed arrangement of the camera and the screen for the active edit,
+ * from where the screen changes and where the speech begins. Nothing is
+ * applied.
+ */
+export interface LayoutPlanner {
+  plan(projectId: string): Promise<{
+    changes: {
+      at_us: number;
+      kind: "screen" | "camera" | "pip";
+      corner?: string;
+      size?: number;
+      shape?: string;
+      reason: string;
+    }[];
+    activity_places: number;
+  }>;
 }
 
 /** Which recordings of a project have a camera recording alongside them. */
@@ -423,6 +446,7 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
     draft.timeline.duration_us,
   );
   const cuts = transitionCuts(clipMap);
+  const placedLayouts = layoutIntervals(draft.timeline.layouts ?? [], clipMap);
   const placedSounds = soundIntervals(
     draft.timeline.sounds ?? [],
     clipMap,
@@ -532,6 +556,25 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
           : null,
       };
     }),
+    // How the camera and screen share the picture; empty when unchanged
+    // (the screen alone). `at_us` is edit time; null when the moment was cut
+    // away and the change has nothing left to apply to.
+    layouts: (draft.timeline.layouts ?? []).map((layout) => {
+      const placed = placedLayouts.find(
+        (interval) => interval.layoutId === layout.layout_id,
+      );
+      return {
+        layout_id: layout.layout_id,
+        kind: layout.kind,
+        ...(layout.corner ? { corner: layout.corner } : {}),
+        ...(layout.size !== undefined ? { size: layout.size } : {}),
+        ...(layout.shape ? { shape: layout.shape } : {}),
+        ...(layout.face_zoom !== undefined
+          ? { face_zoom: layout.face_zoom }
+          : {}),
+        at_us: placed ? placed.startUs : null,
+      };
+    }),
     // Music and sound effects; empty when the draft has none.
     sounds: (draft.timeline.sounds ?? []).map((sound) => {
       const placed = placedSounds.find(
@@ -609,6 +652,7 @@ export class CodexVideoEditToolService {
   private readonly shortsProposer: ShortsProposer | undefined;
   private readonly zoomTargeter: ZoomTargeter | undefined;
   private readonly cameraCatalog: CameraCatalog | undefined;
+  private readonly layoutPlanner: LayoutPlanner | undefined;
 
   constructor(
     activeProjectId: string,
@@ -622,6 +666,7 @@ export class CodexVideoEditToolService {
     shortsProposer?: ShortsProposer,
     zoomTargeter?: ZoomTargeter,
     cameraCatalog?: CameraCatalog,
+    layoutPlanner?: LayoutPlanner,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
@@ -635,6 +680,7 @@ export class CodexVideoEditToolService {
     this.shortsProposer = shortsProposer;
     this.zoomTargeter = zoomTargeter;
     this.cameraCatalog = cameraCatalog;
+    this.layoutPlanner = layoutPlanner;
   }
 
   private applier():
@@ -717,6 +763,8 @@ export class CodexVideoEditToolService {
           return await this.setLayout(input);
         case "layout.remove":
           return await this.removeLayout(input);
+        case "layout.plan":
+          return await this.planLayout(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -2003,6 +2051,38 @@ export class CodexVideoEditToolService {
         ? "Layout change added to the active draft."
         : "Layout change updated on the active draft.",
     );
+  }
+
+  /** A proposal only: it does not change the draft. */
+  private async planLayout(input: unknown): Promise<unknown> {
+    const request = exact(input, ["schema_version", "project_id"]);
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    if (!this.layoutPlanner) reject("tool_not_available");
+    const { draft } = await this.drafts.snapshot(this.activeProjectId);
+    const camera =
+      this.cameraCatalog &&
+      (await Promise.all(
+        [...new Set(draft.timeline.clips.map((clip) => clip.source_id))].map(
+          (sourceId) => this.cameraCatalog!.has(this.activeProjectId, sourceId),
+        ),
+      ).then((found) => found.some(Boolean)));
+    if (!camera)
+      throw new CodexVideoEditToolError(
+        "layout_rejected",
+        undefined,
+        "This video has no camera recording, so there is nothing to arrange.",
+      );
+    const plan = await this.layoutPlanner.plan(this.activeProjectId);
+    return {
+      schema_version: "1.0",
+      project_id: this.activeProjectId,
+      changes: plan.changes,
+      summary:
+        plan.changes.length > 0
+          ? `${plan.changes.length} layout ${plan.changes.length === 1 ? "change" : "changes"} proposed from ${plan.activity_places} places where the screen changes. Apply the ones you agree with using layout.set at at_us; adjust the rest. The screen alone is the arrangement before the first change.`
+          : "Nothing to propose: the edit has too little speech to arrange the camera around.",
+    };
   }
 
   private async removeLayout(input: unknown): Promise<unknown> {

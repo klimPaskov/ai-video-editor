@@ -52,6 +52,7 @@ import {
   CodexVideoEditToolError,
   CodexVideoEditToolService,
   type CameraCatalog,
+  type LayoutPlanner,
   type CodexVideoEditToolName,
   type ZoomTargeter,
 } from "../../../packages/codex-tools/src/service.ts";
@@ -167,6 +168,7 @@ import {
   SoundAssetStore,
 } from "../../../packages/project-store/src/sounds.ts";
 import { CameraLinks } from "./camera-links.ts";
+import { planLayouts } from "../../../packages/domain/src/layout-plan.ts";
 import type { CameraSource } from "../../../packages/media-engine/src/camera-layer.ts";
 import { type LayoutChange } from "../../../packages/domain/src/layouts.ts";
 import { analyzeScreenActivity } from "../../../packages/media-engine/src/screen-activity.ts";
@@ -1804,13 +1806,106 @@ async function start(): Promise<void> {
       offsetUs: link.offsetUs,
     };
   };
+  const layoutPlanner: LayoutPlanner = {
+    async plan(projectId) {
+      const service = new CodexVideoEditToolService(
+        projectId,
+        drafts,
+        "claude",
+      );
+      const summary = (await service.invoke("timeline.get_summary", {
+        schema_version: "1.0",
+        project_id: projectId,
+      })) as {
+        duration_us: number;
+        clips: {
+          source_id: string;
+          source_start_us: number;
+          source_end_us: number;
+          timeline_start_us: number;
+          timeline_end_us: number;
+          speed?: number;
+        }[];
+      };
+      const events = await zoomTargeter.targets(
+        projectId,
+        0,
+        Number.MAX_SAFE_INTEGER,
+        400,
+      );
+      // The speech, in edit time: where each sentence starts and the span.
+      const view = await transcription!
+        .get({ schema_version: "1.0", project_id: projectId, job_id: null })
+        .catch(() => null);
+      const sentenceStarts: number[] = [];
+      let first = Infinity;
+      let last = -Infinity;
+      for (const result of view?.results ?? [])
+        for (const segment of result.transcript.segments) {
+          for (const clip of summary.clips) {
+            if (clip.source_id !== result.source_id) continue;
+            const at = (us: number) =>
+              us >= clip.source_start_us && us < clip.source_end_us
+                ? timelineAt(clip, us)
+                : null;
+            const start = at(segment.start_us);
+            if (start !== null) sentenceStarts.push(start);
+            const spokenStart = at(segment.start_us);
+            const spokenEnd = at(
+              Math.max(segment.start_us, segment.end_us - 1),
+            );
+            if (spokenStart !== null) first = Math.min(first, spokenStart);
+            if (spokenEnd !== null) last = Math.max(last, spokenEnd);
+          }
+        }
+      sentenceStarts.sort((a, b) => a - b);
+      const sources = (await drafts.snapshotWithProject(projectId)).project;
+      const screen =
+        sources.schema_version === "1.1" ? sources.sources[0]! : sources.source;
+      const camera = await cameraSourceFor(projectId, screen.source_id);
+      const planned = planLayouts({
+        durationUs: summary.duration_us,
+        activity: events.map((item) => ({
+          startUs: item.start_us,
+          endUs: item.end_us,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          score: item.score,
+        })),
+        sentenceStarts,
+        speech:
+          Number.isFinite(first) && last > first
+            ? { startUs: first, endUs: last }
+            : null,
+        geometry: {
+          canvasAspect:
+            Number((screen as { width?: number }).width ?? 16) /
+            Number((screen as { height?: number }).height ?? 9),
+          cameraAspect: camera ? camera.width / camera.height : 16 / 9,
+        },
+      });
+      return {
+        changes: planned.map((item) => ({
+          at_us: item.atUs,
+          kind: item.kind,
+          ...(item.corner ? { corner: item.corner } : {}),
+          ...(item.size ? { size: item.size } : {}),
+          ...(item.shape ? { shape: item.shape } : {}),
+          reason: item.reason,
+        })),
+        activity_places: events.length,
+      };
+    },
+  };
   const cameraCatalog: CameraCatalog = {
     has: async (projectId, sourceId) =>
       (await cameraLinks.forSource(projectId, sourceId)) !== null,
   };
   const activityBySource = new Map<string, Promise<ActivityTarget[]>>();
   const zoomTargeter: ZoomTargeter = {
-    async targets(projectId, startUs, endUs) {
+    async targets(projectId, startUs, endUs, limit = 40) {
       const { project } = await drafts.snapshotWithProject(projectId);
       const sources =
         project.schema_version === "1.1" ? project.sources : [project.source];
@@ -1872,7 +1967,7 @@ async function start(): Promise<void> {
       }
       return found
         .sort((a, b) => b.score - a.score)
-        .slice(0, 40)
+        .slice(0, limit)
         .sort((a, b) => a.start_us - b.start_us);
     },
   };
@@ -1996,6 +2091,7 @@ async function start(): Promise<void> {
           },
           zoomTargeter,
           cameraCatalog,
+          layoutPlanner,
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
