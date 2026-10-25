@@ -11,7 +11,7 @@ All edits go into one draft. Your original footage is never changed, and every e
 
 ## Edit
 
-The timeline strip under the player shows each part of the edit, zooms (yellow) and sped-up parts (hatched, with their speed). Click the strip to move the playhead.
+The timeline strip under the player shows small pictures of the edit with a time ruler above them, a hairline at each cut and the parts of the edit, zooms (yellow) and sped-up parts (hatched, with their speed). Click the strip to move the playhead.
 
 | Tool | What it does | Key |
 | --- | --- | --- |

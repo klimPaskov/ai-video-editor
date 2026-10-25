@@ -120,6 +120,33 @@ export async function auditLayout(page: Page): Promise<LayoutFinding[]> {
       return { cut, scrollsY };
     };
 
+    /** The part of a control that is drawn: its box cut by every clipping ancestor. */
+    const shown = (element: Element): DOMRect | null => {
+      let left = element.getBoundingClientRect().left;
+      let right = element.getBoundingClientRect().right;
+      let top = element.getBoundingClientRect().top;
+      let bottom = element.getBoundingClientRect().bottom;
+      for (let node = element.parentElement; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (
+          !/(hidden|clip|auto|scroll)/u.test(style.overflowX + style.overflowY)
+        )
+          continue;
+        const rect = node.getBoundingClientRect();
+        if (/(hidden|clip|auto|scroll)/u.test(style.overflowX)) {
+          left = Math.max(left, rect.left);
+          right = Math.min(right, rect.right);
+        }
+        if (/(hidden|clip|auto|scroll)/u.test(style.overflowY)) {
+          top = Math.max(top, rect.top);
+          bottom = Math.min(bottom, rect.bottom);
+        }
+      }
+      return right > left && bottom > top
+        ? new DOMRect(left, top, right - left, bottom - top)
+        : null;
+    };
+
     for (const element of controls) {
       const rect = element.getBoundingClientRect();
       const name = label(element);
@@ -163,8 +190,11 @@ export async function auditLayout(page: Page): Promise<LayoutFinding[]> {
           b.classList.contains("card-options")
         )
           continue;
-        const ra = a.getBoundingClientRect();
-        const rb = b.getBoundingClientRect();
+        // Only what is drawn counts: a control half scrolled under the edge
+        // of its container is cut off there, not drawn over its neighbours.
+        const ra = shown(a);
+        const rb = shown(b);
+        if (!ra || !rb) continue;
         const w = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
         const h = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
         if (w > 3 && h > 3)

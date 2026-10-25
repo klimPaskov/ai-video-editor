@@ -202,6 +202,7 @@ export class MediaLibrary {
     Promise<PresentationTiming>
   >();
   private readonly thumbnails = new Map<string, Promise<MediaFrame>>();
+  private readonly stripFrames = new Map<string, Promise<MediaFrame>>();
   /**
    * Sources fully verified in this process, keyed by their file identity and
    * change times. Hashing a long recording on every draft read made each edit
@@ -657,6 +658,96 @@ export class MediaLibrary {
       void pending.catch(() => this.thumbnails.delete(key));
     }
     return pending;
+  }
+  /**
+   * A small picture of a source at `timeUs` for the timeline filmstrip. Like
+   * the card thumbnail it is cosmetic (FFmpeg's default conversion, never a
+   * review frame). Times are rounded to half a second so a redrawn strip
+   * after an edit reuses the pictures of everything that did not change.
+   */
+  async stripFrame(
+    id: string,
+    timeUs: number,
+    signal?: AbortSignal,
+  ): Promise<MediaFrame> {
+    if (!Number.isSafeInteger(timeUs) || timeUs < 0)
+      throw new MediaError("INVALID_INPUT", "Seek is outside the video.");
+    await this.initialize();
+    const entry = await this.entry(id);
+    const { summary } = entry;
+    const atUs = Math.min(
+      // Seeking to the very end of a file yields no frame: stop short of it.
+      Math.max(0, summary.durationUs - 500_000),
+      Math.round(timeUs / 500_000) * 500_000,
+    );
+    const key = `${id}:${entry.source.sha256}:${atUs}`;
+    let pending = this.stripFrames.get(key);
+    if (!pending) {
+      pending = this.decodeStripFrame(entry, atUs, signal);
+      if (this.stripFrames.size >= 512)
+        this.stripFrames.delete(this.stripFrames.keys().next().value!);
+      this.stripFrames.set(key, pending);
+      void pending.catch(() => this.stripFrames.delete(key));
+    }
+    return pending;
+  }
+  private async decodeStripFrame(
+    entry: Entry,
+    atUs: number,
+    signal?: AbortSignal,
+  ): Promise<MediaFrame> {
+    const { summary } = entry;
+    const width = Math.min(160, summary.width);
+    const height = Math.max(
+      2,
+      Math.round((width * summary.height) / summary.width / 2) * 2,
+    );
+    const output = await runProcess({
+      executable: this.ffmpeg,
+      args: [
+        "-v",
+        "error",
+        "-nostdin",
+        "-protocol_whitelist",
+        "file",
+        "-format_whitelist",
+        "matroska,webm,mov,avi",
+        "-ss",
+        (atUs / 1_000_000).toFixed(6),
+        "-i",
+        join(this.root, "assets", entry.source.file),
+        "-map",
+        "0:v:0",
+        "-frames:v",
+        "1",
+        "-an",
+        "-sn",
+        "-dn",
+        "-threads",
+        "1",
+        "-vf",
+        `scale=${width}:${height}:flags=bilinear,format=rgba`,
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ],
+      maxOutputBytes: width * height * 4 + 64 * 1024,
+      ...(signal ? { signal } : {}),
+    });
+    if (output.stdout.length !== width * height * 4)
+      throw new MediaError(
+        "UNSUPPORTED_PROFILE",
+        "No picture could be decoded for this source.",
+      );
+    const rgba = Buffer.from(output.stdout);
+    for (let i = 3; i < rgba.length; i += 4) rgba[i] = 255;
+    const frame: MediaFrame = {
+      width,
+      height,
+      rgbaBase64: rgba.toString("base64"),
+    };
+    assertThumbnail(frame);
+    return frame;
   }
   private async decodeThumbnail(
     entry: Entry,

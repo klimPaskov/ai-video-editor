@@ -11,11 +11,16 @@ import {
   assertProjectDraftView,
   assertProjectFrameRequest,
   assertProjectFrameResult,
+  assertProjectStripRequest,
+  assertProjectStripResult,
   assertProjectView,
   type ProjectDraftView,
   type ProjectDraftIntegrityView,
   type ProjectFrameRequest,
   type ProjectFrameResult,
+  type ProjectStripRequest,
+  type ProjectStripResult,
+  type ProjectStripView,
   type ProjectView,
 } from "../../../packages/domain/src/project-view.ts";
 import type { MediaFrame } from "../../../packages/domain/src/library.ts";
@@ -29,6 +34,12 @@ type DraftReader = {
 };
 type FrameReader = {
   frame(id: string, timeUs: number, signal?: AbortSignal): Promise<MediaFrame>;
+  /** Small cosmetic pictures for the filmstrip; absent means none. */
+  stripFrame?(
+    id: string,
+    timeUs: number,
+    signal?: AbortSignal,
+  ): Promise<MediaFrame>;
 };
 export type ProjectDraftNotice =
   { ok: true; value: ProjectDraftView } | { ok: false; message: string };
@@ -39,7 +50,7 @@ function invalid(): never {
 
 function matchesHead(
   current: DraftProjectReadResult,
-  request: ProjectFrameRequest,
+  request: Omit<ProjectFrameRequest, "timelineTimeUs">,
 ): boolean {
   return (
     current.draft.project_id === request.projectId &&
@@ -224,6 +235,59 @@ export class DesktopProjectRuntime {
         ),
       };
     assertProjectDraftIntegrityView(value);
+    return value;
+  }
+
+  /**
+   * Small pictures for the filmstrip at output times of the current draft.
+   * A time that falls in no clip, or whose source cannot be decoded, gets no
+   * picture; the strip then shows that cell plain.
+   */
+  async strip(
+    request: ProjectStripRequest,
+    signal?: AbortSignal,
+  ): Promise<ProjectStripResult> {
+    assertProjectStripRequest(request);
+    const before = await this.drafts.snapshotWithProject(request.projectId);
+    if (!matchesHead(before, request))
+      return { status: "stale", draft: committedDraftView(before) };
+    const { draft } = before;
+    const frames: ProjectStripView["frames"] = [];
+    for (const timelineTimeUs of request.timesUs) {
+      signal?.throwIfAborted();
+      const clip = draft.timeline.clips.find(
+        (candidate) =>
+          candidate.enabled &&
+          timelineTimeUs >= candidate.timeline_start_us &&
+          timelineTimeUs < candidate.timeline_end_us,
+      );
+      let frame: MediaFrame | null = null;
+      if (
+        clip &&
+        this.frames.stripFrame &&
+        before.project.project.source_ids.includes(clip.source_id)
+      )
+        frame = await this.frames
+          .stripFrame(clip.source_id, sourceAt(clip, timelineTimeUs), signal)
+          .catch((error: unknown) => {
+            if (signal?.aborted) throw error;
+            return null;
+          });
+      frames.push({ timelineTimeUs, frame });
+    }
+    const after = await this.drafts.snapshotWithProject(request.projectId);
+    if (!matchesHead(after, request))
+      return { status: "stale", draft: committedDraftView(after) };
+    const value: ProjectStripResult = {
+      status: "ready",
+      projectId: request.projectId,
+      draftId: request.draftId,
+      baseRevisionId: request.baseRevisionId,
+      draftSequence: request.expectedSequence,
+      timelineSha256: request.expectedTimelineSha256,
+      frames,
+    };
+    assertProjectStripResult(value);
     return value;
   }
 

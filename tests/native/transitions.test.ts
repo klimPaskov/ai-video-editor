@@ -206,6 +206,42 @@ try {
   await expect(page.locator("#transition-add")).toHaveText("Change transition");
   await expect(page.locator("#transition-remove")).toBeVisible();
 
+  step = "filmstrip";
+  // The strip shows pictures of the edit under its parts and a time ruler.
+  await expect(
+    page.locator(".timeline-thumbs.filled canvas").first(),
+  ).toBeVisible({ timeout: 60_000 });
+  const filmstrip = await page.evaluate(() => {
+    const cells = [
+      ...document.querySelectorAll<HTMLCanvasElement>(
+        ".timeline-thumbs canvas",
+      ),
+    ];
+    const drawn = cells.filter((canvas) => {
+      const data = canvas
+        .getContext("2d")!
+        .getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let at = 0; at < data.length; at += 4)
+        if (data[at]! + data[at + 1]! + data[at + 2]! > 30) return true;
+      return false;
+    });
+    return {
+      cells: cells.length,
+      drawn: drawn.length,
+      labels: [...document.querySelectorAll(".timeline-tick")].map(
+        (tick) => tick.textContent,
+      ),
+    };
+  });
+  assert.ok(filmstrip.cells >= 3, `cells: ${filmstrip.cells}`);
+  assert.equal(filmstrip.drawn, filmstrip.cells, "no blank picture");
+  assert.ok(filmstrip.labels.length >= 2, `labels: ${filmstrip.labels}`);
+  assert.equal(filmstrip.labels[0], "0:00");
+  await page.locator("#timeline-strip").screenshot({
+    path: join(evidence, "filmstrip.png"),
+  });
+  result.filmstrip = filmstrip;
+
   step = "preview";
   // The window is 0.7 s to 1.3 s, centred on the cut at 1.0 s.
   await seekTo(page, 1_000_000);

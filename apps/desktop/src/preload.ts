@@ -82,6 +82,8 @@ import {
   assertProjectDraftIntegrityView,
   assertProjectFrameRequest,
   assertProjectFrameResult,
+  assertProjectStripRequest,
+  assertProjectStripResult,
   assertManualTrimRequest,
   assertManualSplitRequest,
   assertManualRangeCutRequest,
@@ -550,6 +552,10 @@ const bridge: DesktopBridge = {
   readProjectFrame: (request) => {
     assertProjectFrameRequest(request);
     return invoke(channels.projectFrame, request, assertProjectFrameResult);
+  },
+  readProjectStrip: (request) => {
+    assertProjectStripRequest(request);
+    return invoke(channels.projectStrip, request, assertProjectStripResult);
   },
   applyManualTrim: (request) => {
     assertManualTrimRequest(request);

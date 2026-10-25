@@ -1,6 +1,11 @@
 import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
 import type { GraphicInterval } from "../../../packages/domain/src/graphics.ts";
 import type { ZoomInterval } from "../../../packages/domain/src/zoom.ts";
+import type { MediaFrame } from "../../../packages/domain/src/library.ts";
+import {
+  rulerTicks,
+  stripCellTimes,
+} from "../../../packages/domain/src/timeline-strip.ts";
 
 /**
  * Proportional view of the draft timeline: one continuous bar coloured by
@@ -32,12 +37,18 @@ export function setupTimelineStrip(options: {
   const clips = host.querySelector<HTMLElement>(".timeline-clips")!;
   const markLayer = host.querySelector<HTMLElement>(".timeline-marks")!;
   const zoomLayer = host.querySelector<HTMLElement>(".timeline-zooms")!;
+  const thumbs = host.querySelector<HTMLElement>(".timeline-thumbs")!;
+  const ruler = host.querySelector<HTMLElement>(".timeline-ruler")!;
   const graphicLayer = host.querySelector<HTMLElement>(".timeline-graphics")!;
   const head = host.querySelector<HTMLElement>(".timeline-playhead")!;
   const summary = host.querySelector<HTMLElement>(".timeline-summary")!;
   let durationUs = 0;
   let key = "";
   let current: ProjectView | undefined;
+  // The filmstrip of the current draft, and the cell count it was asked for.
+  let thumbRun = 0;
+  let thumbCells = 0;
+  let resizeTimer: number | undefined;
 
   const minutes = (us: number): string => {
     const seconds = Math.round(us / 1_000_000);
@@ -55,6 +66,96 @@ export function setupTimelineStrip(options: {
     );
     options.seek(Math.round(ratio * durationUs));
   });
+
+  /** Time labels along the strip, at a step that keeps them apart. */
+  function drawRuler(): void {
+    const width = clips.getBoundingClientRect().width;
+    const ticks = rulerTicks(durationUs, width);
+    ruler.replaceChildren(
+      ...ticks.map((tick, index) => {
+        const mark = document.createElement("span");
+        mark.className = "timeline-tick";
+        mark.style.left = `calc((100% - 0px) * ${tick.us / Math.max(1, durationUs)})`;
+        // A label at the far end would run out of the strip.
+        if (index > 0 && tick.us / Math.max(1, durationUs) > 0.94)
+          mark.classList.add("last");
+        mark.textContent = tick.label;
+        return mark;
+      }),
+    );
+  }
+
+  function pixels(frame: MediaFrame): ImageData {
+    const binary = atob(frame.rgbaBase64);
+    const bytes = new Uint8ClampedArray(binary.length);
+    for (let index = 0; index < binary.length; index++)
+      bytes[index] = binary.charCodeAt(index);
+    return new ImageData(bytes, frame.width, frame.height);
+  }
+
+  /**
+   * Small pictures of the edit under the parts, one per cell. They are
+   * cosmetic and loaded after the strip is drawn; if they cannot be had
+   * (or the draft changes meanwhile) the plain bar stays.
+   */
+  async function loadThumbs(project: ProjectView): Promise<void> {
+    const run = ++thumbRun;
+    const times = stripCellTimes(
+      project.timeline.durationUs,
+      clips.getBoundingClientRect().width,
+    );
+    thumbCells = times.length;
+    if (times.length === 0 || !window.desktop?.readProjectStrip) return;
+    let reply;
+    try {
+      reply = await window.desktop.readProjectStrip({
+        projectId: project.id,
+        draftId: project.draft.id,
+        baseRevisionId: project.draft.baseRevisionId,
+        expectedSequence: project.draft.sequence,
+        expectedTimelineSha256: project.draft.timelineSha256,
+        timesUs: times,
+      });
+    } catch {
+      return;
+    }
+    if (
+      run !== thumbRun ||
+      !reply.ok ||
+      reply.value.status !== "ready" ||
+      current?.id !== project.id
+    )
+      return;
+    const cells = reply.value.frames;
+    const cellShare = 1 / cells.length;
+    const nodes: HTMLCanvasElement[] = [];
+    for (const [index, cell] of cells.entries()) {
+      if (!cell.frame) continue;
+      const canvas = document.createElement("canvas");
+      canvas.width = cell.frame.width;
+      canvas.height = cell.frame.height;
+      canvas.getContext("2d")?.putImageData(pixels(cell.frame), 0, 0);
+      canvas.style.left = `${index * cellShare * 100}%`;
+      canvas.style.width = `${cellShare * 100 + 0.2}%`;
+      nodes.push(canvas);
+    }
+    thumbs.replaceChildren(...nodes);
+    thumbs.classList.toggle("filled", nodes.length > 0);
+  }
+
+  // A resized strip gets the cell count that fits it, once it settles.
+  new ResizeObserver(() => {
+    if (!current?.clips || durationUs <= 0) return;
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      drawRuler();
+      const cells = stripCellTimes(
+        durationUs,
+        clips.getBoundingClientRect().width,
+      ).length;
+      if (current?.clips && cells !== thumbCells) void loadThumbs(current);
+    }, 300);
+  }).observe(clips);
 
   function playhead(us: number): void {
     head.style.left = `calc(4px + (100% - 8px) * ${durationUs > 0 ? Math.min(1, Math.max(0, us / durationUs)) : 0})`;
@@ -125,6 +226,10 @@ export function setupTimelineStrip(options: {
           ? `${minutes(durationUs)} of ${minutes(originalUs)}`
           : "";
       summary.hidden = durationUs >= originalUs;
+      drawRuler();
+      thumbs.classList.remove("filled");
+      thumbs.replaceChildren();
+      void loadThumbs(project);
     }
     const layers: HTMLElement[] = [];
     const { inUs, outUs } = marks;

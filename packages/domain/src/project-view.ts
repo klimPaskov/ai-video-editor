@@ -15,6 +15,7 @@ import {
 import {
   assertMediaFrame,
   assertMediaSummary,
+  assertThumbnail,
   mediaIdPattern,
 } from "./library.ts";
 import type { MediaFrame, MediaSummary } from "./library.ts";
@@ -64,6 +65,32 @@ export interface ProjectFrameView {
 }
 export type ProjectFrameResult =
   ProjectFrameView | { status: "stale"; draft: ProjectDraftView };
+/**
+ * Small pictures of the edit at output times, for the timeline filmstrip.
+ * They are cosmetic: never review frames, and a time with no picture
+ * (a source whose preview is not supported) comes back as null.
+ */
+export interface ProjectStripRequest {
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  /** Increasing output times, 1 to 32 of them. */
+  timesUs: number[];
+}
+export interface ProjectStripView {
+  status: "ready";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  draftSequence: number;
+  timelineSha256: string;
+  frames: { timelineTimeUs: number; frame: MediaFrame | null }[];
+}
+export type ProjectStripResult =
+  ProjectStripView | { status: "stale"; draft: ProjectDraftView };
+export const maxStripFrames = 32;
 export interface ProjectDraftView {
   projectId: string;
   draft: {
@@ -386,6 +413,72 @@ export function assertProjectFrameRequest(
     new Set([value.projectId, value.baseRevisionId, value.draftId]).size !== 3
   )
     invalid();
+}
+export function assertProjectStripRequest(
+  value: unknown,
+): asserts value is ProjectStripRequest {
+  exact(value, [
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "timesUs",
+  ]);
+  id(value.projectId);
+  opaqueId(value.draftId);
+  id(value.baseRevisionId);
+  integer(value.expectedSequence);
+  hash(value.expectedTimelineSha256);
+  const times = value.timesUs;
+  if (
+    !Array.isArray(times) ||
+    times.length < 1 ||
+    times.length > maxStripFrames
+  )
+    invalid();
+  let previous = -1;
+  for (const time of times) {
+    integer(time);
+    if ((time as number) <= previous) invalid();
+    previous = time as number;
+  }
+  if (
+    new Set([value.projectId, value.baseRevisionId, value.draftId]).size !== 3
+  )
+    invalid();
+}
+export function assertProjectStripResult(
+  value: unknown,
+): asserts value is ProjectStripResult {
+  const record = value as Record<string, unknown> | null;
+  if (record && typeof record === "object" && record.status === "stale") {
+    exact(record, ["status", "draft"]);
+    assertProjectDraftView(record.draft);
+    return;
+  }
+  exact(value, [
+    "status",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "draftSequence",
+    "timelineSha256",
+    "frames",
+  ]);
+  if (value.status !== "ready") invalid();
+  id(value.projectId);
+  opaqueId(value.draftId);
+  id(value.baseRevisionId);
+  integer(value.draftSequence);
+  hash(value.timelineSha256);
+  if (!Array.isArray(value.frames) || value.frames.length > maxStripFrames)
+    invalid();
+  for (const entry of value.frames) {
+    exact(entry, ["timelineTimeUs", "frame"]);
+    integer(entry.timelineTimeUs);
+    if (entry.frame !== null) assertThumbnail(entry.frame);
+  }
 }
 function assertManualHead(value: Record<string, unknown>): void {
   if (value.schema_version !== "1.0") invalid();

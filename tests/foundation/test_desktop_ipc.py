@@ -102,6 +102,24 @@ class DesktopIpcContractTests(unittest.TestCase):
                     dict(view, job=dict(job, batch={'index': 3, 'total': 0}))]:
             self.invalid({'channel': 'shorts:get', 'payload': request, 'response': {'ok': True, 'value': bad}})
 
+    def test_strip_pictures_are_small_cosmetic_and_bound_to_the_head(self):
+        head = {'projectId': '8a9c7a44-5e4f-4c5e-9d2e-5c1f0b2a7e11', 'draftId': 'draft-1',
+                'baseRevisionId': '1b2c3d4e-5f60-4a71-8b92-a3b4c5d6e7f8', 'expectedSequence': 3,
+                'expectedTimelineSha256': 'a' * 64}
+        request = dict(head, timesUs=[100000, 400000])
+        ready = {'status': 'ready', 'projectId': head['projectId'], 'draftId': head['draftId'],
+                 'baseRevisionId': head['baseRevisionId'], 'draftSequence': 3, 'timelineSha256': 'a' * 64,
+                 'frames': [{'timelineTimeUs': 100000, 'frame': {'width': 2, 'height': 2, 'rgbaBase64': 'AAAAAAAAAAAAAAAAAAAAAA=='}},
+                            {'timelineTimeUs': 400000, 'frame': None}]}
+        self.valid({'channel': 'projects:strip', 'payload': request, 'response': {'ok': True, 'value': ready}})
+        self.valid({'channel': 'projects:strip', 'payload': request, 'response': {'ok': False, 'message': 'Try again.'}})
+        for wrong in [dict(request, timesUs=[]), dict(request, timesUs=[-1]), dict(request, timesUs=list(range(33))),
+                      dict(request, path='/tmp/x'), {key: value for key, value in request.items() if key != 'timesUs'}]:
+            self.invalid({'channel': 'projects:strip', 'payload': wrong, 'response': {'ok': True, 'value': ready}})
+        for bad in [dict(ready, frames=[{'timelineTimeUs': 0, 'frame': {'width': 2, 'height': 2, 'rgbaBase64': 'AAAA', 'path': '/x'}}]),
+                    dict(ready, frames=[{'timelineTimeUs': 0}]), dict(ready, source='/video.mkv')]:
+            self.invalid({'channel': 'projects:strip', 'payload': request, 'response': {'ok': True, 'value': bad}})
+
     def test_audio_settings_are_two_choices(self):
         request = {'schema_version': '1.0', 'project_id': 'project-1'}
         settings = {'normalize': True, 'denoise': False}

@@ -23,6 +23,7 @@ What has been verified, how, and what has not. Update this file when that change
 
 ## Not verified
 
+- Timeline filmstrip pictures are cosmetic (FFmpeg's default conversion, never review frames) and are cached per half second of source; sources whose frames cannot be decoded show the plain bar.
 - Anything on real Windows or macOS: installer UI, SmartScreen and antivirus behaviour, capture, Claude and Codex on those systems.
 - Completing Claude sign-in through the app's own button (needs a browser inside the guest and the user).
 - Codex and API-key providers end to end with real accounts in this release (the 17 authenticated `codex-*` and `api-provider-*` native tests were not run: the guest has no Codex account or API key and none was copied in); only their fixtures and unit tests.

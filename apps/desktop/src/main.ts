@@ -59,6 +59,7 @@ import {
 } from "../../../packages/codex-bridge/src/dynamic-tools.ts";
 import {
   assertProjectFrameRequest,
+  assertProjectStripRequest,
   assertProjectRequest,
   assertProjectNavigation,
   assertProjectRename,
@@ -2383,6 +2384,25 @@ async function start(): Promise<void> {
       return value;
     } finally {
       frameRequests.delete(controller);
+    }
+  });
+  // The filmstrip: one request at a time; a newer one replaces a running one,
+  // so editing never queues pictures of a draft that no longer exists.
+  let stripRequest: AbortController | undefined;
+  register(channels.projectStrip, async (request) => {
+    assertProjectStripRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new Error("Inactive project");
+    stripRequest?.abort();
+    const controller = new AbortController();
+    stripRequest = controller;
+    try {
+      const value = await projectRuntime.strip(request, controller.signal);
+      if (activeProjectId !== request.projectId)
+        throw new Error("Inactive project");
+      return value;
+    } finally {
+      if (stripRequest === controller) stripRequest = undefined;
     }
   });
   register(channels.projectManualTrim, async (request) => {

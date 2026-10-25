@@ -1086,22 +1086,74 @@ dd {
   flex-direction: column;
   gap: 6px;
 }
+.timeline-ruler {
+  position: relative;
+  height: 14px;
+  margin: 0 4px;
+  color: var(--text-2);
+  font-size: 10px;
+  line-height: 14px;
+  pointer-events: none;
+}
+.timeline-tick {
+  position: absolute;
+  top: 0;
+  padding-left: 4px;
+  white-space: nowrap;
+  border-left: 1px solid var(--border-strong);
+}
+/* The last label would run past the strip: it sits to the left of its tick. */
+.timeline-tick.last {
+  padding: 0 4px 0 0;
+  border-right: 1px solid var(--border-strong);
+  border-left: 0;
+  transform: translateX(-100%);
+}
 .timeline-track {
   position: relative;
-  height: 44px;
+  height: 56px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
   overflow: hidden;
 }
-.timeline-clips {
+.timeline-clips,
+.timeline-thumbs {
   position: absolute;
   inset: 4px;
-}
-.timeline-clips {
   border-radius: 5px;
   overflow: hidden;
+}
+/* Pictures of the edit sit under the parts; a cell with none shows the bar. */
+.timeline-thumbs {
+  background: var(--clip);
+}
+.timeline-thumbs canvas {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  height: 100%;
+  object-fit: cover;
+}
+.timeline-thumbs.filled + .timeline-clips .timeline-clip {
+  color: #fff;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 85%);
+  background: transparent;
+  box-shadow: inset 0 -3px 0 var(--clip);
+}
+.timeline-thumbs.filled + .timeline-clips .timeline-clip.second-source {
+  box-shadow: inset 0 -3px 0 var(--clip-second);
+}
+.timeline-thumbs.filled + .timeline-clips .timeline-clip.current {
+  background: rgb(255 255 255 / 16%);
+  box-shadow: inset 0 -3px 0 var(--clip-current);
+}
+.timeline-thumbs.filled + .timeline-clips .timeline-clip.cut {
+  box-shadow:
+    inset 1px 0 0 rgb(10 11 16 / 80%),
+    inset 0 -3px 0 var(--clip);
 }
 /* Parts sit edge to edge as one bar; a hairline marks each cut. */
 .timeline-clip {

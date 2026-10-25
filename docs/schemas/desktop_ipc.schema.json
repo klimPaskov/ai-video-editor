@@ -2417,6 +2417,46 @@
       ],
       "properties": {
         "channel": {
+          "const": "projects:strip"
+        },
+        "payload": {
+          "$ref": "#/$defs/projectStripRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectStripResult"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
           "const": "projects:manual-trim"
         },
         "payload": {
@@ -7891,6 +7931,144 @@
           "pattern": "^export-[A-Za-z0-9-]{8,48}$"
         }
       }
+    },
+    "projectStripRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "timesUs"
+      ],
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "timesUs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "description": "Increasing output times."
+        }
+      },
+      "description": "Binds a request for small filmstrip pictures of the edit at output times to the exact committed draft head. The pictures are cosmetic, never review frames; no source identity, source time or path crosses the renderer boundary."
+    },
+    "projectStripReady": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "draftSequence",
+        "timelineSha256",
+        "frames"
+      ],
+      "properties": {
+        "status": {
+          "const": "ready"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "timelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "frames": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "timelineTimeUs",
+              "frame"
+            ],
+            "properties": {
+              "timelineTimeUs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "frame": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/$defs/thumbnail"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "projectStripResult": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/projectStripReady"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "draft"
+          ],
+          "properties": {
+            "status": {
+              "const": "stale"
+            },
+            "draft": {
+              "$ref": "#/$defs/projectDraftView"
+            }
+          }
+        }
+      ]
     }
   }
 }

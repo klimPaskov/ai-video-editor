@@ -62,6 +62,8 @@ import type {
   ProjectDraftView,
   ProjectDraftIntegrityView,
   ProjectFrameRequest,
+  ProjectStripRequest,
+  ProjectStripResult,
   ProjectFrameResult,
   ProjectView,
   ProjectRequest,
@@ -281,6 +283,9 @@ export interface DesktopBridge {
   readProjectFrame(
     request: ProjectFrameRequest,
   ): Promise<Reply<ProjectFrameResult>>;
+  readProjectStrip(
+    request: ProjectStripRequest,
+  ): Promise<Reply<ProjectStripResult>>;
   applyManualTrim(request: ManualTrimRequest): Promise<Reply<ProjectDraftView>>;
   applyManualSplit(
     request: ManualSplitRequest,
@@ -403,6 +408,7 @@ export const channels = Object.freeze({
   projectDelete: "projects:delete",
   projectIntegrityCheck: "projects:verify-draft-integrity",
   projectFrame: "projects:frame",
+  projectStrip: "projects:strip",
   projectManualTrim: "projects:manual-trim",
   projectManualSplit: "projects:manual-split",
   projectManualRangeCut: "projects:manual-range-cut",
