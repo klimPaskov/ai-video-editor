@@ -18,6 +18,7 @@ What has been verified, how, and what has not. Update this file when that change
 - `lifecycle.test.ts` (crash recovery, second instance, damaged install) is slow and timing-sensitive in the guest: the renderer-crash report arrives 10 to 60+ seconds late there. After the waits were lengthened it passed in 4 of 5 runs; the one failure was a 30 s wait for a broken launch to exit, now 90 s, and it passed twice after that. It needs a quiet guest (never run two at once).
 - Two media tests (`claude-bridge`: a full edit with the playbook; `recorder`: a paused and resumed take) failed once each in a full `npm run check` while the host was saturated by the guest, and pass three of three when run alone: they are timing-sensitive under heavy load.
 - `composition.test.ts` failed intermittently at its hostile-page step: the page navigates its own frame away, which can win the race against its blocked-load reports, so the check answers "did not answer in time" instead of "could not be loaded". Both are refusals; the test now accepts either and still asserts that nothing reached a listener. It passed 5 of 5 runs afterwards.
+- Full non-credentialed native suite on the final commit (2026-10-25, 38 runs including transitions, short clips, composition and the two Codex runtime tests): 37 passed first time; `codex-browser-callback` failed once at its signed-out login control and passed on two reruns, so it is treated as a load flake.
 - Several native tests are timing-sensitive when the host is busy (5 s expectations); they pass on rerun.
 
 ## Not verified
