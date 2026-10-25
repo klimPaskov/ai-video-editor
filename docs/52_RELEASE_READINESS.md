@@ -1,5 +1,7 @@
 # Release readiness (2026-10-25)
 
+**Latest round (pacing, zooms, graphics components, camera; ADRs 0026 to 0029):** `npm run check` and `npm run check:publication` pass; the layout audit passes (411 screens, 0 findings, before the final camera-tools tweak and not rerun after it); in the guest a full native run of 25 tests passed 22 on the first run: `zoom` and `speed` failed because the hidden camera preview video was mistaken for the picture (fixed, both pass on rerun together with `camera-layout`), `lifecycle` failed as before (timing-sensitive; its rerun was blocked because Docker Desktop crashed and was not restarted without asking). With the signed-in profile `one-click-edit` and `camera-claude` (real Claude plans and applies layouts with the 29-tool inventory) passed, `claude-connection` passed on rerun (first run: the model undid its own edit). **Not done after these changes:** the Windows installer is still the one built on commit e1dc9ef (no transitions-to-camera changes) and the Wine smoke was not rerun; stale test projects in the guest were not removed; camera capture was tested only with labelled test devices, never a real camera on Windows or macOS.
+
 What has been verified, how, and what has not. Update this file when that changes; do not claim more than it says.
 
 ## Verified
