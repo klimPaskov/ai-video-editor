@@ -1,11 +1,8 @@
 /**
- * Step screenshots: a synthetic recording (2 s of tone, 2 s of
- * silence) gets a music bed and a sound effect from audio files chosen in the
- * Sound card; the layers are shared-Undo draft edits that survive Redo, are
- * mixed (audible in the recording's silent
- * half), and can be removed.
+ * Step screenshots: a synthetic recording is imported and each of the five
+ * steps is opened and captured for visual inspection.
  *
- * node tests/native/sound.test.ts <packaged-executable>
+ * node tests/native/step-screens.test.ts <packaged-executable>
  */
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";

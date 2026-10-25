@@ -1,14 +1,22 @@
 /**
- * Robustness: a synthetic recording (2 s of tone, 2 s of
- * silence) gets a music bed and a sound effect from audio files chosen in the
- * Sound card; the layers are shared-Undo draft edits that survive Redo, are
- * mixed (audible in the recording's silent
- * half), and can be removed.
+ * Robustness: a synthetic recording (2 s of tone, 2 s of silence) is exported
+ * to a folder that does not exist and to a genuinely full volume, transcribed
+ * with no speech in it, and reopened after its managed source file is gone.
+ * Each case must end in a plain message and a usable window, never a hang, a
+ * crash or an uncaught page error.
  *
- * node tests/native/sound.test.ts <packaged-executable>
+ * node tests/native/robustness.test.ts <packaged-executable>
  */
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  open,
+  readdir,
+  rm,
+  statfs,
+  writeFile,
+} from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect as baseExpect } from "playwright/test";
 import type { Page } from "playwright/test";
@@ -73,7 +81,9 @@ const configRoot = join(evidence, "config");
 const launch = (extra: string[] = []) =>
   _electron.launch({
     executablePath,
-    args: extra,
+    // Chromium keeps its shared memory in /dev/shm unless told otherwise; the
+    // full-disk case fills that volume, so keep Chromium off it.
+    args: ["--disable-dev-shm-usage", ...extra],
     env: { ...process.env, XDG_CONFIG_HOME: configRoot },
     chromiumSandbox: true,
     timeout: 30_000,
@@ -148,6 +158,56 @@ try {
   plain(await page.locator("#export-error").textContent());
   await expect(page.locator("#export-start")).toBeEnabled();
   await page.screenshot({ path: join(evidence, "export-failed.png") });
+
+  step = "export-to-a-full-disk";
+  // A genuinely full disk: /dev/shm is a small memory-backed volume in the
+  // guest; fill it to the last byte and export into it.
+  const full = "/dev/shm";
+  const filler = join(full, `ai-video-editor-full-${process.pid}.fill`);
+  const target = join(full, `ai-video-editor-export-${process.pid}.mkv`);
+  const handle = await open(filler, "w");
+  try {
+    const chunk = Buffer.alloc(1024 * 1024);
+    for (;;) {
+      try {
+        await handle.write(chunk);
+      } catch {
+        break;
+      }
+    }
+    for (let size = 4096; size >= 1; size = Math.floor(size / 2))
+      for (;;) {
+        try {
+          await handle.write(Buffer.alloc(size));
+        } catch {
+          break;
+        }
+      }
+    const left = await statfs(full);
+    assert.ok(left.bavail * left.bsize < 4096, "the volume is full");
+    await electron.evaluate(({ dialog }, path) => {
+      dialog.showSaveDialog = async () => ({
+        canceled: false,
+        filePath: path,
+      });
+    }, target);
+    await page.locator("#export-start").click();
+    // The earlier failure is still showing: wait for this export to begin
+    // before waiting for how it ends.
+    await expect(page.locator("#export-running")).toBeVisible();
+    await expect(page.locator("#export-running")).toBeHidden({
+      timeout: 120_000,
+    });
+    await expect(page.locator("#export-error")).toBeVisible();
+    assert.equal(await page.locator("#export-done").isVisible(), false);
+    plain(await page.locator("#export-error").textContent());
+    await expect(page.locator("#export-start")).toBeEnabled();
+    await page.screenshot({ path: join(evidence, "export-disk-full.png") });
+  } finally {
+    await handle.close();
+    await rm(filler, { force: true });
+    await rm(target, { force: true });
+  }
 
   step = "a-clip-with-no-speech";
   await electron.close();
