@@ -282,8 +282,13 @@ try {
   // as errors; nothing it tried reached the listeners: the sandbox has no
   // way out.
   assert.equal(freeform.leak!.ok, false);
+  // The page also navigates its own frame away, which can win the race
+  // against its blocked-load reports: it then never answers. Either outcome
+  // is a refusal; what matters is that nothing reached a listener (below).
   assert.ok(
-    freeform.leak!.findings.some((item) => /could not be loaded/u.test(item)),
+    freeform.leak!.findings.some((item) =>
+      /could not be loaded|did not answer in time/u.test(item),
+    ),
     freeform.leak!.findings.join(", "),
   );
   await new Promise((done) => setTimeout(done, 2_000));
