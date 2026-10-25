@@ -2364,13 +2364,10 @@ test("graphics.component renders a designed layout, explains bad content and sha
   const projectId = active.project.project_id;
   const claude = new CodexVideoEditToolService(projectId, drafts, "claude");
   const input = async (requestId: string) => {
-    const {
-      html: _html,
-      css: _css,
-      name: _name,
-      layer: _layer,
-      ...rest
-    } = graphicInput(await drafts.snapshot(projectId), requestId);
+    const rest: Record<string, unknown> = {
+      ...graphicInput(await drafts.snapshot(projectId), requestId),
+    };
+    for (const key of ["html", "css", "name", "layer"]) delete rest[key];
     return {
       ...rest,
       duration_us: 2_000_000,
