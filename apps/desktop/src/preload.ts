@@ -88,6 +88,8 @@ import {
   assertManualSpeedRequest,
   assertManualGraphicRequest,
   assertManualGraphicRemoveRequest,
+  assertManualTransitionRequest,
+  assertManualTransitionRemoveRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualTranscriptCutRequest,
@@ -319,6 +321,22 @@ const bridge: DesktopBridge = {
     assertManualGraphicRemoveRequest(request);
     return invoke(
       channels.projectManualGraphicRemove,
+      request,
+      assertProjectDraftView,
+    );
+  },
+  applyManualTransition: (request) => {
+    assertManualTransitionRequest(request);
+    return invoke(
+      channels.projectManualTransition,
+      request,
+      assertProjectDraftView,
+    );
+  },
+  removeManualTransition: (request) => {
+    assertManualTransitionRemoveRequest(request);
+    return invoke(
+      channels.projectManualTransitionRemove,
       request,
       assertProjectDraftView,
     );

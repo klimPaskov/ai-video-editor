@@ -21,7 +21,10 @@ The timeline strip under the player shows each part of the edit, zooms (yellow) 
 | Cut range | Removes the marked range | |
 | Zoom | Zooms into the marked range (or two seconds from the playhead). Click the picture where it should point | Z |
 | Speed | Plays the marked range, or the part under the playhead, at 2×, 3×, 4× or 8× | |
+| Add transition | Hides the cut nearest the playhead behind a dip to black or white, a wipe or an iris (0.3, 0.6 or 1 s). It changes if you pick another style, and Remove transition takes it off | |
 | Restore source range | Brings back a removed part of the original footage | |
+
+A transition needs a cut, so it is off until you have cut or split something that left a jump; it shows as a small hatched marker on the strip and plays in the preview and the export. Audio is not changed.
 
 While the playhead is inside a zoom, you can change its strength, move its target or remove it. Sped-up parts keep the voice's pitch.
 

@@ -485,6 +485,55 @@ export const codexVideoEditMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: codexVideoEditToolNames[17],
+    description:
+      "Put a transition on a cut, as one undoable transaction. A transition is a styled overlay centred on the cut that hides the jump between two moments: 'dip' fades to a colour and back, 'wipe_right' and 'wipe_left' sweep a colour panel across, 'iris' opens a circle of colour over the frame and closes it again. at_us is the output time of the first frame after the cut; the timeline summary lists every real cut in `cuts` (a cut that already has a transition shows its transition_id, and setting another replaces it). duration_us is the total time on screen (0.2 to 2 s, default 0.6 s), color is #rrggbb (default black; use the video's own palette for wipes and irises). Place them where the video moves to a new section or subject, not on every cut: a handful in a few minutes reads as designed, one on each cut as noise. Pass transition_id from the summary to change one. Audio is not changed.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "at_us", "kind"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        transition_id: id,
+        at_us: { type: "integer", minimum: 1 },
+        kind: {
+          type: "string",
+          enum: ["dip", "wipe_right", "wipe_left", "iris"],
+        },
+        duration_us: { type: "integer", minimum: 200000, maximum: 2000000 },
+        color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[18],
+    description:
+      "Remove one transition from the active draft by transition_id as one undoable transaction.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "transition_id"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        transition_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ] as const;
 
 /** Claude's own tools, on files in its project workspace (ADR 0021). */

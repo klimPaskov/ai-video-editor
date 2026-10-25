@@ -1,4 +1,11 @@
 import { assertZoomEffect, zoomLimits, type ZoomEffect } from "./zoom.ts";
+import {
+  assertTransitionEffect,
+  transitionKinds,
+  transitionLimits,
+  type TransitionEffect,
+  type TransitionKind,
+} from "./transitions.ts";
 import { isClipSpeed, speedLength } from "./speed.ts";
 import {
   assertGraphicEffect,
@@ -79,6 +86,8 @@ export interface ProjectDraftView {
   /** Zoom effects anchored to source time. */
   zooms?: ZoomEffect[];
   graphics?: GraphicEffect[];
+  /** Transitions anchored to cuts. */
+  transitions?: TransitionEffect[];
 }
 export interface ProjectDraftIntegrityView {
   draft: ProjectDraftView;
@@ -184,6 +193,33 @@ export interface ManualGraphicRemoveRequest {
   expectedSequence: number;
   expectedTimelineSha256: string;
   graphicId: string;
+}
+/**
+ * Adds a transition at the cut at output time `atUs` (the first frame of the
+ * incoming clip), or replaces transition `transitionId`. Main anchors it to
+ * the source moment where the incoming clip starts.
+ */
+export interface ManualTransitionRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  transitionId: string | null;
+  atUs: number;
+  kind: TransitionKind;
+  durationUs: number;
+  color: string;
+}
+export interface ManualTransitionRemoveRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  transitionId: string;
 }
 /** Plays output interval [startUs, endUs) at `speed` (1 is normal speed). */
 export interface ManualSpeedRequest {
@@ -453,6 +489,50 @@ export function assertManualZoomRequest(
   )
     invalid();
 }
+export function assertManualTransitionRequest(
+  value: unknown,
+): asserts value is ManualTransitionRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "transitionId",
+    "atUs",
+    "kind",
+    "durationUs",
+    "color",
+  ]);
+  assertManualHead(value);
+  if (value.transitionId !== null) opaqueId(value.transitionId);
+  positive(value.atUs);
+  if (
+    !transitionKinds.includes(value.kind as TransitionKind) ||
+    !Number.isSafeInteger(value.durationUs) ||
+    (value.durationUs as number) < transitionLimits.minDurationUs ||
+    (value.durationUs as number) > transitionLimits.maxDurationUs ||
+    typeof value.color !== "string" ||
+    !/^#[0-9a-fA-F]{6}$/u.test(value.color)
+  )
+    invalid();
+}
+export function assertManualTransitionRemoveRequest(
+  value: unknown,
+): asserts value is ManualTransitionRemoveRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "transitionId",
+  ]);
+  assertManualHead(value);
+  opaqueId(value.transitionId);
+}
 export function assertManualGraphicRequest(
   value: unknown,
 ): asserts value is ManualGraphicRequest {
@@ -694,6 +774,11 @@ export function assertProjectDraftView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "graphics");
+  const hasTransitions =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "transitions");
   exact(value, [
     "projectId",
     "draft",
@@ -702,6 +787,7 @@ export function assertProjectDraftView(
     ...(hasTranscriptEdits ? ["transcriptEdits"] : []),
     ...(hasZooms ? ["zooms"] : []),
     ...(hasGraphics ? ["graphics"] : []),
+    ...(hasTransitions ? ["transitions"] : []),
   ]);
   id(value.projectId);
   exact(value.draft, [
@@ -798,6 +884,18 @@ export function assertProjectDraftView(
   if (hasTranscriptEdits) assertTranscriptTextOverrides(value.transcriptEdits);
   if (hasZooms) assertViewZooms(value.zooms);
   if (hasGraphics) assertViewGraphics(value.graphics);
+  if (hasTransitions) assertViewTransitions(value.transitions);
+}
+function assertViewTransitions(value: unknown): void {
+  if (!Array.isArray(value) || value.length > transitionLimits.maxTransitions)
+    invalid();
+  for (const transition of value) assertTransitionEffect(transition);
+  const transitions = value as TransitionEffect[];
+  if (
+    new Set(transitions.map((transition) => transition.transition_id)).size !==
+    transitions.length
+  )
+    invalid();
 }
 function assertViewGraphics(value: unknown): void {
   if (!Array.isArray(value) || value.length > graphicLimits.maxGraphics)
@@ -869,6 +967,11 @@ export function assertProjectView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "graphics");
+  const hasTransitions =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "transitions");
   exact(value, [
     ...keys,
     ...(hasSources ? ["sources"] : []),
@@ -876,6 +979,7 @@ export function assertProjectView(
     ...(hasTranscriptEdits ? ["transcriptEdits"] : []),
     ...(hasZooms ? ["zooms"] : []),
     ...(hasGraphics ? ["graphics"] : []),
+    ...(hasTransitions ? ["transitions"] : []),
   ]);
   id(value.id);
   id(value.revisionId);
@@ -914,6 +1018,7 @@ export function assertProjectView(
     ...(hasTranscriptEdits ? { transcriptEdits: value.transcriptEdits } : {}),
     ...(hasZooms ? { zooms: value.zooms } : {}),
     ...(hasGraphics ? { graphics: value.graphics } : {}),
+    ...(hasTransitions ? { transitions: value.transitions } : {}),
   };
   assertProjectDraftView(draftView);
   if (hasTranscriptEdits)

@@ -29,6 +29,7 @@ export function reconcileProjectDraft(
   delete next.clips;
   delete next.zooms;
   delete next.graphics;
+  delete next.transitions;
   return {
     status: "applied",
     value: {
@@ -40,6 +41,7 @@ export function reconcileProjectDraft(
         : {}),
       ...(changed.zooms ? { zooms: changed.zooms } : {}),
       ...(changed.graphics ? { graphics: changed.graphics } : {}),
+      ...(changed.transitions ? { transitions: changed.transitions } : {}),
       ...(changed.clips ? { clips: changed.clips } : {}),
     },
   };

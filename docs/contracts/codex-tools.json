@@ -302,6 +302,36 @@
       ]
     },
     {
+      "name": "transition.set",
+      "mode": "mutation",
+      "description": "Put one transition (dip to a colour, wipe right or left, or iris) on a real cut, given by the output time of the incoming clip's first frame, with duration 0.2-2 s and a #rrggbb colour; the transition is anchored to the source moment where the incoming clip starts, so it follows later cuts. A transition_id replaces that transition; one cut holds one transition. Audio is unchanged. Shared undo.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "transition.remove",
+      "mode": "mutation",
+      "description": "Remove one transition by transition_id with shared undo.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
       "name": "captions.configure",
       "mode": "mutation",
       "description": "Set the draft's caption choices (on, style, size, position, burn-in) with shared undo; caption text stays derived from the transcript.",

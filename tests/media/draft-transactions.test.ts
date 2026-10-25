@@ -2103,6 +2103,119 @@ test("graphics are reversible draft edits that survive reopen", async () => {
   assert.deepEqual(await readFile(source), sourceBytes);
 });
 
+test("transitions are reversible draft edits tied to a cut and survive reopen", async () => {
+  const { projects, projectStore, baseline, source } = await fixture();
+  const sourceBytes = await readFile(source);
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  const pass = {
+    pass_group_id: "pass-transition-001",
+    kind: "graphics" as const,
+  };
+  // Cutting 0.3 to 0.5 s leaves a real cut at 0.3 s of the output; the
+  // incoming clip starts at 0.5 s of the source.
+  const cut = await store.applyManual(
+    trim(initial, {
+      request_id: "request-transition-cut-001",
+      pass_group: { pass_group_id: "pass-manual-001", kind: "manual" },
+      operations: [
+        { type: "ripple_delete", start_us: 300_000, end_us: 500_000 },
+      ],
+    }),
+  );
+  const transition = {
+    transition_id: "transition-001",
+    source_id: baseline.source.source_id,
+    source_us: 500_000,
+    kind: "dip" as const,
+    duration_us: 400_000,
+    color: "#000000",
+  };
+  const added = await store.applyManual(
+    trim(cut.draft, {
+      request_id: "request-transition-add-001",
+      pass_group: pass,
+      reason: "Dip through black at the cut.",
+      operations: [{ type: "set_transition", transition }],
+    }),
+  );
+  assert.equal(added.transaction.operations[0]?.operation_type, "transition");
+  assert.deepEqual(added.draft.timeline.transitions, [transition]);
+  // A second transition at the same cut replaces the first.
+  const replaced = await store.applyManual(
+    trim(added.draft, {
+      request_id: "request-transition-replace-001",
+      pass_group: pass,
+      operations: [
+        {
+          type: "set_transition",
+          transition: {
+            ...transition,
+            transition_id: "transition-002",
+            kind: "iris" as const,
+          },
+        },
+      ],
+    }),
+  );
+  assert.deepEqual(
+    replaced.draft.timeline.transitions?.map((item) => item.transition_id),
+    ["transition-002"],
+  );
+  // Setting exactly the same thing again, a moment outside the source and
+  // removing one that does not exist are refused.
+  for (const bad of [
+    {
+      type: "set_transition" as const,
+      transition: replaced.draft.timeline.transitions![0]!,
+    },
+    {
+      type: "set_transition" as const,
+      transition: { ...transition, source_us: 5_000_000 },
+    },
+    { type: "remove_transition" as const, transition_id: "transition-404" },
+  ])
+    await assert.rejects(async () =>
+      store.applyManual(
+        trim(replaced.draft, {
+          request_id: `request-transition-bad-${bad.type}-${JSON.stringify(bad).length}`,
+          pass_group: pass,
+          operations: [bad],
+        }),
+      ),
+    );
+  const removed = await store.applyManual(
+    trim(replaced.draft, {
+      request_id: "request-transition-remove-001",
+      pass_group: pass,
+      operations: [
+        { type: "remove_transition", transition_id: "transition-002" },
+      ],
+    }),
+  );
+  assert.equal(removed.draft.timeline.transitions, undefined);
+  const undone = await store.undoManual(
+    undo(
+      removed.draft,
+      removed.transaction.transaction_id,
+      "request-transition-undo-001",
+    ),
+  );
+  assert.deepEqual(undone.draft.timeline.transitions, [
+    { ...transition, transition_id: "transition-002", kind: "iris" },
+  ]);
+  const reopened = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopened.draft, undone.draft);
+  assert.deepEqual(await readFile(source), sourceBytes);
+});
+
 test("sound layers are reversible draft edits that survive reopen", async () => {
   const { projects, projectStore, baseline, source } = await fixture();
   const sourceBytes = await readFile(source);

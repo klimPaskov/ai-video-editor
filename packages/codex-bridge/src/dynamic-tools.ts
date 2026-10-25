@@ -38,6 +38,8 @@ const dynamicNames: Record<CodexVideoEditToolName, string> = {
   "captions.configure": "captions_configure",
   "audio.configure": "audio_configure",
   "media.get_frames": "media_get_frames",
+  "transition.set": "transition_set",
+  "transition.remove": "transition_remove",
 };
 const internalNames = new Map(
   Object.entries(dynamicNames).map(([internal, wire]) => [

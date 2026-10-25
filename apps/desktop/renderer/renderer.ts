@@ -8,6 +8,7 @@ import { setupSoundPanel } from "./sound-panel.ts";
 import { setupSoundPreview } from "./sound-preview.ts";
 import { mediaRect, setupZoomPreview } from "./zoom-preview.ts";
 import { setupGraphicsPreview } from "./graphics-preview.ts";
+import { setupTransitionTools } from "./transition-tools.ts";
 import {
   zoomAt,
   zoomLimits,
@@ -132,6 +133,16 @@ const editActions = element("edit-actions"),
   zoomHint = element("zoom-hint"),
   speedSelect = element<HTMLSelectElement>("speed"),
   speedScope = element("speed-scope");
+const transitionTools = setupTransitionTools({
+  add: element<HTMLButtonElement>("transition-add"),
+  remove: element<HTMLButtonElement>("transition-remove"),
+  kind: element<HTMLSelectElement>("transition-kind"),
+  length: element<HTMLSelectElement>("transition-length"),
+  position: () => Number(seek.value),
+  busy: () => manualEditPending || navigating,
+  time: (us) => time(us),
+  run: (work, failure, seekUs) => runManualEdit(work, failure, seekUs),
+});
 const reviewActions = element("review-actions"),
   checkDraftIntegrityButton = element<HTMLButtonElement>(
     "check-draft-integrity",
@@ -1440,6 +1451,7 @@ function renderEditTools(): void {
     .join(" · ");
   renderZoomTools(project, inUs, outUs);
   renderSpeedTools(project, inUs, outUs);
+  transitionTools.render(project);
   restoreToggleButton.disabled = manualEditPending || navigating;
   restoreToggleButton.textContent = restoreRangeOpen
     ? "Cancel restore"
@@ -2706,6 +2718,36 @@ async function submitManualRestoreRange(): Promise<void> {
         restoreRangeIssue =
           "The source range could not be restored. Check the missing interval and try again.";
     }
+  } finally {
+    manualEditPending = false;
+    back.disabled = false;
+    renderEditTools();
+  }
+}
+/**
+ * One manual edit by an Edit tool: the busy state, the saved draft applied
+ * (the player moves to `seekUs`), and a plain message when it cannot be saved.
+ */
+async function runManualEdit(
+  work: (project: ProjectView) => Promise<Reply<ProjectDraftView>>,
+  failure: string,
+  seekUs: number,
+): Promise<void> {
+  const project = activeProject,
+    generation = routeGeneration;
+  if (!project || project.stage !== "edit" || manualEditPending) return;
+  playback.stop();
+  manualEditPending = true;
+  back.disabled = true;
+  renderEditTools();
+  clearError();
+  try {
+    const reply = await work(project);
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      applyProjectDraft(reply, seekUs);
+  } catch {
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      showError(failure);
   } finally {
     manualEditPending = false;
     back.disabled = false;

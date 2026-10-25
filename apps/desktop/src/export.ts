@@ -42,6 +42,7 @@ import {
   graphicIntervals,
   type GraphicInterval,
 } from "../../../packages/domain/src/graphics.ts";
+import { transitionGraphicIntervals } from "../../../packages/domain/src/transitions.ts";
 import type { GraphicsRenderRequest, GraphicsTrack } from "./graphics-track.ts";
 import {
   soundIntervals,
@@ -181,11 +182,19 @@ export async function planDraft(
   const zooms = window
     ? windowZoomIntervals(allZooms, window.startUs, window.endUs)
     : allZooms;
-  const allGraphics = graphicIntervals(
-    snapshot.draft.timeline.graphics ?? [],
-    mapped,
-    snapshot.draft.timeline.duration_us,
-  );
+  // Transitions are drawn like graphics, on top of them.
+  const allGraphics = [
+    ...graphicIntervals(
+      snapshot.draft.timeline.graphics ?? [],
+      mapped,
+      snapshot.draft.timeline.duration_us,
+    ),
+    ...transitionGraphicIntervals(
+      snapshot.draft.timeline.transitions ?? [],
+      mapped,
+      snapshot.draft.timeline.duration_us,
+    ),
+  ].sort((a, b) => a.startUs - b.startUs || a.layer - b.layer);
   const graphics = window
     ? allGraphics
         .filter(

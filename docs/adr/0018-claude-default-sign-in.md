@@ -46,3 +46,5 @@ Addendum (2026-10-18): following the user's direction that the rough cut runs on
 Addendum (2026-10-19): at the user's direction the fresh production choice is Sonnet, not Opus, when the account offers it (otherwise the account-recommended `default`); the rough cut stays on Haiku. Opus remains selectable in Settings. Sonnet is chosen by catalog name because the `default` entry can itself resolve to Opus. Remembered explicit choices are unchanged.
 
 Addendum (2026-10-24): ADR 0023 adds the Claude-only `sound.list`, `sound.set` and `sound.remove`, raising Claude's editor inventory to twenty-one tools (Codex keeps seventeen, the API providers sixteen). The init check and allowlist still derive from the shared Claude tool list; a real-CLI init with the twenty-one tools is still to be confirmed.
+
+Addendum (2026-10-25): ADR 0025 adds `transition.set` and `transition.remove` to the shared tool list, raising Claude's editor inventory to twenty-three tools (Codex nineteen, the API providers eighteen). The init check and allowlist still derive from the shared Claude tool list; a real-CLI init with the twenty-three tools is still to be confirmed.

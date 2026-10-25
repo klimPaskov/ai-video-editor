@@ -3,6 +3,7 @@ import {
   graphicIntervals,
   type GraphicInterval,
 } from "../../../packages/domain/src/graphics.ts";
+import { transitionGraphicIntervals } from "../../../packages/domain/src/transitions.ts";
 import { syncStage, type StageGraphic } from "./stage-control.ts";
 
 /**
@@ -66,13 +67,22 @@ export function setupGraphicsPreview(preview: HTMLElement): {
       : "";
     if (nextKey !== key) {
       key = nextKey;
+      // Transitions are drawn like graphics, on top of them.
       intervals =
-        project?.graphics?.length && project.clips
-          ? graphicIntervals(
-              project.graphics,
-              project.clips,
-              project.timeline.durationUs,
-            )
+        project?.clips &&
+        (project.graphics?.length || project.transitions?.length)
+          ? [
+              ...graphicIntervals(
+                project.graphics ?? [],
+                project.clips,
+                project.timeline.durationUs,
+              ),
+              ...transitionGraphicIntervals(
+                project.transitions ?? [],
+                project.clips,
+                project.timeline.durationUs,
+              ),
+            ].sort((a, b) => a.startUs - b.startUs || a.layer - b.layer)
           : [];
     }
     const active = intervals.some(

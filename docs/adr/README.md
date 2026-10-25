@@ -27,3 +27,5 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0022: Windows release: cross-packaged win32-x64, bundled LGPL FFmpeg, Windows Codex client, per-user NSIS installer, release fuses, unsigned until a certificate exists
 - 0023: music and sound effects as undoable draft layers from project audio files, mixed at export
 - 0024: a minimal interface with selectable themes (Light Canvas default; Cinematic changes the layout)
+
+- 0025: transitions as undoable draft effects (dip, wipe, iris) anchored to cuts and drawn like graphics, manual and on every assistant route

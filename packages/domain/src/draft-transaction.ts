@@ -10,6 +10,11 @@ import {
   type ZoomEffect,
 } from "./zoom.ts";
 import {
+  assertTransitionEffect,
+  assertTransitionEffects,
+  type TransitionEffect,
+} from "./transitions.ts";
+import {
   clipSpeed,
   isClipSpeed,
   speedLength,
@@ -40,6 +45,8 @@ export type DraftTimeline = InitialProjectSnapshot["timeline"] & {
   zooms?: ZoomEffect[];
   /** Motion graphics anchored to source moments; absent means none. */
   graphics?: GraphicEffect[];
+  /** Transitions anchored to cuts; absent means none. */
+  transitions?: TransitionEffect[];
   /** Music and sound effects mixed into the audio; absent means none. */
   sounds?: SoundLayer[];
   /**
@@ -134,6 +141,17 @@ export interface RemoveGraphicIntent {
   graphic_id: string;
 }
 
+/** Adds a transition, or replaces the transition with the same id. */
+export interface SetTransitionIntent {
+  type: "set_transition";
+  transition: TransitionEffect;
+}
+
+export interface RemoveTransitionIntent {
+  type: "remove_transition";
+  transition_id: string;
+}
+
 /** Adds a sound layer (music or effect), or replaces the one with the same id. */
 export interface SetSoundIntent {
   type: "set_sound";
@@ -175,6 +193,8 @@ export type DraftEditIntent =
   | SetAudioIntent
   | SetGraphicIntent
   | RemoveGraphicIntent
+  | SetTransitionIntent
+  | RemoveTransitionIntent
   | SetSoundIntent
   | RemoveSoundIntent
   | SetSpeedIntent
@@ -403,6 +423,23 @@ export interface GraphicOperationRecord {
   };
 }
 
+export interface TransitionOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "transition";
+  action: "set" | "remove";
+  transition_id: string;
+  /** The transition set, or null when removing. */
+  transition: TransitionEffect | null;
+  before: TransitionEffect[];
+  after: TransitionEffect[];
+  inverse: {
+    type: "restore_transitions";
+    transitions: TransitionEffect[];
+    expected_after_sha256: string;
+  };
+}
+
 export interface SoundOperationRecord {
   schema_version: "1.0";
   operation_id: string;
@@ -452,6 +489,7 @@ export type DraftOperationRecord =
   | AudioOperationRecord
   | SoundOperationRecord
   | GraphicOperationRecord
+  | TransitionOperationRecord
   | SpeedOperationRecord
   | ZoomOperationRecord
   | TrimOperationRecord
@@ -686,7 +724,15 @@ export function assertDraftTimeline(
       "speed_ids",
       "created_at",
     ],
-    ["transcript_edits", "zooms", "graphics", "sounds", "captions", "audio"],
+    [
+      "transcript_edits",
+      "zooms",
+      "graphics",
+      "transitions",
+      "sounds",
+      "captions",
+      "audio",
+    ],
   );
   if (Object.hasOwn(value, "captions")) assertCaptionSettings(value.captions);
   if (Object.hasOwn(value, "audio")) assertAudioSettings(value.audio);
@@ -694,6 +740,8 @@ export function assertDraftTimeline(
     assertZoomEffects(value.zooms, baseline.clips);
   if (Object.hasOwn(value, "graphics"))
     assertGraphicEffects(value.graphics, baseline.clips);
+  if (Object.hasOwn(value, "transitions"))
+    assertTransitionEffects(value.transitions, baseline.clips);
   if (Object.hasOwn(value, "sounds"))
     assertSoundLayers(value.sounds, baseline.clips);
   if (Object.hasOwn(value, "transcript_edits"))
@@ -876,6 +924,18 @@ export function assertApplyDraftTransactionRequest(
       if (value.operations.length !== 1) invalid();
       exact(operation, ["type", "graphic_id"]);
       id(operation.graphic_id);
+      continue;
+    }
+    if (operation?.type === "set_transition") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "transition"]);
+      assertTransitionEffect(operation.transition);
+      continue;
+    }
+    if (operation?.type === "remove_transition") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "transition_id"]);
+      id(operation.transition_id);
       continue;
     }
     if (operation?.type === "set_sound") {

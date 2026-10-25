@@ -2456,6 +2456,86 @@
       ],
       "properties": {
         "channel": {
+          "const": "projects:manual-transition"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualTransitionRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "projects:manual-transition-remove"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualTransitionRemoveRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
           "const": "projects:manual-speed"
         },
         "payload": {
@@ -4891,6 +4971,13 @@
         },
         "draft": {
           "$ref": "#/$defs/projectDraftHead"
+        },
+        "transitions": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/transitionEffect"
+          }
         }
       },
       "description": "Path-free committed project and draft view. Runtime additionally requires project, revision, draft, source and timeline IDs to be distinct, an ordered two-source inventory when present, and draft.baseRevisionId to equal revisionId. A stage identifies navigation, not successful feature execution or export."
@@ -5863,6 +5950,13 @@
           "maxItems": 100000,
           "items": {
             "$ref": "#/$defs/transcriptTextOverride"
+          }
+        },
+        "transitions": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/transitionEffect"
           }
         }
       },
@@ -7307,6 +7401,170 @@
           }
         }
       }
+    },
+    "manualTransitionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "transitionId",
+        "atUs",
+        "kind",
+        "durationUs",
+        "color"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "transitionId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            }
+          ]
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "enum": [
+            "dip",
+            "wipe_right",
+            "wipe_left",
+            "iris"
+          ]
+        },
+        "durationUs": {
+          "type": "integer",
+          "minimum": 200000,
+          "maximum": 2000000
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      },
+      "description": "Adds a transition at the cut at output time atUs (the first frame of the incoming clip), or replaces transitionId. Main anchors it to the source moment where the incoming clip starts and refuses a time that is not a cut."
+    },
+    "manualTransitionRemoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "transitionId"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "transitionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      }
+    },
+    "transitionEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transition_id",
+        "source_id",
+        "source_us",
+        "kind",
+        "duration_us",
+        "color"
+      ],
+      "properties": {
+        "transition_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_us": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "dip",
+            "wipe_right",
+            "wipe_left",
+            "iris"
+          ]
+        },
+        "duration_us": {
+          "type": "integer",
+          "minimum": 200000,
+          "maximum": 2000000
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      },
+      "description": "A styled overlay that hides a cut, centred on the first frame of the incoming clip, which starts at source moment source_us of source_id. It follows later cuts and is dormant while no cut is there. At most one per cut. It draws like a motion graphic over the video and changes no audio."
     }
   }
 }

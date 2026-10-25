@@ -48,6 +48,7 @@ const paths: Record<string, string> = {
   captions: "M3 5h18v14H3ZM7 11h4M13 11h4M7 15h7M16 15h1",
   clips: "M7 3h10v18H7ZM3 6h2v12H3ZM19 6h2v12h-2ZM10 9l4 3-4 3Z",
   audio: "M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2",
+  transition: "M3 7h7v10H3ZM14 7h7v10h-7ZM10 12h4M12.5 10l1.5 2-1.5 2",
   zoom: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4M11 8v6M8 11h6",
   speed: "M5 6l7 6-7 6ZM12 6l7 6-7 6Z",
   target:

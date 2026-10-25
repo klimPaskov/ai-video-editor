@@ -74,6 +74,8 @@ import type {
   ManualSpeedRequest,
   ManualGraphicRequest,
   ManualGraphicRemoveRequest,
+  ManualTransitionRequest,
+  ManualTransitionRemoveRequest,
   ManualRestoreRangeRequest,
   ManualTranscriptCorrectionRequest,
   ManualTranscriptCutRequest,
@@ -195,6 +197,12 @@ export interface DesktopBridge {
   removeManualGraphic(
     request: ManualGraphicRemoveRequest,
   ): Promise<Reply<ProjectDraftView>>;
+  applyManualTransition(
+    request: ManualTransitionRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  removeManualTransition(
+    request: ManualTransitionRemoveRequest,
+  ): Promise<Reply<ProjectDraftView>>;
   applyManualSpeed(
     request: ManualSpeedRequest,
   ): Promise<Reply<ProjectDraftView>>;
@@ -301,6 +309,8 @@ export const channels = Object.freeze({
   projectManualSpeed: "projects:manual-speed",
   projectManualGraphic: "projects:manual-graphic",
   projectManualGraphicRemove: "projects:manual-graphic-remove",
+  projectManualTransition: "projects:manual-transition",
+  projectManualTransitionRemove: "projects:manual-transition-remove",
   audioGet: "audio:get",
   audioSet: "audio:set",
   soundsGet: "sounds:get",

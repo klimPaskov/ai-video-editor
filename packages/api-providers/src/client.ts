@@ -30,7 +30,7 @@ const maxMessages = 64;
 /** Tool calls in one assistant message. */
 const maxToolCalls = 8;
 /** Tool definitions offered in one request (the editor offers 12). */
-const maxToolDefinitions = 16;
+const maxToolDefinitions = 20;
 const maxThoughtSignatureBytes = 16 * 1024;
 const geminiClientHeader = "ai-video-editor/0.0.0";
 

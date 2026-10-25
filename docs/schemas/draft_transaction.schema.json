@@ -64,6 +64,7 @@
           { "$ref": "#/$defs/zoom_operation" },
           { "$ref": "#/$defs/speed_operation" },
           { "$ref": "#/$defs/graphic_operation" },
+          { "$ref": "#/$defs/transition_operation" },
           { "$ref": "#/$defs/captions_operation" },
           { "$ref": "#/$defs/audio_operation" },
           { "$ref": "#/$defs/sound_operation" }
@@ -125,6 +126,21 @@
         "properties": {
           "operations": {
             "contains": { "$ref": "#/$defs/graphic_operation" }
+          }
+        },
+        "required": ["operations"]
+      },
+      "then": {
+        "properties": {
+          "operations": { "minItems": 1, "maxItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operations": {
+            "contains": { "$ref": "#/$defs/transition_operation" }
           }
         },
         "required": ["operations"]
@@ -575,6 +591,37 @@
         }
       },
       "description": "Adds or replaces one motion graphic (set) or removes one (remove, graphic null). It is the only operation in its transaction; its inverse restores the previous graphics list and the clip map is unchanged."
+    },
+    "transition_operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "operation_type", "action", "transition_id", "transition", "before", "after", "inverse"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "operation_id": { "$ref": "#/$defs/id" },
+        "operation_type": { "const": "transition" },
+        "action": { "enum": ["set", "remove"] },
+        "transition_id": { "$ref": "#/$defs/id" },
+        "transition": {
+          "oneOf": [
+            { "$ref": "timeline.schema.json#/$defs/transition_effect" },
+            { "type": "null" }
+          ]
+        },
+        "before": { "type": "array", "maxItems": 256, "items": { "$ref": "timeline.schema.json#/$defs/transition_effect" } },
+        "after": { "type": "array", "maxItems": 256, "items": { "$ref": "timeline.schema.json#/$defs/transition_effect" } },
+        "inverse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "transitions", "expected_after_sha256"],
+          "properties": {
+            "type": { "const": "restore_transitions" },
+            "transitions": { "type": "array", "maxItems": 256, "items": { "$ref": "timeline.schema.json#/$defs/transition_effect" } },
+            "expected_after_sha256": { "$ref": "#/$defs/hash" }
+          }
+        }
+      },
+      "description": "Adds or replaces one transition (set; a transition already on the same cut is replaced) or removes one (remove, transition null). It is the only operation in its transaction; its inverse restores the previous transitions and the clip map is unchanged."
     },
     "speed_operation": {
       "type": "object",

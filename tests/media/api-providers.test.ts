@@ -423,7 +423,7 @@ test("request bounds prevent unbounded content or tools before network access", 
     {
       model: "test-model",
       messages: [{ role: "user", content: "hello" }],
-      tools: Array.from({ length: 17 }, (_, i) => ({
+      tools: Array.from({ length: 21 }, (_, i) => ({
         name: `tool_${i}`,
         description: "test",
         parameters: { type: "object" },
@@ -458,7 +458,7 @@ test("every guarded editor tool definition reaches each provider request", async
       description: tool.description,
       parameters: tool.inputSchema as unknown as Record<string, unknown>,
     }));
-  assert.equal(tools.length, 16);
+  assert.equal(tools.length, 18);
   for (const provider of ["openai", "deepseek", "gemini"] as const)
     await client.complete(provider, key, {
       model: "test-model",

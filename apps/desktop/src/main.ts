@@ -72,6 +72,8 @@ import {
   assertManualSpeedRequest,
   assertManualGraphicRequest,
   assertManualGraphicRemoveRequest,
+  assertManualTransitionRequest,
+  assertManualTransitionRemoveRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualTranscriptCutRequest,
@@ -214,6 +216,7 @@ import type { ProjectDraftNotice } from "./project-runtime.ts";
 import type { ClipSpeed } from "../../../packages/domain/src/speed.ts";
 import { zoomSourceRange } from "../../../packages/domain/src/zoom.ts";
 import { graphicAnchor } from "../../../packages/domain/src/graphics.ts";
+import { cutAt } from "../../../packages/domain/src/transitions.ts";
 import { renderGraphicsTrack } from "./graphics-render.ts";
 import { renderDraftFrames } from "./frame-render.ts";
 import { checkComposition } from "./composition-check.ts";
@@ -2590,6 +2593,114 @@ async function start(): Promise<void> {
             reason: "Remove a graphic.",
             operations: [
               { type: "remove_graphic", graphic_id: request.graphicId },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  register(channels.projectManualTransition, async (request) => {
+    assertManualTransitionRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    const { draft } = await drafts.snapshotWithProject(request.projectId);
+    if (
+      draft.draft_sequence !== request.expectedSequence ||
+      draft.timeline_sha256 !== request.expectedTimelineSha256
+    )
+      throw new UserFacingError("The draft changed. Try again.");
+    // A transition belongs to a cut: the first frame of an incoming clip
+    // that does not continue the clip before it.
+    const cut = cutAt(
+      draft.timeline.clips.map((clip) => ({
+        sourceId: clip.source_id,
+        timelineStartUs: clip.timeline_start_us,
+        timelineEndUs: clip.timeline_end_us,
+        sourceStartUs: clip.source_start_us,
+        sourceEndUs: clip.source_end_us,
+      })),
+      request.atUs,
+    );
+    if (!cut) throw new UserFacingError("There is no cut at that point.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "transition.set",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "graphics" },
+            reason: request.transitionId
+              ? "Change a transition."
+              : "Add a transition.",
+            operations: [
+              {
+                type: "set_transition",
+                transition: {
+                  transition_id:
+                    request.transitionId ??
+                    `transition-${randomUUID().replaceAll("-", "")}`,
+                  source_id: cut.sourceId,
+                  source_us: cut.sourceUs,
+                  kind: request.kind,
+                  duration_us: request.durationUs,
+                  color: request.color.toLowerCase(),
+                },
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(
+          error.code === "conflict"
+            ? "That cut already has this transition."
+            : error.message,
+        );
+      throw error;
+    }
+  });
+  register(channels.projectManualTransitionRemove, async (request) => {
+    assertManualTransitionRemoveRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "transition.remove",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "graphics" },
+            reason: "Remove a transition.",
+            operations: [
+              {
+                type: "remove_transition",
+                transition_id: request.transitionId,
+              },
             ],
           }),
       });

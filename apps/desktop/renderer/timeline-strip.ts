@@ -146,10 +146,14 @@ export function setupTimelineStrip(options: {
     graphicLayer.replaceChildren(
       ...graphics.map((graphic) => {
         const bar = document.createElement("div");
-        bar.className = "timeline-graphic";
+        // A transition is a small marker over its cut, not a labelled bar.
+        const transition = graphic.graphicId.startsWith("transition-");
+        bar.className = transition
+          ? "timeline-graphic timeline-transition"
+          : "timeline-graphic";
         bar.style.left = `calc(4px + (100% - 8px) * ${graphic.startUs / Math.max(1, durationUs)})`;
         bar.style.width = `calc((100% - 8px) * ${(graphic.endUs - graphic.startUs) / Math.max(1, durationUs)})`;
-        bar.textContent = graphic.name;
+        if (!transition) bar.textContent = graphic.name;
         bar.title = graphic.name;
         return bar;
       }),

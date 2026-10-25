@@ -79,6 +79,7 @@ export function committedDraftView(result: DraftReadResult): ProjectDraftView {
     transcriptEdits: structuredClone(draft.timeline.transcript_edits ?? []),
     zooms: structuredClone(draft.timeline.zooms ?? []),
     graphics: structuredClone(draft.timeline.graphics ?? []),
+    transitions: structuredClone(draft.timeline.transitions ?? []),
   };
   assertProjectDraftView(value);
   return value;
@@ -107,6 +108,8 @@ export async function invokeWithProjectDraftRefresh<T>(options: {
     options.toolName === "speed.set" ||
     options.toolName === "graphics.set" ||
     options.toolName === "graphics.remove" ||
+    options.toolName === "transition.set" ||
+    options.toolName === "transition.remove" ||
     options.toolName === "captions.configure" ||
     options.toolName === "audio.configure" ||
     options.toolName === "sound.set" ||
@@ -181,6 +184,7 @@ export class DesktopProjectRuntime {
       transcriptEdits: draft.transcriptEdits ?? [],
       zooms: draft.zooms ?? [],
       graphics: draft.graphics ?? [],
+      transitions: draft.transitions ?? [],
       ...(snapshot.schema_version === "1.1" ? { sources: summaries } : {}),
       timeline: draft.timeline,
       clips: draft.clips!,

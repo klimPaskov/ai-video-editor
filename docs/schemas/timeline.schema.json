@@ -255,6 +255,12 @@
       "items": { "$ref": "#/$defs/graphic_effect" },
       "description": "Draft motion graphics. Omitted when the draft has none."
     },
+    "transitions": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/transition_effect" },
+      "description": "Draft transitions anchored to cuts. Omitted when the draft has none."
+    },
     "captions": {
       "$ref": "#/$defs/caption_settings",
       "description": "The draft's caption choices. Omitted until the first change; the project's earlier per-project choice or the default applies until then."
@@ -368,6 +374,20 @@
         "composition_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       },
       "description": "A motion graphic: an HTML fragment and its CSS, or (with composition_sha256 and empty html and css) a stored HyperFrames composition played in a sealed child page, starting where source moment source_us plays in the edit and lasting duration_us of output time. Runtime rejects scripts, event handlers, script URLs, embedded documents, form and media elements, @import and any non-data, non-fragment URL, and requires source_us inside the source and unique IDs."
+    },
+    "transition_effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transition_id", "source_id", "source_us", "kind", "duration_us", "color"],
+      "properties": {
+        "transition_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_us": { "type": "integer", "minimum": 0 },
+        "kind": { "enum": ["dip", "wipe_right", "wipe_left", "iris"] },
+        "duration_us": { "type": "integer", "minimum": 200000, "maximum": 2000000 },
+        "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+      },
+      "description": "A styled overlay that hides a cut, centred on the first frame of the incoming clip, which starts at source moment source_us of source_id. It follows later cuts and is dormant while no cut is there. At most one per cut. It draws like a motion graphic over the video and changes no audio."
     },
     "zoom_effect": {
       "type": "object",

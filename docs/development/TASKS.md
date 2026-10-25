@@ -207,3 +207,12 @@ Acceptance: a finished video yields reviewed, captioned short clips without leav
 - [ ] P12-04 Full AI edit mode: brief, editing playbook, one long assistant run as one undoable pass, progress, Stop, summary and Polish. Implemented for Claude in the assistant drawer with Undo all over the run's recorded transactions (2026-10-15, docs/50); Codex/API full edits and a signed-in real-model run remain.
 - [ ] P12-05 External agents can connect to the running app's MCP server with a per-user token.
 - [x] P12-06 Native tests for graphics preview/export and a full AI edit run with a scripted assistant. `tests/native/graphics.test.ts` and `tests/native/full-edit.test.ts` pass in the isolated Docker guest (2026-10-15).
+
+## P13: transitions (user requirement 2026-10-25)
+
+- [x] P13-01 Transitions as draft effects anchored to cuts: validation, one per cut, dormant when the cut is gone, `set_transition` and `remove_transition` transactions with Undo and replay (ADR 0025, docs/53).
+- [x] P13-02 Draw them identically in the preview and the export as top-layer graphic intervals (dip, wipe right, wipe left, iris), leaving frames outside the window bit-identical.
+- [x] P13-03 Edit control (style, length, add, change, remove, timeline marker), the tools `transition.set` and `transition.remove` on Claude, Codex and the API-key providers, playbook and prompt guidance, schemas and examples. Natively tested in `tests/native/transitions.test.ts`.
+- [ ] P13-04 True cross-dissolve with handle frames, audio crossfades and "apply to every cut" remain open (docs/53).
+
+Acceptance: a cut can be given a transition by hand or by the assistant, it plays in the preview and the exported master exactly where it should, and Undo restores the draft.

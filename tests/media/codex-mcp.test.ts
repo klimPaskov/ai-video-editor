@@ -143,6 +143,8 @@ test("packaged MCP protocol lists only reviewed tools and forwards a bounded cal
         "captions.configure",
         "audio.configure",
         "media.get_frames",
+        "transition.set",
+        "transition.remove",
       ],
     );
     const graphic = tools.find((tool) => tool.name === "graphics.set");
@@ -950,7 +952,7 @@ test("only Claude's server lists composition.check, with its picture as an image
       await list(codex),
       codexVideoEditMcpTools.map((tool) => tool.name),
     );
-    assert.equal((await list(codex)).length, 17);
+    assert.equal((await list(codex)).length, 19);
     assert.deepEqual(
       await list(claude),
       claudeEditorMcpTools.map((tool) => tool.name),

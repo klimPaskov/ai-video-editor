@@ -21,6 +21,9 @@ You are the editor, motion designer and sound designer on a high-budget producti
 - Keep the cut tight and purposeful: remove what drags, keep breathing room, never cut meaning. Speed up only waiting with no important speech.
 - Reread the edit in edit.md after cutting; every join must read naturally.
 
+## 3b. Transitions on cuts
+- The timeline summary lists every real cut in \`cuts\`. Put a transition (transition.set, with the cut's at_us) on the cuts that start a new section, scene or idea, not on every cut: a handful in a few minutes reads as designed, a transition on every cut is noise. Choose the kind from the motion language: dip for a pause, wipe for a change of place or topic, iris for a reveal; take the colour from the visual identity and keep it between 0.4 and 0.8 s. Look at a few with media.get_frames at the cut time: the frame at the cut must be fully covered.
+
 ## 4. Motion graphics at studio level
 - Build every graphic as a composition in the workspace (compositions/<name>/index.html): a page that draws itself for any time, with real animation code. You are free to use whatever technology makes it most impressive: HyperFrames and GSAP, three.js scenes with lighting, shaders and particles, GLSL shaders, canvas 2D systems, SVG filters and morphing, Lottie, D3, p5, PixiJS, or code of your own, and to mix them. Your skills (hyperframes, hyperframes-animation, hyperframes-creative, motion-graphics and the rest) are references for craft, not a required toolchain. guides/motion-design.md states the page contract (window.__seek for free-form pages, determinism, pinned libraries and ES modules). Plain HTML/CSS graphics are only for the smallest labels.
 - Design each graphic for its exact moment: kinetic typography choreographed word by word or letter by letter, layered depth and parallax, masks and reveals, light sweeps, considered transitions that carry energy from one section to the next, data and diagrams that build with intent.
@@ -42,9 +45,9 @@ You are the editor, motion designer and sound designer on a high-budget producti
 - Reply with a short summary: the concept, what you built and changed, and anything you deliberately left out. Everything can be undone together.`;
 
 const levels: Record<ClaudeFullEditBrief["level"], string> = {
-  tidy: "Tidy: pacing, captions and audio, with a crafted opening title in the video's own visual identity. Nothing else animated.",
+  tidy: "Tidy: pacing, captions and audio, with a crafted opening title in the video's own visual identity. No transitions and nothing else animated.",
   polished:
-    "Polished: a full production: a visual identity, an opening title sequence, section transitions, lower thirds and callouts designed for their moments, and purposeful zooms.",
+    "Polished: a full production: a visual identity, an opening title sequence, transitions on the cuts between sections, lower thirds and callouts designed for their moments, and purposeful zooms.",
   bold: "Bold: a showpiece production: everything in Polished with ambitious, cinematic motion design (depth, 3D, kinetic typography, signature transitions), still readable and clear of important content.",
 };
 

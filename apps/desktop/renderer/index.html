@@ -647,6 +647,42 @@
                       Remove zoom
                     </button>
                   </span>
+                  <span id="transition-tools" class="transition-tools">
+                    <select
+                      id="transition-kind"
+                      aria-label="Transition style"
+                      title="Style of the transition at the cut nearest the playhead"
+                    >
+                      <option value="dip:#000000">Dip to black</option>
+                      <option value="dip:#ffffff">Dip to white</option>
+                      <option value="wipe_right:#1a73e8">Wipe right</option>
+                      <option value="wipe_left:#1a73e8">Wipe left</option>
+                      <option value="iris:#000000">Iris</option>
+                    </select>
+                    <select
+                      id="transition-length"
+                      aria-label="Transition length"
+                    >
+                      <option value="300000">0.3 s</option>
+                      <option value="600000" selected>0.6 s</option>
+                      <option value="1000000">1 s</option>
+                    </select>
+                    <button
+                      id="transition-add"
+                      class="tool"
+                      data-icon="transition"
+                    >
+                      Add transition
+                    </button>
+                    <button
+                      id="transition-remove"
+                      class="tool"
+                      data-icon="clear"
+                      hidden
+                    >
+                      Remove transition
+                    </button>
+                  </span>
                 </div>
                 <div id="restore-actions" class="restore-actions">
                   <button

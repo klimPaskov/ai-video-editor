@@ -36,6 +36,8 @@ const activityLabels: Record<string, { label: string; mutating: boolean }> = {
   speed_set: { label: "Changing playback speed", mutating: true },
   graphics_set: { label: "Adding a graphic", mutating: true },
   graphics_remove: { label: "Removing a graphic", mutating: true },
+  transition_set: { label: "Adding a transition", mutating: true },
+  transition_remove: { label: "Removing a transition", mutating: true },
   captions_configure: { label: "Setting captions", mutating: true },
   audio_configure: { label: "Setting audio", mutating: true },
   media_get_frames: { label: "Looking at the edit", mutating: false },

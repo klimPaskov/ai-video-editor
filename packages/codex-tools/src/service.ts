@@ -15,6 +15,14 @@ import {
   zoomLimits,
   zoomSourceRange,
 } from "../../domain/src/zoom.ts";
+import {
+  cutAt,
+  transitionCuts,
+  transitionIntervals,
+  transitionKinds,
+  transitionLimits,
+  type TransitionKind,
+} from "../../domain/src/transitions.ts";
 import { assistantGraphicLimits, frameToolLimits } from "./frames.ts";
 import {
   assertGraphicContent,
@@ -50,6 +58,8 @@ export const codexVideoEditToolNames = [
   "captions.configure",
   "audio.configure",
   "media.get_frames",
+  "transition.set",
+  "transition.remove",
 ] as const;
 
 /**
@@ -339,6 +349,12 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
     clipMap,
     draft.timeline.duration_us,
   );
+  const placedTransitions = transitionIntervals(
+    draft.timeline.transitions ?? [],
+    clipMap,
+    draft.timeline.duration_us,
+  );
+  const cuts = transitionCuts(clipMap);
   const placedSounds = soundIntervals(
     draft.timeline.sounds ?? [],
     clipMap,
@@ -417,6 +433,35 @@ function safeDraft(draft: DraftReadResult["draft"], undoId: string | null) {
           : null,
         html_bytes: new TextEncoder().encode(graphic.html).length,
         css_bytes: new TextEncoder().encode(graphic.css).length,
+      };
+    }),
+    // Real cuts of the edit, where a transition can go (`at_us` is the output
+    // time of the incoming clip's first frame, for transition.set).
+    cuts: cuts.map((cut) => ({
+      at_us: cut.atUs,
+      left_clip_us: cut.beforeUs,
+      right_clip_us: cut.afterUs,
+      transition_id:
+        (draft.timeline.transitions ?? []).find(
+          (transition) =>
+            transition.source_id === cut.sourceId &&
+            transition.source_us === cut.sourceUs,
+        )?.transition_id ?? null,
+    })),
+    transitions: (draft.timeline.transitions ?? []).map((transition) => {
+      const placed = placedTransitions.find(
+        (interval) => interval.transitionId === transition.transition_id,
+      );
+      return {
+        transition_id: transition.transition_id,
+        kind: transition.kind,
+        duration_us: transition.duration_us,
+        color: transition.color,
+        // Null when its cut is gone and the transition is dormant.
+        at_us: placed ? placed.cutUs : null,
+        timeline_range: placed
+          ? { start_us: placed.startUs, end_us: placed.endUs }
+          : null,
       };
     }),
     // Music and sound effects; empty when the draft has none.
@@ -567,6 +612,10 @@ export class CodexVideoEditToolService {
           return await this.setGraphic(input);
         case "graphics.remove":
           return await this.removeGraphic(input);
+        case "transition.set":
+          return await this.setTransition(input);
+        case "transition.remove":
+          return await this.removeTransition(input);
         case "captions.configure":
           return await this.configureCaptions(input);
         case "audio.configure":
@@ -1112,6 +1161,145 @@ export class CodexVideoEditToolService {
       operations: [{ type: "remove_zoom", zoom_id: request.zoom_id }],
     });
     return safeMutation(result, "Zoom removed from the active draft.");
+  }
+
+  /**
+   * A transition sits on a cut: `at_us` is the output time of the incoming
+   * clip's first frame, which must be a real cut of the current draft. It is
+   * anchored to the source moment there, so it follows later cuts. Setting
+   * one on a cut that has one replaces it.
+   */
+  private async setTransition(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      [
+        "schema_version",
+        "request_id",
+        "project_id",
+        "draft_id",
+        "base_revision_id",
+        "expected_sequence",
+        "expected_timeline_sha256",
+        "pass_group_id",
+        "reason",
+        "at_us",
+        "kind",
+      ],
+      ["transition_id", "duration_us", "color"],
+    );
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    let transitionId: string | null = null;
+    if (request.transition_id !== undefined) {
+      id(request.transition_id);
+      transitionId = request.transition_id;
+    }
+    integer(request.at_us, 1);
+    if (!transitionKinds.includes(request.kind as TransitionKind))
+      reject("invalid_request");
+    const durationUs =
+      request.duration_us === undefined ? 600_000 : request.duration_us;
+    integer(durationUs, transitionLimits.minDurationUs);
+    if (durationUs > transitionLimits.maxDurationUs) reject("invalid_request");
+    const color = request.color === undefined ? "#000000" : request.color;
+    if (typeof color !== "string" || !/^#[0-9a-fA-F]{6}$/u.test(color))
+      reject("invalid_request");
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    // Look up the cut in the exact head the caller read; the commit re-checks.
+    const { draft } = await this.drafts.snapshot(this.activeProjectId);
+    if (
+      draft.draft_id !== request.draft_id ||
+      draft.base_revision_id !== request.base_revision_id ||
+      draft.draft_sequence !== request.expected_sequence ||
+      draft.timeline_sha256 !== request.expected_timeline_sha256
+    )
+      reject("stale_draft");
+    const existing =
+      transitionId === null
+        ? undefined
+        : draft.timeline.transitions?.find(
+            (transition) => transition.transition_id === transitionId,
+          );
+    if (transitionId !== null && !existing) reject("edit_conflict");
+    const cut = cutAt(
+      draft.timeline.clips.map((clip) => ({
+        sourceId: clip.source_id,
+        timelineStartUs: clip.timeline_start_us,
+        timelineEndUs: clip.timeline_end_us,
+        sourceStartUs: clip.source_start_us,
+        sourceEndUs: clip.source_end_us,
+        ...(clip.speed ? { speed: clip.speed } : {}),
+      })),
+      request.at_us,
+    );
+    if (!cut) reject("invalid_request");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "graphics" },
+      reason: request.reason,
+      operations: [
+        {
+          type: "set_transition",
+          transition: {
+            transition_id:
+              transitionId ?? `transition-${randomUUID().replaceAll("-", "")}`,
+            source_id: cut.sourceId,
+            source_us: cut.sourceUs,
+            kind: request.kind as TransitionKind,
+            duration_us: durationUs,
+            color: color.toLowerCase(),
+          },
+        },
+      ],
+    });
+    return safeMutation(
+      result,
+      transitionId === null
+        ? "Transition added to the active draft."
+        : "Transition changed on the active draft.",
+    );
+  }
+
+  private async removeTransition(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "transition_id",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    id(request.transition_id);
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "graphics" },
+      reason: request.reason,
+      operations: [
+        { type: "remove_transition", transition_id: request.transition_id },
+      ],
+    });
+    return safeMutation(result, "Transition removed from the active draft.");
   }
 
   /**
