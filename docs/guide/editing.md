@@ -5,7 +5,7 @@ All edits go into one draft. Your original footage is never changed, and every e
 ## Auto Edit
 
 - **Transcribe locally** creates a word-timed transcript on your computer.
-- **Magic Edit** proposes a first cut from the transcript and the audio: long pauses, filler words and repeated takes. Choose **Gentle**, **Balanced** or **Tight**. The cut is applied as one step you can undo.
+- **Magic Edit** proposes a first cut from the transcript and the audio: long pauses, filler words and repeated takes. Choose **Natural**, **Balanced** or **Tight** pacing. Long pauses are shortened and fillers removed as one step you can undo, then Claude makes the story edit.
 - **Captions**: turn captions on, then choose a style (Plain, Highlight words or Minimal), a size, and top or bottom placement. Captions follow every cut. They are shown in the preview and exported as an .srt file, or burned into the video if you choose **Burn into export**.
 - **Audio**: **Even out volume** normalises loudness to −16 LUFS; **Reduce background noise** removes steady noise. Both apply to exports; the source is unchanged.
 

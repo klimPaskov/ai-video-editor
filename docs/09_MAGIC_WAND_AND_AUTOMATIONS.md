@@ -64,7 +64,7 @@ Automatically apply only high-confidence, low-risk edits under the chosen preset
 
 ## Presets
 
-- Gentle: remove only clear dead air and failed takes.
+- Natural (`gentle`): pauses over 0.8 s shortened to 0.5 s, fillers removed, clear dead air and failed takes.
 - Balanced: normal tutorial pacing.
 - Tight: stronger filler and pause cleanup, still protects meaning.
 - Custom: user-selected switches and thresholds.
@@ -89,11 +89,11 @@ The rough cut is never deterministic. Run Magic Edit transcribes locally, runs t
 
 The steps below described the earlier rule-based Magic Edit. Its plan now only produces evidence for Claude; step 3 no longer applies cuts.
 
-Auto Edit now has Magic Edit with a Gentle, Balanced (default) or Tight preset and Run Magic Edit. It uses only local evidence and sends nothing to an AI provider.
+Auto Edit now has Magic Edit with a Natural, Balanced (default) or Tight preset and Run Magic Edit. It uses only local evidence and sends nothing to an AI provider.
 
 1. **Transcript.** It reuses a completed local transcript, or starts transcription once and follows that job; a failed or cancelled transcription ends the run with a fixed message.
 2. **Plan** (`packages/domain/src/magic-wand.ts`). From the deterministic candidate report and silence analysis it cuts only:
-   - word-free detected silence of at least 2.0 / 1.0 / 0.6 s (Gentle / Balanced / Tight), shortened to keep 0.8 / 0.5 / 0.3 s split across both sides;
+   - ADR 0026 (this replaces the older detected-silence rule): a gap between words (or before the first / after the last word) of at least 0.8 / 0.45 / 0.3 s (Natural / Balanced / Tight), shortened to keep 0.5 / 0.3 / 0.2 s. The cut sits in the quietest part of the gap by a 10 ms loudness track and is refused unless that stretch is clearly under the speech level; without loudness data a gap must be mostly detected silence. The app applies pause and filler cuts itself as one undoable transaction; Claude is told how many and handles the story-level cuts;
    - Balanced and Tight: a single configured filler (um, uh, erm, hmm for English) with at least 40 ms of non-speech on both sides and no confidence below 0.5, cut at the midpoints of the surrounding gaps;
    - the earlier copy of an exactly repeated sentence, so the final take is kept, with the same clean-gap rule.
    Any cut that would touch a protected, uncertain, name, number, negation or overlapping word, or split a word it does not remove entirely, is dropped. False starts, self-corrections, spoken editor cues and skipped items are counted as left for review.

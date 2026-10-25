@@ -1739,3 +1739,109 @@ test(
     }
   },
 );
+
+test(
+  "a cut join fades both sides in the exported audio, and only when asked",
+  { timeout: 180_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-join-fade-"));
+    try {
+      const recorded = join(directory, "tone.mkv");
+      await ffmpeg([
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=96x64:rate=30:duration=3",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=48000:duration=3",
+        "-af",
+        "volume=0.8",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "pcm_s16le",
+        recorded,
+      ]);
+      const input = await source(directory, "join.mkv", [
+        "-i",
+        recorded,
+        "-c",
+        "copy",
+      ]);
+      // Second 0-1 then second 2-3: one real cut at output 1.0 s.
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 0,
+            sourceEndUs: 1_000_000,
+          },
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 2_000_000,
+            sourceEndUs: 3_000_000,
+          },
+        ],
+        [input],
+      );
+      const decodeAround = async (name: string, joinFadeMs?: number) => {
+        const output = join(directory, name);
+        await exportDraft({
+          plan,
+          profile: "lossless_master",
+          outputPath: output,
+          replace: false,
+          ...(joinFadeMs ? { joinFadeMs } : {}),
+        });
+        const pcm = await ffmpeg([
+          "-i",
+          output,
+          "-map",
+          "0:a:0",
+          "-c:a",
+          "pcm_s16le",
+          "-f",
+          "s16le",
+          "pipe:1",
+        ]);
+        const at = (frame: number) => {
+          let peak = 0;
+          // The master's audio is stereo or mono; take the loudest channel.
+          const channels = pcm.length / 2 / 96_000;
+          for (let channel = 0; channel < channels; channel++)
+            peak = Math.max(
+              peak,
+              Math.abs(pcm.readInt16LE((frame * channels + channel) * 2)),
+            );
+          return peak;
+        };
+        return { at };
+      };
+      const plain = await decodeAround("plain.mkv");
+      const faded = await decodeAround("faded.mkv", 10);
+      // Far from the join nothing changes.
+      assert.equal(faded.at(24_000), plain.at(24_000));
+      assert.equal(faded.at(72_000), plain.at(72_000));
+      // The frames next to the cut at 48 000 are quiet only when faded.
+      const edge = [47_999, 48_000];
+      for (const frame of edge)
+        assert.ok(
+          faded.at(frame) < 1500,
+          `faded sample ${frame} is ${faded.at(frame)}`,
+        );
+      assert.ok(
+        Math.max(plain.at(47_999), plain.at(48_000)) > 1500 ||
+          plain.at(47_999) !== faded.at(47_999),
+      );
+      // 20 ms from the join the fade is over.
+      assert.equal(faded.at(48_000 - 960), plain.at(48_000 - 960));
+      assert.equal(faded.at(48_000 + 960), plain.at(48_000 + 960));
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

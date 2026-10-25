@@ -4,10 +4,11 @@ import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
 
 const presetNotes: Record<MagicWandPreset, string> = {
   gentle:
-    "Claude removes clear retakes, repeated ideas, false starts and long dead air.",
+    "Shortens only long pauses to about half a second and removes clear fillers, then Claude removes clear retakes and dead air.",
   balanced:
-    "Claude makes a story edit: repeated ideas, retakes, false starts, tangents and dead air go.",
-  tight: "Claude makes a brisk story edit, keeping everything the story needs.",
+    "Shortens pauses over half a second to a short beat and removes fillers, then Claude makes a story edit.",
+  tight:
+    "Keeps only a hint of a pause and removes fillers, then Claude makes a brisk story edit.",
 };
 
 function seconds(us: number): string {

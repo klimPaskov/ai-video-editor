@@ -11,6 +11,7 @@ import {
   selectDeliveryEncoder,
 } from "./delivery-encoder.ts";
 import { mixSoundLayers, type SoundMixLayer } from "./sound-mix.ts";
+import { fadeClipEdges, joinFadeFrames } from "./join-fade.ts";
 import { atempoChain } from "../../domain/src/speed.ts";
 import type { PresentationTiming } from "./presentation-timing.ts";
 import type { MediaExecutables } from "./lossless.ts";
@@ -746,6 +747,12 @@ export interface ExportRequest {
    * optionally followed by burned-in captions at the new size.
    */
   compose?: ExportComposition;
+  /**
+   * Milliseconds of fade on each side of an audio cut (where consecutive
+   * clips are not contiguous in their source), so a join does not click.
+   * Unset leaves the samples exactly as decoded.
+   */
+  joinFadeMs?: number;
   /** Speech cleanup applied to the assembled audio before encoding. */
   audioCleanup?: { normalize: boolean; denoise: boolean };
   /**
@@ -1051,9 +1058,39 @@ export async function exportDraft(
       };
       const output = createWriteStream(audioPath, { mode: 0o600 });
       try {
-        for (const clip of plan.clips) {
+        for (const [clipIndex, clip] of plan.clips.entries()) {
           const source = decodedAudio.get(clip.path)!;
           const offset = clip.firstSample * sampleBytes;
+          // Fade only across real cuts, never inside continuous audio.
+          const joins = (a: PlannedClip, b: PlannedClip) =>
+            !(
+              a.path === b.path &&
+              a.speed === 1 &&
+              b.speed === 1 &&
+              a.firstSample + a.sampleCount === b.firstSample
+            );
+          const previous = plan.clips[clipIndex - 1];
+          const next = plan.clips[clipIndex + 1];
+          const fadeFrames = joinFadeFrames(
+            audio.sampleRate,
+            request.joinFadeMs ?? 0,
+            clip.outputSamples,
+          );
+          const fade = {
+            raw: audio.raw,
+            channels: audio.channels,
+            totalFrames: clip.outputSamples,
+            inFrames: previous && joins(previous, clip) ? fadeFrames : 0,
+            outFrames: next && joins(clip, next) ? fadeFrames : 0,
+          };
+          const faded = fade.inFrames > 0 || fade.outFrames > 0;
+          let written = 0;
+          const fadeThenWrite = async (buffer: Buffer) => {
+            if (faded) fadeClipEdges(buffer, written, fade);
+            written += buffer.length;
+            hash.update(buffer);
+            await writeChunk(output, buffer);
+          };
           const expected = clip.sampleCount * sampleBytes;
           const available = Math.max(
             0,
@@ -1062,12 +1099,8 @@ export async function exportDraft(
           // A source whose audio ends before its video contributes silence.
           const silence = Buffer.alloc(expected - available);
           if (clip.speed === 1) {
-            const write = async (buffer: Buffer) => {
-              hash.update(buffer);
-              await writeChunk(output, buffer);
-            };
-            await copyRange(source.file, offset, available, write);
-            if (silence.length) await write(silence);
+            await copyRange(source.file, offset, available, fadeThenWrite);
+            if (silence.length) await fadeThenWrite(silence);
           } else {
             // Time-stretch the slice without changing pitch, then fix its
             // length to the exact planned sample count.
@@ -1115,10 +1148,7 @@ export async function exportDraft(
                 "FIDELITY_MISMATCH",
                 "Sped-up audio does not match the draft length.",
               );
-            await copyRange(stretched, 0, length, async (buffer) => {
-              hash.update(buffer);
-              await writeChunk(output, buffer);
-            });
+            await copyRange(stretched, 0, length, fadeThenWrite);
             await rm(slice, { force: true });
             await rm(stretched, { force: true });
           }

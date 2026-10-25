@@ -58,9 +58,9 @@ Render representative joins, zooms, speed boundaries, captions, layouts, and aud
 
 ## Presets
 
-### Gentle
+### Natural (preset `gentle`)
 
-Remove clear failed material and excessive silence. Use few effects.
+Shorten only pauses over 0.8 s to 0.5 s and remove clear fillers (ADR 0026); Claude then removes clear failed material and dead air. Use few effects.
 
 ### Balanced
 

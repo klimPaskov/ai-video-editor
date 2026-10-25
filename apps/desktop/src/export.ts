@@ -503,6 +503,7 @@ export class DesktopExports {
         },
         signal: job.controller.signal,
         audioCleanup: job.audio,
+        joinFadeMs: 8,
         ...(job.sounds.length ? { sounds: { layers: job.sounds } } : {}),
         ...composition(job, plan.format.video, graphics),
         onProgress: (progress) => {
