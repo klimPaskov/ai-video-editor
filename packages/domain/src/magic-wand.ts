@@ -1,6 +1,7 @@
 import { timelineAt } from "./speed.ts";
 import {
   isQuietSpan,
+  loudRuns,
   quietestWindowStart,
   speechLevel,
   type EnergyTrack,
@@ -87,6 +88,12 @@ export interface MagicPlan {
   /** Candidates found but not cut automatically. */
   leftForReview: number;
 }
+
+/** A sound the transcript does not hold counts as a hesitation in this range. */
+const hesitationMinimumUs = 300_000;
+const hesitationMaximumUs = 1_200_000;
+/** Clear air it needs on each side, from the neighbouring words. */
+const hesitationAirUs = 100_000;
 
 const blockingFlags = new Set([
   "uncertain",
@@ -201,6 +208,31 @@ export function planMagicWandCuts(
       }
       const cutLength = length - config.keptPauseUs;
       if (cutLength < 10_000) continue;
+      // A drawn-out sound the transcript does not hold ("um", "uh"): a loud
+      // stretch of 0.3 to 1.2 s with clear air on both sides. Taking the gap
+      // out (keeping the preset's beat) removes it with the pause.
+      if (track && config.removeFillers) {
+        const sound = loudRuns(
+          track,
+          gap.start,
+          gap.end,
+          level,
+          hesitationMinimumUs,
+        ).find(
+          (run) =>
+            run.endUs - run.startUs <= hesitationMaximumUs &&
+            run.startUs - gap.start >= hesitationAirUs &&
+            gap.end - run.endUs >= hesitationAirUs,
+        );
+        if (sound) {
+          const from = gap.start + config.keptPauseUs / 2;
+          const to = gap.end - config.keptPauseUs / 2;
+          if (to - from >= sound.endUs - sound.startUs) {
+            add(from, to, "filler");
+            continue;
+          }
+        }
+      }
       const start = track
         ? quietestWindowStart(track, gap.start, gap.end, cutLength)
         : gap.start + config.keptPauseUs / 2;

@@ -387,3 +387,52 @@ test("IPC schema Magic Edit messages equal the domain's fixed messages", async (
     ...Object.values(magicWandIssues),
   ]);
 });
+
+test("a drawn-out sound the transcript lacks is taken out with its pause; speech it missed is not", () => {
+  wordCounter = 0;
+  const input = source(
+    [
+      segment("segment-01", [
+        ["Open", 200_000, 600_000],
+        ["the", 3_000_000, 3_200_000],
+      ]),
+    ],
+    [],
+  );
+  const track = (loud: [number, number][]) => ({
+    frameUs: 10_000,
+    rms: energy(8_000_000, 0.001, [
+      [200_000, 600_000, 0.2],
+      [3_000_000, 3_200_000, 0.2],
+      ...loud.map(([a, b]) => [a, b, 0.15] as [number, number, number]),
+    ]).rms,
+  });
+  const plan = (loud: [number, number][]) =>
+    planMagicWandCuts(
+      [input],
+      "balanced",
+      new Map([[input.sourceId, track(loud)]]),
+    );
+  // Only the gap between the two words matters here (the end of the
+  // recording is shortened as usual).
+  const between = (loud: [number, number][]) =>
+    plan(loud).cuts.filter((cut) => cut.startUs < 3_000_000);
+  // A 0.5 s "um" in the middle of a 2.4 s gap, clear air around it.
+  const um = between([[1_500_000, 2_000_000]]);
+  assert.equal(um.length, 1);
+  assert.deepEqual(um[0]!.kinds, ["filler"]);
+  // The whole gap goes except the preset's 0.3 s beat, split either side.
+  assert.equal(um[0]!.startUs, 750_000);
+  assert.equal(um[0]!.endUs, 2_850_000);
+  // Too long to be a hesitation: it may be speech the transcript missed.
+  assert.deepEqual(between([[1_000_000, 2_800_000]]), []);
+  // Touching the neighbouring word: no clear air, so not a separate sound;
+  // the gap is only shortened as a pause.
+  assert.deepEqual(
+    between([[650_000, 1_100_000]]).map((cut) => cut.kinds),
+    [["pause"]],
+  );
+  // Too short to matter: the gap is shortened like any pause.
+  const click = between([[1_500_000, 1_650_000]]);
+  assert.deepEqual(click[0]!.kinds, ["pause"]);
+});

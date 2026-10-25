@@ -65,6 +65,37 @@ export function quietestWindowStart(
 }
 
 /**
+ * Stretches of [fromUs, toUs) where the audio stays above `ratio` of the
+ * speech level for at least `minimumUs`. Used to find sounds the transcript
+ * does not hold (a drawn-out "um", a breath, a laugh).
+ */
+export function loudRuns(
+  track: EnergyTrack,
+  fromUs: number,
+  toUs: number,
+  level: number,
+  minimumUs: number,
+  ratio = 0.25,
+): { startUs: number; endUs: number }[] {
+  const runs: { startUs: number; endUs: number }[] = [];
+  if (level <= 0) return runs;
+  let start: number | null = null;
+  const first = Math.max(0, Math.floor(fromUs / track.frameUs));
+  const last = Math.min(track.rms.length, Math.ceil(toUs / track.frameUs));
+  for (let index = first; index <= last; index++) {
+    const loud = index < last && track.rms[index]! > level * ratio;
+    if (loud && start === null) start = index;
+    if (!loud && start !== null) {
+      const startUs = start * track.frameUs;
+      const endUs = index * track.frameUs;
+      if (endUs - startUs >= minimumUs) runs.push({ startUs, endUs });
+      start = null;
+    }
+  }
+  return runs;
+}
+
+/**
  * How loud this recording's speech is: the 80th percentile of frame energy
  * among frames above the noise floor. Zero for a silent track.
  */
