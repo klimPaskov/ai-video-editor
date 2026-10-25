@@ -292,8 +292,7 @@ export function segmentArguments(request: SegmentRequest): string[] {
           "3",
           "-g",
           "1",
-          "-slices",
-          "8",
+          // The encoder picks a slice count that is valid for the size.
           "-slicecrc",
           "1",
           "-pix_fmt",
