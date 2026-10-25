@@ -884,7 +884,7 @@ export function assertApplyDraftTransactionRequest(
   if (
     !Array.isArray(value.operations) ||
     value.operations.length < 1 ||
-    value.operations.length > 64
+    value.operations.length > 1024
   )
     invalid();
   const clips = new Set<string>();

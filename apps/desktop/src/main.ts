@@ -155,6 +155,7 @@ import {
   SoundAssetError,
   SoundAssetStore,
 } from "../../../packages/project-store/src/sounds.ts";
+import { decodeEnergyTrack } from "../../../packages/media-engine/src/audio-energy.ts";
 import { probeSoundFile } from "../../../packages/media-engine/src/sound-probe.ts";
 import { sweepPartialExports, sweepTemporaryFolders } from "./private-notes.ts";
 import { roughCutTools } from "./rough-cut-playbook.ts";
@@ -1586,6 +1587,54 @@ async function start(): Promise<void> {
       });
     },
     roughCutEditor,
+    {
+      tightener: {
+        async energy(projectId, sourceId) {
+          const { project } = await drafts.snapshotWithProject(projectId);
+          const sources =
+            project.schema_version === "1.1"
+              ? project.sources
+              : [project.source];
+          const source = sources.find((item) => item.source_id === sourceId);
+          if (!source) return null;
+          return decodeEnergyTrack({
+            ffmpeg: mediaExecutables.ffmpeg,
+            path: source.managed_path,
+          });
+        },
+        async applyRanges(projectId, draft, ranges) {
+          if (activeProjectId !== projectId)
+            throw new CodexVideoEditToolError("inactive_project");
+          await invokeWithProjectDraftRefresh({
+            toolName: "cut.delete_ranges",
+            projectId,
+            activeProjectId: () => activeProjectId,
+            drafts,
+            notify: publishDraftNotice,
+            work: () =>
+              drafts.applyMagicWand({
+                schema_version: "1.0",
+                request_id: randomUUID(),
+                project_id: projectId,
+                draft_id: draft.draft_id,
+                base_revision_id: draft.base_revision_id,
+                expected_sequence: draft.draft_sequence,
+                expected_timeline_sha256: draft.timeline_sha256,
+                pass_group: {
+                  pass_group_id: randomUUID(),
+                  kind: "spoken_cut",
+                },
+                reason: "Tighten pauses and fillers.",
+                operations: ranges.map((range) => ({
+                  type: "ripple_delete" as const,
+                  start_us: range.start_us,
+                  end_us: range.end_us,
+                })),
+              }),
+          });
+        },
+      },
+    },
   );
   magicWandBusy = (projectId) => magicWand.busy(projectId);
   register(channels.magicGet, async (request) => {

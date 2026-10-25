@@ -1,4 +1,10 @@
 import { timelineAt } from "./speed.ts";
+import {
+  isQuietSpan,
+  quietestWindowStart,
+  speechLevel,
+  type EnergyTrack,
+} from "./audio-energy.ts";
 import type {
   LocalTranscript,
   TranscriptAnalysis,
@@ -7,12 +13,14 @@ import type {
 import type { SpokenCandidateReport } from "./spoken-candidates.ts";
 
 /**
- * Deterministic Magic Edit first cut. It turns only low-risk local evidence
- * into cuts: detected silence longer than the preset (keeping breathing
- * room), isolated configured fillers with clean gaps on both sides, and the
- * earlier copy of an exactly repeated sentence (the final take is kept).
- * Anything touching a protected or uncertain word, false starts,
- * self-corrections and spoken editor cues stay for review.
+ * Deterministic tightening. It turns only low-risk local evidence into cuts:
+ * pauses longer than the preset (found from the gaps between words and
+ * confirmed by the audio; keeping breathing room), isolated configured
+ * fillers with clean gaps on both sides, and the earlier copy of an exactly
+ * repeated sentence (the final take is kept). Each pause cut sits in the
+ * quietest part of its gap when the audio's loudness is known. Anything
+ * touching a protected or uncertain word, false starts, self-corrections and
+ * spoken editor cues stay for review.
  */
 
 export const magicWandPresets = ["gentle", "balanced", "tight"] as const;
@@ -30,21 +38,24 @@ export interface MagicWandPresetConfig {
 export const magicWandPresetConfigs: Readonly<
   Record<MagicWandPreset, Readonly<MagicWandPresetConfig>>
 > = Object.freeze({
+  // Natural: only the clearly long pauses, kept long enough to breathe.
   gentle: Object.freeze({
-    minimumPauseUs: 2_000_000,
-    keptPauseUs: 800_000,
-    removeFillers: false,
-    removeRepeatedTakes: true,
-  }),
-  balanced: Object.freeze({
-    minimumPauseUs: 1_000_000,
+    minimumPauseUs: 800_000,
     keptPauseUs: 500_000,
     removeFillers: true,
     removeRepeatedTakes: true,
   }),
-  tight: Object.freeze({
-    minimumPauseUs: 600_000,
+  // Balanced: the usual hesitations go; a sentence still gets a beat.
+  balanced: Object.freeze({
+    minimumPauseUs: 450_000,
     keptPauseUs: 300_000,
+    removeFillers: true,
+    removeRepeatedTakes: true,
+  }),
+  // Tight: quick delivery with only a hint of a gap.
+  tight: Object.freeze({
+    minimumPauseUs: 300_000,
+    keptPauseUs: 200_000,
     removeFillers: true,
     removeRepeatedTakes: true,
   }),
@@ -97,10 +108,15 @@ function sourceWords(transcript: LocalTranscript): Word[] {
     .sort((a, b) => a.start_us - b.start_us || a.end_us - b.end_us);
 }
 
-/** Plans the cuts for every source; ranges are source time, half-open. */
+/**
+ * Plans the cuts for every source; ranges are source time, half-open.
+ * `energy` (per source) lets a pause cut sit in the quietest part of its gap
+ * and refuses a gap whose audio is not clearly quiet.
+ */
 export function planMagicWandCuts(
   sources: readonly MagicSourceInput[],
   preset: MagicWandPreset,
+  energy: ReadonlyMap<string, EnergyTrack> = new Map(),
 ): MagicPlan {
   const config = magicWandPresetConfigs[preset];
   const cuts: MagicCut[] = [];
@@ -148,22 +164,52 @@ export function planMagicWandCuts(
       };
     };
 
-    // Pauses: word-free detected silence longer than the preset.
-    for (const silence of analysis.silences) {
-      let start = silence.start_us;
-      let end = silence.end_us;
+    // Pauses: the gaps between words (and before the first and after the
+    // last) longer than the preset. Without the audio's loudness a gap must
+    // also be mostly detected silence; with it, the cut itself must be quiet.
+    // A transcript with no words says nothing about speech, so it is left.
+    const track = energy.get(source.sourceId);
+    const level = track ? speechLevel(track) : 0;
+    const gapsOfSpeech: { start: number; end: number }[] = [];
+    if (words.length > 0) {
+      let cursor = 0;
       for (const word of words) {
-        if (word.end_us <= start || word.start_us >= end) continue;
-        // A word inside the silence splits it; keep the larger free side.
-        if (word.start_us - start >= end - word.end_us) end = word.start_us;
-        else start = word.end_us;
+        if (word.start_us - cursor >= config.minimumPauseUs)
+          gapsOfSpeech.push({ start: cursor, end: word.start_us });
+        cursor = Math.max(cursor, word.end_us);
       }
-      if (end - start < config.minimumPauseUs) continue;
-      add(
-        start + config.keptPauseUs / 2,
-        end - config.keptPauseUs / 2,
-        "pause",
-      );
+      if (transcript.duration_us - cursor >= config.minimumPauseUs)
+        gapsOfSpeech.push({ start: cursor, end: transcript.duration_us });
+    }
+    for (const gap of gapsOfSpeech) {
+      const length = gap.end - gap.start;
+      if (!track) {
+        const silent = analysis.silences.reduce(
+          (total, silence) =>
+            total +
+            Math.max(
+              0,
+              Math.min(silence.end_us, gap.end) -
+                Math.max(silence.start_us, gap.start),
+            ),
+          0,
+        );
+        if (silent < length * 0.5) {
+          leftForReview++;
+          continue;
+        }
+      }
+      const cutLength = length - config.keptPauseUs;
+      if (cutLength < 10_000) continue;
+      const start = track
+        ? quietestWindowStart(track, gap.start, gap.end, cutLength)
+        : gap.start + config.keptPauseUs / 2;
+      // Audio that is not clearly quiet may be speech the transcript missed.
+      if (track && !isQuietSpan(track, start, start + cutLength, level)) {
+        leftForReview++;
+        continue;
+      }
+      add(start, start + cutLength, "pause");
     }
 
     for (const candidate of report.candidates) {

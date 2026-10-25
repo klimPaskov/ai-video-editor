@@ -6,6 +6,7 @@ import {
   planMagicWandCuts,
   type MagicSourceInput,
 } from "../../packages/domain/src/magic-wand.ts";
+import type { EnergyTrack } from "../../packages/domain/src/audio-energy.ts";
 import {
   analyzeSpokenCandidates,
   createDefaultSpokenCandidatePolicy,
@@ -124,15 +125,16 @@ function fixture(): MagicSourceInput {
   );
 }
 
-test("gentle keeps fillers and shortens only very long pauses; the final take stays", () => {
+test("gentle shortens only long pauses and still lifts out a clean filler; the final take stays", () => {
   const plan = planMagicWandCuts([fixture()], "gentle");
   assert.deepEqual(
     plan.cuts.map(({ startUs, endUs, kinds }) => [startUs, endUs, kinds]),
     [
       // Earlier copy of the repeated sentence, joined at gap midpoints.
       [250_000, 1_850_000, ["repeated_take"]],
-      // 2.2 s pause keeps 0.8 s.
-      [3_700_000, 5_100_000, ["pause"]],
+      // The 2.8 s gap keeps 0.5 s.
+      [3_450_000, 5_750_000, ["pause"]],
+      [6_350_000, 6_650_000, ["filler"]],
     ],
   );
 });
@@ -143,7 +145,8 @@ test("balanced lifts out a cleanly separated filler but not a packed one or prot
     plan.cuts.map(({ startUs, endUs, kinds }) => [startUs, endUs, kinds]),
     [
       [250_000, 1_850_000, ["repeated_take"]],
-      [3_550_000, 5_250_000, ["pause"]],
+      // The 2.8 s gap keeps 0.3 s.
+      [3_350_000, 5_850_000, ["pause"]],
       [6_350_000, 6_650_000, ["filler"]],
     ],
   );
@@ -163,7 +166,7 @@ test("balanced lifts out a cleanly separated filler but not a packed one or prot
     }
 });
 
-test("tight shortens shorter pauses but never a pause containing speech", () => {
+test("tight shortens shorter pauses but never cuts into speech", () => {
   wordCounter = 0;
   const input = source(
     [
@@ -182,7 +185,114 @@ test("tight shortens shorter pauses but never a pause containing speech", () => 
   const plan = planMagicWandCuts([input], "tight");
   assert.deepEqual(
     plan.cuts.map(({ startUs, endUs }) => [startUs, endUs]),
-    [[550_000, 1_150_000]],
+    [
+      // 0.9 s between "One" and "two" keeps 0.2 s.
+      [500_000, 1_200_000],
+      // 1.5 s between "two" and "three"; only 0.5 s of it is detected
+      // silence, under half, so it is left for review.
+    ],
+  );
+  // The 1.5 s gap and the trailing gap have no detected silence to confirm them.
+  assert.equal(plan.leftForReview, 2);
+  const words = input.transcript.segments.flatMap((item) => item.words);
+  for (const cut of plan.cuts)
+    for (const word of words)
+      assert.ok(
+        word.end_us <= cut.startUs || word.start_us >= cut.endUs,
+        `cut ${cut.startUs}-${cut.endUs} touches "${word.text}"`,
+      );
+});
+
+/** 10 ms frames: `level` everywhere, with `loud` spans at their own level. */
+function energy(
+  durationUs: number,
+  level: number,
+  loud: [startUs: number, endUs: number, level: number][] = [],
+): EnergyTrack {
+  const rms = new Float32Array(Math.ceil(durationUs / 10_000)).fill(level);
+  for (const [start, end, value] of loud)
+    rms.fill(value, Math.floor(start / 10_000), Math.ceil(end / 10_000));
+  return { frameUs: 10_000, rms };
+}
+
+test("with the audio known, a pause needs no silence detection and is cut in its quietest part", () => {
+  wordCounter = 0;
+  // No detected silences at all: the gap between the words is found from the
+  // words themselves.
+  const input = source(
+    [
+      segment("segment-01", [
+        ["Open", 200_000, 600_000],
+        ["the", 2_600_000, 2_800_000],
+      ]),
+    ],
+    [],
+  );
+  // Speech is loud; the gap holds a breath just after "Open" (0.6-0.9 s) and
+  // is otherwise near silent.
+  const track = energy(8_000_000, 0.001, [
+    [200_000, 600_000, 0.2],
+    [2_600_000, 2_800_000, 0.2],
+    [600_000, 900_000, 0.03],
+  ]);
+  const plan = planMagicWandCuts(
+    [input],
+    "balanced",
+    new Map([[input.sourceId, track]]),
+  );
+  const pause = plan.cuts.find((cut) => cut.kinds.includes("pause"))!;
+  // 2.0 s gap, 0.3 s kept: a 1.7 s cut that starts after the breath.
+  assert.equal(pause.endUs - pause.startUs, 1_700_000);
+  assert.ok(pause.startUs >= 900_000 - 10_000, `starts at ${pause.startUs}`);
+  assert.ok(pause.endUs <= 2_600_000);
+});
+
+test("a gap that the transcript calls empty but the audio calls loud is not cut", () => {
+  wordCounter = 0;
+  const input = source(
+    [
+      segment("segment-01", [
+        ["Open", 200_000, 600_000],
+        ["the", 3_000_000, 3_200_000],
+      ]),
+    ],
+    [],
+  );
+  // Missed speech fills the whole gap.
+  const track = energy(8_000_000, 0.001, [[200_000, 3_200_000, 0.18]]);
+  const plan = planMagicWandCuts(
+    [input],
+    "balanced",
+    new Map([[input.sourceId, track]]),
+  );
+  // Only the quiet trailing gap after the last word is cut.
+  assert.ok(plan.cuts.every((cut) => cut.startUs >= 3_200_000));
+  assert.ok(plan.leftForReview >= 1);
+});
+
+test("without words there is nothing to say a gap is empty, so no pause is cut", () => {
+  wordCounter = 0;
+  const input = source([], [{ start_us: 0, end_us: 8_000_000 }]);
+  assert.deepEqual(planMagicWandCuts([input], "tight").cuts, []);
+});
+
+test("the leading and trailing silences of a recording are trimmed to the kept length", () => {
+  wordCounter = 0;
+  const input = source(
+    [segment("segment-01", [["Hello", 2_000_000, 2_400_000]])],
+    [],
+  );
+  const track = energy(8_000_000, 0.001, [[2_000_000, 2_400_000, 0.2]]);
+  const plan = planMagicWandCuts(
+    [input],
+    "balanced",
+    new Map([[input.sourceId, track]]),
+  );
+  const cuts = plan.cuts.map((cut) => [cut.startUs, cut.endUs - cut.startUs]);
+  // 2.0 s before the word keeps 0.3 s; 5.6 s after it keeps 0.3 s.
+  assert.deepEqual(
+    cuts.map(([, length]) => length),
+    [1_700_000, 5_300_000],
   );
 });
 

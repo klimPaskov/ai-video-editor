@@ -9,6 +9,11 @@ import {
   roughCutRequest,
   roughCutTools,
 } from "../../apps/desktop/src/rough-cut-playbook.ts";
+import type { Tightener } from "../../apps/desktop/src/magic-wand.ts";
+import type {
+  LocalTranscript,
+  TranscriptAnalysis,
+} from "../../packages/domain/src/transcription.ts";
 import { magicWandIssues } from "../../packages/domain/src/magic-wand-view.ts";
 import { codexVideoEditToolNames } from "../../packages/codex-tools/src/service.ts";
 
@@ -17,6 +22,8 @@ const project = "project-rough-001";
 function harness(script: {
   outcome: RoughCutOutcome | "later";
   refuse?: RoughCutOutcome;
+  results?: unknown[];
+  tightener?: Tightener;
 }) {
   const calls: string[] = [];
   const started: Array<{ preset: string; request: string }> = [];
@@ -33,7 +40,7 @@ function harness(script: {
           progress_percent: 100,
           job_id: "job-1",
         },
-        results: [],
+        results: script.results ?? [],
       }) as never,
     start: async () => {
       throw new Error("not needed");
@@ -78,6 +85,7 @@ function harness(script: {
   };
   const magic = new DesktopMagicWand(transcriptions, invoke, editor, {
     pollMs: 5,
+    ...(script.tightener ? { tightener: script.tightener } : {}),
   });
   return {
     magic,
@@ -191,4 +199,82 @@ test("the rough cut's request carries evidence, not cuts, and its tools only cut
     "timeline.undo",
   ])
     assert.equal(roughCutTools.has(tool), false, tool);
+});
+
+test("pauses and fillers are tightened by the app in one transaction; Claude is told", async () => {
+  const word = (id: string, text: string, start: number, end: number) => ({
+    word_id: id,
+    text,
+    start_us: start,
+    end_us: end,
+    confidence: null,
+    flags: [],
+  });
+  const words = [
+    word("word-000001", "Open", 200_000, 600_000),
+    word("word-000002", "the", 2_600_000, 2_800_000),
+  ];
+  const transcript: LocalTranscript = {
+    schema_version: "1.0",
+    transcript_id: "transcript-1",
+    project_id: "project-01",
+    source_id: "source-1",
+    duration_us: 3_000_000,
+    language: "en",
+    model: { provider: "local", name: "fixture", version: "1" },
+    segments: [
+      {
+        segment_id: "segment-01",
+        start_us: 200_000,
+        end_us: 2_800_000,
+        text: "Open the",
+        words,
+      },
+    ],
+    warnings: [
+      "Word timings are local model estimates; verify before editing.",
+    ],
+  };
+  const analysis: TranscriptAnalysis = {
+    schema_version: "1.0",
+    project_id: "project-01",
+    source_id: "source-1",
+    source_sha256: "a".repeat(64),
+    duration_us: 3_000_000,
+    silence_policy: {
+      version: "1",
+      noise_db: -40,
+      minimum_duration_us: 250_000,
+    },
+    silences: [],
+  };
+  const applied: Array<{ start_us: number; end_us: number }[]> = [];
+  const frames = new Float32Array(300).fill(0.001);
+  frames.fill(0.2, 20, 60);
+  frames.fill(0.2, 260, 280);
+  const run = harness({
+    outcome: "completed",
+    results: [
+      {
+        source_id: "source-1",
+        transcript,
+        analysis,
+      },
+    ],
+    tightener: {
+      energy: async () => ({ frameUs: 10_000, rms: frames }),
+      applyRanges: async (_projectId, _draft, ranges) => {
+        applied.push([...ranges]);
+      },
+    },
+  });
+  run.magic.start(project, "balanced");
+  const view = await settle(run.magic);
+  assert.equal(view.status, "completed");
+  assert.equal(applied.length, 1, "one transaction");
+  const gap = applied[0]!.find((range) => range.start_us >= 600_000)!;
+  // 2.0 s gap, 0.3 s kept.
+  assert.equal(gap.end_us - gap.start_us, 1_700_000);
+  assert.equal(view.summary?.pauses, applied[0]!.length);
+  assert.match(run.started[0]!.request, /already tightened the pacing/u);
 });

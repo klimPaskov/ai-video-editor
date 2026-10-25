@@ -4,6 +4,7 @@ import {
   type MagicSourceInput,
   type MagicWandPreset,
 } from "../../../packages/domain/src/magic-wand.ts";
+import type { EnergyTrack } from "../../../packages/domain/src/audio-energy.ts";
 import {
   assertMagicWandView,
   idleMagicWandView,
@@ -38,6 +39,19 @@ type ToolInvoker = (
   input: unknown,
 ) => Promise<unknown>;
 
+/**
+ * What the tightening step needs from main: the loudness of a recording and
+ * one undoable transaction of ripple deletes (descending output ranges).
+ */
+export interface Tightener {
+  energy(projectId: string, sourceId: string): Promise<EnergyTrack | null>;
+  applyRanges(
+    projectId: string,
+    draft: DraftSummary,
+    ranges: readonly { start_us: number; end_us: number }[],
+  ): Promise<void>;
+}
+
 /** How a rough-cut run by Claude ended, as Magic Edit reports it. */
 export type RoughCutOutcome =
   "completed" | "stopped" | "signIn" | "limit" | "failed";
@@ -55,7 +69,7 @@ export interface RoughCutEditor {
   stop(projectId: string): Promise<void>;
 }
 
-interface DraftSummary {
+export interface DraftSummary {
   draft_id: string;
   base_revision_id: string;
   draft_sequence: number;
@@ -70,6 +84,12 @@ interface DraftSummary {
     timeline_end_us: number;
     speed?: number;
   }[];
+}
+
+interface Tightened {
+  pauses: number;
+  fillers: number;
+  leftForReview: number;
 }
 
 interface Job {
@@ -104,13 +124,15 @@ export class DesktopMagicWand {
   private readonly views = new Map<string, MagicWandView>();
   private readonly jobs = new Map<string, Job>();
   private readonly pollMs: number;
+  private readonly tightener: Tightener | null;
 
   constructor(
     transcriptions: Transcriptions,
     invoke: ToolInvoker,
     editor: RoughCutEditor,
-    options: { pollMs?: number } = {},
+    options: { pollMs?: number; tightener?: Tightener } = {},
   ) {
+    this.tightener = options.tightener ?? null;
     this.transcriptions = transcriptions;
     this.invoke = invoke;
     this.editor = editor;
@@ -170,6 +192,7 @@ export class DesktopMagicWand {
     status: "completed" | "stopped" | "failed",
     message: string | null,
     change: { removedUs: number; cuts: number } | null,
+    tightened: Tightened | null = null,
   ): void {
     this.set(job.projectId, {
       status,
@@ -178,15 +201,15 @@ export class DesktopMagicWand {
       progress: null,
       // Measured from the draft: what Claude's committed cuts removed.
       summary:
-        !change || (status === "failed" && change.cuts === 0)
+        !change || (status === "failed" && change.cuts === 0 && !tightened)
           ? null
           : {
               removedUs: change.removedUs,
               cuts: change.cuts,
-              pauses: 0,
-              fillers: 0,
+              pauses: tightened?.pauses ?? 0,
+              fillers: tightened?.fillers ?? 0,
               repeatedTakes: 0,
-              leftForReview: 0,
+              leftForReview: tightened?.leftForReview ?? 0,
             },
       message,
     });
@@ -262,13 +285,53 @@ export class DesktopMagicWand {
           ),
         }),
       );
-      // Evidence for Claude, mapped onto the current edit; not cuts.
-      const plan = planMagicWandCuts(inputs, job.preset);
+      // The loudness of each recording confirms and places every pause cut.
+      const energy = new Map<string, EnergyTrack>();
+      if (this.tightener)
+        for (const input of inputs) {
+          if (job.stop) break;
+          const track = await this.tightener
+            .energy(job.projectId, input.sourceId)
+            .catch(() => null);
+          if (track) energy.set(input.sourceId, track);
+        }
+      const plan = planMagicWandCuts(inputs, job.preset, energy);
       before = draftOf(
         await this.invoke(job.projectId, "timeline.get_summary", summary),
       );
-      const clips = before.clips;
-      const evidence: RoughCutEvidence[] = plan.cuts
+      // Pauses and fillers are tightened here, deterministically, as one
+      // undoable transaction; Claude gets only what is left (repeated
+      // wording and anything the analysis would not cut on its own).
+      let tightened: Tightened | null = null;
+      let leftover = plan.cuts;
+      if (this.tightener && !job.stop) {
+        const mechanical = plan.cuts.filter((cut) =>
+          cut.kinds.every((kind) => kind === "pause" || kind === "filler"),
+        );
+        leftover = plan.cuts.filter((cut) => !mechanical.includes(cut));
+        const ranges = mapCutsToOutput(mechanical, before.clips);
+        if (ranges.length > 0) {
+          await this.tightener.applyRanges(job.projectId, before, ranges);
+          tightened = {
+            pauses: ranges.filter((range) => range.kinds.includes("pause"))
+              .length,
+            fillers: ranges.filter((range) => range.kinds.includes("filler"))
+              .length,
+            leftForReview: plan.leftForReview,
+          };
+        } else
+          tightened = {
+            pauses: 0,
+            fillers: 0,
+            leftForReview: plan.leftForReview,
+          };
+      }
+      const clips = tightened
+        ? draftOf(
+            await this.invoke(job.projectId, "timeline.get_summary", summary),
+          ).clips
+        : before.clips;
+      const evidence: RoughCutEvidence[] = leftover
         .flatMap((cut) =>
           mapCutsToOutput([cut], clips).flatMap((range) =>
             range.kinds.map((kind) => ({
@@ -294,7 +357,7 @@ export class DesktopMagicWand {
       const refused = await this.editor.start(
         job.projectId,
         job.preset,
-        roughCutRequest(job.preset, evidence),
+        roughCutRequest(job.preset, evidence, tightened),
       );
       let outcome = refused;
       while (!outcome) {
@@ -308,9 +371,10 @@ export class DesktopMagicWand {
           "completed",
           changed?.cuts ? null : magicWandIssues.nothing,
           changed,
+          tightened,
         );
       else if (outcome === "stopped")
-        this.end(job, "stopped", magicWandIssues.stopped, changed);
+        this.end(job, "stopped", magicWandIssues.stopped, changed, tightened);
       else
         this.end(
           job,
@@ -321,6 +385,7 @@ export class DesktopMagicWand {
               ? magicWandIssues.limit
               : magicWandIssues.failed,
           changed,
+          tightened,
         );
     } catch (error) {
       const message =

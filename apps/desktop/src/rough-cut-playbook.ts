@@ -70,11 +70,17 @@ const evidenceNames: Record<RoughCutEvidence["kind"], string> = {
 export function roughCutRequest(
   preset: MagicWandPreset,
   evidence: readonly RoughCutEvidence[],
+  tightened: { pauses: number; fillers: number } | null = null,
 ): string {
   const shown = evidence.slice(0, 300);
   const lines = [
     "Make the rough cut of this video.",
     `How far to go: ${presetGuidance[preset]}`,
+    ...(tightened
+      ? [
+          `The app has already tightened the pacing: ${tightened.pauses} pauses were shortened and ${tightened.fillers} fillers removed, each cut in a quiet spot. Do not cut pauses or fillers again; times in the timeline summary are current. Spend your effort on the story: repeated ideas, retakes, false starts, tangents and dead time.`,
+        ]
+      : []),
     "",
     shown.length
       ? `Local analysis evidence, in microseconds: "source" is the recording's own time (as transcript.get_range uses it), "edit" is the current timeline time (as the cut tools use it). Confirm each against the transcript; it is not a cut list.`
