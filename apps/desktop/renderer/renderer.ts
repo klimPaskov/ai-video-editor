@@ -3052,7 +3052,7 @@ function renderZoomTools(
 function previewMedia(): HTMLCanvasElement | HTMLVideoElement {
   return (
     canvas.parentElement!.querySelector<HTMLVideoElement>(
-      "video:not([hidden])",
+      "video.preview-video:not([hidden])",
     ) ?? canvas
   );
 }

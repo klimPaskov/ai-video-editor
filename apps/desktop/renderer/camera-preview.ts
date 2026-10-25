@@ -37,6 +37,7 @@ export function setupCameraPreview(preview: HTMLElement): {
     video.preload = "auto";
     video.disablePictureInPicture = true;
     video.controls = false;
+    video.hidden = true;
     wrapper.append(video);
     preview.append(wrapper);
     return { wrapper, video };
@@ -143,12 +144,19 @@ export function setupCameraPreview(preview: HTMLElement): {
           ? layoutIntervals(project.layouts, project.clips)
           : [];
     }
+    // A hidden layer's video is hidden too, so nothing that looks for the
+    // picture on screen ever takes the camera for it.
+    const sync = () => {
+      pip.video.hidden = pip.wrapper.hidden;
+      full.video.hidden = full.wrapper.hidden;
+    };
     const shown = !!project && !!camera?.linked && intervals.length > 0;
     if (!shown || !project || !camera) {
       pip.wrapper.hidden = true;
       full.wrapper.hidden = true;
       follow(pip.video, 0, 1, false, false);
       follow(full.video, 0, 1, false, false);
+      sync();
       return;
     }
     const source = `media/${project.id}/camera`;
@@ -209,6 +217,7 @@ export function setupCameraPreview(preview: HTMLElement): {
         layers.fullFocusY,
       );
     }
+    sync();
     follow(pip.video, target, speed, playing, !!placed);
     follow(full.video, target, speed, playing, layers.full > 0);
   }
