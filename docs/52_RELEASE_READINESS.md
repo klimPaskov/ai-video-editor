@@ -4,6 +4,7 @@ What has been verified, how, and what has not. Update this file when that change
 
 ## Verified
 
+- **Security review of the 2026-10-25 UI changes** (diff `bb66568..HEAD`): only renderer files changed (no main process, IPC, package or schema change). The diff adds no HTML injection (`innerHTML` and similar), `eval`, external URL, `window.open`, new IPC or storage use; its one sensitive call is `requestFullscreen()` on the preview from a click. The page policy (`script-src 'self'`, no network, `form-action 'none'`), the denied permission handlers and the blocked downloads are unchanged. A manual diff review, not an independent audit.
 - **Unit and contract checks**: `npm run check` (typecheck, lint, format, 608 media and foundation tests, schema and delivery validation) and `npm run check:publication`.
 - **Packaged app in the isolated guest** (Docker, Xvfb, never the host), final build of commit 6759dd4:
   - Layout audit `tests/native/layout.test.ts --enforce`: 411 screens (5 themes x 5 window sizes and scales x Home, the five steps with and without disclosures, the assistant drawer, source details, every Settings section, failed start, Review result, export running and done, project options, recording dialog), no page overflow, cut-off control, overlap, clipped text, small target or low-contrast text.
