@@ -58,3 +58,5 @@ Addendum (2026-10-25, later): the Claude-only `zoom.targets` (ADR 0027) raises C
 Addendum (2026-10-25, later still): the Claude-only `graphics.component` (ADR 0028) raises Claude's editor inventory to twenty-six tools (Codex nineteen, the API providers eighteen). A real-CLI init with the twenty-six tools is still to be confirmed.
 
 Addendum (2026-10-25, camera): the Claude-only `layout.set`, `layout.remove` and `layout.plan` (ADR 0029) raise Claude's editor inventory to twenty-nine tools (Codex nineteen, the API providers eighteen). A real-CLI init with the twenty-nine tools is still to be confirmed.
+
+Addendum (2026-10-25, confirmed): with the signed-in private guest profile the packaged app on Claude Code 2.1.302 initialised with the full twenty-nine tools and a real Claude called `layout_plan` and applied `layout_set` changes (tests/native/camera-claude.test.ts); the real-CLI init check is now confirmed for twenty-nine tools.
