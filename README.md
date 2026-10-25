@@ -22,6 +22,8 @@ AI Video Editor is a standalone desktop recorder and editor for screen recording
 - Captions from the transcript in three styles, with an .srt file or burned into the video.
 - Audio cleanup: even out loudness and reduce background noise.
 - Transitions on cuts (dip, wipe, iris), added by hand or by Claude, shown in the preview and the export.
+- A camera recorded with the screen (or added as a video) and layouts that arrange it: full screen, in a corner, or gone, with eased changes, planned by Claude from where the screen changes and where the speech starts.
+- Pauses and fillers tightened by the app (Natural, Balanced or Tight), zooms that need a reason, and a library of designed graphics.
 - Music and sound effects from your own audio files, with volume, lowering under speech and Undo; they are mixed into the export.
 
 **Edit**
