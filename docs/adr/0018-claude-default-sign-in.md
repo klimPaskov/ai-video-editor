@@ -54,3 +54,5 @@ Addendum (2026-10-25): the Claude-only `shorts.propose` (docs/49) raises Claude'
 Addendum (2026-10-25, later): Confirmed 2026-10-25: with the user's signed-in private guest profile, the packaged app on Claude Code 2.1.302 initialized with the full twenty-four-tool inventory (including `transition.set`, `transition.remove` and `shorts.propose`) and a real Claude edit committed during its turn with origin `claude` (`tests/native/claude-connection.test.ts --require-signed-in`).
 
 Addendum (2026-10-25, later): the Claude-only `zoom.targets` (ADR 0027) raises Claude's editor inventory to twenty-five tools (Codex nineteen, the API providers eighteen). A real-CLI init with the twenty-five tools is still to be confirmed.
+
+Addendum (2026-10-25, later still): the Claude-only `graphics.component` (ADR 0028) raises Claude's editor inventory to twenty-six tools (Codex nineteen, the API providers eighteen). A real-CLI init with the twenty-six tools is still to be confirmed.

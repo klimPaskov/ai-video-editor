@@ -714,6 +714,57 @@ export const claudeOnlyMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: claudeOnlyToolNames[6],
+    description:
+      "Place one designed graphic from the app's component library as one undoable transaction. The app renders a finished, animated layout (entry, hold, exit, sized to the video, clear of the title-safe margin); you supply the content, the moment and an accent colour, so the result looks designed without writing code. Kinds: lower_third (title = name, subtitle = role or detail; side left or right), chapter_card (title = chapter name, subtitle = small kicker such as \"Part 2\"; side left or right), stat_callout (title = the number or value, subtitle = what it measures; side and place), highlight_box (frames an area of the screen: x, y, width, height are frame fractions 0–1, title = the label on the tag; get the area from zoom.targets or a picture), keyword (title = a short phrase to emphasise; side and place), step_badge (subtitle = step number 1–99, title = the step; side and place). Use accent as #RRGGBB, the same for the whole video (pick it from the footage or the user's brand). Needs at least 1.5 s on screen; 3–5 s is usual. Use it for graphics that clarify what is said (a name when someone is introduced, the number just spoken, the section being entered, the control being pointed at); for a hero moment that needs custom motion, author a composition and use graphics.set instead. With graphic_id the existing graphic is replaced.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "start_us",
+        "duration_us",
+        "kind",
+        "title",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        graphic_id: id,
+        start_us: { type: "integer", minimum: 0 },
+        duration_us: { type: "integer", minimum: 1500000 },
+        kind: {
+          type: "string",
+          enum: [
+            "lower_third",
+            "chapter_card",
+            "stat_callout",
+            "highlight_box",
+            "keyword",
+            "step_badge",
+          ],
+        },
+        title: { type: "string", minLength: 1, maxLength: 60 },
+        subtitle: { type: "string", maxLength: 90 },
+        accent: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
+        side: { type: "string", enum: ["left", "right"] },
+        place: { type: "string", enum: ["top", "middle", "bottom"] },
+        x: { type: "number", minimum: 0, maximum: 1 },
+        y: { type: "number", minimum: 0, maximum: 1 },
+        width: { type: "number", minimum: 0, maximum: 1 },
+        height: { type: "number", minimum: 0, maximum: 1 },
+        layer: { type: "integer", minimum: 0, maximum: 99 },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
 ] as const;
 
 /** Every tool Claude's editor server lists. */

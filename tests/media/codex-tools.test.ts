@@ -2358,3 +2358,73 @@ test("shorts.propose hands validated proposals to the app and is Claude's alone"
         (error as { code?: string }).code === "tool_not_available",
     );
 });
+
+test("graphics.component renders a designed layout, explains bad content and shares Undo", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const claude = new CodexVideoEditToolService(projectId, drafts, "claude");
+  const input = async (requestId: string) => {
+    const {
+      html: _html,
+      css: _css,
+      name: _name,
+      layer: _layer,
+      ...rest
+    } = graphicInput(await drafts.snapshot(projectId), requestId);
+    return {
+      ...rest,
+      duration_us: 2_000_000,
+      kind: "lower_third",
+      title: "Ada Lovelace",
+      subtitle: "Mathematician",
+      accent: "#ff8a3d",
+    };
+  };
+  for (const bad of [
+    { title: "" },
+    { accent: "orange" },
+    { duration_us: 1_000_000 },
+    { kind: "carousel" },
+    { subtitle: "x".repeat(91) },
+  ])
+    await assert.rejects(
+      claude.invoke("graphics.component", {
+        ...(await input("component-bad")),
+        ...bad,
+      }),
+      (error: Error) =>
+        ["invalid_request", "graphic_rejected"].includes(
+          (error as CodexVideoEditToolError).code,
+        ),
+    );
+  // A highlight box needs its area.
+  await assert.rejects(
+    claude.invoke("graphics.component", {
+      ...(await input("component-box")),
+      kind: "highlight_box",
+    }),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "graphic_rejected",
+  );
+  const added = (await claude.invoke(
+    "graphics.component",
+    await input("component-ok"),
+  )) as ToolCommit;
+  assert.equal(typeof added.transaction_id, "string");
+  const graphic = (await drafts.snapshot(projectId)).draft.timeline
+    .graphics![0]!;
+  assert.match(graphic.name, /^Lower third: Ada Lovelace/u);
+  assert.match(graphic.html, /Ada Lovelace/u);
+  assert.match(graphic.css, /#ff8a3d/u);
+  assert.equal(graphic.duration_us, 2_000_000);
+  // Text is escaped, never trusted as markup.
+  const escaped = (await claude.invoke("graphics.component", {
+    ...(await input("component-escape")),
+    kind: "keyword",
+    title: "<b>Hi</b>",
+  })) as ToolCommit;
+  assert.equal(typeof escaped.transaction_id, "string");
+  const latest = (await drafts.snapshot(projectId)).draft.timeline.graphics!;
+  assert.ok(latest.some((item) => item.html.includes("&lt;b&gt;Hi&lt;/b&gt;")));
+  assert.ok(!latest.some((item) => item.html.includes("<b>")));
+});

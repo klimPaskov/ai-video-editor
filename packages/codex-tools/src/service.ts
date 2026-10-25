@@ -33,6 +33,12 @@ import {
   graphicLimits,
 } from "../../domain/src/graphics.ts";
 import {
+  GraphicComponentError,
+  graphicComponentKinds,
+  renderGraphicComponent,
+  type GraphicComponentKind,
+} from "../../domain/src/graphic-components.ts";
+import {
   buildSoundLayer,
   SoundBuildError,
   soundIntervals,
@@ -73,6 +79,7 @@ export const claudeOnlyToolNames = [
   "sound.remove",
   "shorts.propose",
   "zoom.targets",
+  "graphics.component",
 ] as const;
 /** Claude's guarded editor tools: the shared tools plus its own. */
 export const claudeEditorToolNames = [
@@ -683,6 +690,8 @@ export class CodexVideoEditToolService {
           return await this.proposeShorts(input);
         case "zoom.targets":
           return await this.findZoomTargets(input);
+        case "graphics.component":
+          return await this.placeGraphicComponent(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -1846,6 +1855,108 @@ export class CodexVideoEditToolService {
           ? `${result.accepted} ${result.accepted === 1 ? "clip" : "clips"} added to the Short clips panel.`
           : "No clip was kept. Fix the problems listed and call again.",
     };
+  }
+
+  /**
+   * Places one designed component (lower third, chapter card, stat, highlight,
+   * keyword, step) as an ordinary graphic: the app renders the layout, the
+   * model supplies the content, the moment and the accent.
+   */
+  private async placeGraphicComponent(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      [
+        "schema_version",
+        "request_id",
+        "project_id",
+        "draft_id",
+        "base_revision_id",
+        "expected_sequence",
+        "expected_timeline_sha256",
+        "pass_group_id",
+        "reason",
+        "start_us",
+        "duration_us",
+        "kind",
+        "title",
+      ],
+      [
+        "graphic_id",
+        "layer",
+        "subtitle",
+        "accent",
+        "side",
+        "place",
+        "x",
+        "y",
+        "width",
+        "height",
+      ],
+    );
+    if (
+      typeof request.kind !== "string" ||
+      !(graphicComponentKinds as readonly string[]).includes(request.kind)
+    )
+      reject("invalid_request");
+    integer(request.duration_us, graphicLimits.minDurationUs);
+    let rendered: { name: string; html: string; css: string };
+    try {
+      rendered = renderGraphicComponent(
+        request.kind as GraphicComponentKind,
+        {
+          title: request.title as string,
+          ...(request.subtitle !== undefined
+            ? { subtitle: request.subtitle as string }
+            : {}),
+          ...(request.accent !== undefined
+            ? { accent: request.accent as string }
+            : {}),
+          ...(request.side !== undefined
+            ? { side: request.side as "left" | "right" }
+            : {}),
+          ...(request.place !== undefined
+            ? { place: request.place as "top" | "middle" | "bottom" }
+            : {}),
+          ...(request.x !== undefined ? { x: request.x as number } : {}),
+          ...(request.y !== undefined ? { y: request.y as number } : {}),
+          ...(request.width !== undefined
+            ? { width: request.width as number }
+            : {}),
+          ...(request.height !== undefined
+            ? { height: request.height as number }
+            : {}),
+        },
+        request.duration_us as number,
+      );
+    } catch (error) {
+      if (error instanceof GraphicComponentError)
+        throw new CodexVideoEditToolError(
+          "graphic_rejected",
+          undefined,
+          error.message,
+        );
+      throw error;
+    }
+    return this.setGraphic({
+      schema_version: request.schema_version,
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group_id: request.pass_group_id,
+      reason: request.reason,
+      start_us: request.start_us,
+      duration_us: request.duration_us,
+      name: rendered.name,
+      layer: request.layer ?? 20,
+      html: rendered.html,
+      css: rendered.css,
+      ...(request.graphic_id !== undefined
+        ? { graphic_id: request.graphic_id }
+        : {}),
+    });
   }
 
   /**
