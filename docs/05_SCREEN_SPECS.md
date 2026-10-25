@@ -174,7 +174,7 @@ Visible:
 
 Advanced codec settings are collapsed.
 
-Implemented (2026-10-07): the Export step shows two selectable quality cards (Lossless master by default, Smaller file), a one-line note about the choice and Export…; the file name and destination come from the system save dialog. While exporting it shows only progress, Rendering/Verifying and Cancel. Caption sidecars are not available yet.
+Implemented (2026-10-07): the Export step shows two stacked, selectable quality options with radio dots (Lossless master by default, Smaller file), a one-line note about the choice and Export…; the file name and destination come from the system save dialog. While exporting it shows only progress, Rendering/Verifying and Cancel. Caption sidecars are not available yet.
 
 ## S12: export complete
 

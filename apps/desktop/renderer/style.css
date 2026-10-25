@@ -1767,11 +1767,12 @@ dd {
 .quality-cards {
   display: grid;
   flex-basis: 100%;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 .quality-card,
 .quality-card:hover:not(:disabled) {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1779,13 +1780,30 @@ dd {
   gap: 4px;
   min-width: 0;
   min-height: 72px;
-  padding: 14px 16px;
+  padding: 14px 16px 14px 52px;
   color: var(--text);
   text-align: left;
   white-space: normal;
   background: var(--surface);
   border: 1.5px solid var(--border-strong);
   border-radius: 16px;
+}
+.quality-card::before {
+  position: absolute;
+  top: 50%;
+  left: 18px;
+  width: 20px;
+  height: 20px;
+  content: "";
+  background: var(--surface);
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.quality-card[aria-checked="true"]::before {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 4px var(--surface);
 }
 .quality-card strong {
   font-size: 16px;
@@ -1798,12 +1816,15 @@ dd {
 }
 .quality-card[aria-checked="true"],
 .quality-card[aria-checked="true"]:hover:not(:disabled) {
-  background: var(--accent-soft);
+  background: var(--surface);
   border-color: var(--accent);
 }
 #export-start {
   flex: 1 1 100%;
   justify-content: center;
+  min-height: 52px;
+  font-size: 17px;
+  border-radius: 999px;
 }
 #export-profile-note,
 #export-result,
