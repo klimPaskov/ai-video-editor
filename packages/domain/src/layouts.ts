@@ -506,8 +506,18 @@ export function windowLayoutIntervals(
     (interval) => interval.startUs > startUs && interval.startUs < endUs,
   );
   const opening = before.at(-1);
+  // A change still under way at the window's start keeps playing from where
+  // it was; one that has finished is simply the arrangement.
+  const underWay =
+    opening !== undefined && startUs - opening.startUs < opening.moveUs;
   return [
-    ...(opening ? [{ ...opening, startUs: 0, moveUs: 0 }] : []),
+    ...(opening
+      ? [
+          underWay
+            ? { ...opening, startUs: opening.startUs - startUs }
+            : { ...opening, startUs: 0, moveUs: 0 },
+        ]
+      : []),
     ...inside.map((interval) => ({
       ...interval,
       startUs: interval.startUs - startUs,

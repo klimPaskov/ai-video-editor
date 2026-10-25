@@ -1305,12 +1305,24 @@ async function start(): Promise<void> {
       project.schema_version === "1.1"
         ? project.source_probes
         : [project.source_probe];
-    return sources.map((source, index) => ({
+    const found = sources.map((source, index) => ({
       id: source.source_id,
       sha256: source.sha256,
       path: source.managed_path,
       probe: probes[index] as unknown,
     }));
+    // The camera of the project plays from its own copy like any source.
+    const link = await cameraLinks.forSource(projectId, sources[0]!.source_id);
+    if (link) {
+      const media = await library.verifiedSource(link.mediaId);
+      found.push({
+        id: "camera",
+        sha256: media.sha256,
+        path: media.managedPath,
+        probe: media.probe as unknown,
+      });
+    }
+    return found;
   };
   register(channels.playbackGet, async (request) => {
     assertPlaybackProjectRequest(request);
@@ -1361,6 +1373,28 @@ async function start(): Promise<void> {
   resolvePlaybackSource = async (projectId, sourceId) => {
     if (activeProjectId !== projectId) return null;
     const { project } = await drafts.snapshotWithProject(projectId);
+    if (sourceId === "camera") {
+      const first =
+        project.schema_version === "1.1" ? project.sources[0]! : project.source;
+      const link = await cameraLinks.forSource(projectId, first.source_id);
+      if (!link) return null;
+      const media = await library.verifiedSource(link.mediaId);
+      const format = (media.probe as { format?: { format_name?: unknown } })
+        .format?.format_name;
+      const name = typeof format === "string" ? format : "";
+      return playbackProxies!.resolve(
+        {
+          sha256: media.sha256,
+          path: media.managedPath,
+          probe: media.probe as unknown,
+        },
+        name.includes("mp4")
+          ? "video/mp4"
+          : name.includes("matroska")
+            ? "video/x-matroska"
+            : "application/octet-stream",
+      );
+    }
     const sources =
       project.schema_version === "1.1" ? project.sources : [project.source];
     const probes =
@@ -1504,6 +1538,7 @@ async function start(): Promise<void> {
         captions: () => draftCaptions(projectId),
         renderGraphics: (request) =>
           renderGraphicsTrack(request, `${origin}/stage.html`),
+        camera: (project, source) => cameraSourceFor(project, source),
       }),
     );
     frameQueue = work.catch(() => undefined);

@@ -305,14 +305,15 @@ export async function renderCameraTrack(
     0,
   );
   for (const [index, piece] of pieces.entries()) {
-    const first = Math.ceil(piece.startUs / frameUs);
+    // A change under way when the export begins starts before frame 0.
+    const first = Math.max(0, Math.ceil(piece.startUs / frameUs));
     const end = Math.min(options.frameCount, Math.ceil(piece.endUs / frameUs));
     if (end <= first) continue;
     const path = join(options.directory, `camera-${index}.mkv`);
     // Frame-aligned times, so a fade or glide spans whole frames.
     const aligned = {
       ...piece,
-      startUs: first * frameUs,
+      startUs: piece.startUs < 0 ? piece.startUs : first * frameUs,
       endUs: end * frameUs,
     };
     const encoder = startProcess(
@@ -368,8 +369,9 @@ export async function renderCameraTrack(
         const cameraStart = recordingSeconds + camera.offsetUs / 1_000_000;
         const sourceSeconds =
           (count * clip.speed * frameRate.denominator) / frameRate.numerator;
-        const localStart =
-          ((from - first) * frameRate.denominator) / frameRate.numerator;
+        // Time since the piece began (a piece under way at frame 0 began
+        // before it), so a fade or glide continues from where it was.
+        const localStart = (from * frameUs - aligned.startUs) / 1_000_000;
         const graph = cameraPieceGraph(aligned, layout, frameRate, localStart);
         const decoder = startProcess(
           options.ffmpeg,

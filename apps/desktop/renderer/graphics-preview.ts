@@ -40,8 +40,9 @@ export function setupGraphicsPreview(preview: HTMLElement): {
   } {
     const box = preview.getBoundingClientRect();
     const visible =
-      preview.querySelector<HTMLVideoElement>("video:not([hidden])") ??
-      preview.querySelector<HTMLCanvasElement>("canvas");
+      preview.querySelector<HTMLVideoElement>(
+        "video.preview-video:not([hidden])",
+      ) ?? preview.querySelector<HTMLCanvasElement>("canvas");
     const width =
       visible instanceof HTMLVideoElement
         ? visible.videoWidth

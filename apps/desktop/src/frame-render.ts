@@ -9,6 +9,10 @@ import {
 import { zoomFilter } from "../../../packages/domain/src/zoom.ts";
 import { exportDraft } from "../../../packages/media-engine/src/render.ts";
 import { runProcess } from "../../../packages/media-engine/src/process.ts";
+import {
+  renderCameraTrack,
+  type CameraSource,
+} from "../../../packages/media-engine/src/camera-layer.ts";
 import { planDraft, type DraftReader } from "./export.ts";
 import type { GraphicsRenderRequest, GraphicsTrack } from "./graphics-track.ts";
 
@@ -45,6 +49,11 @@ export interface FrameRenderOptions {
   renderGraphics?: (
     request: GraphicsRenderRequest,
   ) => Promise<GraphicsTrack | null>;
+  /** The camera recording that goes with a recording of the project. */
+  camera?: (
+    projectId: string,
+    sourceId: string,
+  ) => Promise<CameraSource | null>;
   ffmpeg?: string;
   ffprobe?: string;
   signal?: AbortSignal;
@@ -102,7 +111,7 @@ export async function renderDraftFrames(
         options.projectId,
         { startUs, endUs },
       );
-      const { zooms, graphics } = planned;
+      const { zooms, graphics, layouts } = planned;
       // Pictures need no sound: a video-only plan avoids decoding each
       // source's audio from its start for every frame.
       const plan = {
@@ -126,6 +135,31 @@ export async function renderDraftFrames(
           ffmpeg,
           ...(options.signal ? { signal: options.signal } : {}),
         });
+      }
+      // The camera, when a layout shows it at this moment.
+      const layoutSource = (planned.snapshot.draft.timeline.layouts ?? []).find(
+        (item) => item.kind !== "screen",
+      )?.source_id;
+      if (layouts.length && layoutSource && options.camera) {
+        const source = await options.camera(options.projectId, layoutSource);
+        if (source) {
+          const cameraTrack = await renderCameraTrack({
+            ffmpeg,
+            directory,
+            camera: source,
+            cameraSourceId: layoutSource,
+            canvas: { width: video.width, height: video.height },
+            frameRate: video.frameRate,
+            clips: plan.clips,
+            frameCount: plan.frameCount,
+            intervals: layouts,
+            ...(options.signal ? { signal: options.signal } : {}),
+          });
+          if (cameraTrack.segments.length)
+            track = {
+              segments: [...cameraTrack.segments, ...(track?.segments ?? [])],
+            };
+        }
       }
       const cues = captions?.settings.enabled
         ? captions.cues

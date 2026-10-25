@@ -18,6 +18,7 @@ import { join, resolve } from "node:path";
 import { _electron, expect as baseExpect } from "playwright/test";
 import type { Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
+import { openDisclosures } from "./disclosures.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 
 await assertNativeTestEnvironment();
@@ -201,9 +202,13 @@ try {
     state.__next = file;
     void dialog;
   }, cameraPath);
+  await openDisclosures(page);
+  await expect(page.locator("#camera-add")).toBeVisible();
+  await page.locator("#camera-add").click();
+  await expect(page.locator("#camera-status")).toHaveText("Camera in sync");
+  await expect(page.locator("#camera-add")).toBeHidden();
   const linked = await page.evaluate(
-    (id) =>
-      window.desktop.chooseCamera({ schema_version: "1.0", project_id: id }),
+    (id) => window.desktop.getCamera({ schema_version: "1.0", project_id: id }),
     project.id,
   );
   assert.ok(linked.ok);
@@ -211,17 +216,53 @@ try {
   assert.equal(linked.value.width, 1280);
   assert.equal(linked.value.offset_us, 0);
   chosen = cameraPath;
+  // The offset buttons move the camera by a tenth of a second.
+  await page.locator("#camera-later").click();
+  await expect(page.locator("#camera-status")).toHaveText("Camera +0.1 s");
+  await page.locator("#camera-earlier").click();
+  await expect(page.locator("#camera-status")).toHaveText("Camera in sync");
 
   step = "layouts";
-  // Corner camera from 2 s, full camera from 4 s, the screen from 6 s.
+  // Corner camera from 2 s (through the tools), full camera from 4 s, the
+  // screen from 6 s.
+  await page.evaluate(() => {
+    const seek = document.querySelector<HTMLInputElement>("#seek")!;
+    seek.value = "2000000";
+    seek.dispatchEvent(new Event("input"));
+  });
+  await page.locator("#camera-layout").selectOption("pip");
+  await page.locator("#camera-shape").selectOption("circle");
+  await page.locator("#camera-size").selectOption("large");
+  await page.locator("#camera-apply").click();
+  await expect(page.locator(".timeline-layout")).toHaveCount(1);
   for (const fields of [
-    { atUs: 2_000_000, kind: "pip" as const, corner: "bottom_right" as const },
     { atUs: 4_000_000, kind: "camera" as const },
     { atUs: 6_000_000, kind: "screen" as const },
   ]) {
     const reply = await layoutRequest(fields);
     assert.ok(reply.ok, `${fields.kind} change is saved`);
   }
+  await expect(page.locator(".timeline-layout")).toHaveCount(2);
+  // The preview shows the camera where the layouts put it.
+  const seekTo = async (us: number) => {
+    await page.evaluate((value) => {
+      const seek = document.querySelector<HTMLInputElement>("#seek")!;
+      seek.value = String(value);
+      seek.dispatchEvent(new Event("input"));
+    }, us);
+    await page.waitForTimeout(500);
+  };
+  await seekTo(3_000_000);
+  await expect(page.locator(".camera-pip")).toBeVisible();
+  await expect(page.locator(".camera-full")).toBeHidden();
+  await page.screenshot({ path: join(evidence, "preview-corner.png") });
+  await seekTo(5_000_000);
+  await expect(page.locator(".camera-full")).toBeVisible();
+  await page.screenshot({ path: join(evidence, "preview-full.png") });
+  await seekTo(7_000_000);
+  await expect(page.locator(".camera-pip")).toBeHidden();
+  await expect(page.locator(".camera-full")).toBeHidden();
+  await seekTo(0);
   const layouts = (await head(page)).layouts ?? [];
   assert.equal(layouts.length, 3);
   assert.deepEqual(
@@ -273,11 +314,11 @@ try {
   for (const seconds of [0.5, 1.5, 7, 7.9]) {
     assert.ok(same(frameOf(seconds)), `${seconds}s equals the recording`);
   }
-  // A corner camera: its circle (0.3 of the width, bottom right) is the
+  // A corner camera: its circle (the large size, 0.34 of the width, bottom right) is the
   // camera's colour; the rest of the picture is still the recording.
   const circleCentre = [
-    Math.round(width * (1 - 0.03 - 0.15)),
-    Math.round(height - 0.03 * width - (0.3 * width) / 2),
+    Math.round(width * (1 - 0.03 - 0.17)),
+    Math.round(height - 0.03 * width - (0.34 * width) / 2),
   ] as const;
   const inCircle = at(rgb, frameOf(3), circleCentre[0], circleCentre[1]);
   assert.ok(

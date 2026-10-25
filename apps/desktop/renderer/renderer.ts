@@ -9,6 +9,8 @@ import { setupSoundPreview } from "./sound-preview.ts";
 import { mediaRect, setupZoomPreview } from "./zoom-preview.ts";
 import { setupGraphicsPreview } from "./graphics-preview.ts";
 import { setupTransitionTools } from "./transition-tools.ts";
+import { setupCameraTools } from "./camera-tools.ts";
+import { setupCameraPreview } from "./camera-preview.ts";
 import {
   zoomAt,
   zoomLimits,
@@ -141,6 +143,30 @@ const transitionTools = setupTransitionTools({
   position: () => Number(seek.value),
   busy: () => manualEditPending || navigating,
   time: (us) => time(us),
+  run: (work, failure, seekUs) => runManualEdit(work, failure, seekUs),
+});
+const cameraTools = setupCameraTools({
+  root: element("camera-tools"),
+  add: element<HTMLButtonElement>("camera-add"),
+  remove: element<HTMLButtonElement>("camera-remove"),
+  layout: element<HTMLSelectElement>("camera-layout"),
+  corner: element<HTMLSelectElement>("camera-corner"),
+  size: element<HTMLSelectElement>("camera-size"),
+  shape: element<HTMLSelectElement>("camera-shape"),
+  apply: element<HTMLButtonElement>("camera-apply"),
+  removeChange: element<HTMLButtonElement>("camera-remove-change"),
+  earlier: element<HTMLButtonElement>("camera-earlier"),
+  later: element<HTMLButtonElement>("camera-later"),
+  status: element("camera-status"),
+  position: () => Number(seek.value),
+  busy: () => manualEditPending || navigating,
+  time: (us) => time(us),
+  project: () => activeProject,
+  changed: (view) => {
+    cameraPreview.setCamera(view);
+    refreshZoom();
+  },
+  fail: (message) => showError(message),
   run: (work, failure, seekUs) => runManualEdit(work, failure, seekUs),
 });
 const reviewActions = element("review-actions"),
@@ -1346,6 +1372,7 @@ const timelineStrip = setupTimelineStrip({
 const captions = setupCaptions({ preview: canvas.parentElement! });
 const zoomPreview = setupZoomPreview(canvas.parentElement!);
 const graphicsPreview = setupGraphicsPreview(canvas.parentElement!);
+const cameraPreview = setupCameraPreview(canvas.parentElement!);
 const audioPanel = setupAudioPanel();
 const soundPreview = setupSoundPreview({ projectId: () => activeProject?.id });
 const soundPanel = setupSoundPanel({
@@ -1356,6 +1383,7 @@ function refreshZoom(us = Number(seek.value)): void {
   const project = selected?.previewAvailable ? activeProject : undefined;
   zoomPreview.render(project, us);
   graphicsPreview.render(project, us);
+  cameraPreview.render(project, us, playback.playing());
 }
 function refreshCaptions(): void {
   refreshZoom();
@@ -1380,6 +1408,7 @@ function renderTimeline(): void {
     },
     zoomPreview.intervals(),
     graphicsPreview.intervals(),
+    cameraPreview.intervals(),
   );
   timelineStrip.playhead(Number(seek.value));
 }
@@ -1452,6 +1481,7 @@ function renderEditTools(): void {
   renderZoomTools(project, inUs, outUs);
   renderSpeedTools(project, inUs, outUs);
   transitionTools.render(project);
+  cameraTools.render(project);
   restoreToggleButton.disabled = manualEditPending || navigating;
   restoreToggleButton.textContent = restoreRangeOpen
     ? "Cancel restore"

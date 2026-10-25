@@ -1,6 +1,7 @@
 import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
 import type { GraphicInterval } from "../../../packages/domain/src/graphics.ts";
 import type { ZoomInterval } from "../../../packages/domain/src/zoom.ts";
+import type { LayoutInterval } from "../../../packages/domain/src/layouts.ts";
 import type { MediaFrame } from "../../../packages/domain/src/library.ts";
 import {
   rulerTicks,
@@ -29,6 +30,7 @@ export function setupTimelineStrip(options: {
     marks: TimelineMarks,
     zooms?: readonly ZoomInterval[],
     graphics?: readonly GraphicInterval[],
+    layouts?: readonly LayoutInterval[],
   ): void;
   playhead(us: number): void;
 } {
@@ -176,6 +178,7 @@ export function setupTimelineStrip(options: {
     marks: TimelineMarks,
     zooms: readonly ZoomInterval[] = [],
     graphics: readonly GraphicInterval[] = [],
+    layouts: readonly LayoutInterval[] = [],
   ): void {
     current = project;
     host.hidden = !project?.clips;
@@ -261,6 +264,22 @@ export function setupTimelineStrip(options: {
         if (!transition) bar.textContent = graphic.name;
         bar.title = graphic.name;
         return bar;
+      }),
+    );
+    graphicLayer.append(
+      ...layouts.flatMap((layout, index) => {
+        // A layout holds from its change until the next one; the screen
+        // alone is not marked.
+        if (layout.state.kind === "screen") return [];
+        const endUs = layouts[index + 1]?.startUs ?? durationUs;
+        const bar = document.createElement("div");
+        bar.className = "timeline-graphic timeline-layout";
+        bar.style.left = `calc(4px + (100% - 8px) * ${layout.startUs / Math.max(1, durationUs)})`;
+        bar.style.width = `calc((100% - 8px) * ${(endUs - layout.startUs) / Math.max(1, durationUs)})`;
+        bar.textContent =
+          layout.state.kind === "camera" ? "Camera" : "Camera corner";
+        bar.title = bar.textContent;
+        return [bar];
       }),
     );
     zoomLayer.replaceChildren(

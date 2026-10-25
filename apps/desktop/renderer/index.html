@@ -685,6 +685,86 @@
                       Remove transition
                     </button>
                   </span>
+                  <span id="camera-tools" class="camera-tools">
+                    <button
+                      id="camera-add"
+                      class="tool"
+                      data-icon="video"
+                      title="Add the video of your camera, recorded at the same time as the screen"
+                    >
+                      Add camera video
+                    </button>
+                    <select
+                      id="camera-layout"
+                      aria-label="Layout from the playhead"
+                      hidden
+                    >
+                      <option value="pip" selected>Camera in a corner</option>
+                      <option value="camera">Camera only</option>
+                      <option value="screen">Screen only</option>
+                    </select>
+                    <select id="camera-corner" aria-label="Corner" hidden>
+                      <option value="bottom_right" selected>
+                        Bottom right
+                      </option>
+                      <option value="bottom_left">Bottom left</option>
+                      <option value="top_right">Top right</option>
+                      <option value="top_left">Top left</option>
+                    </select>
+                    <select id="camera-size" aria-label="Camera size" hidden>
+                      <option value="small">Small</option>
+                      <option value="medium" selected>Medium</option>
+                      <option value="large">Large</option>
+                    </select>
+                    <select id="camera-shape" aria-label="Camera shape" hidden>
+                      <option value="circle">Circle</option>
+                      <option value="rounded" selected>Rounded</option>
+                      <option value="rect">Rectangle</option>
+                    </select>
+                    <button
+                      id="camera-apply"
+                      class="tool"
+                      data-icon="video"
+                      hidden
+                    >
+                      Layout from here
+                    </button>
+                    <button
+                      id="camera-remove-change"
+                      class="tool"
+                      data-icon="clear"
+                      hidden
+                    >
+                      Remove layout change
+                    </button>
+                    <span class="camera-sync">
+                      <button
+                        id="camera-earlier"
+                        class="tool"
+                        aria-label="Move the camera 0.1 seconds earlier"
+                        hidden
+                      >
+                        −0.1 s
+                      </button>
+                      <output id="camera-status" class="muted" hidden></output>
+                      <button
+                        id="camera-later"
+                        class="tool"
+                        aria-label="Move the camera 0.1 seconds later"
+                        hidden
+                      >
+                        +0.1 s
+                      </button>
+                    </span>
+                    <button
+                      id="camera-remove"
+                      class="tool"
+                      data-icon="clear"
+                      hidden
+                    >
+                      Remove camera
+                    </button>
+                  </span>
                 </div>
                 <div id="restore-actions" class="restore-actions">
                   <button

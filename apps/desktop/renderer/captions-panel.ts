@@ -136,8 +136,9 @@ export function setupCaptions(options: { preview: HTMLElement }): {
   } {
     const box = options.preview.getBoundingClientRect();
     const visible =
-      options.preview.querySelector<HTMLVideoElement>("video:not([hidden])") ??
-      options.preview.querySelector<HTMLCanvasElement>("canvas");
+      options.preview.querySelector<HTMLVideoElement>(
+        "video.preview-video:not([hidden])",
+      ) ?? options.preview.querySelector<HTMLCanvasElement>("canvas");
     const intrinsicWidth =
       visible instanceof HTMLVideoElement
         ? visible.videoWidth
