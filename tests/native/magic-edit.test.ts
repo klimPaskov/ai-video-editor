@@ -217,10 +217,18 @@ try {
   const after = edited.value.find((item) => item.id === project.id)!;
   const removedUs = originalDurationUs - after.timeline.durationUs;
   assert.ok(removedUs >= 1_500_000, `removed only ${removedUs} us`);
-  // The rough cut is Claude's: no cut is made by Magic Edit itself.
-  assert.deepEqual(
-    (await records()).filter((record) => record.origin === "magic_wand"),
-    [],
+  // The app tightens pauses and fillers itself, as one transaction of
+  // ripple deletes (ADR 0026); the rest of the rough cut is Claude's.
+  const tightening = (await records()).filter(
+    (record) => record.origin === "magic_wand",
+  );
+  assert.equal(tightening.length, 1);
+  assert.equal(tightening[0]!.status, "committed");
+  assert.ok(
+    tightening[0]!.operations.length >= 1 &&
+      tightening[0]!.operations.every(
+        (operation) => operation.operation_type === "ripple_delete",
+      ),
   );
   const magic = (await records()).filter(
     (record) => record.origin === "claude",
@@ -307,6 +315,7 @@ try {
     roughCutBy: "scripted Claude test double (haiku)",
     refusedDecoration: true,
     transactions: magic.length,
+    tightenedRanges: tightening[0]!.operations.length,
     removedUs,
     words: words.length,
     removedWords,
@@ -315,11 +324,12 @@ try {
 
   step = "undo";
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  for (let index = 0; index < magic.length; index++) {
+  const applied = magic.length + tightening.length;
+  for (let index = 0; index < applied; index++) {
     await page.locator("#undo-edit").click();
     await expect
       .poll(async () => (await records()).length, { timeout: 30_000 })
-      .toBe(magic.length + index + 1);
+      .toBe(applied + index + 1);
   }
   const undone = await page.evaluate(() => window.desktop.listProjects());
   assert.ok(undone.ok);
