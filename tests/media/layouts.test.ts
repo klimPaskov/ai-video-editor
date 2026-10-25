@@ -3,7 +3,8 @@ import test from "node:test";
 import {
   assertLayoutChange,
   assertLayoutChanges,
-  cameraFrameAt,
+  cameraLayersAt,
+  cameraPieces,
   layoutIntervals,
   windowLayoutIntervals,
   type LayoutChange,
@@ -103,12 +104,13 @@ test("the picture is the screen alone until the first change", () => {
     [change("layout-1", 5_000_000, { kind: "pip", move_us: 0 })],
     [clip(0, 10_000_000, 0)],
   );
-  assert.equal(cameraFrameAt(intervals, 1_000_000, geometry).opacity, 0);
-  assert.equal(cameraFrameAt([], 1_000_000, geometry).opacity, 0);
-  assert.equal(cameraFrameAt(intervals, 5_000_000, geometry).opacity, 1);
+  const before = cameraLayersAt(intervals, 1_000_000, geometry);
+  assert.deepEqual([before.full, before.pip], [0, null]);
+  assert.equal(cameraLayersAt([], 1_000_000, geometry).pip, null);
+  assert.equal(cameraLayersAt(intervals, 5_000_000, geometry).pip!.opacity, 1);
 });
 
-test("a corner camera sits in its corner with a margin, circles are square", () => {
+test("a corner camera sits in its corner with a margin; circles are square", () => {
   const intervals = layoutIntervals(
     [
       change("layout-1", 0, {
@@ -121,13 +123,11 @@ test("a corner camera sits in its corner with a margin, circles are square", () 
     ],
     [clip(0, 10_000_000, 0)],
   );
-  const frame = cameraFrameAt(intervals, 1_000_000, geometry);
-  assert.equal(frame.full, false);
-  assert.ok(Math.abs(frame.width - 0.25) < 1e-9);
-  assert.ok(Math.abs(frame.x + frame.width - 0.97) < 1e-9);
-  assert.ok(Math.abs(frame.y + frame.height - (1 - 0.03 * (16 / 9))) < 1e-9);
-  // The camera keeps its 16:9 shape: 0.25 of the width is 0.25 * 16/9 / (16/9) tall.
-  assert.ok(Math.abs(frame.height - 0.25) < 1e-9);
+  const pip = cameraLayersAt(intervals, 1_000_000, geometry).pip!;
+  assert.ok(Math.abs(pip.width - 0.25) < 1e-9);
+  assert.ok(Math.abs(pip.x + pip.width - 0.97) < 1e-9);
+  assert.ok(Math.abs(pip.y + pip.height - (1 - 0.03 * (16 / 9))) < 1e-9);
+  assert.ok(Math.abs(pip.height - 0.25) < 1e-9);
   const circle = layoutIntervals(
     [
       change("layout-1", 0, {
@@ -139,12 +139,11 @@ test("a corner camera sits in its corner with a margin, circles are square", () 
     ],
     [clip(0, 10_000_000, 0)],
   );
-  const round = cameraFrameAt(circle, 1_000_000, geometry);
-  // Square in pixels: height share = width share * aspect.
+  const round = cameraLayersAt(circle, 1_000_000, geometry).pip!;
   assert.ok(Math.abs(round.height - round.width * (16 / 9)) < 1e-9);
 });
 
-test("a corner camera glides to another corner, grows to full and fades in and out", () => {
+test("changes dissolve and glide: nothing jumps", () => {
   const clips = [clip(0, 60_000_000, 0)];
   const intervals = layoutIntervals(
     [
@@ -159,25 +158,58 @@ test("a corner camera glides to another corner, grows to full and fades in and o
         move_us: 1_000_000,
       }),
       change("layout-3", 20_000_000, { kind: "camera", move_us: 1_000_000 }),
-      change("layout-4", 30_000_000, { kind: "screen", move_us: 1_000_000 }),
+      change("layout-4", 30_000_000, { kind: "pip", move_us: 1_000_000 }),
+      change("layout-5", 40_000_000, { kind: "screen", move_us: 1_000_000 }),
     ],
     clips,
   );
-  const at = (us: number) => cameraFrameAt(intervals, us, geometry);
-  // Gliding: halfway through the move the camera is between the corners.
-  const start = at(9_000_000);
-  const mid = at(10_500_000);
-  const end = at(12_000_000);
-  assert.ok(mid.x < start.x && mid.x > end.x);
-  assert.ok(mid.y < start.y && mid.y > end.y);
+  const at = (us: number) => cameraLayersAt(intervals, us, geometry);
+  // Gliding between corners.
+  const start = at(9_000_000).pip!;
+  const mid = at(10_500_000).pip!;
+  const end = at(12_000_000).pip!;
+  assert.ok(
+    mid.x < start.x && mid.x > end.x && mid.y < start.y && mid.y > end.y,
+  );
   assert.equal(mid.opacity, 1);
-  // Growing: the rectangle expands and ends covering the picture.
-  assert.ok(at(20_500_000).width > end.width && at(20_500_000).width < 1);
-  assert.equal(at(22_000_000).full, true);
-  assert.equal(at(22_000_000).width, 1);
-  // Fading out in place once the screen comes back.
-  assert.ok(at(30_500_000).opacity > 0 && at(30_500_000).opacity < 1);
-  assert.equal(at(32_000_000).opacity, 0);
+  // The full camera fades in over the corner camera, which stays beneath.
+  const half = at(20_500_000);
+  assert.ok(half.full > 0 && half.full < 1);
+  assert.equal(half.pip!.opacity, 1);
+  assert.deepEqual([at(22_000_000).full, at(22_000_000).pip], [1, null]);
+  // Back to a corner: the full camera fades out over the corner camera.
+  const back = at(30_500_000);
+  assert.ok(back.full > 0 && back.full < 1);
+  assert.ok(back.pip!.opacity > 0);
+  assert.deepEqual([at(32_000_000).full, at(32_000_000).pip!.opacity], [0, 1]);
+  // Leaving for the screen fades the corner camera in place.
+  const out = at(40_500_000).pip!;
+  assert.ok(out.opacity > 0 && out.opacity < 1);
+  assert.equal(at(42_000_000).pip, null);
+});
+
+test("pieces list steady spans and changes in output time, skipping the screen alone", () => {
+  const clips = [clip(0, 60_000_000, 0)];
+  const intervals = layoutIntervals(
+    [
+      change("layout-1", 5_000_000, { kind: "pip", move_us: 1_000_000 }),
+      change("layout-2", 20_000_000, { kind: "camera", move_us: 0 }),
+      change("layout-3", 30_000_000, { kind: "screen", move_us: 500_000 }),
+    ],
+    clips,
+  );
+  const pieces = cameraPieces(intervals, 40_000_000);
+  assert.deepEqual(
+    pieces.map((piece) => [piece.kind, piece.startUs, piece.endUs]),
+    [
+      ["change", 5_000_000, 6_000_000],
+      ["steady", 6_000_000, 20_000_000],
+      ["steady", 20_000_000, 30_000_000],
+      ["change", 30_000_000, 30_500_000],
+    ],
+  );
+  // A window shorter than the edit stops where it ends.
+  assert.equal(cameraPieces(intervals, 7_000_000).at(-1)!.endUs, 7_000_000);
 });
 
 test("a window of the edit opens with the arrangement already in effect", () => {
@@ -196,5 +228,5 @@ test("a window of the edit opens with the arrangement already in effect", () => 
       ["layout-2", 5_000_000],
     ],
   );
-  assert.equal(cameraFrameAt(window, 0, geometry).opacity, 1);
+  assert.equal(cameraLayersAt(window, 0, geometry).pip!.opacity, 1);
 });

@@ -6,6 +6,11 @@ import {
   type TransitionEffect,
   type TransitionKind,
 } from "./transitions.ts";
+import {
+  assertLayoutChange,
+  layoutLimits,
+  type LayoutChange,
+} from "./layouts.ts";
 import { isClipSpeed, speedLength } from "./speed.ts";
 import {
   assertGraphicEffect,
@@ -115,6 +120,8 @@ export interface ProjectDraftView {
   graphics?: GraphicEffect[];
   /** Transitions anchored to cuts. */
   transitions?: TransitionEffect[];
+  /** Camera and screen arrangements anchored to moments. */
+  layouts?: LayoutChange[];
 }
 export interface ProjectDraftIntegrityView {
   draft: ProjectDraftView;
@@ -872,6 +879,11 @@ export function assertProjectDraftView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "transitions");
+  const hasLayouts =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "layouts");
   exact(value, [
     "projectId",
     "draft",
@@ -881,6 +893,7 @@ export function assertProjectDraftView(
     ...(hasZooms ? ["zooms"] : []),
     ...(hasGraphics ? ["graphics"] : []),
     ...(hasTransitions ? ["transitions"] : []),
+    ...(hasLayouts ? ["layouts"] : []),
   ]);
   id(value.projectId);
   exact(value.draft, [
@@ -978,6 +991,17 @@ export function assertProjectDraftView(
   if (hasZooms) assertViewZooms(value.zooms);
   if (hasGraphics) assertViewGraphics(value.graphics);
   if (hasTransitions) assertViewTransitions(value.transitions);
+  if (hasLayouts) assertViewLayouts(value.layouts);
+}
+function assertViewLayouts(value: unknown): void {
+  if (!Array.isArray(value) || value.length > layoutLimits.maxLayouts)
+    invalid();
+  for (const layout of value) assertLayoutChange(layout);
+  const layouts = value as LayoutChange[];
+  if (
+    new Set(layouts.map((layout) => layout.layout_id)).size !== layouts.length
+  )
+    invalid();
 }
 function assertViewTransitions(value: unknown): void {
   if (!Array.isArray(value) || value.length > transitionLimits.maxTransitions)
@@ -1065,6 +1089,11 @@ export function assertProjectView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "transitions");
+  const hasLayouts =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "layouts");
   exact(value, [
     ...keys,
     ...(hasSources ? ["sources"] : []),
@@ -1073,6 +1102,7 @@ export function assertProjectView(
     ...(hasZooms ? ["zooms"] : []),
     ...(hasGraphics ? ["graphics"] : []),
     ...(hasTransitions ? ["transitions"] : []),
+    ...(hasLayouts ? ["layouts"] : []),
   ]);
   id(value.id);
   id(value.revisionId);
@@ -1112,6 +1142,7 @@ export function assertProjectView(
     ...(hasZooms ? { zooms: value.zooms } : {}),
     ...(hasGraphics ? { graphics: value.graphics } : {}),
     ...(hasTransitions ? { transitions: value.transitions } : {}),
+    ...(hasLayouts ? { layouts: value.layouts } : {}),
   };
   assertProjectDraftView(draftView);
   if (hasTranscriptEdits)

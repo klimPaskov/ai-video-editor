@@ -270,9 +270,14 @@ export function layoutIntervals(
   return intervals;
 }
 
-/** The camera's rectangle and look at one output time. */
-export interface CameraFrame {
-  /** 0 hides the camera; 1 shows it fully. */
+/**
+ * The camera as one or two layers over the screen. A corner camera is the
+ * `pip` layer; a camera that fills the picture is the `full` layer. A change
+ * dissolves between arrangements (the new layer fades in or the old one out)
+ * and a corner camera glides to its new corner, so there is never a jump.
+ */
+export interface PipLayer {
+  /** 0 hides the layer; 1 shows it fully. */
   opacity: number;
   /** Position and size as fractions of the picture's width and height. */
   x: number;
@@ -280,11 +285,19 @@ export interface CameraFrame {
   width: number;
   height: number;
   shape: LayoutShape;
-  /** The camera fills the picture (shape and margin do not apply). */
-  full: boolean;
   faceZoom: number;
   focusX: number;
   focusY: number;
+}
+
+export interface CameraLayers {
+  /** Opacity of the camera filling the picture (0 when absent). */
+  full: number;
+  fullZoom: number;
+  fullFocusX: number;
+  fullFocusY: number;
+  /** The corner camera, or null when it is not shown. */
+  pip: PipLayer | null;
 }
 
 export interface LayoutGeometry {
@@ -299,13 +312,11 @@ function smooth(p: number): number {
   return x * x * (3 - 2 * x);
 }
 
-/** The camera's rectangle for a state; `screen` borrows the other side's. */
-function rectOf(
+/** The corner camera's rectangle for a state. */
+export function pipRect(
   state: LayoutState,
   geometry: LayoutGeometry,
-): { x: number; y: number; width: number; height: number; full: boolean } {
-  if (state.kind === "camera")
-    return { x: 0, y: 0, width: 1, height: 1, full: true };
+): { x: number; y: number; width: number; height: number } {
   const width = state.size;
   // A circle is square; the others keep the camera's own shape.
   const aspect = state.shape === "circle" ? 1 : geometry.cameraAspect;
@@ -319,7 +330,6 @@ function rectOf(
     y: top ? marginY : 1 - marginY - height,
     width,
     height,
-    full: false,
   };
 }
 
@@ -327,17 +337,44 @@ function lerp(a: number, b: number, p: number): number {
   return a + (b - a) * p;
 }
 
+function pipOf(
+  state: LayoutState,
+  geometry: LayoutGeometry,
+  opacity: number,
+): PipLayer {
+  return {
+    opacity,
+    ...pipRect(state, geometry),
+    shape: state.shape,
+    faceZoom: state.faceZoom,
+    focusX: state.focusX,
+    focusY: state.focusY,
+  };
+}
+
+/** What each layer looks like in a steady state (no change under way). */
+function steadyLayers(
+  state: LayoutState,
+  geometry: LayoutGeometry,
+): CameraLayers {
+  return {
+    full: state.kind === "camera" ? 1 : 0,
+    fullZoom: state.faceZoom,
+    fullFocusX: state.focusX,
+    fullFocusY: state.focusY,
+    pip: state.kind === "pip" ? pipOf(state, geometry, 1) : null,
+  };
+}
+
 /**
- * The camera at output time `us`. After a change the picture eases from the
- * old arrangement to the new one over `moveUs`: a corner camera glides to its
- * new corner, grows to fill the picture or shrinks back, and appears or
- * disappears by fading in place.
+ * The camera layers at output time `us`. After a change the picture eases
+ * from the old arrangement to the new one over `moveUs`.
  */
-export function cameraFrameAt(
+export function cameraLayersAt(
   intervals: readonly LayoutInterval[],
   us: number,
   geometry: LayoutGeometry,
-): CameraFrame {
+): CameraLayers {
   let index = -1;
   for (let item = 0; item < intervals.length; item++)
     if (intervals[item]!.startUs <= us) index = item;
@@ -346,29 +383,107 @@ export function cameraFrameAt(
   const previous = index > 0 ? intervals[index - 1]!.state : defaultLayoutState;
   const moveUs = index >= 0 ? intervals[index]!.moveUs : 0;
   const since = index >= 0 ? us - intervals[index]!.startUs : Infinity;
-  const progress = moveUs <= 0 || since >= moveUs ? 1 : smooth(since / moveUs);
-  const visible = (state: LayoutState) => (state.kind === "screen" ? 0 : 1);
-  // `screen` has no rectangle of its own: it fades where the other one is.
-  const target = current.kind === "screen" ? previous : current;
-  const origin = previous.kind === "screen" ? current : previous;
-  const to = rectOf(target, geometry);
-  const from = rectOf(origin, geometry);
-  const opacity = lerp(visible(previous), visible(current), progress);
-  const shape = current.kind === "screen" ? previous.shape : current.shape;
-  const full = progress >= 1 ? to.full : to.full && from.full;
-  const lens = target.kind === "screen" ? current : target;
+  if (index < 0 || moveUs <= 0 || since >= moveUs)
+    return steadyLayers(current, geometry);
+  const p = smooth(since / moveUs);
+  const from = steadyLayers(previous, geometry);
+  const to = steadyLayers(current, geometry);
+  const full = lerp(from.full, to.full, p);
+  const lens = current.kind === "camera" ? current : previous;
+  let pip: PipLayer | null = null;
+  if (from.pip && to.pip)
+    pip = {
+      opacity: 1,
+      x: lerp(from.pip.x, to.pip.x, p),
+      y: lerp(from.pip.y, to.pip.y, p),
+      width: lerp(from.pip.width, to.pip.width, p),
+      height: lerp(from.pip.height, to.pip.height, p),
+      shape: to.pip.shape,
+      faceZoom: lerp(from.pip.faceZoom, to.pip.faceZoom, p),
+      focusX: lerp(from.pip.focusX, to.pip.focusX, p),
+      focusY: lerp(from.pip.focusY, to.pip.focusY, p),
+    };
+  else if (to.pip) pip = { ...to.pip, opacity: p };
+  else if (from.pip)
+    // Leaving a corner for the full camera keeps the corner camera beneath
+    // until the full one has covered it; leaving for the screen fades it.
+    pip = { ...from.pip, opacity: current.kind === "camera" ? 1 : 1 - p };
   return {
-    opacity,
-    x: lerp(from.x, to.x, progress),
-    y: lerp(from.y, to.y, progress),
-    width: lerp(from.width, to.width, progress),
-    height: lerp(from.height, to.height, progress),
-    shape: progress < 1 && (from.full || to.full) ? "rect" : shape,
     full,
-    faceZoom: lens.faceZoom,
-    focusX: lens.focusX,
-    focusY: lens.focusY,
+    fullZoom: lens.faceZoom,
+    fullFocusX: lens.focusX,
+    fullFocusY: lens.focusY,
+    pip: pip && pip.opacity > 0 ? pip : null,
   };
+}
+
+/**
+ * The picture's timeline as pieces: each a span of output time with a
+ * steady arrangement, or a change from one arrangement to the next. Export
+ * renders each piece on its own.
+ */
+export type CameraPiece =
+  | { kind: "steady"; startUs: number; endUs: number; state: LayoutState }
+  | {
+      kind: "change";
+      startUs: number;
+      endUs: number;
+      from: LayoutState;
+      to: LayoutState;
+    };
+
+/**
+ * Splits [0, durationUs) into pieces. Spans where the camera is not shown
+ * (the screen alone) are left out: nothing is drawn there.
+ */
+export function cameraPieces(
+  intervals: readonly LayoutInterval[],
+  durationUs: number,
+): CameraPiece[] {
+  const pieces: CameraPiece[] = [];
+  const add = (piece: CameraPiece) => {
+    if (piece.endUs > piece.startUs) pieces.push(piece);
+  };
+  let previous: LayoutState = defaultLayoutState;
+  for (const [index, interval] of intervals.entries()) {
+    if (interval.startUs >= durationUs) break;
+    const end = Math.min(
+      durationUs,
+      intervals[index + 1]?.startUs ?? durationUs,
+    );
+    const moveEnd = Math.min(end, interval.startUs + interval.moveUs);
+    const sameLook =
+      previous.kind === interval.state.kind &&
+      (previous.kind === "screen" ||
+        (previous.kind === "camera" &&
+          previous.faceZoom === interval.state.faceZoom &&
+          previous.focusX === interval.state.focusX &&
+          previous.focusY === interval.state.focusY) ||
+        (previous.kind === "pip" &&
+          previous.corner === interval.state.corner &&
+          previous.size === interval.state.size &&
+          previous.shape === interval.state.shape &&
+          previous.faceZoom === interval.state.faceZoom &&
+          previous.focusX === interval.state.focusX &&
+          previous.focusY === interval.state.focusY));
+    if (!sameLook && moveEnd > interval.startUs)
+      add({
+        kind: "change",
+        startUs: interval.startUs,
+        endUs: moveEnd,
+        from: previous,
+        to: interval.state,
+      });
+    if (interval.state.kind !== "screen")
+      add({
+        kind: "steady",
+        startUs: sameLook ? interval.startUs : moveEnd,
+        endUs: end,
+        state: interval.state,
+      });
+    previous = interval.state;
+  }
+  return pieces;
 }
 
 /**

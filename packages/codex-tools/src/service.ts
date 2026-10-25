@@ -9,7 +9,7 @@ import {
   assertTranscriptionProjectView,
   type TranscriptionProjectView,
 } from "../../domain/src/transcription.ts";
-import { isClipSpeed } from "../../domain/src/speed.ts";
+import { isClipSpeed, sourceAt } from "../../domain/src/speed.ts";
 import {
   zoomIntervals,
   zoomLimits,
@@ -32,6 +32,10 @@ import {
   graphicIntervals,
   graphicLimits,
 } from "../../domain/src/graphics.ts";
+import {
+  assertLayoutChange,
+  type LayoutChange,
+} from "../../domain/src/layouts.ts";
 import {
   GraphicComponentError,
   graphicComponentKinds,
@@ -80,6 +84,8 @@ export const claudeOnlyToolNames = [
   "shorts.propose",
   "zoom.targets",
   "graphics.component",
+  "layout.set",
+  "layout.remove",
 ] as const;
 /** Claude's guarded editor tools: the shared tools plus its own. */
 export const claudeEditorToolNames = [
@@ -179,6 +185,11 @@ export interface ZoomTargeter {
   >;
 }
 
+/** Which recordings of a project have a camera recording alongside them. */
+export interface CameraCatalog {
+  has(projectId: string, sourceId: string): Promise<boolean>;
+}
+
 /** The project's audio files (music and sound effects), for sound layers. */
 export interface SoundCatalog {
   list(projectId: string): Promise<SoundAsset[]>;
@@ -220,6 +231,8 @@ export type CodexVideoEditToolErrorCode =
   | "graphic_rejected"
   | "composition_rejected"
   | "sound_rejected"
+  | "component_rejected"
+  | "layout_rejected"
   | "frame_unavailable"
   | "service_unavailable";
 
@@ -244,6 +257,8 @@ const messages: Record<CodexVideoEditToolErrorCode, string> = {
     "The graphic was rejected. Use inline HTML and CSS without scripts, forms, embedded documents or network resources.",
   composition_rejected: "The composition could not be used.",
   sound_rejected: "The sound could not be used.",
+  component_rejected: "The graphic component could not be used.",
+  layout_rejected: "The layout could not be used.",
   service_unavailable:
     "The editing service is unavailable. Reopen the project and try again.",
 };
@@ -274,7 +289,10 @@ export class CodexVideoEditToolError extends Error {
           ? `${messages[code]} ${graphicReason}`
           : // A composition's own problem (its file, or its script error),
             // so Claude can fix what it wrote.
-            (code === "composition_rejected" || code === "sound_rejected") &&
+            (code === "composition_rejected" ||
+                code === "sound_rejected" ||
+                code === "component_rejected" ||
+                code === "layout_rejected") &&
               graphicReason !== undefined
             ? `${messages[code]} ${graphicReason.replace(/[\u0000-\u001f\u007f]/gu, " ").slice(0, 400)}`
             : messages[code],
@@ -590,6 +608,7 @@ export class CodexVideoEditToolService {
   private readonly soundCatalog: SoundCatalog | undefined;
   private readonly shortsProposer: ShortsProposer | undefined;
   private readonly zoomTargeter: ZoomTargeter | undefined;
+  private readonly cameraCatalog: CameraCatalog | undefined;
 
   constructor(
     activeProjectId: string,
@@ -602,6 +621,7 @@ export class CodexVideoEditToolService {
     soundCatalog?: SoundCatalog,
     shortsProposer?: ShortsProposer,
     zoomTargeter?: ZoomTargeter,
+    cameraCatalog?: CameraCatalog,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
@@ -614,6 +634,7 @@ export class CodexVideoEditToolService {
     this.soundCatalog = soundCatalog;
     this.shortsProposer = shortsProposer;
     this.zoomTargeter = zoomTargeter;
+    this.cameraCatalog = cameraCatalog;
   }
 
   private applier():
@@ -692,6 +713,10 @@ export class CodexVideoEditToolService {
           return await this.findZoomTargets(input);
         case "graphics.component":
           return await this.placeGraphicComponent(input);
+        case "layout.set":
+          return await this.setLayout(input);
+        case "layout.remove":
+          return await this.removeLayout(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -1858,6 +1883,162 @@ export class CodexVideoEditToolService {
   }
 
   /**
+   * Changes how the camera and the screen share the picture from a moment of
+   * the edit until the next change. The moment is given in edit time and kept
+   * as a moment of the recording, so it follows cuts.
+   */
+  private async setLayout(input: unknown): Promise<unknown> {
+    const request = exact(
+      input,
+      [
+        "schema_version",
+        "request_id",
+        "project_id",
+        "draft_id",
+        "base_revision_id",
+        "expected_sequence",
+        "expected_timeline_sha256",
+        "pass_group_id",
+        "reason",
+        "at_us",
+        "kind",
+      ],
+      [
+        "layout_id",
+        "corner",
+        "size",
+        "shape",
+        "face_zoom",
+        "focus_x",
+        "focus_y",
+        "move_us",
+      ],
+    );
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    let layoutId: string | null = null;
+    if (request.layout_id !== undefined) {
+      id(request.layout_id);
+      layoutId = request.layout_id;
+    }
+    integer(request.at_us);
+    const atUs = request.at_us;
+    const change: Record<string, unknown> = { kind: request.kind };
+    for (const key of [
+      "corner",
+      "size",
+      "shape",
+      "face_zoom",
+      "focus_x",
+      "focus_y",
+      "move_us",
+    ])
+      if (request[key] !== undefined) change[key] = request[key];
+    try {
+      assertLayoutChange({
+        layout_id: "layout-check",
+        source_id: "source-check",
+        source_us: 0,
+        ...change,
+      });
+    } catch {
+      reject("invalid_request");
+    }
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const { draft } = await this.drafts.snapshot(this.activeProjectId);
+    if (
+      draft.draft_id !== request.draft_id ||
+      draft.base_revision_id !== request.base_revision_id ||
+      draft.draft_sequence !== request.expected_sequence ||
+      draft.timeline_sha256 !== request.expected_timeline_sha256
+    )
+      reject("stale_draft");
+    if (
+      layoutId !== null &&
+      !draft.timeline.layouts?.some((item) => item.layout_id === layoutId)
+    )
+      reject("edit_conflict");
+    const clip = draft.timeline.clips.find(
+      (item) => atUs >= item.timeline_start_us && atUs < item.timeline_end_us,
+    );
+    if (!clip) reject("invalid_request");
+    if (
+      request.kind !== "screen" &&
+      !(
+        this.cameraCatalog &&
+        (await this.cameraCatalog.has(this.activeProjectId, clip.source_id))
+      )
+    )
+      throw new CodexVideoEditToolError(
+        "layout_rejected",
+        undefined,
+        "This video has no camera recording, so only the screen layout is available.",
+      );
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "layout" },
+      reason: request.reason,
+      operations: [
+        {
+          type: "set_layout",
+          layout: {
+            layout_id: layoutId ?? `layout-${randomUUID().replaceAll("-", "")}`,
+            source_id: clip.source_id,
+            source_us: sourceAt(clip, atUs),
+            ...change,
+          } as LayoutChange,
+        },
+      ],
+    });
+    return safeMutation(
+      result,
+      layoutId === null
+        ? "Layout change added to the active draft."
+        : "Layout change updated on the active draft.",
+    );
+  }
+
+  private async removeLayout(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "request_id",
+      "project_id",
+      "draft_id",
+      "base_revision_id",
+      "expected_sequence",
+      "expected_timeline_sha256",
+      "pass_group_id",
+      "reason",
+      "layout_id",
+    ]);
+    freshness(request, this.activeProjectId);
+    id(request.pass_group_id);
+    id(request.layout_id);
+    const apply = this.applier();
+    if (!apply) reject("service_unavailable");
+    const result = await apply({
+      schema_version: "1.0",
+      request_id: request.request_id,
+      project_id: request.project_id,
+      draft_id: request.draft_id,
+      base_revision_id: request.base_revision_id,
+      expected_sequence: request.expected_sequence,
+      expected_timeline_sha256: request.expected_timeline_sha256,
+      pass_group: { pass_group_id: request.pass_group_id, kind: "layout" },
+      reason: request.reason,
+      operations: [{ type: "remove_layout", layout_id: request.layout_id }],
+    });
+    return safeMutation(result, "Layout change removed from the active draft.");
+  }
+
+  /**
    * Places one designed component (lower third, chapter card, stat, highlight,
    * keyword, step) as an ordinary graphic: the app renders the layout, the
    * model supplies the content, the moment and the accent.
@@ -1931,7 +2112,7 @@ export class CodexVideoEditToolService {
     } catch (error) {
       if (error instanceof GraphicComponentError)
         throw new CodexVideoEditToolError(
-          "graphic_rejected",
+          "component_rejected",
           undefined,
           error.message,
         );

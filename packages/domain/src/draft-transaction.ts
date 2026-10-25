@@ -15,6 +15,11 @@ import {
   type TransitionEffect,
 } from "./transitions.ts";
 import {
+  assertLayoutChange,
+  assertLayoutChanges,
+  type LayoutChange,
+} from "./layouts.ts";
+import {
   clipSpeed,
   isClipSpeed,
   speedLength,
@@ -47,6 +52,8 @@ export type DraftTimeline = InitialProjectSnapshot["timeline"] & {
   graphics?: GraphicEffect[];
   /** Transitions anchored to cuts; absent means none. */
   transitions?: TransitionEffect[];
+  /** Camera and screen arrangements anchored to moments; absent means none. */
+  layouts?: LayoutChange[];
   /** Music and sound effects mixed into the audio; absent means none. */
   sounds?: SoundLayer[];
   /**
@@ -152,6 +159,17 @@ export interface RemoveTransitionIntent {
   transition_id: string;
 }
 
+/** Adds a layout change, or replaces the change with the same id. */
+export interface SetLayoutIntent {
+  type: "set_layout";
+  layout: LayoutChange;
+}
+
+export interface RemoveLayoutIntent {
+  type: "remove_layout";
+  layout_id: string;
+}
+
 /** Adds a sound layer (music or effect), or replaces the one with the same id. */
 export interface SetSoundIntent {
   type: "set_sound";
@@ -195,6 +213,8 @@ export type DraftEditIntent =
   | RemoveGraphicIntent
   | SetTransitionIntent
   | RemoveTransitionIntent
+  | SetLayoutIntent
+  | RemoveLayoutIntent
   | SetSoundIntent
   | RemoveSoundIntent
   | SetSpeedIntent
@@ -440,6 +460,23 @@ export interface TransitionOperationRecord {
   };
 }
 
+export interface LayoutOperationRecord {
+  schema_version: "1.0";
+  operation_id: string;
+  operation_type: "layout";
+  action: "set" | "remove";
+  layout_id: string;
+  /** The change set, or null when removing. */
+  layout: LayoutChange | null;
+  before: LayoutChange[];
+  after: LayoutChange[];
+  inverse: {
+    type: "restore_layouts";
+    layouts: LayoutChange[];
+    expected_after_sha256: string;
+  };
+}
+
 export interface SoundOperationRecord {
   schema_version: "1.0";
   operation_id: string;
@@ -490,6 +527,7 @@ export type DraftOperationRecord =
   | SoundOperationRecord
   | GraphicOperationRecord
   | TransitionOperationRecord
+  | LayoutOperationRecord
   | SpeedOperationRecord
   | ZoomOperationRecord
   | TrimOperationRecord
@@ -729,6 +767,7 @@ export function assertDraftTimeline(
       "zooms",
       "graphics",
       "transitions",
+      "layouts",
       "sounds",
       "captions",
       "audio",
@@ -742,6 +781,8 @@ export function assertDraftTimeline(
     assertGraphicEffects(value.graphics, baseline.clips);
   if (Object.hasOwn(value, "transitions"))
     assertTransitionEffects(value.transitions, baseline.clips);
+  if (Object.hasOwn(value, "layouts"))
+    assertLayoutChanges(value.layouts, baseline.clips);
   if (Object.hasOwn(value, "sounds"))
     assertSoundLayers(value.sounds, baseline.clips);
   if (Object.hasOwn(value, "transcript_edits"))
@@ -936,6 +977,18 @@ export function assertApplyDraftTransactionRequest(
       if (value.operations.length !== 1) invalid();
       exact(operation, ["type", "transition_id"]);
       id(operation.transition_id);
+      continue;
+    }
+    if (operation?.type === "set_layout") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "layout"]);
+      assertLayoutChange(operation.layout);
+      continue;
+    }
+    if (operation?.type === "remove_layout") {
+      if (value.operations.length !== 1) invalid();
+      exact(operation, ["type", "layout_id"]);
+      id(operation.layout_id);
       continue;
     }
     if (operation?.type === "set_sound") {

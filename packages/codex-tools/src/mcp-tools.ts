@@ -765,6 +765,60 @@ export const claudeOnlyMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: claudeOnlyToolNames[7],
+    description:
+      "Change how the camera and the screen share the picture, from at_us (edit time, microseconds) until the next layout change, as one undoable transaction. Needs a camera recording of the video (the screen layout always works). Kinds: screen (the screen alone, the default before any change), camera (the camera fills the picture; use it for introductions, opinions, conclusions and moments where the screen adds nothing), pip (the camera in a corner of the screen; use it while demonstrating, so the viewer sees the screen and the speaker). For pip: corner (top_left, top_right, bottom_left, bottom_right; move it away from what the viewer needs to see, such as a result, a control being pointed at or the captions), size (0.12–0.5 of the picture width, 0.2–0.3 is usual), shape (circle, rounded, rect). face_zoom (1–2.5) magnifies the camera picture around focus_x/focus_y (give both, 0–1) to frame the face. move_us (0–2000000, default 600000) is how long the change takes: a camera in a corner glides to another corner, grows to fill the picture or shrinks back, and fades in or out. Change layouts when the content changes, not on a timer; avoid more than a few changes a minute. With layout_id the existing change is updated.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "at_us", "kind"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        layout_id: id,
+        at_us: { type: "integer", minimum: 0 },
+        kind: { type: "string", enum: ["screen", "camera", "pip"] },
+        corner: {
+          type: "string",
+          enum: ["top_left", "top_right", "bottom_left", "bottom_right"],
+        },
+        size: { type: "number", minimum: 0.12, maximum: 0.5 },
+        shape: { type: "string", enum: ["circle", "rounded", "rect"] },
+        face_zoom: { type: "number", minimum: 1, maximum: 2.5 },
+        focus_x: { type: "number", minimum: 0, maximum: 1 },
+        focus_y: { type: "number", minimum: 0, maximum: 1 },
+        move_us: { type: "integer", minimum: 0, maximum: 2000000 },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[8],
+    description:
+      "Remove one layout change by layout_id (from the timeline summary) as one undoable transaction; the arrangement before it applies again.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "layout_id"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        layout_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ] as const;
 
 /** Every tool Claude's editor server lists. */

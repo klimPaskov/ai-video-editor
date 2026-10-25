@@ -2390,7 +2390,7 @@ test("graphics.component renders a designed layout, explains bad content and sha
         ...bad,
       }),
       (error: Error) =>
-        ["invalid_request", "graphic_rejected"].includes(
+        ["invalid_request", "component_rejected"].includes(
           (error as CodexVideoEditToolError).code,
         ),
     );
@@ -2401,7 +2401,8 @@ test("graphics.component renders a designed layout, explains bad content and sha
       kind: "highlight_box",
     }),
     (error: Error) =>
-      (error as CodexVideoEditToolError).code === "graphic_rejected",
+      (error as CodexVideoEditToolError).code === "component_rejected" &&
+      /fraction/u.test(error.message),
   );
   const added = (await claude.invoke(
     "graphics.component",
@@ -2424,4 +2425,111 @@ test("graphics.component renders a designed layout, explains bad content and sha
   const latest = (await drafts.snapshot(projectId)).draft.timeline.graphics!;
   assert.ok(latest.some((item) => item.html.includes("&lt;b&gt;Hi&lt;/b&gt;")));
   assert.ok(!latest.some((item) => item.html.includes("<b>")));
+});
+
+test("layout.set and layout.remove change the camera arrangement, follow cuts and share Undo", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const withCamera = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { has: async () => true },
+  );
+  const without = new CodexVideoEditToolService(projectId, drafts, "claude");
+  const input = async (requestId: string, extra: Record<string, unknown>) => {
+    const rest: Record<string, unknown> = {
+      ...graphicInput(await drafts.snapshot(projectId), requestId),
+    };
+    for (const key of [
+      "html",
+      "css",
+      "name",
+      "layer",
+      "start_us",
+      "duration_us",
+    ])
+      delete rest[key];
+    return {
+      ...rest,
+      pass_group_id: "assistant-layout-001",
+      at_us: 500_000,
+      ...extra,
+    };
+  };
+  // Without a camera only the screen layout exists.
+  await assert.rejects(
+    without.invoke(
+      "layout.set",
+      await input("layout-no-camera", { kind: "pip" }),
+    ),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "layout_rejected" &&
+      /no camera recording/u.test(error.message),
+  );
+  for (const bad of [
+    { kind: "carousel" },
+    { kind: "camera", corner: "top_left" },
+    { kind: "pip", size: 0.9 },
+    { kind: "pip", focus_x: 0.5 },
+    { kind: "pip", at_us: 99_000_000 },
+  ])
+    await assert.rejects(
+      withCamera.invoke("layout.set", await input("layout-bad", bad)),
+      expectCode("invalid_request"),
+    );
+  const added = (await withCamera.invoke(
+    "layout.set",
+    await input("layout-ok", {
+      kind: "pip",
+      corner: "top_left",
+      size: 0.25,
+      shape: "circle",
+    }),
+  )) as ToolCommit;
+  assert.equal(typeof added.transaction_id, "string");
+  const layouts = (await drafts.snapshot(projectId)).draft.timeline.layouts!;
+  assert.equal(layouts.length, 1);
+  assert.deepEqual(
+    { ...layouts[0]!, layout_id: "", source_us: 0, source_id: "" },
+    {
+      layout_id: "",
+      source_id: "",
+      source_us: 0,
+      kind: "pip",
+      corner: "top_left",
+      size: 0.25,
+      shape: "circle",
+    },
+  );
+  assert.equal(layouts[0]!.source_us, 500_000);
+  // A second change at the same moment replaces the first.
+  await withCamera.invoke(
+    "layout.set",
+    await input("layout-replace", { kind: "camera", move_us: 0 }),
+  );
+  const replaced = (await drafts.snapshot(projectId)).draft.timeline.layouts!;
+  assert.equal(replaced.length, 1);
+  assert.equal(replaced[0]!.kind, "camera");
+  const removeHead: Record<string, unknown> = {
+    ...(await input("layout-remove", {})),
+    layout_id: replaced[0]!.layout_id,
+  };
+  delete removeHead.at_us;
+  const removed = (await withCamera.invoke(
+    "layout.remove",
+    removeHead,
+  )) as ToolCommit;
+  assert.equal(typeof removed.transaction_id, "string");
+  assert.equal(
+    (await drafts.snapshot(projectId)).draft.timeline.layouts,
+    undefined,
+  );
 });

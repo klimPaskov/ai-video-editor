@@ -44,6 +44,7 @@ import { sameProjectStorePath, serializeProjectStore } from "./serialize.ts";
 import { assertZoomEffects } from "../../domain/src/zoom.ts";
 import { assertGraphicEffects } from "../../domain/src/graphics.ts";
 import { assertTransitionEffects } from "../../domain/src/transitions.ts";
+import { assertLayoutChanges } from "../../domain/src/layouts.ts";
 import { assertSoundLayers } from "../../domain/src/sounds.ts";
 import { clipSpeed, sourceAt, speedLength } from "../../domain/src/speed.ts";
 
@@ -737,6 +738,66 @@ function prepareApply(
       });
       continue;
     }
+    if (intent.type === "set_layout" || intent.type === "remove_layout") {
+      if (request.operations.length !== 1) fail("invalid");
+      const beforeLayouts = structuredClone(timeline.layouts ?? []);
+      const layoutId =
+        intent.type === "set_layout"
+          ? intent.layout.layout_id
+          : intent.layout_id;
+      const exists = beforeLayouts.some(
+        (layout) => layout.layout_id === layoutId,
+      );
+      if (intent.type === "remove_layout" && !exists) fail("conflict");
+      // One change per moment: setting another at the same place replaces it.
+      const afterLayouts = beforeLayouts.filter(
+        (layout) =>
+          layout.layout_id !== layoutId &&
+          !(
+            intent.type === "set_layout" &&
+            layout.source_id === intent.layout.source_id &&
+            layout.source_us === intent.layout.source_us
+          ),
+      );
+      if (intent.type === "set_layout")
+        afterLayouts.push(structuredClone(intent.layout));
+      afterLayouts.sort(
+        (a, b) =>
+          a.source_id.localeCompare(b.source_id) ||
+          a.source_us - b.source_us ||
+          a.layout_id.localeCompare(b.layout_id),
+      );
+      try {
+        assertLayoutChanges(afterLayouts, baseline.timeline.clips);
+      } catch {
+        fail("conflict");
+      }
+      if (
+        intent.type === "set_layout" &&
+        canonicalSha256(beforeLayouts) === canonicalSha256(afterLayouts)
+      )
+        fail("conflict");
+      if (afterLayouts.length) timeline.layouts = afterLayouts;
+      else delete timeline.layouts;
+      timeline.operation_ids.push(operationId);
+      records.push({
+        schema_version: "1.0",
+        operation_id: operationId,
+        operation_type: "layout",
+        action: intent.type === "set_layout" ? "set" : "remove",
+        layout_id: layoutId,
+        layout:
+          intent.type === "set_layout" ? structuredClone(intent.layout) : null,
+        before: beforeLayouts,
+        after: structuredClone(afterLayouts),
+        inverse: {
+          type: "restore_layouts",
+          layouts: beforeLayouts,
+          expected_after_sha256: canonicalSha256(afterLayouts),
+        },
+      });
+      continue;
+    }
     if (intent.type === "set_sound" || intent.type === "remove_sound") {
       if (request.operations.length !== 1) fail("invalid");
       const beforeSounds = structuredClone(timeline.sounds ?? []);
@@ -1410,94 +1471,109 @@ export class DraftTransactionStore {
                         type: "remove_sound" as const,
                         sound_id: operation.sound_id,
                       }
-                  : operation.operation_type === "transition"
-                    ? operation.action === "set" && operation.transition
+                  : operation.operation_type === "layout"
+                    ? operation.action === "set" && operation.layout
                       ? {
-                          type: "set_transition" as const,
-                          transition: operation.transition,
+                          type: "set_layout" as const,
+                          layout: operation.layout,
                         }
                       : {
-                          type: "remove_transition" as const,
-                          transition_id: operation.transition_id,
+                          type: "remove_layout" as const,
+                          layout_id: operation.layout_id,
                         }
-                    : operation.operation_type === "graphic"
-                      ? operation.action === "set" && operation.graphic
+                    : operation.operation_type === "transition"
+                      ? operation.action === "set" && operation.transition
                         ? {
-                            type: "set_graphic" as const,
-                            graphic: operation.graphic,
+                            type: "set_transition" as const,
+                            transition: operation.transition,
                           }
                         : {
-                            type: "remove_graphic" as const,
-                            graphic_id: operation.graphic_id,
+                            type: "remove_transition" as const,
+                            transition_id: operation.transition_id,
                           }
-                      : operation.operation_type === "speed"
-                        ? {
-                            type: "set_speed" as const,
-                            start_us: operation.start_us,
-                            end_us: operation.end_us,
-                            speed: operation.speed,
-                          }
-                        : operation.operation_type === "zoom"
-                          ? operation.action === "set" && operation.zoom
-                            ? {
-                                type: "set_zoom" as const,
-                                zoom: operation.zoom,
-                              }
-                            : {
-                                type: "remove_zoom" as const,
-                                zoom_id: operation.zoom_id,
-                              }
-                          : operation.operation_type === "split"
-                            ? {
-                                type: "split" as const,
-                                clip_id: operation.clip_id,
-                                timeline_position_us:
-                                  operation.timeline_position_us,
-                              }
-                            : operation.operation_type === "ripple_delete"
+                      : operation.operation_type === "graphic"
+                        ? operation.action === "set" && operation.graphic
+                          ? {
+                              type: "set_graphic" as const,
+                              graphic: operation.graphic,
+                            }
+                          : {
+                              type: "remove_graphic" as const,
+                              graphic_id: operation.graphic_id,
+                            }
+                        : operation.operation_type === "speed"
+                          ? {
+                              type: "set_speed" as const,
+                              start_us: operation.start_us,
+                              end_us: operation.end_us,
+                              speed: operation.speed,
+                            }
+                          : operation.operation_type === "zoom"
+                            ? operation.action === "set" && operation.zoom
                               ? {
-                                  type: "ripple_delete" as const,
-                                  start_us: operation.start_us,
-                                  end_us: operation.end_us,
+                                  type: "set_zoom" as const,
+                                  zoom: operation.zoom,
                                 }
-                              : operation.operation_type === "restore"
+                              : {
+                                  type: "remove_zoom" as const,
+                                  zoom_id: operation.zoom_id,
+                                }
+                            : operation.operation_type === "split"
+                              ? {
+                                  type: "split" as const,
+                                  clip_id: operation.clip_id,
+                                  timeline_position_us:
+                                    operation.timeline_position_us,
+                                }
+                              : operation.operation_type === "ripple_delete"
                                 ? {
-                                    type: "restore_range" as const,
-                                    source_id: operation.source_id,
-                                    source_start_us: operation.source_start_us,
-                                    source_end_us: operation.source_end_us,
+                                    type: "ripple_delete" as const,
+                                    start_us: operation.start_us,
+                                    end_us: operation.end_us,
                                   }
-                                : operation.operation_type === "transcript_cut"
+                                : operation.operation_type === "restore"
                                   ? {
-                                      type: "transcript_cut" as const,
+                                      type: "restore_range" as const,
                                       source_id: operation.source_id,
-                                      transcript_id: operation.transcript_id,
-                                      start_word_id: operation.start_word_id,
-                                      end_word_id: operation.end_word_id,
                                       source_start_us:
                                         operation.source_start_us,
                                       source_end_us: operation.source_end_us,
-                                      start_us: operation.start_us,
-                                      end_us: operation.end_us,
                                     }
                                   : operation.operation_type ===
-                                      "transcript_edit"
+                                      "transcript_cut"
                                     ? {
-                                        type: "transcript_edit" as const,
+                                        type: "transcript_cut" as const,
                                         source_id: operation.source_id,
                                         transcript_id: operation.transcript_id,
-                                        word_id: operation.word_id,
-                                        original_text: operation.original_text,
-                                        expected_text: operation.before_text,
-                                        replacement_text: operation.after_text,
+                                        start_word_id: operation.start_word_id,
+                                        end_word_id: operation.end_word_id,
+                                        source_start_us:
+                                          operation.source_start_us,
+                                        source_end_us: operation.source_end_us,
+                                        start_us: operation.start_us,
+                                        end_us: operation.end_us,
                                       }
-                                    : {
-                                        type: "trim" as const,
-                                        clip_id: operation.clip_id,
-                                        edge: operation.edge,
-                                        timeline_position_us:
-                                          operation.timeline_position_us,
-                                      },
+                                    : operation.operation_type ===
+                                        "transcript_edit"
+                                      ? {
+                                          type: "transcript_edit" as const,
+                                          source_id: operation.source_id,
+                                          transcript_id:
+                                            operation.transcript_id,
+                                          word_id: operation.word_id,
+                                          original_text:
+                                            operation.original_text,
+                                          expected_text: operation.before_text,
+                                          replacement_text:
+                                            operation.after_text,
+                                        }
+                                      : {
+                                          type: "trim" as const,
+                                          clip_id: operation.clip_id,
+                                          edge: operation.edge,
+                                          timeline_position_us:
+                                            operation.timeline_position_us,
+                                        },
           ),
         };
         assertApplyDraftTransactionRequest(request);

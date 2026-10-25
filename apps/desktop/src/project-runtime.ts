@@ -91,6 +91,7 @@ export function committedDraftView(result: DraftReadResult): ProjectDraftView {
     zooms: structuredClone(draft.timeline.zooms ?? []),
     graphics: structuredClone(draft.timeline.graphics ?? []),
     transitions: structuredClone(draft.timeline.transitions ?? []),
+    layouts: structuredClone(draft.timeline.layouts ?? []),
   };
   assertProjectDraftView(value);
   return value;
@@ -121,6 +122,8 @@ export async function invokeWithProjectDraftRefresh<T>(options: {
     options.toolName === "graphics.remove" ||
     options.toolName === "transition.set" ||
     options.toolName === "transition.remove" ||
+    options.toolName === "layout.set" ||
+    options.toolName === "layout.remove" ||
     options.toolName === "captions.configure" ||
     options.toolName === "audio.configure" ||
     options.toolName === "sound.set" ||
@@ -196,6 +199,7 @@ export class DesktopProjectRuntime {
       zooms: draft.zooms ?? [],
       graphics: draft.graphics ?? [],
       transitions: draft.transitions ?? [],
+      layouts: draft.layouts ?? [],
       ...(snapshot.schema_version === "1.1" ? { sources: summaries } : {}),
       timeline: draft.timeline,
       clips: draft.clips!,
