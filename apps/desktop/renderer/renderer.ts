@@ -2290,6 +2290,24 @@ const playback = setupPlayback({
   failed: (message) => showError(message),
 });
 playButton.addEventListener("click", () => playback.toggle());
+// Side panels start below the application bar, whatever height it wraps to.
+const applicationBar = document.querySelector("header");
+if (applicationBar)
+  new ResizeObserver(() =>
+    document.documentElement.style.setProperty(
+      "--header-height",
+      `${applicationBar.offsetHeight}px`,
+    ),
+  ).observe(applicationBar);
+element("fullscreen").addEventListener("click", () => {
+  // The picture alone fills the screen; Esc leaves it.
+  const picture = document.querySelector<HTMLElement>(".preview");
+  void (
+    document.fullscreenElement
+      ? document.exitFullscreen()
+      : picture?.requestFullscreen()
+  )?.catch(() => undefined);
+});
 function frameInterval(): number {
   return activeProject
     ? (1_000_000 * activeProject.timeline.frameRate.denominator) /

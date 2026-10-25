@@ -276,6 +276,13 @@
                   <output id="time" for="seek"></output
                   ><span id="duration"></span>
                 </div>
+                <button
+                  id="fullscreen"
+                  class="icon-button"
+                  data-icon="fullscreen"
+                  aria-label="Full screen"
+                  title="Full screen"
+                ></button>
               </div>
               <div id="timeline-strip" class="timeline-strip" hidden>
                 <div class="timeline-track" aria-hidden="true">
@@ -696,11 +703,38 @@
             </div>
             <section id="export-actions" class="export-actions" hidden>
               <div id="export-setup" class="export-setup">
-                <label for="export-profile">Quality</label>
-                <select id="export-profile">
+                <div
+                  id="export-profiles"
+                  class="quality-cards"
+                  role="radiogroup"
+                  aria-label="Quality"
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    class="quality-card"
+                    data-profile="lossless_master"
+                    aria-checked="true"
+                  >
+                    <strong>Lossless master</strong>
+                    <span>Every frame and sample kept</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    class="quality-card"
+                    data-profile="smaller_mp4"
+                    aria-checked="false"
+                  >
+                    <strong>Smaller file</strong>
+                    <span>A copy for sharing</span>
+                  </button>
+                </div>
+                <select id="export-profile" aria-label="Quality" hidden>
                   <option value="lossless_master">Lossless master</option>
                   <option value="smaller_mp4">Smaller file</option>
                 </select>
+                <p id="export-profile-note"></p>
                 <button
                   id="export-start"
                   class="primary"
@@ -709,7 +743,6 @@
                 >
                   Export…
                 </button>
-                <p id="export-profile-note"></p>
               </div>
               <div id="export-running" class="export-running" hidden>
                 <progress

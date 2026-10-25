@@ -374,8 +374,7 @@ try {
     );
     await dialogs(electron, master);
     await page.getByRole("button", { name: "Export", exact: true }).click();
-    if (exportMp4)
-      await page.locator("#export-profile").selectOption("smaller_mp4");
+    if (exportMp4) await page.locator('[data-profile="smaller_mp4"]').click();
     await expect(page.locator("#export-profile")).toHaveValue(
       exportMp4 ? "smaller_mp4" : "lossless_master",
     );

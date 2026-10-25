@@ -89,7 +89,10 @@ try {
     "Export",
   ]) {
     await page.getByRole("button", { name, exact: true }).click();
-    await page.waitForTimeout(2500);
+    await expect(
+      page.getByRole("button", { name, exact: true }),
+    ).toHaveAttribute("aria-current", "step", { timeout: 60_000 });
+    await page.waitForTimeout(1500);
     await page.screenshot({
       path: join(evidence, `step-${name.replaceAll(" ", "-")}.png`),
     });

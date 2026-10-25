@@ -16,6 +16,7 @@ const paths: Record<string, string> = {
   more: "M5.5 12h1M11.5 12h1M17.5 12h1",
   "frame-back": "M18 6 10 12l8 6V6ZM6 6v12",
   "frame-forward": "M6 6l8 6-8 6V6ZM18 6v12",
+  fullscreen: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
   play: "M7 4.5v15L19.5 12 7 4.5Z",
   pause: "M8 5v14M16 5v14",
   stop: "M6 6h12v12H6Z",

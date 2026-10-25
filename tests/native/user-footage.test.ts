@@ -398,7 +398,7 @@ try {
     const share = join(outputs, "User footage share.mp4");
     await dialogs(electron, share);
     await page.locator("#export-again").click();
-    await page.locator("#export-profile").selectOption("smaller_mp4");
+    await page.locator('[data-profile="smaller_mp4"]').click();
     await page.locator("#export-start").click();
     await expect(page.locator("#export-done")).toBeVisible({
       timeout: 8 * 3_600_000,

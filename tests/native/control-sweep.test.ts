@@ -175,6 +175,13 @@ try {
         0,
         `"${next}" left a dialog open`,
       );
+      // Full screen is left again by the keyboard, as a person would.
+      if (await page.evaluate(() => Boolean(document.fullscreenElement))) {
+        await page.keyboard.press("Escape");
+        await expect
+          .poll(() => page.evaluate(() => Boolean(document.fullscreenElement)))
+          .toBe(false);
+      }
       // The window still answers.
       assert.equal(await page.evaluate(() => 1 + 1), 2);
       // A control may have moved the project to another step: come back.

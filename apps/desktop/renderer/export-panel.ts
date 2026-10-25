@@ -36,6 +36,9 @@ export function setupExportPanel(): ExportPanel {
   const panel = element("export-actions");
   const profileSelect = element<HTMLSelectElement>("export-profile");
   const note = element("export-profile-note");
+  const cards = [
+    ...document.querySelectorAll<HTMLButtonElement>(".quality-card"),
+  ];
   const startButton = element<HTMLButtonElement>("export-start");
   const running = element("export-running");
   const progress = element<HTMLProgressElement>("export-progress");
@@ -68,6 +71,13 @@ export function setupExportPanel(): ExportPanel {
     note.textContent = profileNotes[profileSelect.value as ExportProfileChoice];
     startButton.disabled = pending;
     profileSelect.disabled = pending;
+    for (const card of cards) {
+      card.setAttribute(
+        "aria-checked",
+        String(card.dataset.profile === profileSelect.value),
+      );
+      card.disabled = pending;
+    }
     if (active && view?.fraction !== null && view?.fraction !== undefined)
       progress.value = Math.round(view.fraction * 1000);
     phase.textContent =
@@ -131,6 +141,11 @@ export function setupExportPanel(): ExportPanel {
   }
 
   profileSelect.addEventListener("change", paint);
+  for (const card of cards)
+    card.addEventListener("click", () => {
+      profileSelect.value = card.dataset.profile!;
+      paint();
+    });
   startButton.addEventListener(
     "click",
     () =>

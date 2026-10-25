@@ -303,7 +303,7 @@ try {
   step = "smaller-export";
   await page.locator("#export-again").click();
   await expect(page.locator("#export-setup")).toBeVisible();
-  await page.locator("#export-profile").selectOption("smaller_mp4");
+  await page.locator('[data-profile="smaller_mp4"]').click();
   await expect(page.locator("#export-profile-note")).toContainText(
     "Compressed",
   );
@@ -323,7 +323,7 @@ try {
 
   step = "cancel";
   await page.locator("#export-again").click();
-  await page.locator("#export-profile").selectOption("lossless_master");
+  await page.locator('[data-profile="lossless_master"]').click();
   const cancelled = join(outputs, "Cancelled.mkv");
   await savePath(electron, cancelled);
   await page.locator("#export-start").click();

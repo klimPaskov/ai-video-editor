@@ -790,6 +790,11 @@ canvas,
 .preview-video {
   background: #05060a;
 }
+.preview:fullscreen {
+  background: #000;
+  border: 0;
+  border-radius: 0;
+}
 #preview-message {
   max-width: 420px;
   margin: 24px;
@@ -1759,15 +1764,46 @@ dd {
   flex-wrap: wrap;
   gap: 10px;
 }
-.export-setup label {
-  font-weight: 500;
+.quality-cards {
+  display: grid;
+  flex-basis: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
-#export-profile {
-  width: auto;
-  min-width: 180px;
+.quality-card,
+.quality-card:hover:not(:disabled) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 14px 16px;
+  color: var(--text);
+  text-align: left;
+  white-space: normal;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: 16px;
+}
+.quality-card strong {
+  font-size: 16px;
+  font-weight: 600;
+}
+.quality-card span {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 400;
+}
+.quality-card[aria-checked="true"],
+.quality-card[aria-checked="true"]:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 #export-start {
-  margin-left: auto;
+  flex: 1 1 100%;
+  justify-content: center;
 }
 #export-profile-note,
 #export-result,
@@ -2517,7 +2553,9 @@ button.large {
 
 /* Layout (ADR 0024): Light Canvas as drawn in the reference designs */
 header {
-  height: 72px;
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 72px;
   padding: 0 40px;
   background: transparent;
   border-bottom: 0;
@@ -3033,6 +3071,17 @@ dialog {
     background: transparent;
     box-shadow: none;
   }
+  /* The floating controls leave room for an open side panel. */
+  html[data-layout="cinematic"]
+    #viewer:has(#codex-drawer:not([hidden]))
+    .stage-card {
+    padding-right: 420px;
+  }
+  html[data-layout="cinematic"]
+    #viewer:has(#inspector:not([hidden]))
+    .stage-card {
+    padding-right: 320px;
+  }
   html[data-layout="cinematic"] #viewer[data-stage="export"] .stage-card {
     display: flex;
   }
@@ -3110,7 +3159,7 @@ body:has(#home:not([hidden])) #source-details {
 html:not([data-layout="cinematic"]) #codex-drawer,
 html:not([data-layout="cinematic"]) #inspector {
   position: fixed;
-  top: 84px;
+  top: calc(var(--header-height, 72px) + 12px);
   right: 20px;
   bottom: 20px;
   z-index: 20;
@@ -3147,5 +3196,12 @@ html:not([data-layout="cinematic"]) #viewer:has(#inspector:not([hidden])) {
   html:not([data-layout="cinematic"])
     #viewer:has(#codex-drawer:not([hidden]), #inspector:not([hidden])) {
     padding-right: 40px;
+  }
+}
+
+/* The Export step's two columns stack once there is not room for both. */
+@media (max-width: 900px) {
+  #viewer[data-stage="export"] .stage-card {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

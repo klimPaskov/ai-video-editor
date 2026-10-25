@@ -28,7 +28,7 @@ What has been verified, how, and what has not. Update this file when that change
 
 ## Deviations from the reference designs
 
-The player has no volume or fullscreen control; the Edit timeline is one clip bar with markers, not a thumbnail filmstrip with a time ruler; Export keeps a quality dropdown instead of two selectable cards; below 821 px or 561 px high the Cinematic layout becomes the classic layout.
+The player has a Full screen control but no volume control (the preview plays no audio, so one would do nothing); the Edit timeline is one clip bar with markers, not a thumbnail filmstrip with a time ruler; below 821 px or 561 px high the Cinematic layout becomes the classic layout.
 
 ## What only the user can supply
 
