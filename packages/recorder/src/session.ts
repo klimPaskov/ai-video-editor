@@ -30,6 +30,9 @@ export interface SegmentRecord {
   videoStartSeconds: number | null;
   audioStartSeconds: number | null;
   audioOffsetSamples: number;
+  /** The segment's camera file, when a camera was recorded. */
+  cameraFile?: string;
+  cameraStartSeconds?: number | null;
   /** Ended without Pause/Stop (device loss or encoder failure). */
   interrupted: boolean;
 }
@@ -45,6 +48,11 @@ export interface SessionState {
 
 export interface FinishedRecording {
   path: string;
+  /**
+   * The camera recording, lossless, with the same frames as the screen
+   * recording (so its sync offset is exactly zero); null without a camera.
+   */
+  cameraPath: string | null;
   frames: number;
   durationUs: number;
   record: string;
@@ -121,6 +129,7 @@ export interface TakeRecord {
   platform: SegmentRequest["platform"];
   display: string;
   microphone: string | null;
+  camera?: string | null;
   frame_rate: 30 | 60;
   segments: SegmentRecord[];
   pauses: { afterFrames: number }[];
@@ -175,6 +184,15 @@ export class CaptureSession {
           width: 2,
           height: 2,
         },
+        camera:
+          record.camera == null
+            ? null
+            : {
+                id: "recovered",
+                label: String(record.camera),
+                format: "test_pattern",
+                device: "",
+              },
         // Only whether there was a microphone matters when finishing.
         microphone:
           record.microphone === null
@@ -195,10 +213,29 @@ export class CaptureSession {
         String(segment.file).split(/[\\/]/u).pop() ?? "",
       );
       if (!/^segment-\d{3}\.mkv$/u.test(file.split(/[\\/]/u).pop()!)) continue;
-      session.segments.push({ ...segment, file });
+      const cameraFile =
+        typeof segment.cameraFile === "string"
+          ? join(
+              options.directory,
+              String(segment.cameraFile).split(/[\\/]/u).pop() ?? "",
+            )
+          : undefined;
+      session.segments.push({
+        ...segment,
+        file,
+        ...(cameraFile &&
+        /^camera-\d{3}\.mkv$/u.test(cameraFile.split(/[\\/]/u).pop()!)
+          ? { cameraFile }
+          : {}),
+      });
     }
     session.pauses.push(...record.pauses);
     return session;
+  }
+
+  /** The camera is the last input: after the screen and the microphone. */
+  private cameraInputIndex(): number {
+    return this.options.request.microphone ? 2 : 1;
   }
 
   /** Persists the take record; writes are serialised and best effort. */
@@ -214,6 +251,9 @@ export class CaptureSession {
         audioStartSeconds: this.options.request.microphone
           ? (starts[1] ?? null)
           : null,
+        ...(running.record.cameraFile
+          ? { cameraStartSeconds: starts[this.cameraInputIndex()] ?? null }
+          : {}),
         interrupted: true,
       });
     }
@@ -224,6 +264,7 @@ export class CaptureSession {
       platform: this.options.request.platform,
       display: this.options.request.display.label,
       microphone: this.options.request.microphone?.label ?? null,
+      camera: this.options.request.camera?.label ?? null,
       frame_rate: this.options.request.frameRate,
       segments,
       pauses: [...this.pauses],
@@ -269,9 +310,16 @@ export class CaptureSession {
       this.options.directory,
       `segment-${String(this.segments.length + 1).padStart(3, "0")}.mkv`,
     );
+    const cameraFile = this.options.request.camera
+      ? join(
+          this.options.directory,
+          `camera-${String(this.segments.length + 1).padStart(3, "0")}.mkv`,
+        )
+      : undefined;
     const args = segmentArguments({
       ...this.options.request,
       outputPath: file,
+      ...(cameraFile ? { cameraOutputPath: cameraFile } : {}),
     });
     const supervisor = this.options.supervisor;
     const child = supervisor
@@ -303,6 +351,7 @@ export class CaptureSession {
         videoStartSeconds: null,
         audioStartSeconds: null,
         audioOffsetSamples: 0,
+        ...(cameraFile ? { cameraFile, cameraStartSeconds: null } : {}),
         interrupted: false,
       },
       done: Promise.resolve(),
@@ -350,6 +399,9 @@ export class CaptureSession {
     running.record.audioStartSeconds = this.options.request.microphone
       ? (starts[1] ?? null)
       : null;
+    if (running.record.cameraFile)
+      running.record.cameraStartSeconds =
+        starts[this.cameraInputIndex()] ?? null;
     running.record.interrupted = !running.stopping;
     this.segments.push(running.record);
     if (this.current === running) {
@@ -460,6 +512,91 @@ export class CaptureSession {
         aligned.push(target);
       }
       if (aligned.length === 0) throw new Error("Nothing was recorded.");
+      // The camera, cut to the screen's own frames segment by segment: the
+      // same first frame, the same number of frames, so the offset is zero.
+      let cameraPath: string | null = null;
+      if (this.options.request.camera) {
+        const cameras: string[] = [];
+        for (const segment of usable) {
+          if (!segment.cameraFile) continue;
+          const target = join(
+            this.options.directory,
+            `aligned-${segment.cameraFile.split(/[\\/]/u).pop()}`,
+          );
+          const shift =
+            (segment.cameraStartSeconds ?? segment.videoStartSeconds ?? 0) -
+            (segment.videoStartSeconds ?? 0);
+          // A camera that started later holds its first picture until it
+          // began; one that started earlier drops the lead-in.
+          const align =
+            shift > 0.0005
+              ? `tpad=start_mode=clone:start_duration=${shift.toFixed(6)}`
+              : shift < -0.0005
+                ? `trim=start=${(-shift).toFixed(6)},setpts=PTS-STARTPTS`
+                : "null";
+          await run(this.options.ffmpeg, [
+            "-hide_banner",
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-i",
+            segment.cameraFile,
+            "-an",
+            "-vf",
+            `${align},fps=${fn}/${fd},tpad=stop_mode=clone:stop_duration=2,trim=end_frame=${segment.frames},setpts=N/(${fn}/${fd})/TB`,
+            "-frames:v",
+            String(segment.frames),
+            "-c:v",
+            "ffv1",
+            "-level",
+            "3",
+            "-g",
+            "1",
+            "-slicecrc",
+            "1",
+            "-pix_fmt",
+            "yuv422p",
+            "-fflags",
+            "+bitexact",
+            "-f",
+            "matroska",
+            target,
+          ]).catch(() => undefined);
+          cameras.push(target);
+        }
+        if (cameras.length === usable.length && cameras.length > 0) {
+          cameraPath = join(this.options.directory, "camera.mkv");
+          if (cameras.length === 1) await rename(cameras[0]!, cameraPath);
+          else {
+            const list = join(this.options.directory, "camera-segments.txt");
+            await writeFile(
+              list,
+              cameras
+                .map((file) => `file '${file.replaceAll("'", "'\\''")}'`)
+                .join("\n") + "\n",
+            );
+            await run(this.options.ffmpeg, [
+              "-hide_banner",
+              "-nostdin",
+              "-loglevel",
+              "error",
+              "-f",
+              "concat",
+              "-safe",
+              "0",
+              "-i",
+              list,
+              "-c",
+              "copy",
+              "-fflags",
+              "+bitexact",
+              "-f",
+              "matroska",
+              cameraPath,
+            ]);
+          }
+        }
+      }
       const finalPath = join(this.options.directory, "recording.mkv");
       if (aligned.length === 1) await rename(aligned[0]!, finalPath);
       else {
@@ -511,6 +648,7 @@ export class CaptureSession {
             platform: this.options.request.platform,
             display: this.options.request.display.label,
             microphone: this.options.request.microphone?.label ?? null,
+            camera: this.options.request.camera?.label ?? null,
             frame_rate: this.frameRate,
             sample_rate: captureSampleRate,
             segments: usable,
@@ -527,6 +665,7 @@ export class CaptureSession {
       this.options.onUpdate?.();
       return {
         path: finalPath,
+        cameraPath,
         frames,
         durationUs: Math.round((frames * 1_000_000) / fn),
         record,

@@ -27,12 +27,31 @@ export interface AudioInput {
   device: string;
 }
 
+export interface VideoInput {
+  /** Opaque id the renderer may send back; never a device path. */
+  id: string;
+  label: string;
+  /** FFmpeg input format and device name; main only. */
+  format: "v4l2" | "dshow" | "avfoundation" | "test_pattern";
+  device: string;
+}
+
+/** The picture size and rate the camera is asked for. */
+export const cameraCapture = Object.freeze({
+  width: 1280,
+  height: 720,
+  frameRate: 30,
+});
+
 export interface SegmentRequest {
   platform: CapturePlatform;
   /** X11 display name on Linux, e.g. ":0". */
   x11Display?: string;
   display: DisplayTarget;
   microphone: AudioInput | null;
+  /** A camera recorded alongside the screen, into `cameraOutputPath`. */
+  camera?: VideoInput | null;
+  cameraOutputPath?: string;
   frameRate: 30 | 60;
   outputPath: string;
 }
@@ -136,6 +155,64 @@ export function segmentArguments(request: SegmentRequest): string[] {
       audio.push("-f", "avfoundation", "-i", `:${microphone.device}`);
     else audio.push("-f", microphone.format, "-i", microphone.device);
   }
+  // The camera is the last input, so the screen and microphone keep indexes
+  // 0 and 1 whether or not there is one.
+  const camera = request.camera ?? null;
+  const cameraInput: string[] = [];
+  if (camera) {
+    if (!request.cameraOutputPath)
+      throw new Error("A camera recording needs an output file.");
+    const size = `${cameraCapture.width}x${cameraCapture.height}`;
+    const rate = String(cameraCapture.frameRate);
+    cameraInput.push(
+      "-thread_queue_size",
+      "1024",
+      "-use_wallclock_as_timestamps",
+      "1",
+    );
+    if (camera.format === "test_pattern")
+      // Labelled synthetic camera for repeatable tests; never a real device.
+      cameraInput.push(
+        "-f",
+        "lavfi",
+        "-i",
+        `smptebars=size=${size}:rate=${rate},realtime`,
+      );
+    else if (camera.format === "dshow")
+      cameraInput.push(
+        "-f",
+        "dshow",
+        "-framerate",
+        rate,
+        "-video_size",
+        size,
+        "-i",
+        `video=${camera.device}`,
+      );
+    else if (camera.format === "avfoundation")
+      cameraInput.push(
+        "-f",
+        "avfoundation",
+        "-framerate",
+        rate,
+        "-video_size",
+        size,
+        "-i",
+        `${camera.device}:none`,
+      );
+    else
+      cameraInput.push(
+        "-f",
+        "v4l2",
+        "-framerate",
+        rate,
+        "-video_size",
+        size,
+        "-i",
+        camera.device,
+      );
+  }
+  const cameraIndex = microphone ? 2 : 1;
   return [
     "-hide_banner",
     // Input headers (with each input's wall-clock start) go to stderr; stop
@@ -160,6 +237,7 @@ export function segmentArguments(request: SegmentRequest): string[] {
           ...audio,
         ]
       : []),
+    ...cameraInput,
     "-map",
     "0:v:0",
     ...(microphone ? ["-map", "1:a:0"] : []),
@@ -197,6 +275,34 @@ export function segmentArguments(request: SegmentRequest): string[] {
     "-f",
     "matroska",
     request.outputPath,
+    // The camera goes into a second, lossless file of its own, at the
+    // screen's constant rate.
+    ...(camera
+      ? [
+          "-map",
+          `${cameraIndex}:v:0`,
+          "-an",
+          "-fps_mode",
+          "cfr",
+          "-r",
+          rate,
+          "-c:v",
+          "ffv1",
+          "-level",
+          "3",
+          "-g",
+          "1",
+          "-slices",
+          "8",
+          "-slicecrc",
+          "1",
+          "-pix_fmt",
+          "yuv422p",
+          "-f",
+          "matroska",
+          request.cameraOutputPath!,
+        ]
+      : []),
   ];
 }
 
@@ -257,6 +363,30 @@ export function parseDshowAudio(text: string): AudioInput[] {
   }
   return inputs;
 }
+
+/** Windows DirectShow video devices from `ffmpeg -list_devices true -f dshow`. */
+export function parseDshowVideo(text: string): VideoInput[] {
+  const inputs: VideoInput[] = [];
+  for (const line of text.split(/\r?\n/u)) {
+    const match = /\]\s+"([^"]{1,200})"\s+\(video\)/u.exec(line);
+    if (!match) continue;
+    inputs.push({
+      id: `dshow-video-${inputs.length + 1}`,
+      label: match[1]!,
+      format: "dshow",
+      device: match[1]!,
+    });
+  }
+  return inputs;
+}
+
+/** Labelled synthetic camera for repeatable tests; never a real device. */
+export const testPatternCamera: VideoInput = Object.freeze({
+  id: "test-pattern-camera",
+  label: "Test pattern (not a camera)",
+  format: "test_pattern",
+  device: "smptebars",
+});
 
 /** Labelled synthetic microphone for repeatable tests; never a real device. */
 export const testToneInput: AudioInput = Object.freeze({

@@ -5,11 +5,14 @@ import { join } from "node:path";
 import {
   captureSize,
   parseDshowAudio,
+  parseDshowVideo,
   parsePulseSources,
+  testPatternCamera,
   testToneInput,
   type AudioInput,
   type CapturePlatform,
   type DisplayTarget,
+  type VideoInput,
 } from "../../../packages/recorder/src/capture.ts";
 import {
   CaptureSession,
@@ -52,6 +55,11 @@ export interface RecorderOptions {
   ffprobe?: string;
   displays(): PhysicalDisplay[];
   importFile(path: string): Promise<MediaSummary>;
+  /**
+   * A take with a camera: the camera recording's library entry goes with
+   * the screen recording's. Called once both are imported.
+   */
+  onCamera?(screenMediaId: string, cameraMediaId: string): Promise<void>;
   /** Runs captures under the capture supervisor (see the session). */
   supervisor?: {
     executable: string;
@@ -105,6 +113,7 @@ export class DesktopRecorder {
   private readonly ffprobe: string;
   private displays = new Map<string, DisplayTarget>();
   private microphones = new Map<string, AudioInput>();
+  private cameras = new Map<string, VideoInput>();
   private session: CaptureSession | null = null;
   private directory: string | null = null;
   private view: RecordingView = idle;
@@ -161,10 +170,53 @@ export class DesktopRecorder {
     return [];
   }
 
+  private async listCameras(): Promise<VideoInput[]> {
+    const list = this.options.listOutput ?? output;
+    if (this.testCapture()) return [testPatternCamera];
+    if (this.options.platform === "win32")
+      return parseDshowVideo(
+        await list(this.ffmpeg, [
+          "-hide_banner",
+          "-list_devices",
+          "true",
+          "-f",
+          "dshow",
+          "-i",
+          "dummy",
+        ]),
+      );
+    if (this.options.platform === "linux") {
+      const found: VideoInput[] = [];
+      for (const name of (await readdir("/dev").catch(() => [])).sort()) {
+        if (!/^video\d{1,2}$/u.test(name)) continue;
+        const label = (
+          await readFile(`/sys/class/video4linux/${name}/name`, "utf8").catch(
+            () => "",
+          )
+        )
+          .trim()
+          .slice(0, 100);
+        found.push({
+          id: `v4l2-${found.length + 1}`,
+          label: label || `Camera ${found.length + 1}`,
+          format: "v4l2",
+          device: `/dev/${name}`,
+        });
+      }
+      // A camera exposes several nodes; the first of each name is the picture.
+      const seen = new Set<string>();
+      return found.filter((item) =>
+        seen.has(item.label) ? false : (seen.add(item.label), true),
+      );
+    }
+    return [];
+  }
+
   async devices(): Promise<RecordingDevices> {
     const message = this.unavailable();
     this.displays.clear();
     this.microphones.clear();
+    this.cameras.clear();
     if (!message) {
       const displays: PhysicalDisplay[] = this.testCapture()
         ? [
@@ -183,6 +235,8 @@ export class DesktopRecorder {
         this.displays.set(display.id, display);
       for (const microphone of (await this.listMicrophones()).slice(0, 64))
         this.microphones.set(microphone.id, microphone);
+      for (const camera of (await this.listCameras()).slice(0, 16))
+        this.cameras.set(camera.id, camera);
     }
     const value: RecordingDevices = {
       displays: [...this.displays.values()].map((display, index) => {
@@ -198,6 +252,10 @@ export class DesktopRecorder {
       microphones: [...this.microphones.values()].map((microphone) => ({
         id: microphone.id,
         label: microphone.label,
+      })),
+      cameras: [...this.cameras.values()].map((camera) => ({
+        id: camera.id,
+        label: camera.label,
       })),
       message,
     };
@@ -300,7 +358,11 @@ export class DesktopRecorder {
         ? null
         : this.microphones.get(request.microphone_id);
     const platform = this.platform()!;
-    if (!display || microphone === undefined)
+    const camera =
+      request.camera_id === undefined || request.camera_id === null
+        ? null
+        : this.cameras.get(request.camera_id);
+    if (!display || microphone === undefined || camera === undefined)
       throw new RecordingError(recordingIssues.device);
     await this.discard();
     const directory = join(this.options.root, randomUUID());
@@ -320,6 +382,7 @@ export class DesktopRecorder {
           : {}),
         display,
         microphone,
+        ...(camera ? { camera } : {}),
         frameRate: 30,
       },
     });
@@ -378,6 +441,16 @@ export class DesktopRecorder {
       const named = join(this.directory!, `${takeName(new Date())}.mkv`);
       await rename(finished.path, named);
       media = await this.options.importFile(named);
+      // A camera take: its own recording, linked to the screen's.
+      if (finished.cameraPath) {
+        const cameraNamed = join(
+          this.directory!,
+          `${takeName(new Date())} camera.mkv`,
+        );
+        await rename(finished.cameraPath, cameraNamed);
+        const cameraMedia = await this.options.importFile(cameraNamed);
+        await this.options.onCamera?.(media.id, cameraMedia.id);
+      }
     } catch (error) {
       // The take folder is kept only while the session can still use it.
       await this.discard();

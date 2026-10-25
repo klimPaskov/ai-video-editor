@@ -17,9 +17,15 @@ export interface RecordingMicrophone {
   label: string;
 }
 
+export interface RecordingCamera {
+  id: string;
+  label: string;
+}
+
 export interface RecordingDevices {
   displays: RecordingDisplay[];
   microphones: RecordingMicrophone[];
+  cameras: RecordingCamera[];
   /** Set when recording is not possible on this device. */
   message: string | null;
 }
@@ -36,6 +42,8 @@ export interface RecordingStartRequest {
   schema_version: "1.0";
   display_id: string;
   microphone_id: string | null;
+  /** A camera recorded alongside the screen; omitted for none. */
+  camera_id?: string | null;
   /** Omitted to record the whole display. */
   region?: RecordingRegion;
 }
@@ -186,15 +194,21 @@ export function assertRecordingStartRequest(
     value !== null &&
     typeof value === "object" &&
     Object.hasOwn(value, "region");
+  const hasCamera =
+    value !== null &&
+    typeof value === "object" &&
+    Object.hasOwn(value, "camera_id");
   const request = exact(value, [
     "schema_version",
     "display_id",
     "microphone_id",
+    ...(hasCamera ? ["camera_id"] : []),
     ...(hasRegion ? ["region"] : []),
   ]);
   if (request.schema_version !== "1.0") invalid();
   id(request.display_id);
   if (request.microphone_id !== null) id(request.microphone_id);
+  if (hasCamera && request.camera_id !== null) id(request.camera_id);
   if (hasRegion) assertRecordingRegion(request.region);
 }
 
@@ -247,14 +261,26 @@ export function assertRecordingRegionResult(
 export function assertRecordingDevices(
   value: unknown,
 ): asserts value is RecordingDevices {
-  const devices = exact(value, ["displays", "microphones", "message"]);
+  const devices = exact(value, [
+    "displays",
+    "microphones",
+    "cameras",
+    "message",
+  ]);
   if (
     !Array.isArray(devices.displays) ||
     !Array.isArray(devices.microphones) ||
+    !Array.isArray(devices.cameras) ||
     devices.displays.length > 16 ||
-    devices.microphones.length > 64
+    devices.microphones.length > 64 ||
+    devices.cameras.length > 16
   )
     invalid();
+  for (const camera of devices.cameras) {
+    const item = exact(camera, ["id", "label"]);
+    id(item.id);
+    label(item.label);
+  }
   for (const display of devices.displays) {
     const item = exact(display, ["id", "label", "width", "height", "primary"]);
     id(item.id);

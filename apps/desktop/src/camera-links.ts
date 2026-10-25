@@ -88,6 +88,69 @@ export class CameraLinks {
     return true;
   }
 
+  /**
+   * A recording made with a camera is imported before any project exists:
+   * the pair is remembered here until a project is made from the recording.
+   */
+  async rememberPending(
+    screenMediaId: string,
+    cameraMediaId: string,
+  ): Promise<void> {
+    if (
+      !mediaIdPattern.test(screenMediaId) ||
+      !mediaIdPattern.test(cameraMediaId)
+    )
+      throw new Error("Invalid camera link.");
+    const pending = await this.readPending();
+    pending[screenMediaId] = cameraMediaId;
+    await this.writePending(pending);
+  }
+
+  /** The camera that was recorded with this recording, once. */
+  async takePending(screenMediaId: string): Promise<string | null> {
+    const pending = await this.readPending();
+    const found = pending[screenMediaId];
+    if (!found) return null;
+    // The pair stays until a project uses it: a second project made from the
+    // same recording gets the camera too.
+    return found;
+  }
+
+  private async readPending(): Promise<Record<string, string>> {
+    try {
+      const value = JSON.parse(
+        await readFile(path.join(this.root, "pending.json"), "utf8"),
+      ) as unknown;
+      if (!value || typeof value !== "object" || Array.isArray(value))
+        return {};
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).filter(
+          ([key, item]) =>
+            mediaIdPattern.test(key) &&
+            typeof item === "string" &&
+            mediaIdPattern.test(item),
+        ),
+      ) as Record<string, string>;
+    } catch {
+      return {};
+    }
+  }
+
+  private async writePending(pending: Record<string, string>): Promise<void> {
+    await mkdir(this.root, { recursive: true, mode: 0o700 });
+    const file = path.join(this.root, "pending.json");
+    const temporary = `${file}.${process.pid}.tmp`;
+    await writeFile(
+      temporary,
+      `${JSON.stringify(pending, null, 2)}
+`,
+      {
+        mode: 0o600,
+      },
+    );
+    await rename(temporary, file);
+  }
+
   private async write(projectId: string, links: CameraLink[]): Promise<void> {
     await mkdir(this.root, { recursive: true, mode: 0o700 });
     const file = this.file(projectId);

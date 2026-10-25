@@ -1148,6 +1148,8 @@ async function start(): Promise<void> {
     platform: process.platform,
     env: process.env,
     importFile: (file) => library.importFile(file),
+    onCamera: (screenMediaId, cameraMediaId) =>
+      cameraLinks.rememberPending(screenMediaId, cameraMediaId),
     displays: () =>
       screen.getAllDisplays().map((display, index) => {
         // Capture uses physical pixels; Windows maps per-monitor DPI itself.
@@ -2222,8 +2224,16 @@ async function start(): Promise<void> {
   register(channels.projectCreate, async (request) => {
     assertProjectRequest(request);
     await assertCanLeaveActive();
-    const created = await projects.createFromMedia(request.id),
-      value = await projectRuntime.view(created.project.project_id);
+    const created = await projects.createFromMedia(request.id);
+    // A recording made with a camera brings its camera along.
+    const camera = await cameraLinks.takePending(request.id);
+    if (camera)
+      await cameraLinks.set(created.project.project_id, {
+        sourceId: request.id,
+        mediaId: camera,
+        offsetUs: 0,
+      });
+    const value = await projectRuntime.view(created.project.project_id);
     activeProjectId = value.id;
     return value;
   });

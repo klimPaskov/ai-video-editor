@@ -3996,12 +3996,13 @@
       ]
     },
     "recordingDevices": {
-      "description": "Screens and microphones offered for recording. Ids are opaque; FFmpeg device names and coordinates stay in main.",
+      "description": "Screens, microphones and cameras offered for recording. Ids are opaque; FFmpeg device names and coordinates stay in main.",
       "type": "object",
       "additionalProperties": false,
       "required": [
         "displays",
         "microphones",
+        "cameras",
         "message"
       ],
       "properties": {
@@ -4059,6 +4060,26 @@
             }
           }
         },
+        "cameras": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/recordingDeviceId"
+              },
+              "label": {
+                "$ref": "#/$defs/recordingLabel"
+              }
+            }
+          }
+        },
         "message": {
           "$ref": "#/$defs/recordingMessage"
         }
@@ -4080,6 +4101,16 @@
           "$ref": "#/$defs/recordingDeviceId"
         },
         "microphone_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/recordingDeviceId"
+            }
+          ]
+        },
+        "camera_id": {
           "anyOf": [
             {
               "type": "null"
