@@ -45,6 +45,7 @@ const activityLabels: Record<string, { label: string; mutating: boolean }> = {
   sound_list: { label: "Looking at the audio files", mutating: false },
   sound_set: { label: "Placing music or a sound", mutating: true },
   sound_remove: { label: "Removing a sound", mutating: true },
+  shorts_propose: { label: "Choosing short clips", mutating: false },
   timeline_undo: { label: "Undoing the last edit", mutating: true },
 };
 

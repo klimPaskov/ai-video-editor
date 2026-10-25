@@ -142,13 +142,15 @@ function safeName(name: string): string {
 
 /**
  * Plans the export of the active draft, or of output time [startUs, endUs)
- * of it when a window is given. Throws `MediaError` with a fixed message.
+ * of it when a window is given. A window may play `speed` times faster (a
+ * whole number the render supports for every part in it); zooms and
+ * graphics then move with it. Throws `MediaError` with a fixed message.
  */
 export async function planDraft(
   drafts: DraftReader,
   ffprobe: string,
   projectId: string,
-  window?: { startUs: number; endUs: number },
+  window?: { startUs: number; endUs: number; speed?: number },
 ): Promise<{
   plan: ReturnType<typeof planExport>;
   snapshot: DraftProjectReadResult;
@@ -178,9 +180,16 @@ export async function planDraft(
     sourceEndUs: clip.source_end_us,
     ...(clip.speed ? { speed: clip.speed } : {}),
   }));
+  const factor = window?.speed ?? 1;
   const allZooms = zoomIntervals(snapshot.draft.timeline.zooms ?? [], mapped);
   const zooms = window
-    ? windowZoomIntervals(allZooms, window.startUs, window.endUs)
+    ? windowZoomIntervals(allZooms, window.startUs, window.endUs).map(
+        (interval) => ({
+          ...interval,
+          startUs: Math.floor(interval.startUs / factor),
+          endUs: Math.floor(interval.endUs / factor),
+        }),
+      )
     : allZooms;
   // Transitions are drawn like graphics, on top of them.
   const allGraphics = [
@@ -200,14 +209,27 @@ export async function planDraft(
         .filter(
           (item) => item.endUs > window.startUs && item.startUs < window.endUs,
         )
-        .map((item) => ({
-          ...item,
-          startUs: item.startUs - window.startUs,
-          endUs: item.endUs - window.startUs,
-        }))
+        .map((item) => {
+          const startUs = Math.floor((item.startUs - window.startUs) / factor);
+          const endUs = Math.floor((item.endUs - window.startUs) / factor);
+          // A transition follows the cut it hides; a graphic keeps the time
+          // it is on screen, so its animation is not cut short.
+          return {
+            ...item,
+            startUs,
+            endUs: item.graphicId.startsWith("transition-")
+              ? endUs
+              : Math.min(
+                  Math.floor((window.endUs - window.startUs) / factor),
+                  startUs + (item.endUs - item.startUs),
+                ),
+          };
+        })
     : allGraphics;
   const clips = window
-    ? draftWindowClips(mapped, window.startUs, window.endUs)
+    ? draftWindowClips(mapped, window.startUs, window.endUs).map((clip) =>
+        factor === 1 ? clip : { ...clip, speed: (clip.speed ?? 1) * factor },
+      )
     : ordered.map((clip) => ({
         sourceId: clip.source_id,
         sourceStartUs: clip.source_start_us,

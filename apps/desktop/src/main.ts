@@ -157,6 +157,7 @@ import {
 import { probeSoundFile } from "../../../packages/media-engine/src/sound-probe.ts";
 import { sweepPartialExports, sweepTemporaryFolders } from "./private-notes.ts";
 import { roughCutTools } from "./rough-cut-playbook.ts";
+import { shortsPickTools } from "./shorts-pick-playbook.ts";
 import {
   writeClaudeWorkspace,
   type WorkspaceTimeline,
@@ -182,6 +183,9 @@ import {
   assertShortClipRequest,
   assertShortClipsView,
   assertShortExportRequest,
+  assertShortExportAllRequest,
+  assertShortLibraryRequest,
+  shortIssues,
   assertShortProjectRequest,
 } from "../../../packages/domain/src/short-clips-view.ts";
 import {
@@ -1001,6 +1005,34 @@ async function start(): Promise<void> {
     captionSettings: effectiveCaptions,
     audioSettings: effectiveAudio,
     defaultDirectory: () => app.getPath("videos"),
+    chooseFolder: async (defaultPath) => {
+      if (!window) return null;
+      const chosen = await dialog.showOpenDialog(window, {
+        title: "Export all clips to a folder",
+        defaultPath,
+        properties: ["openDirectory", "createDirectory"],
+      });
+      return chosen.canceled || !chosen.filePaths[0]
+        ? null
+        : chosen.filePaths[0];
+    },
+    reveal: (file) => shell.showItemInFolder(file),
+    pickRunning: (projectId) => claude?.runKind(projectId) === "shorts_pick",
+    startPick: async (projectId) => {
+      if (!claude || (await claude.settled()).status !== "signed_in")
+        throw new ShortClipError(shortIssues.pickSignIn);
+      if (claude.runKind(projectId))
+        throw new ShortClipError(shortIssues.pickBusy);
+      try {
+        await claude.startShortsPick(projectId);
+      } catch (error) {
+        throw new ShortClipError(
+          error instanceof ClaudeUserError
+            ? error.message
+            : shortIssues.pickFailed,
+        );
+      }
+    },
     chooseDestination: async (defaultPath) => {
       if (!window) return null;
       const chosen = await dialog.showSaveDialog(window, {
@@ -1046,6 +1078,28 @@ async function start(): Promise<void> {
   register(channels.shortsExport, async (request) => {
     assertShortExportRequest(request);
     return shorts(request.project_id, () => shortClips!.export(request));
+  });
+  register(channels.shortsExportAll, async (request) => {
+    assertShortExportAllRequest(request);
+    return shorts(request.project_id, () => shortClips!.exportAll(request));
+  });
+  register(channels.shortsReveal, async (request) => {
+    assertShortLibraryRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.reveal(request.project_id, request.export_id),
+    );
+  });
+  register(channels.shortsForget, async (request) => {
+    assertShortLibraryRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.forget(request.project_id, request.export_id),
+    );
+  });
+  register(channels.shortsPick, async (request) => {
+    assertShortProjectRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.pick(request.project_id),
+    );
   });
   register(channels.shortsCancel, async (request) => {
     assertShortProjectRequest(request);
@@ -1707,6 +1761,12 @@ async function start(): Promise<void> {
       !roughCutTools.has(name as string)
     )
       throw new CodexVideoEditToolError("tool_not_available");
+    // Choosing clips only reads, looks and proposes; it never edits.
+    if (
+      claude?.runKind(projectId) === "shorts_pick" &&
+      !shortsPickTools.has(name as string)
+    )
+      throw new CodexVideoEditToolError("tool_not_available");
     const target =
       input && typeof input === "object"
         ? (input as { target_transaction_id?: unknown }).target_transaction_id
@@ -1733,6 +1793,9 @@ async function start(): Promise<void> {
           importCompositionForClaude,
           checkCompositionForClaude,
           soundAssets,
+          {
+            propose: (id, proposals) => shortClips!.propose(id, proposals),
+          },
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,

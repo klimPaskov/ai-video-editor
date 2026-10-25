@@ -647,6 +647,46 @@ export const claudeOnlyMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: claudeOnlyToolNames[4],
+    description:
+      "Propose up to six short clips of the active edit for the Short clips panel, in rank order (strongest first). It does not change the edit. Each clip is a half-open range of edit time (microseconds; read the times from edit.md) of 15 to 60 seconds that starts at the first word of a sentence and ends at the last word of one, stands on its own for someone who has not seen the rest, and does not overlap another. The app snaps each edge to the nearest spoken word and refuses a clip that is too short or long, has no spoken words at an edge, or overlaps one already chosen; the answer lists what it refused and why, and the accepted clips replace the panel's earlier set. A title (at most 80 characters) and one to four short reasons come with each clip. Needs a transcript of the edit.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "clips"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        clips: {
+          type: "array",
+          minItems: 1,
+          maxItems: 6,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["start_us", "end_us", "title", "reasons"],
+            properties: {
+              start_us: { type: "integer", minimum: 0 },
+              end_us: { type: "integer", minimum: 1 },
+              title: { type: "string", minLength: 1, maxLength: 120 },
+              reasons: {
+                type: "array",
+                maxItems: 4,
+                items: { type: "string", maxLength: 120 },
+              },
+            },
+          },
+        },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ] as const;
 
 /** Every tool Claude's editor server lists. */

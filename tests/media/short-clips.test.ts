@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { CaptionWord } from "../../packages/domain/src/captions.ts";
+import { assertGraphicContent } from "../../packages/domain/src/graphics.ts";
 import {
   draftWindowClips,
   findShortCandidates,
+  proposeShortCandidates,
   reframeFilter,
+  shortSpeedFits,
+  shortTitleBox,
+  shortTitleInterval,
   shortWords,
   splitSentences,
 } from "../../packages/domain/src/short-clips.ts";
@@ -158,4 +163,146 @@ test("clips start at real sentence starts, not after a pause split", () => {
     );
   // Never from the pause-split remainder at 13.5 s.
   assert.ok(found.every((clip) => clip.startUs !== 13_500_000));
+});
+
+test("a speed fits only when every part of the clip can play that much faster", () => {
+  assert.equal(shortSpeedFits([undefined, 1], 2), true);
+  assert.equal(shortSpeedFits([2, 4], 2), true);
+  assert.equal(shortSpeedFits([undefined, 3], 2), false);
+  assert.equal(shortSpeedFits([8], 2), false);
+  assert.equal(shortSpeedFits([3, 8], 1), true);
+});
+
+test("a title stays inside the picture of each format and framing", () => {
+  const wide = { width: 2560, height: 1440 };
+  // Fit shows the whole frame; the title spans most of its width.
+  const fit = shortTitleBox("vertical", "fit", 0.5, wide);
+  assert.ok(Math.abs(fit.left + fit.width / 2 - 0.5) < 1e-9);
+  assert.ok(fit.width > 0.8);
+  // Fill crops a 9:16 slice out of 16:9: the title stays inside that slice.
+  for (const position of [0, 0.5, 1]) {
+    const box = shortTitleBox("vertical", "fill", position, wide);
+    const slice = 9 / 16 / (16 / 9);
+    const left = position * (1 - slice);
+    assert.ok(box.left >= left - 1e-9, `left at ${position}`);
+    assert.ok(
+      box.left + box.width <= left + slice + 1e-9,
+      `right at ${position}`,
+    );
+  }
+  // A landscape fill of a landscape frame crops nothing.
+  assert.deepEqual(
+    shortTitleBox("landscape", "fill", 0.2, wide),
+    shortTitleBox("landscape", "fit", 0.9, wide),
+  );
+});
+
+test("a title is a safe overlay that follows the speed and the clip length", () => {
+  const box = { left: 0.08, width: 0.84 };
+  const title = shortTitleInterval(
+    'Why <b>this</b> & "that"?',
+    20_000_000,
+    box,
+  );
+  assert.ok(title);
+  assert.equal(title!.startUs, 0);
+  assert.equal(title!.endUs, 3_000_000);
+  assert.equal(title!.layer, 99);
+  assert.match(
+    title!.html,
+    /Why &lt;b&gt;this&lt;\/b&gt; &amp; &quot;that&quot;\?/u,
+  );
+  assertGraphicContent(title!.html, title!.css);
+  // At 2x the title still shows for its own time; a short clip ends it early.
+  assert.equal(shortTitleInterval("Hi", 20_000_000, box, 2)!.endUs, 3_000_000);
+  assert.equal(shortTitleInterval("Hi", 4_000_000, box, 2)!.endUs, 2_000_000);
+  assert.equal(shortTitleInterval("   ", 20_000_000, box), null);
+  assert.equal(shortTitleInterval("Hi", 500_000, box), null);
+  assert.ok(
+    (
+      shortTitleInterval("x".repeat(500), 20_000_000, box)!.html.match(/x/gu) ??
+      []
+    ).length <= 80,
+  );
+});
+
+test("proposed clips snap to spoken words and keep the same rules", () => {
+  // A monologue of about 100 s, one word every 0.4 s.
+  const words = paragraph(
+    "Here is how to record a clean demo of your app in minutes.",
+    22,
+    0,
+  ).words;
+  const result = proposeShortCandidates(words, [
+    // Snaps to word edges; 30 s.
+    {
+      start_us: 10_100_000,
+      end_us: 40_300_000,
+      title: "  The best  demo\u0000tip ",
+      reasons: [
+        "Opens clearly",
+        "x".repeat(200),
+        "",
+        "Third",
+        "Fourth",
+        "Fifth",
+      ],
+    },
+    // Overlaps the first.
+    { start_us: 35_000_000, end_us: 60_000_000, title: "Overlap", reasons: [] },
+    // Too short.
+    { start_us: 60_000_000, end_us: 66_000_000, title: "Short", reasons: [] },
+    // Too long.
+    { start_us: 0, end_us: 90_000_000, title: "Long", reasons: [] },
+    // Nowhere near speech.
+    { start_us: 500_000_000, end_us: 540_000_000, title: "Far", reasons: [] },
+    // No title.
+    { start_us: 45_000_000, end_us: 70_000_000, title: " ", reasons: [] },
+  ]);
+  assert.equal(result.candidates.length, 1);
+  const [clip] = result.candidates;
+  // Edges land on sentence edges: the first word of "Here is how..." and
+  // the last word of a sentence ending in "minutes.".
+  const sentenceStarts = splitSentences(words).map((s) => s.startUs);
+  const sentenceEnds = splitSentences(words).map((s) => s.endUs);
+  assert.ok(sentenceStarts.includes(clip!.startUs));
+  assert.ok(sentenceEnds.includes(clip!.endUs));
+  assert.equal(clip!.origin, "ai");
+  assert.equal(clip!.title, "The best demo tip");
+  assert.equal(clip!.id, `clip-${clip!.startUs}-${clip!.endUs}`);
+  assert.equal(clip!.reasons.length, 4);
+  assert.ok(clip!.reasons.every((reason) => reason.length <= 80 && reason));
+  assert.ok(clip!.excerpt.length <= 221 && clip!.excerpt.startsWith("Here"));
+  assert.equal(result.rejected.length, 5);
+  assert.match(result.rejected[0]!, /^Clip 2: .*overlaps/u);
+  assert.match(result.rejected[1]!, /^Clip 3: .*clips must be 15 to 60 s/u);
+  assert.match(result.rejected[3]!, /^Clip 5: .*sentences start and end/u);
+  assert.match(result.rejected[4]!, /^Clip 6: .*title/u);
+});
+
+test("at most six clips are kept, strongest first, in time order", () => {
+  const words = paragraph(
+    "Here is how to record a clean demo of your app in minutes.",
+    60,
+    0,
+  ).words;
+  const proposals = Array.from({ length: 7 }, (_, index) => ({
+    start_us: index * 40_000_000 + 1_000_000,
+    end_us: index * 40_000_000 + 31_000_000,
+    title: `Clip ${index}`,
+    reasons: [],
+  })).reverse();
+  const result = proposeShortCandidates(words, proposals);
+  assert.equal(result.candidates.length, 6);
+  assert.deepEqual(
+    result.candidates.map((clip) => clip.startUs),
+    [...result.candidates.map((clip) => clip.startUs)].sort((a, b) => a - b),
+  );
+  // The first proposal ranks highest.
+  assert.ok(
+    result.candidates.find((clip) => clip.title === "Clip 6")!.score >
+      result.candidates.find((clip) => clip.title === "Clip 1")!.score,
+  );
+  assert.equal(result.rejected.length, 1);
+  assert.match(result.rejected[0]!, /at most 6/u);
 });

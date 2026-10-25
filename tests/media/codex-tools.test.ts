@@ -2280,3 +2280,81 @@ test("sound.list, sound.set and sound.remove manage music and effects for Claude
       expectCode("tool_not_available"),
     );
 });
+
+test("shorts.propose hands validated proposals to the app and is Claude's alone", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const seen: unknown[] = [];
+  const claude = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      propose: async (id, proposals) => {
+        seen.push([id, proposals]);
+        return {
+          accepted: 1,
+          rejected: ["Clip 2: it overlaps a clip already chosen."],
+        };
+      },
+    },
+  );
+  const clip = {
+    start_us: 1_000_000,
+    end_us: 31_000_000,
+    title: "Why demos feel slow",
+    reasons: ["Opens with a question"],
+  };
+  const answer = (await claude.invoke("shorts.propose", {
+    schema_version: "1.0",
+    project_id: projectId,
+    clips: [clip, { ...clip, start_us: 20_000_000 }],
+  })) as { accepted: number; rejected: string[]; summary: string };
+  assert.equal(answer.accepted, 1);
+  assert.deepEqual(answer.rejected, [
+    "Clip 2: it overlaps a clip already chosen.",
+  ]);
+  assert.match(answer.summary, /1 clip added/u);
+  assert.equal((seen[0] as [string, unknown[]])[0], projectId);
+  assert.equal((seen[0] as [string, unknown[]])[1].length, 2);
+  for (const clips of [
+    [],
+    Array.from({ length: 7 }, () => clip),
+    [{ ...clip, title: "" }],
+    [{ ...clip, title: "x".repeat(121) }],
+    [{ ...clip, reasons: ["a", "b", "c", "d", "e"] }],
+    [{ ...clip, start_us: -1 }],
+    [{ ...clip, end_us: 1.5 }],
+    [{ ...clip, path: "/tmp/x" }],
+  ])
+    await assert.rejects(() =>
+      claude.invoke("shorts.propose", {
+        schema_version: "1.0",
+        project_id: projectId,
+        clips,
+      }),
+    );
+  await assert.rejects(() =>
+    claude.invoke("shorts.propose", {
+      schema_version: "1.0",
+      project_id: "other-project",
+      clips: [clip],
+    }),
+  );
+  // Without a proposer (Codex, API providers, tests) the tool is not offered.
+  for (const origin of ["codex", "api_provider"] as const)
+    await assert.rejects(
+      () =>
+        new CodexVideoEditToolService(projectId, drafts, origin).invoke(
+          "shorts.propose",
+          { schema_version: "1.0", project_id: projectId, clips: [clip] },
+        ),
+      (error: unknown) =>
+        (error as { code?: string }).code === "tool_not_available",
+    );
+});

@@ -201,6 +201,84 @@ async function scriptedFullEdit(
 }
 
 /**
+ * Scripted clip picking for native tests: reads the edit, tries a tool a
+ * picking run may not use (which must be refused), then proposes clips the
+ * way the playbook asks, one of them overlapping so the app's refusal comes
+ * back, and reports what the app accepted.
+ */
+async function scriptedShortsPick(
+  allowed: string[],
+  assistant: (content: unknown[], error?: string) => void,
+  result: (ok: boolean, extra?: Record<string, unknown>) => void,
+  base: Record<string, unknown>,
+): Promise<void> {
+  const { call, attempt, projectId, close } = await connectEditor(
+    allowed,
+    assistant,
+    base,
+  );
+  const summary = JSON.parse(
+    (
+      await call("timeline.get_summary", {
+        schema_version: "1.0",
+        project_id: projectId,
+      })
+    )[0]!.text as string,
+  ) as Record<string, unknown>;
+  const duration = summary.duration_us as number;
+  // A picking run only reads, looks and proposes: an edit is refused.
+  const refused = await attempt("zoom.set", {
+    schema_version: "1.0",
+    request_id: `scripted-${Date.now()}`,
+    project_id: projectId,
+    draft_id: summary.draft_id,
+    base_revision_id: summary.base_revision_id,
+    expected_sequence: summary.draft_sequence,
+    expected_timeline_sha256: summary.timeline_sha256,
+    pass_group_id: "scripted-zoom",
+    reason: "Not allowed while choosing clips.",
+    start_us: 0,
+    end_us: 1_000_000,
+    center_x: 0.5,
+    center_y: 0.5,
+    scale: 2,
+  });
+  const clips = [
+    {
+      start_us: 0,
+      end_us: Math.min(duration, 30_000_000),
+      title: "Scripted pick one",
+      reasons: ["Opens clearly", "One complete idea"],
+    },
+    // Overlaps the first: the app refuses it and says why.
+    {
+      start_us: 10_000_000,
+      end_us: Math.min(duration, 40_000_000),
+      title: "Scripted overlap",
+      reasons: [],
+    },
+  ];
+  const answer = JSON.parse(
+    (
+      await call("shorts.propose", {
+        schema_version: "1.0",
+        project_id: projectId,
+        clips,
+      })
+    )[0]!.text as string,
+  ) as Record<string, unknown>;
+  appendFileSync(
+    logPath,
+    `${JSON.stringify({
+      scriptedShorts: { refusedEdit: !refused.ok, answer },
+    })}\n`,
+  );
+  close();
+  assistant([{ type: "text", text: `Chose ${String(answer.accepted)} clip.` }]);
+  result(true);
+}
+
+/**
  * Scripted composition for native tests: writes a small GSAP composition to
  * the workspace (the CLI's working directory), places it with graphics.set
  * and looks at a rendered picture of it.
@@ -718,6 +796,16 @@ if (args[0] === "--version") {
               appendFileSync(
                 logPath,
                 `${JSON.stringify({ scriptedError: String(error).slice(0, 200) })}\n`,
+              );
+              result(false);
+            },
+          );
+        } else if (kind === "scripted_shorts_pick") {
+          void scriptedShortsPick(allowed, assistant, result, base).catch(
+            (error: unknown) => {
+              appendFileSync(
+                logPath,
+                `${JSON.stringify({ scriptedError: String(error).slice(0, 300) })}\n`,
               );
               result(false);
             },

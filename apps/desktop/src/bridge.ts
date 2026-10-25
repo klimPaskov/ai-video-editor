@@ -36,6 +36,8 @@ import type {
   ShortClipRequest,
   ShortClipsView,
   ShortExportRequest,
+  ShortExportAllRequest,
+  ShortLibraryRequest,
   ShortProjectRequest,
 } from "../../../packages/domain/src/short-clips-view.ts";
 import type {
@@ -223,6 +225,12 @@ export interface DesktopBridge {
   discardShortClip(request: ShortClipRequest): Promise<Reply<ShortClipsView>>;
   exportShortClip(request: ShortExportRequest): Promise<Reply<ShortClipsView>>;
   cancelShortClip(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
+  exportAllShortClips(
+    request: ShortExportAllRequest,
+  ): Promise<Reply<ShortClipsView>>;
+  revealShortClip(request: ShortLibraryRequest): Promise<Reply<ShortClipsView>>;
+  forgetShortClip(request: ShortLibraryRequest): Promise<Reply<ShortClipsView>>;
+  pickShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
   getCaptionSettings(
     request: CaptionSettingsRequest,
   ): Promise<Reply<CaptionSettings>>;
@@ -322,6 +330,10 @@ export const channels = Object.freeze({
   shortsDiscard: "shorts:discard",
   shortsExport: "shorts:export",
   shortsCancel: "shorts:cancel",
+  shortsExportAll: "shorts:export-all",
+  shortsReveal: "shorts:reveal",
+  shortsForget: "shorts:forget",
+  shortsPick: "shorts:pick",
   captionsGet: "captions:get",
   captionsSet: "captions:set",
   recordingDevices: "recording:devices",

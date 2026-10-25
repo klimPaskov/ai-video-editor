@@ -66,18 +66,40 @@ class DesktopIpcContractTests(unittest.TestCase):
     def test_short_clips_are_path_free_with_fixed_messages(self):
         request = {'schema_version': '1.0', 'project_id': 'project-1'}
         clip = {'id': 'clip-1000000-31000000', 'title': 'Why do demos feel slow?', 'startUs': 1000000, 'endUs': 31000000,
-                'score': 0.82, 'reasons': ['Opens with a question'], 'excerpt': 'Why do demos feel slow? Because...'}
-        job = {'status': 'completed', 'clipId': clip['id'], 'fraction': None, 'fileName': 'Why do demos feel slow.mp4', 'message': None}
-        view = {'status': 'ready', 'candidates': [clip], 'job': job, 'message': None}
-        for channel in ['get', 'find', 'cancel']:
+                'score': 0.82, 'reasons': ['Opens with a question'], 'excerpt': 'Why do demos feel slow? Because...', 'origin': 'rules'}
+        job = {'status': 'completed', 'clipId': clip['id'], 'fraction': None, 'fileName': 'Why do demos feel slow.mp4', 'message': None, 'batch': None}
+        saved = {'id': 'export-6f1c2d3e-aaaa', 'title': 'Why do demos feel slow?', 'fileName': 'Why do demos feel slow.mp4',
+                 'format': 'vertical', 'speed': 2, 'durationUs': 15000000, 'createdAt': '2026-10-25T12:00:00.000Z', 'exists': True}
+        view = {'status': 'ready', 'candidates': [clip], 'job': job, 'message': None, 'library': [saved],
+                'pick': {'running': False, 'message': None}}
+        for channel in ['get', 'find', 'cancel', 'pick']:
             self.valid({'channel': 'shorts:' + channel, 'payload': request, 'response': {'ok': True, 'value': view}})
         self.valid({'channel': 'shorts:discard', 'payload': dict(request, clip_id=clip['id']), 'response': {'ok': True, 'value': view}})
-        export = dict(request, clip_id=clip['id'], format='vertical', framing='fill', position=0.3, captions=True)
+        export = dict(request, clip_id=clip['id'], format='vertical', framing='fill', position=0.3, captions=True, title=True, speed=2)
         self.valid({'channel': 'shorts:export', 'payload': export, 'response': {'ok': False, 'message': 'A clip is already exporting.'}})
-        for wrong in [dict(export, format='9:16'), dict(export, position=2), dict(export, clip_id='../x'), dict(export, path='/tmp/x.mp4')]:
+        for wrong in [dict(export, format='9:16'), dict(export, position=2), dict(export, clip_id='../x'), dict(export, path='/tmp/x.mp4'),
+                      dict(export, speed=3), dict(export, speed=1.5), dict(export, title='yes')]:
             self.invalid({'channel': 'shorts:export', 'payload': wrong, 'response': {'ok': True, 'value': view}})
+        export_all = {key: value for key, value in export.items() if key != 'clip_id'}
+        self.valid({'channel': 'shorts:export-all', 'payload': export_all, 'response': {'ok': True, 'value': view}})
+        for wrong in [dict(export_all, folder='/tmp'), dict(export_all, speed=4), dict(export, clip_id=clip['id'])]:
+            self.invalid({'channel': 'shorts:export-all', 'payload': wrong, 'response': {'ok': True, 'value': view}})
+        saved_request = dict(request, export_id=saved['id'])
+        for channel in ['reveal', 'forget']:
+            self.valid({'channel': 'shorts:' + channel, 'payload': saved_request, 'response': {'ok': True, 'value': view}})
+            for wrong in [dict(saved_request, export_id='../x'), dict(saved_request, path='/tmp/x.mp4'), request]:
+                self.invalid({'channel': 'shorts:' + channel, 'payload': wrong, 'response': {'ok': True, 'value': view}})
+        batch = dict(view, job=dict(job, status='running', fraction=0.4, batch={'index': 1, 'total': 3}))
+        self.valid({'channel': 'shorts:get', 'payload': request, 'response': {'ok': True, 'value': batch}})
+        picking = dict(view, pick={'running': True, 'message': None}, candidates=[dict(clip, origin='ai')])
+        self.valid({'channel': 'shorts:get', 'payload': request, 'response': {'ok': True, 'value': picking}})
+        self.valid({'channel': 'shorts:get', 'payload': request,
+                    'response': {'ok': True, 'value': dict(view, pick={'running': False, 'message': 'Claude did not choose any clips. Try again.'})}})
         for bad in [dict(view, job=dict(job, fileName='/home/user/x.mp4')), dict(view, message='ffmpeg failed'),
-                    dict(view, candidates=[dict(clip, path='/x')])]:
+                    dict(view, candidates=[dict(clip, path='/x')]), dict(view, candidates=[dict(clip, origin='model')]),
+                    dict(view, library=[dict(saved, path='/home/user/x.mp4')]), dict(view, library=[dict(saved, fileName='/x/y.mp4')]),
+                    dict(view, pick={'running': False, 'message': 'the model said hello'}),
+                    dict(view, job=dict(job, batch={'index': 3, 'total': 0}))]:
             self.invalid({'channel': 'shorts:get', 'payload': request, 'response': {'ok': True, 'value': bad}})
 
     def test_audio_settings_are_two_choices(self):

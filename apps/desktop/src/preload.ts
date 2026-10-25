@@ -55,6 +55,8 @@ import {
   assertShortClipRequest,
   assertShortClipsView,
   assertShortExportRequest,
+  assertShortExportAllRequest,
+  assertShortLibraryRequest,
   assertShortProjectRequest,
 } from "../../../packages/domain/src/short-clips-view.ts";
 import {
@@ -400,6 +402,22 @@ const bridge: DesktopBridge = {
   cancelShortClip: (request) => {
     assertShortProjectRequest(request);
     return invoke(channels.shortsCancel, request, assertShortClipsView);
+  },
+  exportAllShortClips: (request) => {
+    assertShortExportAllRequest(request);
+    return invoke(channels.shortsExportAll, request, assertShortClipsView);
+  },
+  revealShortClip: (request) => {
+    assertShortLibraryRequest(request);
+    return invoke(channels.shortsReveal, request, assertShortClipsView);
+  },
+  forgetShortClip: (request) => {
+    assertShortLibraryRequest(request);
+    return invoke(channels.shortsForget, request, assertShortClipsView);
+  },
+  pickShortClips: (request) => {
+    assertShortProjectRequest(request);
+    return invoke(channels.shortsPick, request, assertShortClipsView);
   },
   getCaptionSettings: (request) => {
     assertCaptionSettingsRequest(request);

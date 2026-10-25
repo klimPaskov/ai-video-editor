@@ -193,9 +193,9 @@ Acceptance: `docs/workflow/results/P10.json` records the exact final evidence an
 
 ## P11: short clips (user requirement 2026-10-07)
 
-- [ ] P11-01 Find self-contained short moments in a finished draft. Local transcript rules, candidate cards, preview, discard and stale detection are implemented (docs/49); AI proposals and ranking through the guarded tools remain.
+- [x] P11-01 Find self-contained short moments in a finished draft. Local transcript rules, candidate cards, preview, discard and stale detection, and Claude's picks through the guarded `shorts.propose` (checked by the app against the draft; Claude only) are implemented and natively tested (docs/49).
 - [ ] P11-02 Export a clip as vertical, square or landscape MP4 with fit or fill framing and burned-in captions through the verified render pipeline. Implemented and natively tested with a public talk excerpt (docs/49); face and webcam-aware framing remain.
-- [ ] P11-03 Add speed, titles, a clip library and multi-clip export.
+- [x] P11-03 Add speed (1× or 2×), titles, a saved-clips list (show in folder, remove) and export of every clip to one folder. Implemented and natively tested (docs/49). Face-aware framing and free speed values remain open.
 
 Acceptance: a finished video yields reviewed, captioned short clips without leaving the app.
 

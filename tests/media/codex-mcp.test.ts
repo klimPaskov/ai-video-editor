@@ -962,9 +962,11 @@ test("only Claude's server lists composition.check, with its picture as an image
       "sound.list",
       "sound.set",
       "sound.remove",
+      "shorts.propose",
     ])
       assert.ok((await list(claude)).includes(name), name);
     assert.equal((await list(codex)).includes("sound.set"), false);
+    assert.equal((await list(codex)).includes("shorts.propose"), false);
     assert.equal(
       ((await codex.request(call)).error as { code: number }).code,
       -32602,

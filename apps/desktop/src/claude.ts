@@ -40,6 +40,11 @@ import {
   fullEditRequest,
 } from "./full-edit-playbook.ts";
 import { roughCutLabel, roughCutPlaybook } from "./rough-cut-playbook.ts";
+import {
+  shortsPickLabel,
+  shortsPickPlaybook,
+  shortsPickRequest,
+} from "./shorts-pick-playbook.ts";
 import type { MagicWandPreset } from "../../../packages/domain/src/magic-wand.ts";
 import { claudeEditorToolNames } from "../../../packages/codex-tools/src/service.ts";
 import type { CodexMcpRuntime } from "../../../packages/codex-tools/src/broker.ts";
@@ -177,8 +182,9 @@ export interface ClaudeDraftHistory {
 
 const fullEditMaxTurns = 150;
 const roughCutMaxTurns = 150;
+const shortsPickMaxTurns = 60;
 
-export type ClaudeRunKind = "chat" | "full_edit" | "rough_cut";
+export type ClaudeRunKind = "chat" | "full_edit" | "rough_cut" | "shorts_pick";
 const transactionIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
 
 export interface DesktopClaudeOptions {
@@ -943,6 +949,23 @@ export class DesktopClaude {
       fullEdit: false,
       kind: "rough_cut",
       model: this.roughCutSelection(),
+    });
+  }
+
+  /**
+   * Starts choosing short clips: a read-only run with the clip-picking
+   * playbook that ends in one `shorts.propose` call (main enforces the tools).
+   */
+  async startShortsPick(projectId: string): Promise<ClaudeThreadView> {
+    if (!this.sessions.has(projectId)) await this.openThread(projectId);
+    const session = this.readySession(projectId);
+    return this.startTurn(session, {
+      shown: shortsPickLabel,
+      text: shortsPickRequest,
+      systemPrompt: `${claudeEditorInstructions(projectId)}\n\n${shortsPickPlaybook}`,
+      maxTurns: shortsPickMaxTurns,
+      fullEdit: false,
+      kind: "shorts_pick",
     });
   }
 

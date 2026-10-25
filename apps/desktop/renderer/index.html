@@ -813,6 +813,16 @@
                     <button id="shorts-find" type="button" data-icon="sparkle">
                       Find clips
                     </button>
+                    <button id="shorts-pick" type="button" data-icon="sparkle">
+                      Pick with Claude
+                    </button>
+                    <button
+                      id="shorts-export-all"
+                      type="button"
+                      data-icon="export"
+                    >
+                      Export all
+                    </button>
                   </div>
                   <div class="shorts-options">
                     <select id="shorts-format" aria-label="Clip format">
@@ -840,14 +850,36 @@
                         checked
                       />Burn in captions</label
                     >
+                    <label class="switch" for="shorts-title"
+                      ><input id="shorts-title" type="checkbox" />Show
+                      title</label
+                    >
+                    <select id="shorts-speed" aria-label="Clip speed">
+                      <option value="1">Normal speed</option>
+                      <option value="2">2× speed</option>
+                    </select>
                   </div>
                   <p id="shorts-note" class="muted"></p>
+                  <div
+                    id="shorts-batch"
+                    class="short-status"
+                    role="status"
+                    hidden
+                  ></div>
                   <ul
                     id="shorts-list"
                     class="shorts-list"
                     aria-label="Short clips"
                   ></ul>
                   <p id="shorts-error" role="alert" hidden></p>
+                  <div id="shorts-library-box" class="shorts-library" hidden>
+                    <p class="muted">Saved clips</p>
+                    <ul
+                      id="shorts-library"
+                      class="shorts-list"
+                      aria-label="Saved clips"
+                    ></ul>
+                  </div>
                 </div>
               </details>
             </section>

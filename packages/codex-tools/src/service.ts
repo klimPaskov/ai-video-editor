@@ -71,6 +71,7 @@ export const claudeOnlyToolNames = [
   "sound.list",
   "sound.set",
   "sound.remove",
+  "shorts.propose",
 ] as const;
 /** Claude's guarded editor tools: the shared tools plus its own. */
 export const claudeEditorToolNames = [
@@ -128,6 +129,22 @@ export type CompositionChecker = (
     dataBase64: string;
   } | null;
 }>;
+
+/**
+ * Takes the short clips Claude proposes for the active project, checks them
+ * against the draft and keeps the ones that hold.
+ */
+export interface ShortsProposer {
+  propose(
+    projectId: string,
+    proposals: readonly {
+      start_us: number;
+      end_us: number;
+      title: string;
+      reasons: string[];
+    }[],
+  ): Promise<{ accepted: number; rejected: string[] }>;
+}
 
 /** The project's audio files (music and sound effects), for sound layers. */
 export interface SoundCatalog {
@@ -538,6 +555,7 @@ export class CodexVideoEditToolService {
   private readonly compositionImporter: CompositionImporter | undefined;
   private readonly compositionChecker: CompositionChecker | undefined;
   private readonly soundCatalog: SoundCatalog | undefined;
+  private readonly shortsProposer: ShortsProposer | undefined;
 
   constructor(
     activeProjectId: string,
@@ -548,6 +566,7 @@ export class CodexVideoEditToolService {
     compositionImporter?: CompositionImporter,
     compositionChecker?: CompositionChecker,
     soundCatalog?: SoundCatalog,
+    shortsProposer?: ShortsProposer,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
@@ -558,6 +577,7 @@ export class CodexVideoEditToolService {
     this.compositionImporter = compositionImporter;
     this.compositionChecker = compositionChecker;
     this.soundCatalog = soundCatalog;
+    this.shortsProposer = shortsProposer;
   }
 
   private applier():
@@ -630,6 +650,8 @@ export class CodexVideoEditToolService {
           return await this.setSound(input);
         case "sound.remove":
           return await this.removeSound(input);
+        case "shorts.propose":
+          return await this.proposeShorts(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -1695,6 +1717,59 @@ export class CodexVideoEditToolService {
             },
           ]
         : [],
+    };
+  }
+
+  /**
+   * Proposes short clips for the app's Short clips panel. It does not touch
+   * the draft: the app checks every clip against the draft's words and the
+   * length and overlap rules, keeps the ones that hold and says why it
+   * refused the others, so the model can correct and call again.
+   */
+  private async proposeShorts(input: unknown): Promise<unknown> {
+    const request = exact(input, ["schema_version", "project_id", "clips"]);
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    if (!this.shortsProposer) reject("tool_not_available");
+    const clips = request.clips;
+    if (!Array.isArray(clips) || clips.length < 1 || clips.length > 6)
+      reject("invalid_request");
+    const proposals = (clips as unknown[]).map((value) => {
+      const clip = exact(value, ["start_us", "end_us", "title", "reasons"]);
+      integer(clip.start_us);
+      integer(clip.end_us, 1);
+      if (
+        typeof clip.title !== "string" ||
+        clip.title.length < 1 ||
+        clip.title.length > 120 ||
+        !Array.isArray(clip.reasons) ||
+        clip.reasons.length > 4 ||
+        clip.reasons.some(
+          (reason: unknown) =>
+            typeof reason !== "string" || reason.length > 120,
+        )
+      )
+        reject("invalid_request");
+      return {
+        start_us: clip.start_us as number,
+        end_us: clip.end_us as number,
+        title: clip.title as string,
+        reasons: clip.reasons as string[],
+      };
+    });
+    const result = await this.shortsProposer.propose(
+      this.activeProjectId,
+      proposals,
+    );
+    return {
+      schema_version: "1.0",
+      project_id: this.activeProjectId,
+      accepted: result.accepted,
+      rejected: result.rejected,
+      summary:
+        result.accepted > 0
+          ? `${result.accepted} ${result.accepted === 1 ? "clip" : "clips"} added to the Short clips panel.`
+          : "No clip was kept. Fix the problems listed and call again.",
     };
   }
 
