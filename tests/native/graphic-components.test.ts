@@ -47,7 +47,7 @@ await ffmpeg([
   "-f",
   "lavfi",
   "-i",
-  `gradients=size=${width}x${height}:rate=${rate}:duration=24:speed=0.01:c0=0x1d2b45:c1=0x6b7a99:nb_colors=2`,
+  `color=c=0x6b7a99:size=${width}x${height}:rate=${rate}:duration=24`,
   "-f",
   "lavfi",
   "-i",
@@ -251,7 +251,7 @@ try {
         different++;
     const share = different / (width * height);
     // A graphic is drawn: some part of the picture is clearly different.
-    assert.ok(share > 0.003, `${item.kind} changed only ${share}`);
+    assert.ok(share > 0.004, `${item.kind} changed only ${share}`);
     drawn.push(`${item.kind}:${share.toFixed(3)}`);
   }
   result.drawn = drawn;

@@ -97,13 +97,13 @@ function onAccent(accent: string): string {
 
 const shared = (seconds: number) => `
 .gc-root{position:absolute;inset:0;container-type:size;font-family:Inter,"Segoe UI",system-ui,-apple-system,sans-serif;color:#fff}
-.gc-exit{animation:gc-exit .45s cubic-bezier(.4,0,1,1) ${(seconds - 0.45).toFixed(3)}s both}
+.gc-exit{position:absolute;inset:0;animation:gc-exit .45s cubic-bezier(.4,0,1,1) ${(seconds - 0.45).toFixed(3)}s both}
 @keyframes gc-exit{to{opacity:0;transform:translateY(1.2cqh)}}
 @keyframes gc-rise{from{opacity:0;transform:translateY(2.4cqh)}to{opacity:1;transform:none}}
 @keyframes gc-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes gc-pop{0%{opacity:0;transform:scale(.6)}70%{opacity:1;transform:scale(1.06)}100%{opacity:1;transform:scale(1)}}
 @keyframes gc-fade{from{opacity:0}to{opacity:1}}
-@keyframes gc-draw{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes gc-draw{from{clip-path:inset(-30% 100% -30% -6%)}to{clip-path:inset(-30% -6% -30% -6%)}}
 `;
 
 function placeStyles(
@@ -210,10 +210,11 @@ export function renderGraphicComponent(
         fail(
           "The highlighted area must lie inside the frame and be at least 2% wide and tall.",
         );
-      const html = `<div class="gc-root"><div class="gc-exit"><div class="hb"><span class="hb-tag">${safeTitle}</span></div></div></div>`;
+      const html = `<div class="gc-root"><div class="gc-exit"><div class="hb"><span class="hb-frame"></span><span class="hb-tag">${safeTitle}</span></div></div></div>`;
       const labelBelow = y + height < 0.88;
       const css = `${shared(seconds)}
-.hb{position:absolute;left:${(x * 100).toFixed(2)}cqw;top:${(y * 100).toFixed(2)}cqh;width:${(width * 100).toFixed(2)}cqw;height:${(height * 100).toFixed(2)}cqh;box-sizing:border-box;border:.45cqw solid ${accent};border-radius:1cqw;box-shadow:0 0 0 .2cqw rgba(0,0,0,.35),0 0 3cqw ${accent}66;animation:gc-draw .6s cubic-bezier(.2,.8,.2,1) both,hb-pulse 1.6s 1s ease-in-out infinite}
+.hb{position:absolute;left:${(x * 100).toFixed(2)}cqw;top:${(y * 100).toFixed(2)}cqh;width:${(width * 100).toFixed(2)}cqw;height:${(height * 100).toFixed(2)}cqh}
+.hb-frame{position:absolute;inset:0;box-sizing:border-box;border:.45cqw solid ${accent};border-radius:1cqw;box-shadow:0 0 0 .2cqw rgba(0,0,0,.35),0 0 3cqw ${accent}66;animation:gc-draw .6s cubic-bezier(.2,.8,.2,1) both,hb-pulse 1.6s 1s ease-in-out infinite}
 @keyframes hb-pulse{0%,100%{box-shadow:0 0 0 .2cqw rgba(0,0,0,.35),0 0 3cqw ${accent}66}50%{box-shadow:0 0 0 .2cqw rgba(0,0,0,.35),0 0 5cqw ${accent}aa}}
 .hb-tag{position:absolute;left:0;${labelBelow ? "top:calc(100% + 1.2cqh)" : "bottom:calc(100% + 1.2cqh)"};white-space:nowrap;font-size:2.2cqw;font-weight:700;padding:.8cqh 1.6cqw;border-radius:99px;background:${accent};color:${ink};animation:gc-rise .5s .45s cubic-bezier(.2,.8,.2,1) both}`;
       return { name: `Highlight: ${title}`.slice(0, 80), html, css };
@@ -232,7 +233,7 @@ export function renderGraphicComponent(
         fail("For a step, subtitle is the step number (1–99).");
       const html = `<div class="gc-root"><div class="gc-exit"><div class="sb"><span class="sb-num">${escapeHtml(number)}</span><span class="sb-text">${safeTitle}</span></div></div></div>`;
       const css = `${shared(seconds)}
-.sb{position:absolute;${placeStyles(side, place)}display:flex;align-items:center;gap:1.4cqw;flex-direction:${side === "left" ? "row" : "row-reverse"};padding:1.2cqh 2.4cqw 1.2cqh 1.2cqh;border-radius:99px;background:rgba(10,13,20,.82);animation:gc-fade .35s ease-out both}
+.sb{position:absolute;${placeStyles(side, place)}display:flex;align-items:center;gap:1.4cqw;padding:1.2cqh 2.4cqw 1.2cqh 1.2cqh;border-radius:99px;background:rgba(10,13,20,.82);animation:gc-fade .35s ease-out both}
 .sb-num{display:grid;place-items:center;width:5.6cqw;height:5.6cqw;border-radius:50%;background:${accent};color:${ink};font-size:3cqw;font-weight:800;animation:gc-pop .55s cubic-bezier(.2,.8,.2,1) both}
 .sb-text{font-size:2.8cqw;font-weight:600;animation:gc-rise .5s .2s cubic-bezier(.2,.8,.2,1) both}`;
       return { name: `Step ${number}: ${title}`.slice(0, 80), html, css };

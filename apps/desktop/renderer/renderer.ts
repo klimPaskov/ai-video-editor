@@ -2986,6 +2986,8 @@ function setZoomPicking(next: typeof zoomPicking): void {
   const preview = canvas.parentElement!;
   preview.classList.toggle("picking", next !== undefined);
   zoomHint.hidden = next === undefined;
+  // The picture must be on screen, clear of the app bar, to be clicked.
+  if (next !== undefined) preview.scrollIntoView({ block: "center" });
 }
 function renderZoomTools(
   project: ProjectView,
