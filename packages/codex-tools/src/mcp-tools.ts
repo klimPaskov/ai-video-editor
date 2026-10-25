@@ -260,7 +260,7 @@ export const codexVideoEditMcpTools = [
   {
     name: codexVideoEditToolNames[9],
     description:
-      "Zoom into one point of the frame for a half-open output-time range of at least 0.5 s within one recording's footage, as one undoable transaction. Use it briefly (typically a few seconds at scale 1.5–2), only to make a small on-screen detail readable. center_x and center_y are frame fractions (0–1); scale is 1.1–4. Zooms of the same recording cannot overlap. With zoom_id, the existing zoom keeps its range and only its point and scale change.",
+      'Zoom into one point of the frame for a half-open output-time range of at least 0.5 s within one recording\'s footage, as one undoable transaction. Zoom only where a viewer needs a detail (a place from zoom.targets), never as decoration; most of a video has no zoom. center_x and center_y are frame fractions (0–1); scale is 1.1–4 (1.3–2.4 is usual). Motion: "hold" (default) eases in, stays and eases out, for a detail to read; "push" grows the magnification slowly across the whole range, for emphasis during a sentence. Optional end_center_x/end_center_y pan to a second point across the range (to follow a result or move between two places; give both). ease_in_us/ease_out_us (100000–1500000, default 400000) set the ramps; a longer ease feels calmer. Zooms of the same recording cannot overlap. With zoom_id, the existing zoom keeps its range and only its point, scale and motion change.',
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -282,6 +282,11 @@ export const codexVideoEditMcpTools = [
         center_x: { type: "number", minimum: 0, maximum: 1 },
         center_y: { type: "number", minimum: 0, maximum: 1 },
         scale: { type: "number", minimum: 1.1, maximum: 4 },
+        motion: { type: "string", enum: ["hold", "push"] },
+        end_center_x: { type: "number", minimum: 0, maximum: 1 },
+        end_center_y: { type: "number", minimum: 0, maximum: 1 },
+        ease_in_us: { type: "integer", minimum: 100000, maximum: 1500000 },
+        ease_out_us: { type: "integer", minimum: 100000, maximum: 1500000 },
       },
     },
     annotations: {
@@ -682,6 +687,28 @@ export const claudeOnlyMcpTools = [
     },
     annotations: {
       readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[5],
+    description:
+      "Find the places in the edit where something happens on screen (a dialog opens, text appears, a panel updates), by comparing the recording's frames. Returns up to 40 targets in edit time (microseconds), each with the rectangle that changed (fractions of the frame), a suggested zoom centre and scale, and a score. This is the evidence for a zoom: zoom only at a target and only when the viewer needs the detail; a range with no targets has nothing to zoom to. Changes across most of the picture (scrolling, scene changes) are not reported. Read-only. start_us and end_us (or null) limit the range.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "start_us", "end_us"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        start_us: { type: ["integer", "null"], minimum: 0 },
+        end_us: { type: ["integer", "null"], minimum: 1 },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
       openWorldHint: false,

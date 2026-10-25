@@ -213,3 +213,149 @@ test("an output range maps to one source's time through cuts and speed", () => {
   assert.equal(zoomSourceRange(clips, 1_500_000, 2_500_000), null);
   assert.equal(zoomSourceRange(clips, 2_500_000, 3_000_001), null);
 });
+
+test("push and pan zooms are validated and move smoothly", () => {
+  const push: ZoomEffect = {
+    ...zoom,
+    zoom_id: "zoom-push",
+    motion: "push",
+    end_center_x: 0.25,
+    end_center_y: 0.75,
+    ease_out_us: 600_000,
+  };
+  assertZoomEffects([push], sources);
+  for (const bad of [
+    { ...push, end_center_y: undefined },
+    { ...push, motion: "spin" },
+    { ...push, ease_in_us: 10 },
+    { ...push, ease_out_us: 5_000_000 },
+    { ...push, end_center_x: 2 },
+  ])
+    assert.throws(() =>
+      assertZoomEffects(
+        [JSON.parse(JSON.stringify(bad)) as ZoomEffect],
+        sources,
+      ),
+    );
+  const clips = [
+    {
+      sourceId: "source-a",
+      timelineStartUs: 0,
+      timelineEndUs: 10_000_000,
+      sourceStartUs: 0,
+      sourceEndUs: 10_000_000,
+    },
+  ];
+  const pieces = zoomIntervals([push], clips);
+  let previous = zoomAt(pieces, 1_000_000);
+  assert.equal(previous.scale, 1);
+  // The push grows steadily until the ease-out begins, and the centre
+  // travels from the first point to the second.
+  for (let us = 1_200_000; us <= 2_300_000; us += 100_000) {
+    const now = zoomAt(pieces, us);
+    assert.ok(now.scale >= previous.scale, `scale fell at ${us}`);
+    assert.ok(
+      now.centerX <= previous.centerX && now.centerY >= previous.centerY,
+    );
+    previous = now;
+  }
+  assert.ok(previous.scale > 1.7);
+  assert.ok(zoomAt(pieces, 2_950_000).scale < 1.2);
+  assert.equal(zoomAt(pieces, 3_000_000).scale, 1);
+});
+
+test(
+  "FFmpeg accepts push and pan expressions and draws only inside the zoom",
+  { timeout: 60_000 },
+  async () => {
+    const width = 160,
+      height = 90,
+      rate = 10;
+    const source = (
+      await runProcess({
+        executable: "ffmpeg",
+        args: [
+          "-v",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          `testsrc2=size=${width}x${height}:rate=${rate}:duration=4`,
+          "-pix_fmt",
+          "bgra",
+          "-f",
+          "rawvideo",
+          "pipe:1",
+        ],
+        maxOutputBytes: 64 * 1024 * 1024,
+      })
+    ).stdout;
+    const push: ZoomEffect = {
+      ...zoom,
+      motion: "push",
+      end_center_x: 0.3,
+      end_center_y: 0.7,
+      ease_out_us: 500_000,
+    };
+    const filter = zoomFilter(
+      zoomIntervals(
+        [push],
+        [
+          {
+            sourceId: "source-a",
+            timelineStartUs: 0,
+            timelineEndUs: 4_000_000,
+            sourceStartUs: 0,
+            sourceEndUs: 4_000_000,
+          },
+        ],
+      ),
+      width,
+      height,
+    )!;
+    const { spawn } = await import("node:child_process");
+    const output = await new Promise<Buffer>((resolve, reject) => {
+      const child = spawn("ffmpeg", [
+        "-v",
+        "error",
+        "-f",
+        "rawvideo",
+        "-pixel_format",
+        "bgra",
+        "-video_size",
+        `${width}x${height}`,
+        "-framerate",
+        String(rate),
+        "-i",
+        "pipe:0",
+        "-vf",
+        filter,
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "bgra",
+        "pipe:1",
+      ]);
+      const chunks: Buffer[] = [];
+      child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+      child.stderr.resume();
+      child.once("error", reject);
+      child.once("close", (code) =>
+        code === 0
+          ? resolve(Buffer.concat(chunks))
+          : reject(new Error(`ffmpeg ${code}`)),
+      );
+      child.stdin.end(source);
+    });
+    assert.equal(output.length, source.length);
+    const frameBytes = width * height * 4;
+    const differs = (frame: number) =>
+      !output
+        .subarray(frame * frameBytes, (frame + 1) * frameBytes)
+        .equals(source.subarray(frame * frameBytes, (frame + 1) * frameBytes));
+    // Outside 1 s to 3 s nothing changes; well inside it, frames do.
+    for (const frame of [0, 5, 9, 30, 35, 39])
+      assert.equal(differs(frame), false);
+    for (const frame of [15, 20, 25]) assert.equal(differs(frame), true);
+  },
+);

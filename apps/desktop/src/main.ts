@@ -52,6 +52,7 @@ import {
   CodexVideoEditToolError,
   CodexVideoEditToolService,
   type CodexVideoEditToolName,
+  type ZoomTargeter,
 } from "../../../packages/codex-tools/src/service.ts";
 import {
   nativeChildReadOnlyToolNames,
@@ -155,6 +156,10 @@ import {
   SoundAssetError,
   SoundAssetStore,
 } from "../../../packages/project-store/src/sounds.ts";
+import { analyzeScreenActivity } from "../../../packages/media-engine/src/screen-activity.ts";
+import { zoomForTarget } from "../../../packages/domain/src/screen-activity.ts";
+import { timelineAt } from "../../../packages/domain/src/speed.ts";
+import type { ActivityTarget } from "../../../packages/domain/src/screen-activity.ts";
 import { decodeEnergyTrack } from "../../../packages/media-engine/src/audio-energy.ts";
 import { probeSoundFile } from "../../../packages/media-engine/src/sound-probe.ts";
 import { sweepPartialExports, sweepTemporaryFolders } from "./private-notes.ts";
@@ -1728,6 +1733,76 @@ async function start(): Promise<void> {
     frameQueue = work.catch(() => undefined);
     return work;
   };
+  // Where things happen on screen, per recording (by hash): the evidence for
+  // zooms. A recording is analysed once per app run.
+  const activityBySource = new Map<string, Promise<ActivityTarget[]>>();
+  const zoomTargeter: ZoomTargeter = {
+    async targets(projectId, startUs, endUs) {
+      const { project } = await drafts.snapshotWithProject(projectId);
+      const sources =
+        project.schema_version === "1.1" ? project.sources : [project.source];
+      const summary = (await new CodexVideoEditToolService(
+        projectId,
+        drafts,
+        "claude",
+      ).invoke("timeline.get_summary", {
+        schema_version: "1.0",
+        project_id: projectId,
+      })) as {
+        clips: {
+          source_id: string;
+          source_start_us: number;
+          source_end_us: number;
+          timeline_start_us: number;
+          timeline_end_us: number;
+          speed?: number;
+        }[];
+      };
+      const found: Awaited<ReturnType<ZoomTargeter["targets"]>> = [];
+      for (const source of sources) {
+        const clips = summary.clips.filter(
+          (clip) => clip.source_id === source.source_id,
+        );
+        if (clips.length === 0) continue;
+        let analysis = activityBySource.get(source.sha256);
+        if (!analysis) {
+          analysis = analyzeScreenActivity({
+            ffmpeg: mediaExecutables.ffmpeg,
+            path: source.managed_path,
+          });
+          activityBySource.set(source.sha256, analysis);
+          analysis.catch(() => activityBySource.delete(source.sha256));
+        }
+        for (const target of await analysis) {
+          const zoom = zoomForTarget(target);
+          for (const clip of clips) {
+            const from = Math.max(target.startUs, clip.source_start_us);
+            const to = Math.min(target.endUs, clip.source_end_us);
+            if (to <= from) continue;
+            const start = timelineAt(clip, from);
+            const end = Math.min(clip.timeline_end_us, timelineAt(clip, to));
+            if (end <= startUs || start >= endUs) continue;
+            found.push({
+              start_us: start,
+              end_us: end,
+              x: Math.round(target.x * 1000) / 1000,
+              y: Math.round(target.y * 1000) / 1000,
+              width: Math.round(target.width * 1000) / 1000,
+              height: Math.round(target.height * 1000) / 1000,
+              center_x: zoom.centerX,
+              center_y: zoom.centerY,
+              suggested_scale: zoom.scale,
+              score: target.score,
+            });
+          }
+        }
+      }
+      return found
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 40)
+        .sort((a, b) => a.start_us - b.start_us);
+    },
+  };
   // The project workspace Claude works in (ADR 0021): the committed edit as
   // files. Writes for one project run one at a time, newest last.
   const workspaceWrites = new Map<string, Promise<void>>();
@@ -1846,6 +1921,7 @@ async function start(): Promise<void> {
           {
             propose: (id, proposals) => shortClips!.propose(id, proposals),
           },
+          zoomTargeter,
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,

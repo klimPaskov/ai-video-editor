@@ -414,9 +414,18 @@
         "source_end_us": { "type": "integer", "minimum": 1 },
         "center_x": { "type": "number", "minimum": 0, "maximum": 1 },
         "center_y": { "type": "number", "minimum": 0, "maximum": 1 },
-        "scale": { "type": "number", "minimum": 1.1, "maximum": 4 }
+        "scale": { "type": "number", "minimum": 1.1, "maximum": 4 },
+        "motion": { "enum": ["hold", "push"] },
+        "end_center_x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "end_center_y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "ease_in_us": { "type": "integer", "minimum": 100000, "maximum": 1500000 },
+        "ease_out_us": { "type": "integer", "minimum": 100000, "maximum": 1500000 }
       },
-      "description": "A zoom anchored to source time. It magnifies the point (center_x, center_y) of the frame by scale, eases in and out over at most 0.4 s at its real edges, and follows cuts. Runtime requires at least 0.5 s, a range inside its source, unique IDs and no overlap with another zoom of the same source."
+      "dependentRequired": {
+        "end_center_x": ["end_center_y"],
+        "end_center_y": ["end_center_x"]
+      },
+      "description": "A zoom anchored to source time. It magnifies the point (center_x, center_y) of the frame by scale, eases in and out (400 ms by default, ease_in_us / ease_out_us) at its real edges, and follows cuts. motion push grows the magnification slowly across the whole zoom; end_center_x/y pan to a second point across it. Runtime requires at least 0.5 s, a range inside its source, unique IDs and no overlap with another zoom of the same source."
     },
     "transcript_edit": {
       "type": "object",

@@ -72,6 +72,7 @@ export const claudeOnlyToolNames = [
   "sound.set",
   "sound.remove",
   "shorts.propose",
+  "zoom.targets",
 ] as const;
 /** Claude's guarded editor tools: the shared tools plus its own. */
 export const claudeEditorToolNames = [
@@ -144,6 +145,31 @@ export interface ShortsProposer {
       reasons: string[];
     }[],
   ): Promise<{ accepted: number; rejected: string[] }>;
+}
+
+/**
+ * Places in the active edit where something happens on screen, found by
+ * comparing the recording's frames; times are edit (output) times.
+ */
+export interface ZoomTargeter {
+  targets(
+    projectId: string,
+    startUs: number,
+    endUs: number,
+  ): Promise<
+    {
+      start_us: number;
+      end_us: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      center_x: number;
+      center_y: number;
+      suggested_scale: number;
+      score: number;
+    }[]
+  >;
 }
 
 /** The project's audio files (music and sound effects), for sound layers. */
@@ -556,6 +582,7 @@ export class CodexVideoEditToolService {
   private readonly compositionChecker: CompositionChecker | undefined;
   private readonly soundCatalog: SoundCatalog | undefined;
   private readonly shortsProposer: ShortsProposer | undefined;
+  private readonly zoomTargeter: ZoomTargeter | undefined;
 
   constructor(
     activeProjectId: string,
@@ -567,6 +594,7 @@ export class CodexVideoEditToolService {
     compositionChecker?: CompositionChecker,
     soundCatalog?: SoundCatalog,
     shortsProposer?: ShortsProposer,
+    zoomTargeter?: ZoomTargeter,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
@@ -578,6 +606,7 @@ export class CodexVideoEditToolService {
     this.compositionChecker = compositionChecker;
     this.soundCatalog = soundCatalog;
     this.shortsProposer = shortsProposer;
+    this.zoomTargeter = zoomTargeter;
   }
 
   private applier():
@@ -652,6 +681,8 @@ export class CodexVideoEditToolService {
           return await this.removeSound(input);
         case "shorts.propose":
           return await this.proposeShorts(input);
+        case "zoom.targets":
+          return await this.findZoomTargets(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -1083,10 +1114,41 @@ export class CodexVideoEditToolService {
         "center_y",
         "scale",
       ],
-      ["zoom_id"],
+      [
+        "zoom_id",
+        "motion",
+        "end_center_x",
+        "end_center_y",
+        "ease_in_us",
+        "ease_out_us",
+      ],
     );
     freshness(request, this.activeProjectId);
     id(request.pass_group_id);
+    if (
+      request.motion !== undefined &&
+      request.motion !== "hold" &&
+      request.motion !== "push"
+    )
+      reject("invalid_request");
+    if (
+      (request.end_center_x === undefined) !==
+      (request.end_center_y === undefined)
+    )
+      reject("invalid_request");
+    if (request.end_center_x !== undefined) {
+      fraction(request.end_center_x, 0, 1);
+      fraction(request.end_center_y, 0, 1);
+    }
+    for (const key of ["ease_in_us", "ease_out_us"] as const)
+      if (request[key] !== undefined) {
+        integer(request[key]);
+        if (
+          (request[key] as number) < zoomLimits.minEaseUs ||
+          (request[key] as number) > zoomLimits.maxEaseUs
+        )
+          reject("invalid_request");
+      }
     let zoomId: string | null = null;
     if (request.zoom_id !== undefined) {
       id(request.zoom_id);
@@ -1140,6 +1202,19 @@ export class CodexVideoEditToolService {
             center_x: request.center_x,
             center_y: request.center_y,
             scale: request.scale,
+            ...(request.motion === "push" ? { motion: "push" as const } : {}),
+            ...(request.end_center_x !== undefined
+              ? {
+                  end_center_x: request.end_center_x as number,
+                  end_center_y: request.end_center_y as number,
+                }
+              : {}),
+            ...(request.ease_in_us !== undefined
+              ? { ease_in_us: request.ease_in_us as number }
+              : {}),
+            ...(request.ease_out_us !== undefined
+              ? { ease_out_us: request.ease_out_us as number }
+              : {}),
           },
         },
       ],
@@ -1770,6 +1845,42 @@ export class CodexVideoEditToolService {
         result.accepted > 0
           ? `${result.accepted} ${result.accepted === 1 ? "clip" : "clips"} added to the Short clips panel.`
           : "No clip was kept. Fix the problems listed and call again.",
+    };
+  }
+
+  /**
+   * Where something happens on screen in a range of the edit: the evidence a
+   * zoom needs. Read-only; the draft is not touched.
+   */
+  private async findZoomTargets(input: unknown): Promise<unknown> {
+    const request = exact(input, [
+      "schema_version",
+      "project_id",
+      "start_us",
+      "end_us",
+    ]);
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    if (!this.zoomTargeter) reject("tool_not_available");
+    const startUs = request.start_us === null ? 0 : request.start_us;
+    const endUs =
+      request.end_us === null ? Number.MAX_SAFE_INTEGER : request.end_us;
+    integer(startUs);
+    integer(endUs, 1);
+    if (startUs >= endUs) reject("invalid_request");
+    const targets = await this.zoomTargeter.targets(
+      this.activeProjectId,
+      startUs,
+      endUs,
+    );
+    return {
+      schema_version: "1.0",
+      project_id: this.activeProjectId,
+      targets,
+      summary:
+        targets.length > 0
+          ? `${targets.length} ${targets.length === 1 ? "place" : "places"} on screen where something changes. Zoom only at these, and only when a viewer needs to read or follow the detail; otherwise do not zoom.`
+          : "Nothing on screen changes locally in this range, so there is nothing worth zooming to. Do not zoom here.",
     };
   }
 

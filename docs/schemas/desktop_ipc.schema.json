@@ -3432,7 +3432,12 @@
           "type": "number",
           "minimum": 1.1,
           "maximum": 4
-        }
+        },
+        "motion": { "enum": ["hold", "push"] },
+        "end_center_x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "end_center_y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "ease_in_us": { "type": "integer", "minimum": 100000, "maximum": 1500000 },
+        "ease_out_us": { "type": "integer", "minimum": 100000, "maximum": 1500000 }
       }
     },
     "audioSettings": {

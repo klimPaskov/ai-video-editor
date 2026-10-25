@@ -29,3 +29,5 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0024: a minimal interface with selectable themes (Light Canvas default; Cinematic changes the layout)
 
 - 0025: transitions as undoable draft effects (dip, wipe, iris) anchored to cuts and drawn like graphics, manual and on every assistant route
+- 0026: pauses and fillers tightened by the app, confirmed by audio loudness, as one undoable transaction (Natural / Balanced / Tight)
+- 0027: zooms need on-screen evidence (`zoom.targets`) and gain push, pan and ease options

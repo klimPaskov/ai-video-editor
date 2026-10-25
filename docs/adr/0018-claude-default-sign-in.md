@@ -52,3 +52,5 @@ Addendum (2026-10-25): ADR 0025 adds `transition.set` and `transition.remove` to
 Addendum (2026-10-25): the Claude-only `shorts.propose` (docs/49) raises Claude's editor inventory to twenty-four tools (Codex nineteen, the API providers eighteen). A clip-picking run is a Claude run kind that main restricts to reading, looking and this tool. The init check and allowlist still derive from the shared Claude tool list; a real-CLI init with the twenty-four tools is still to be confirmed.
 
 Addendum (2026-10-25, later): Confirmed 2026-10-25: with the user's signed-in private guest profile, the packaged app on Claude Code 2.1.302 initialized with the full twenty-four-tool inventory (including `transition.set`, `transition.remove` and `shorts.propose`) and a real Claude edit committed during its turn with origin `claude` (`tests/native/claude-connection.test.ts --require-signed-in`).
+
+Addendum (2026-10-25, later): the Claude-only `zoom.targets` (ADR 0027) raises Claude's editor inventory to twenty-five tools (Codex nineteen, the API providers eighteen). A real-CLI init with the twenty-five tools is still to be confirmed.

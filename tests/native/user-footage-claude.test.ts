@@ -53,7 +53,10 @@ const briefLevel = flagValue("--level") ?? "polished";
 const continueAt = process.argv.indexOf("--continue");
 const continueProject = continueAt > 0 ? process.argv[continueAt + 1] : null;
 assert.ok(continueAt < 0 || continueProject, "--continue needs a project id");
-const skipEdit = continueProject !== null && process.argv.includes("--no-edit");
+/** Stop after Magic Edit (tightening and the rough cut); no full edit. */
+const roughOnly = process.argv.includes("--rough-only");
+const skipEdit =
+  roughOnly || (continueProject !== null && process.argv.includes("--no-edit"));
 const evidenceRoot = resolve("test-results");
 await mkdir(evidenceRoot, { recursive: true, mode: 0o700 });
 const evidence = await mkdtemp(join(evidenceRoot, "native-footage-claude-"));
@@ -232,6 +235,53 @@ try {
       removedSeconds: Math.round((originalDurationUs - afterMagicUs) / 1e6),
       editedSeconds: Math.round(afterMagicUs / 1e6),
     };
+    // How much pacing is left: gaps between spoken words inside the kept
+    // material, measured from the local transcript.
+    const transcripts = await page.evaluate(
+      (id) =>
+        window.desktop.getTranscription({
+          schema_version: "1.0",
+          project_id: id,
+          job_id: null,
+        }),
+      current.id,
+    );
+    if (transcripts.ok) {
+      const kept = current.clips ?? [];
+      const gaps: number[] = [];
+      let fillers = 0;
+      for (const item of transcripts.value.results) {
+        const words = item.transcript.segments.flatMap((s) => s.words);
+        const clips = kept.filter((clip) => clip.sourceId === item.source_id);
+        const inside = words.filter((word) =>
+          clips.some(
+            (clip) =>
+              word.start_us >= clip.sourceStartUs &&
+              word.end_us <= clip.sourceEndUs,
+          ),
+        );
+        for (let index = 1; index < inside.length; index++) {
+          const before = inside[index - 1]!;
+          const word = inside[index]!;
+          const together = clips.some(
+            (clip) =>
+              before.start_us >= clip.sourceStartUs &&
+              word.end_us <= clip.sourceEndUs,
+          );
+          if (together) gaps.push(word.start_us - before.end_us);
+        }
+        fillers += inside.filter((word) =>
+          /^(um+|uh+|er+m?|hmm+)[.,]?$/iu.test(word.text),
+        ).length;
+      }
+      (result.magicEdit as Record<string, unknown>).remaining = {
+        gapsOver450ms: gaps.filter((gap) => gap >= 450_000).length,
+        gapsOver700ms: gaps.filter((gap) => gap >= 700_000).length,
+        gapsOver1500ms: gaps.filter((gap) => gap >= 1_500_000).length,
+        fillers,
+        words: gaps.length,
+      };
+    }
     console.log(JSON.stringify({ roughCut: result.magicEdit }));
     assert.equal(magicError, null, magicError ?? "");
   }
