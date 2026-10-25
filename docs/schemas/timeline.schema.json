@@ -261,6 +261,12 @@
       "items": { "$ref": "#/$defs/transition_effect" },
       "description": "Draft transitions anchored to cuts. Omitted when the draft has none."
     },
+    "layouts": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/layout_change" },
+      "description": "How the camera and the screen share the picture, as changes anchored to moments of a recording; each holds until the next. Omitted when the draft has none (the screen alone)."
+    },
     "captions": {
       "$ref": "#/$defs/caption_settings",
       "description": "The draft's caption choices. Omitted until the first change; the project's earlier per-project choice or the default applies until then."
@@ -374,6 +380,29 @@
         "composition_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       },
       "description": "A motion graphic: an HTML fragment and its CSS, or (with composition_sha256 and empty html and css) a stored HyperFrames composition played in a sealed child page, starting where source moment source_us plays in the edit and lasting duration_us of output time. Runtime rejects scripts, event handlers, script URLs, embedded documents, form and media elements, @import and any non-data, non-fragment URL, and requires source_us inside the source and unique IDs."
+    },
+    "layout_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layout_id", "source_id", "source_us", "kind"],
+      "properties": {
+        "layout_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_us": { "type": "integer", "minimum": 0 },
+        "kind": { "enum": ["screen", "camera", "pip"] },
+        "corner": { "enum": ["top_left", "top_right", "bottom_left", "bottom_right"] },
+        "size": { "type": "number", "minimum": 0.12, "maximum": 0.5 },
+        "shape": { "enum": ["circle", "rounded", "rect"] },
+        "face_zoom": { "type": "number", "minimum": 1, "maximum": 2.5 },
+        "focus_x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "focus_y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "move_us": { "type": "integer", "minimum": 0, "maximum": 2000000 }
+      },
+      "dependentRequired": {
+        "focus_x": ["focus_y"],
+        "focus_y": ["focus_x"]
+      },
+      "description": "An arrangement of the camera and screen from a moment of recording source_id: screen (the screen alone), camera (the camera fills the picture) or pip (the camera in a corner, in a shape). corner, size and shape belong to pip; face_zoom with focus_x/focus_y frames the camera picture; move_us (default 600000) is how long the change takes to play. It follows cuts: a moment that was cut away applies at the next retained moment. Runtime allows one change per moment and requires a linked camera recording to show the camera."
     },
     "transition_effect": {
       "type": "object",

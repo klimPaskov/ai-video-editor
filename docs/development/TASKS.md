@@ -157,7 +157,7 @@ Acceptance: automatic effects improve focus and remain directly adjustable. The 
 ## P8: captions, layouts, B-roll, elements, and audio
 
 - [ ] P8-01 Implement captions, styling, safe areas, correction, and sidecars. Derived captions with three styles, sizes, top/bottom placement, preview overlay, transcript corrections, an .srt sidecar and optional burn-in on export are implemented (docs/13); collision avoidance and canvas reflow remain.
-- [ ] P8-02 Implement screen-only, camera bubble, side-by-side, presenter, and custom layouts. Reuse approved layout properties, avoid evidence/caption occlusion, prefer purposeful sections and verify both boundaries/midpoint before checkpointing.
+- [ ] P8-02 (partly done 2026-10-25, ADR 0029: screen, camera and corner layouts, camera recording and linking, preview, export, Claude's planning; side by side, presenter inset and face detection remain) Implement screen-only, camera bubble, side-by-side, presenter, and custom layouts. Reuse approved layout properties, avoid evidence/caption occlusion, prefer purposeful sections and verify both boundaries/midpoint before checkpointing.
 - [ ] P8-03 Implement text, image, shape, overlay, and simple transition elements. Keep editorial motion-graphics opportunities suggestion-only with final-cut intervals and complete grounded prompts; asset creation/import requires a separate explicit request.
 - [ ] P8-04 Index local B-roll and music with provenance and searchable metadata.
 - [ ] P8-05 Let Codex suggest and place local B-roll with source fallback.

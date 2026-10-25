@@ -65,6 +65,7 @@
           { "$ref": "#/$defs/speed_operation" },
           { "$ref": "#/$defs/graphic_operation" },
           { "$ref": "#/$defs/transition_operation" },
+          { "$ref": "#/$defs/layout_operation" },
           { "$ref": "#/$defs/captions_operation" },
           { "$ref": "#/$defs/audio_operation" },
           { "$ref": "#/$defs/sound_operation" }
@@ -141,6 +142,21 @@
         "properties": {
           "operations": {
             "contains": { "$ref": "#/$defs/transition_operation" }
+          }
+        },
+        "required": ["operations"]
+      },
+      "then": {
+        "properties": {
+          "operations": { "minItems": 1, "maxItems": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "operations": {
+            "contains": { "$ref": "#/$defs/layout_operation" }
           }
         },
         "required": ["operations"]
@@ -622,6 +638,37 @@
         }
       },
       "description": "Adds or replaces one transition (set; a transition already on the same cut is replaced) or removes one (remove, transition null). It is the only operation in its transaction; its inverse restores the previous transitions and the clip map is unchanged."
+    },
+    "layout_operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation_id", "operation_type", "action", "layout_id", "layout", "before", "after", "inverse"],
+      "properties": {
+        "schema_version": { "const": "1.0" },
+        "operation_id": { "$ref": "#/$defs/id" },
+        "operation_type": { "const": "layout" },
+        "action": { "enum": ["set", "remove"] },
+        "layout_id": { "$ref": "#/$defs/id" },
+        "layout": {
+          "oneOf": [
+            { "$ref": "timeline.schema.json#/$defs/layout_change" },
+            { "type": "null" }
+          ]
+        },
+        "before": { "type": "array", "maxItems": 256, "items": { "$ref": "timeline.schema.json#/$defs/layout_change" } },
+        "after": { "type": "array", "maxItems": 256, "items": { "$ref": "timeline.schema.json#/$defs/layout_change" } },
+        "inverse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "layouts", "expected_after_sha256"],
+          "properties": {
+            "type": { "const": "restore_layouts" },
+            "layouts": { "type": "array", "maxItems": 256, "items": { "$ref": "timeline.schema.json#/$defs/layout_change" } },
+            "expected_after_sha256": { "$ref": "#/$defs/hash" }
+          }
+        }
+      },
+      "description": "Adds or replaces one layout change (set; a change at the same moment is replaced) or removes one (remove, layout null). It is the only operation in its transaction; its inverse restores the previous changes and the clip map is unchanged."
     },
     "speed_operation": {
       "type": "object",

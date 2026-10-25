@@ -32,3 +32,4 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0026: pauses and fillers tightened by the app, confirmed by audio loudness, as one undoable transaction (Natural / Balanced / Tight)
 - 0027: zooms need on-screen evidence (`zoom.targets`) and gain push, pan and ease options
 - 0028: a library of six designed graphic components placed with `graphics.component`
+- 0029: a camera recording linked to the screen recording and layouts (screen, camera, corner) as an undoable draft effect

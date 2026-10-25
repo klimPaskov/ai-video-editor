@@ -169,6 +169,27 @@ class DesktopIpcContractTests(unittest.TestCase):
         for wrong in [dict(start, display_id=':0.0+0,0 -i /etc/passwd'), dict(start, microphone_id='alsa input'), {'display_id': 'display-1'}]:
             self.invalid({'channel': 'recording:start', 'payload': wrong, 'response': {'ok': True, 'value': recording}})
 
+    def test_camera_and_layout_channels_carry_no_paths(self):
+        view = {'schema_version': '1.0', 'project_id': 'project-1', 'linked': True, 'file_name': 'Camera.mkv',
+                'offset_us': 100000, 'width': 1280, 'height': 720}
+        idle = dict(view, linked=False, file_name=None, offset_us=0, width=None, height=None)
+        request = {'schema_version': '1.0', 'project_id': 'project-1'}
+        for channel in ['camera:get', 'camera:choose', 'camera:remove']:
+            self.valid({'channel': channel, 'payload': request, 'response': {'ok': True, 'value': view}})
+            self.valid({'channel': channel, 'payload': request, 'response': {'ok': True, 'value': idle}})
+        self.valid({'channel': 'camera:offset', 'payload': dict(request, offset_us=-100000), 'response': {'ok': True, 'value': view}})
+        for wrong in [dict(request, path='/home/user/camera.mkv'), dict(request, offset_us=900000000)]:
+            self.invalid({'channel': 'camera:offset', 'payload': wrong, 'response': {'ok': True, 'value': view}})
+        self.invalid({'channel': 'camera:get', 'payload': request, 'response': {'ok': True, 'value': dict(view, path='/x.mkv')}})
+        draft = {'schema_version': '1.0', 'projectId': '3f2b9d1e-6c4a-4b7e-8a15-2d9c1e7f4a60',
+                 'draftId': 'draft-1', 'baseRevisionId': '4a1c8e2f-7d3b-4c9a-9b26-3e8d2f1a5b71',
+                 'expectedSequence': 3, 'expectedTimelineSha256': 'a' * 64, 'layoutId': None,
+                 'atUs': 1000000, 'kind': 'pip', 'corner': 'bottom_right', 'size': 0.24, 'shape': 'circle',
+                 'faceZoom': 1, 'focusX': 0.5, 'focusY': 0.5, 'moveUs': 600000}
+        for wrong in [dict(draft, kind='carousel'), dict(draft, size=0.9), dict(draft, corner='middle'), dict(draft, extra=1)]:
+            self.invalid({'channel': 'projects:manual-layout', 'payload': wrong, 'response': {'ok': False, 'message': 'x'}})
+        self.valid({'channel': 'projects:manual-layout', 'payload': draft, 'response': {'ok': False, 'message': 'The draft changed. Try again.'}})
+
     def test_undefined_requests_are_absent_not_null_or_paths(self):
         for channel in ['list', 'import', 'cancel']:
             for payload in [None, {}, {'path': '/private/video.mkv'}]:

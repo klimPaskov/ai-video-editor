@@ -3385,6 +3385,246 @@
           ]
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "projects:manual-layout"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualLayoutRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "projects:manual-layout-remove"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualLayoutRemoveRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "camera:get"
+        },
+        "payload": {
+          "$ref": "#/$defs/cameraRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/cameraView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "camera:choose"
+        },
+        "payload": {
+          "$ref": "#/$defs/cameraRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/cameraView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "camera:remove"
+        },
+        "payload": {
+          "$ref": "#/$defs/cameraRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/cameraView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "camera:offset"
+        },
+        "payload": {
+          "$ref": "#/$defs/cameraOffsetRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/cameraView"
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "$defs": {
@@ -5303,6 +5543,13 @@
           "items": {
             "$ref": "#/$defs/transitionEffect"
           }
+        },
+        "layouts": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/layoutChange"
+          }
         }
       },
       "description": "Path-free committed project and draft view. Runtime additionally requires project, revision, draft, source and timeline IDs to be distinct, an ordered two-source inventory when present, and draft.baseRevisionId to equal revisionId. A stage identifies navigation, not successful feature execution or export."
@@ -6282,6 +6529,13 @@
           "maxItems": 256,
           "items": {
             "$ref": "#/$defs/transitionEffect"
+          }
+        },
+        "layouts": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/layoutChange"
           }
         }
       },
@@ -7846,6 +8100,339 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
         }
       }
+    },
+    "manualLayoutRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "layoutId",
+        "atUs",
+        "kind",
+        "corner",
+        "size",
+        "shape",
+        "faceZoom",
+        "focusX",
+        "focusY",
+        "moveUs"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "layoutId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            }
+          ]
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "enum": [
+            "screen",
+            "camera",
+            "pip"
+          ]
+        },
+        "corner": {
+          "enum": [
+            "top_left",
+            "top_right",
+            "bottom_left",
+            "bottom_right"
+          ]
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.12,
+          "maximum": 0.5
+        },
+        "shape": {
+          "enum": [
+            "circle",
+            "rounded",
+            "rect"
+          ]
+        },
+        "faceZoom": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2.5
+        },
+        "focusX": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "focusY": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "moveUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000000
+        }
+      },
+      "description": "Changes how the camera and screen share the picture from output time atUs (or replaces layoutId, keeping its moment). Main anchors it to the recording's moment there and refuses a camera layout when no camera video is linked. corner, size and shape matter for pip; faceZoom, focusX and focusY for camera and pip."
+    },
+    "manualLayoutRemoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "layoutId"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "layoutId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      }
+    },
+    "cameraRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      },
+      "description": "camera:choose opens a file dialog owned by main; no path crosses this boundary."
+    },
+    "cameraOffsetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "offset_us"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "offset_us": {
+          "type": "integer",
+          "minimum": -600000000,
+          "maximum": 600000000
+        }
+      }
+    },
+    "cameraView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "linked",
+        "file_name",
+        "offset_us",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "linked": {
+          "type": "boolean"
+        },
+        "file_name": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          ]
+        },
+        "offset_us": {
+          "type": "integer",
+          "minimum": -600000000,
+          "maximum": 600000000
+        },
+        "width": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ]
+        },
+        "height": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ]
+        }
+      },
+      "description": "The camera recording linked to the project's recording, if any. Camera time is recording time plus offset_us."
+    },
+    "layoutChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layout_id",
+        "source_id",
+        "source_us",
+        "kind"
+      ],
+      "properties": {
+        "layout_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_us": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "screen",
+            "camera",
+            "pip"
+          ]
+        },
+        "corner": {
+          "enum": [
+            "top_left",
+            "top_right",
+            "bottom_left",
+            "bottom_right"
+          ]
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.12,
+          "maximum": 0.5
+        },
+        "shape": {
+          "enum": [
+            "circle",
+            "rounded",
+            "rect"
+          ]
+        },
+        "face_zoom": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2.5
+        },
+        "focus_x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "focus_y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "move_us": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000000
+        }
+      },
+      "description": "An arrangement of the camera and screen from a moment of a recording; it holds until the next change and follows cuts."
     },
     "transitionEffect": {
       "type": "object",

@@ -22,7 +22,10 @@ The timeline strip under the player shows small pictures of the edit with a time
 | Zoom | Zooms into the marked range (or two seconds from the playhead). Click the picture where it should point | Z |
 | Speed | Plays the marked range, or the part under the playhead, at 2×, 3×, 4× or 8× | |
 | Add transition | Hides the cut nearest the playhead behind a dip to black or white, a wipe or an iris (0.3, 0.6 or 1 s). It changes if you pick another style, and Remove transition takes it off | |
+| Camera | Add the video of your camera (a recording made with a camera brings its own). Then choose a layout from the playhead: **Camera in a corner** (pick the corner, size and shape), **Camera only** or **Screen only**. Changes glide and dissolve; **Remove layout change** takes the one in effect off. The ±0.1 s buttons move the camera against the screen if they are not quite in step | |
 | Restore source range | Brings back a removed part of the original footage | |
+
+Layouts show as green bars on the strip and play in the preview and the export. When you record, choose a camera in the recording window: the camera is saved as its own video next to the screen, so you can place it anywhere, or full screen, afterwards.
 
 A transition needs a cut, so it is off until you have cut or split something that left a jump; it shows as a small hatched marker on the strip and plays in the preview and the export. Audio is not changed.
 
