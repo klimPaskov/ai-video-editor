@@ -23,6 +23,8 @@ export function projectSideFiles(userData: string, projectId: string) {
       join(userData, "caption-settings", `${projectId}.json`),
       join(userData, "audio-settings", `${projectId}.json`),
       join(userData, "short-clips", `${projectId}.json`),
+      // Which camera video goes with the project (the video itself stays).
+      join(userData, "camera-links", `${projectId}.json`),
     ],
     // One JSON delivery record per export; the exported videos stay.
     directories: [join(userData, "exports", projectId)],
