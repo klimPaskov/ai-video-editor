@@ -98,3 +98,5 @@ Use short labels for real controls and screen-reader names for icon-only control
 No Ready indicator or debug footer appears in the bottom-left corner. No tool versions, local-service health list, QA dump, model logs, or filesystem paths occupy the normal editing view. A capture timer and microphone meter are recording controls, not debug clutter.
 
 The Codex drawer is readily accessible and can stream edits without being permanently expanded. Opening it replaces the inspector at every window width. Closing it can restore the selected tool inspector. Never squeeze the preview behind a transcript, inspector, chat, and global sidebar all opened by default.
+
+Update (2026-10-25): the Edit step's More tools also holds the Camera tools (docs/05, ADR 0029); the recording dialog has a Camera menu. Both follow the same quiet, labelled-control pattern; nothing else about the layout changed.
