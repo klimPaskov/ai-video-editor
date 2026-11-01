@@ -172,6 +172,9 @@ try {
       // Full screen is left again by the keyboard, as a person would.
       if (await page.evaluate(() => Boolean(document.fullscreenElement))) {
         await page.keyboard.press("Escape");
+        // The injected key does not reach the browser's own full-screen
+        // handler (a person's Escape does), so leave it the way a page can.
+        await page.evaluate(() => document.exitFullscreen().catch(() => null));
         await expect
           .poll(() => page.evaluate(() => Boolean(document.fullscreenElement)))
           .toBe(false);

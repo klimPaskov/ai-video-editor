@@ -573,6 +573,7 @@ async function start(): Promise<void> {
     ["/index.html", ["index.html", "text/html; charset=utf-8"]],
     ["/renderer.js", ["renderer.js", "text/javascript; charset=utf-8"]],
     ["/style.css", ["style.css", "text/css; charset=utf-8"]],
+    ["/logo.png", ["logo.png", "image/png"]],
     ["/region.html", ["region.html", "text/html; charset=utf-8"]],
     ["/region.js", ["region.js", "text/javascript; charset=utf-8"]],
     ["/region.css", ["region.css", "text/css; charset=utf-8"]],

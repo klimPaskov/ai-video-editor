@@ -139,7 +139,7 @@ try {
   if (!restoreBeforeEdit.ok)
     assert.equal(
       restoreBeforeEdit.message,
-      "Switch to Edit to restore a source range.",
+      "Switch to Refine to restore a source range.",
     );
   const baselinePath = join(
     userData,

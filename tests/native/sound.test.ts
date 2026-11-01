@@ -166,6 +166,8 @@ try {
   await page.locator("#redo-edit").click();
   await expect.poll(async () => (await sounds())[0]?.gain_db).toBe(-12);
   await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  // Changing step closes the disclosures again.
+  await openDisclosures(page);
   await expect(page.locator(".sound-row")).toHaveCount(1);
   // Back to the default level for the audio check below.
   await page.locator(".sound-row input[type=range]").evaluate((input) => {
@@ -238,6 +240,7 @@ try {
 
   step = "remove";
   await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openDisclosures(page);
   await page.getByRole("button", { name: /^Remove Hit$/u }).click();
   await expect(page.locator(".sound-row")).toHaveCount(1);
   await page.getByRole("button", { name: /^Remove Bed$/u }).click();
