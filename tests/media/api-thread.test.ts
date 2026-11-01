@@ -548,7 +548,7 @@ test("zoom and speed functions are offered to API providers and route unchanged 
     async (_provider, _key, request) => {
       round++;
       if (round === 1) {
-        assert.deepEqual(request.tools?.map((tool) => tool.name).slice(-9), [
+        assert.deepEqual(request.tools?.map((tool) => tool.name).slice(-12), [
           "zoom_set",
           "zoom_remove",
           "speed_set",
@@ -558,6 +558,9 @@ test("zoom and speed functions are offered to API providers and route unchanged 
           "audio_configure",
           "transition_set",
           "transition_remove",
+          "app_start_magic_edit",
+          "app_stop_edit",
+          "app_go_to_step",
         ]);
         const system = request.messages[0];
         assert.equal(system?.role, "system");

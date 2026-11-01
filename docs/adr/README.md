@@ -33,3 +33,4 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0027: zooms need on-screen evidence (`zoom.targets`) and gain push, pan and ease options
 - 0028: a library of six designed graphic components placed with `graphics.component`
 - 0029: a camera recording linked to the screen recording and layouts (screen, camera, corner) as an undoable draft effect
+- 0030: Magic Edit's story edit runs on the chosen connection (Claude, Codex or an API provider) and degrades to the deterministic tightening; chats get guarded app actions (Magic Edit, Edit my video on Claude, Stop, go to a step; never export or cleanup)

@@ -539,6 +539,71 @@ export const codexVideoEditMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: codexVideoEditToolNames[19],
+    description:
+      "Start Magic Edit, the same as the Magic Edit button in Auto Edit: the app transcribes the recording locally, tightens long pauses and fillers as one undoable transaction, then the assistant makes a story edit (repeated ideas, retakes, false starts, tangents) with the guarded cutting tools. preset is how far to go: gentle, balanced or tight. It uses the connection chosen in this conversation. If this reply is still being written the run starts as soon as it ends. Progress and the result show in Auto Edit; every cut can be undone. Tell the user plainly that it has started (or what blocked it); do not claim it finished.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "preset"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        preset: { type: "string", enum: ["gentle", "balanced", "tight"] },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[20],
+    description:
+      "Stop what the app is doing for the edit, the same as the Stop button: cancels a queued Magic Edit or Edit my video, or stops one that is running. Cuts already made stay in the draft and can be undone. Reports in plain words when nothing was running.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[21],
+    description:
+      "Move the app to a workflow step, the same as choosing it in the step bar: record_import, auto_edit, edit, review or export. This only shows the step; it never exports. Exporting and cleaning up stay actions the user takes with the buttons themselves.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "step"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        step: {
+          type: "string",
+          enum: ["record_import", "auto_edit", "edit", "review", "export"],
+        },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ] as const;
 
 /** Claude's own tools, on files in its project workspace (ADR 0021). */
@@ -836,6 +901,27 @@ export const claudeOnlyMcpTools = [
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[10],
+    description:
+      'Start the full "Edit my video", the same as the Edit my video button in Auto Edit: first the rough cut (Magic Edit: local transcript, tightened pauses and fillers, then a story edit), then the full production edit with motion graphics, captions and sound. level is tidy, polished or bold. It starts as soon as this reply is finished and runs to the end on its own; progress shows in Auto Edit, every step can be undone, and the user can stop it. Tell the user plainly that it has started; do not claim it finished.',
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "level"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        level: { type: "string", enum: ["tidy", "polished", "bold"] },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
       openWorldHint: false,
     },
   },

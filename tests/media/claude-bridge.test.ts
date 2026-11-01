@@ -220,7 +220,7 @@ test("turn arguments disable built-in tools, settings and prompts", () => {
   assert.equal(value("--session-id"), "11111111-2222-4333-8444-555555555555");
   assert.equal(value("--effort"), "high");
   assert.ok(!args.includes("--resume"));
-  assert.equal(claudeEditorTools.length, 29);
+  assert.equal(claudeEditorTools.length, 33);
   for (const name of [
     "zoom_set",
     "zoom_remove",

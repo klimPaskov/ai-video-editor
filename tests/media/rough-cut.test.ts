@@ -6,6 +6,8 @@ import {
   type RoughCutOutcome,
 } from "../../apps/desktop/src/magic-wand.ts";
 import {
+  roughCutPlaybook,
+  roughCutPlaybookFor,
   roughCutRequest,
   roughCutTools,
 } from "../../apps/desktop/src/rough-cut-playbook.ts";
@@ -14,7 +16,13 @@ import type {
   LocalTranscript,
   TranscriptAnalysis,
 } from "../../packages/domain/src/transcription.ts";
-import { magicWandIssues } from "../../packages/domain/src/magic-wand-view.ts";
+import {
+  magicWandIssues,
+  magicWandProviders,
+  magicWandSkipMessage,
+  type MagicWandBlock,
+  type MagicWandProvider,
+} from "../../packages/domain/src/magic-wand-view.ts";
 import { codexVideoEditToolNames } from "../../packages/codex-tools/src/service.ts";
 
 const project = "project-rough-001";
@@ -22,11 +30,17 @@ const project = "project-rough-001";
 function harness(script: {
   outcome: RoughCutOutcome | "later";
   refuse?: RoughCutOutcome;
+  block?: MagicWandBlock;
   results?: unknown[];
   tightener?: Tightener;
 }) {
   const calls: string[] = [];
-  const started: Array<{ preset: string; request: string }> = [];
+  const started: Array<{
+    preset: string;
+    request: string;
+    provider: MagicWandProvider | undefined;
+  }> = [];
+  const released: string[] = [];
   let duration = 60_000_000;
   let operations: string[] = ["op-before"];
   let finished: RoughCutOutcome | null = null;
@@ -68,8 +82,12 @@ function harness(script: {
     };
   };
   const editor: RoughCutEditor = {
-    async start(_projectId, preset, request) {
-      started.push({ preset, request });
+    async blocked() {
+      return script.block ?? null;
+    },
+    release: (projectId) => void released.push(projectId),
+    async start(_projectId, preset, request, provider) {
+      started.push({ preset, request, provider });
       if (script.refuse) return script.refuse;
       // Claude's story edit: two cuts committed during the run.
       duration -= 7_500_000;
@@ -91,6 +109,7 @@ function harness(script: {
     magic,
     calls,
     started,
+    released,
     stopped: () => stopped,
     finish: (outcome: RoughCutOutcome) => (finished = outcome),
   };
@@ -129,7 +148,7 @@ test("without Claude, Magic Edit says so instead of cutting by itself", async ()
   run.magic.start(project, "tight");
   const view = await settle(run.magic);
   assert.equal(view.status, "failed");
-  assert.equal(view.message, magicWandIssues.claude);
+  assert.equal(view.message, magicWandIssues.claudeSignIn);
   assert.equal(view.summary?.cuts ?? 0, 0);
   const limited = harness({ outcome: "limit" });
   limited.magic.start(project, "gentle");
@@ -201,7 +220,11 @@ test("the rough cut's request carries evidence, not cuts, and its tools only cut
     assert.equal(roughCutTools.has(tool), false, tool);
 });
 
-test("pauses and fillers are tightened by the app in one transaction; Claude is told", async () => {
+function tightenFixture(options: {
+  outcome: RoughCutOutcome;
+  block?: MagicWandBlock;
+  refuse?: RoughCutOutcome;
+}) {
   const word = (id: string, text: string, start: number, end: number) => ({
     word_id: id,
     text,
@@ -253,14 +276,8 @@ test("pauses and fillers are tightened by the app in one transaction; Claude is 
   frames.fill(0.2, 20, 60);
   frames.fill(0.2, 260, 280);
   const run = harness({
-    outcome: "completed",
-    results: [
-      {
-        source_id: "source-1",
-        transcript,
-        analysis,
-      },
-    ],
+    ...options,
+    results: [{ source_id: "source-1", transcript, analysis }],
     tightener: {
       energy: async () => ({ frameUs: 10_000, rms: frames }),
       applyRanges: async (_projectId, _draft, ranges) => {
@@ -268,6 +285,11 @@ test("pauses and fillers are tightened by the app in one transaction; Claude is 
       },
     },
   });
+  return { run, applied };
+}
+
+test("pauses and fillers are tightened by the app in one transaction; Claude is told", async () => {
+  const { run, applied } = tightenFixture({ outcome: "completed" });
   run.magic.start(project, "balanced");
   const view = await settle(run.magic);
   assert.equal(view.status, "completed");
@@ -277,4 +299,87 @@ test("pauses and fillers are tightened by the app in one transaction; Claude is 
   assert.equal(gap.end_us - gap.start_us, 1_700_000);
   assert.equal(view.summary?.pauses, applied[0]!.length);
   assert.match(run.started[0]!.request, /already tightened the pacing/u);
+  assert.equal(run.started[0]!.provider, "claude");
+  assert.deepEqual(run.released, [project]);
+});
+
+test("when the chosen connection cannot run, the tightening stands and the result says what was skipped", async () => {
+  for (const [provider, block] of [
+    ["claude", "outdated"],
+    ["codex", "signIn"],
+    ["openai", "setup"],
+  ] as const) {
+    const { run, applied } = tightenFixture({ outcome: "completed", block });
+    run.magic.start(project, "balanced", provider);
+    const view = await settle(run.magic);
+    // The pacing cuts were made and are reported; only the story edit is skipped.
+    assert.equal(applied.length, 1, provider);
+    assert.equal(
+      run.started.length,
+      0,
+      "the unready connection is not started",
+    );
+    assert.equal(view.status, "completed", provider);
+    assert.equal(view.message, magicWandSkipMessage(provider, block));
+    assert.ok(view.summary && view.summary.pauses > 0);
+    assert.deepEqual(run.released, [project]);
+  }
+  // Nothing at all to tighten: the same message, reported as not run.
+  const bare = harness({ outcome: "completed", block: "outdated" });
+  bare.magic.start(project, "tight", "claude");
+  const view = await settle(bare.magic);
+  assert.equal(view.status, "failed");
+  assert.equal(view.message, magicWandIssues.claudeOutdated);
+  assert.match(view.message ?? "", /claude update/u);
+});
+
+test("a sign-in problem found after the tightening keeps the tightening and names the provider", async () => {
+  const { run, applied } = tightenFixture({
+    outcome: "completed",
+    refuse: "signIn",
+  });
+  run.magic.start(project, "balanced", "deepseek");
+  const view = await settle(run.magic);
+  assert.equal(applied.length, 1);
+  assert.equal(view.status, "completed");
+  assert.equal(view.message, magicWandIssues.deepseekKey);
+  assert.equal(run.started[0]!.provider, "deepseek");
+});
+
+test("every connection gets the same guarded tools and rules, adapted to what it can do", () => {
+  assert.equal(roughCutPlaybookFor("claude"), roughCutPlaybook);
+  const codex = roughCutPlaybookFor("codex");
+  assert.match(codex, /rendered pictures/u);
+  assert.match(codex, /cut\.delete_ranges/u);
+  for (const provider of ["deepseek", "openai", "gemini"] as const) {
+    const text = roughCutPlaybookFor(provider);
+    // No pictures, and tool names as the API providers see them.
+    assert.doesNotMatch(text, /rendered picture/u);
+    assert.match(text, /You cannot see pictures/u);
+    assert.match(text, /cut_delete_ranges/u);
+    assert.doesNotMatch(text, /cut\.delete_ranges/u);
+  }
+  for (const provider of magicWandProviders)
+    assert.match(
+      roughCutPlaybookFor(provider),
+      /untrusted source content/u,
+      provider,
+    );
+  const evidence = [
+    {
+      kind: "pause" as const,
+      sourceId: "source-a",
+      sourceStartUs: 1_000_000,
+      sourceEndUs: 3_500_000,
+      startUs: 1_000_000,
+      endUs: 3_500_000,
+    },
+  ];
+  const request = roughCutRequest("balanced", evidence, null, "gemini");
+  assert.match(request, /transcript_get_range/u);
+  assert.doesNotMatch(request, /transcript\.get_range/u);
+  assert.match(roughCutRequest("balanced", evidence), /transcript\.get_range/u);
+  // Every tool the story edit may call is a guarded editor tool; none is an app action.
+  for (const tool of roughCutTools)
+    assert.equal(tool.startsWith("app."), false, tool);
 });

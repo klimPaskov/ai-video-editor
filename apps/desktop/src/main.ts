@@ -11,8 +11,6 @@ import {
   assertClaudeThreadSendRequest,
   assertClaudeThreadView,
   assertClaudeView,
-  claudeThreadIssues,
-  type ClaudeThreadView,
 } from "../../../packages/domain/src/claude-view.ts";
 import { DesktopApiProviders } from "./api-providers.ts";
 import { ApiProviderThreads } from "./api-thread.ts";
@@ -53,6 +51,7 @@ import {
   CodexVideoEditToolService,
   type CameraCatalog,
   type LayoutPlanner,
+  appActionToolNames,
   type CodexVideoEditToolName,
   type ZoomTargeter,
 } from "../../../packages/codex-tools/src/service.ts";
@@ -85,6 +84,7 @@ import {
   assertManualTranscriptCutRequest,
   assertManualUndoRequest,
   assertManualRedoRequest,
+  type ProjectStage,
   type ProjectView,
 } from "../../../packages/domain/src/project-view.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
@@ -133,11 +133,13 @@ import {
   assertExportView,
 } from "../../../packages/domain/src/export-view.ts";
 import { DesktopExports, planDraft } from "./export.ts";
+import { DesktopMagicWand } from "./magic-wand.ts";
 import {
-  DesktopMagicWand,
-  type RoughCutEditor,
-  type RoughCutOutcome,
-} from "./magic-wand.ts";
+  StoryPassEditor,
+  DeferredActions,
+  createAppActions,
+  type ApiStory,
+} from "./story-pass.ts";
 import { DesktopRecorder, RecordingError } from "./recording.ts";
 import { DesktopPlaybackProxies } from "./playback-proxies.ts";
 import { CaptionSettingsStore } from "./caption-settings.ts";
@@ -232,6 +234,7 @@ import {
   assertMagicWandProjectRequest,
   assertMagicWandStartRequest,
   assertMagicWandView,
+  type MagicWandProvider,
 } from "../../../packages/domain/src/magic-wand-view.ts";
 import {
   DesktopProjectRuntime,
@@ -1625,6 +1628,13 @@ async function start(): Promise<void> {
       throw new CodexVideoEditToolError("tool_not_available");
     }
     const projectId = activeProjectId;
+    // Magic Edit's story pass only reads, cuts and looks; it never decorates
+    // and never starts other actions.
+    if (
+      storyEditor.restricted(projectId, "codex") &&
+      !roughCutTools.has(name as string)
+    )
+      throw new CodexVideoEditToolError("tool_not_available");
     return invokeWithProjectDraftRefresh({
       toolName: name,
       projectId,
@@ -1636,6 +1646,14 @@ async function start(): Promise<void> {
           "codex",
           readTranscriptForTool,
           renderFramesForTool,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          appActionsFor("codex"),
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
@@ -1657,40 +1675,15 @@ async function start(): Promise<void> {
   );
   // Claude reaches the same guarded tool service through its own broker, so
   // every Claude transaction is attributed to the Claude origin.
-  // Magic Edit reads the draft through the guarded tools as its own origin;
-  // the rough cut itself is Claude's story edit (claude origin, shared Undo).
-  const roughCutOutcome = (view: ClaudeThreadView): RoughCutOutcome | null =>
-    view.status === "running" || view.status === "interrupting"
-      ? null
-      : view.status === "ready"
-        ? "completed"
-        : view.message === claudeThreadIssues.stopped
-          ? "stopped"
-          : view.message === claudeThreadIssues.signIn ||
-              view.message === claudeThreadIssues.model
-            ? "signIn"
-            : view.message === claudeThreadIssues.limit
-              ? "limit"
-              : "failed";
-  const roughCutEditor: RoughCutEditor = {
-    async start(projectId, preset, request) {
-      if (!claude || activeProjectId !== projectId) return "failed";
-      if ((await claude.get()).status !== "signed_in") return "signIn";
-      try {
-        return roughCutOutcome(
-          await claude.startRoughCut(projectId, preset, request),
-        );
-      } catch {
-        return "failed";
-      }
-    },
-    outcome: (projectId) =>
-      claude ? roughCutOutcome(claude.getThread(projectId)) : "failed",
-    async stop(projectId) {
-      if (claude?.runKind(projectId) === "rough_cut")
-        await claude.interruptThread(projectId);
-    },
-  };
+  // Magic Edit's story pass runs with the connection the user chose (Claude
+  // gives the best results; Codex and the API providers use the same guarded
+  // cutting tools). Each transaction is attributed to that connection.
+  const apiStory: { current?: ApiStory } = {};
+  const storyEditor = new StoryPassEditor({
+    claude: () => claude,
+    codex: () => codex,
+    api: () => apiStory.current,
+  });
   const magicWand = new DesktopMagicWand(
     transcription!,
     async (projectId, name, input) => {
@@ -1711,7 +1704,7 @@ async function start(): Promise<void> {
         notify: publishDraftNotice,
       });
     },
-    roughCutEditor,
+    storyEditor,
     {
       tightener: {
         async energy(projectId, sourceId) {
@@ -1762,6 +1755,83 @@ async function start(): Promise<void> {
     },
   );
   magicWandBusy = (projectId) => magicWand.busy(projectId);
+  // What the assistant may do in the app from a chat: the same code the
+  // buttons run. Export and cleanup are not offered to any assistant.
+  const deferredActions = new DeferredActions();
+  const stepOf = async (projectId: string) =>
+    (await projectRuntime.view(projectId)).stage;
+  const navigateForChat = async (
+    projectId: string,
+    stage: ProjectStage,
+  ): Promise<void> => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project first.");
+    if (stage !== "auto_edit" && transcription!.isRunning(projectId))
+      throw new UserFacingError(
+        "Stop local transcription before leaving Auto Edit.",
+      );
+    if (stage !== "auto_edit" && stage !== "edit" && magicWand.busy(projectId))
+      throw new UserFacingError(
+        "Magic Edit is running. Stop it before leaving Auto Edit.",
+      );
+    if ((await stepOf(projectId)) === stage) return;
+    await projects.navigate(projectId, stage);
+    const view = await projectRuntime.view(projectId);
+    if (window && !window.isDestroyed())
+      window.webContents.send(channels.projectStageChanged, {
+        ok: true,
+        value: view,
+      });
+  };
+  const appActionsFor = (provider: MagicWandProvider) =>
+    createAppActions({
+      provider,
+      magic: magicWand,
+      deferred: deferredActions,
+      // The conversation cannot take a second turn until its reply is over.
+      chatIdle: async (projectId) => {
+        try {
+          const status =
+            provider === "claude"
+              ? claude?.getThread(projectId).status
+              : provider === "codex"
+                ? codex?.getThread(projectId).status
+                : (await apiStory.current?.threads.get(projectId, provider))
+                    ?.status;
+          return !(
+            status === "running" ||
+            status === "starting" ||
+            status === "interrupting"
+          );
+        } catch {
+          return true;
+        }
+      },
+      currentStep: stepOf,
+      navigate: navigateForChat,
+      ...(provider === "claude"
+        ? {
+            startFullEdit: async (
+              projectId: string,
+              level: "tidy" | "polished" | "bold",
+            ) => {
+              if (!claude)
+                throw new UserFacingError("Claude is not available.");
+              await claude.startFullEdit(projectId, {
+                goal: "",
+                audience: "",
+                style: "",
+                level,
+              });
+            },
+            stopFullEdit: async (projectId: string) => {
+              if (claude?.runKind(projectId) !== "full_edit") return false;
+              await claude.interruptThread(projectId);
+              return true;
+            },
+          }
+        : {}),
+    });
   register(channels.magicGet, async (request) => {
     assertMagicWandProjectRequest(request);
     if (activeProjectId !== request.project_id)
@@ -1774,7 +1844,11 @@ async function start(): Promise<void> {
     assertMagicWandStartRequest(request);
     if (activeProjectId !== request.project_id)
       throw new UserFacingError("Open this project before using Magic Edit.");
-    const value = magicWand.start(request.project_id, request.preset);
+    const value = magicWand.start(
+      request.project_id,
+      request.preset,
+      request.provider,
+    );
     assertMagicWandView(value);
     return value;
   });
@@ -2120,6 +2194,9 @@ async function start(): Promise<void> {
       !roughCutTools.has(name as string)
     )
       throw new CodexVideoEditToolError("tool_not_available");
+    // A full edit runs on its own; it does not start other edits.
+    if (run && typeof name === "string" && appActionToolNames.has(name))
+      throw new CodexVideoEditToolError("tool_not_available");
     // Choosing clips only reads, looks and proposes; it never edits.
     if (
       claude?.runKind(projectId) === "shorts_pick" &&
@@ -2158,6 +2235,7 @@ async function start(): Promise<void> {
           zoomTargeter,
           cameraCatalog,
           layoutPlanner,
+          appActionsFor("claude"),
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
@@ -2252,9 +2330,12 @@ async function start(): Promise<void> {
     userData,
     apiProviders,
     apiClient,
-    async (projectId, name, input) => {
+    async (projectId, name, input, provider) => {
       if (activeProjectId !== projectId)
         throw new CodexVideoEditToolError("inactive_project");
+      // Magic Edit's story pass only reads and cuts.
+      if (storyEditor.restricted(projectId, "api") && !roughCutTools.has(name))
+        throw new CodexVideoEditToolError("tool_not_available");
       return invokeWithProjectDraftRefresh({
         toolName: name,
         projectId,
@@ -2265,12 +2346,22 @@ async function start(): Promise<void> {
             drafts,
             "api_provider",
             readTranscriptForTool,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            appActionsFor(provider),
           ).invoke(name, input),
         drafts,
         notify: publishDraftNotice,
       });
     },
   );
+  apiStory.current = { providers: apiProviders, threads: apiThreads };
   register(channels.apiProvidersGet, async (request) => {
     assertEmptyRequest(request);
     const value = await apiProviders.get();

@@ -203,7 +203,7 @@ test("malformed and oversized Gemini thought metadata fails closed", async () =>
   const malformed = [
     { google: { thought_signature: "" } },
     { google: { thought_signature: "bad\nvalue" } },
-    { google: { thought_signature: "é" } },
+    { google: { thought_signature: "Ã©" } },
     { google: { thought_signature: "a".repeat(16 * 1024 + 1) } },
     { google: { thought_signature: "ok", secret: "unreviewed" } },
     { google: { thought_signature: "ok" }, other: {} },
@@ -423,7 +423,7 @@ test("request bounds prevent unbounded content or tools before network access", 
     {
       model: "test-model",
       messages: [{ role: "user", content: "hello" }],
-      tools: Array.from({ length: 21 }, (_, i) => ({
+      tools: Array.from({ length: 25 }, (_, i) => ({
         name: `tool_${i}`,
         description: "test",
         parameters: { type: "object" },
@@ -458,7 +458,7 @@ test("every guarded editor tool definition reaches each provider request", async
       description: tool.description,
       parameters: tool.inputSchema as unknown as Record<string, unknown>,
     }));
-  assert.equal(tools.length, 18);
+  assert.equal(tools.length, 21);
   for (const provider of ["openai", "deepseek", "gemini"] as const)
     await client.complete(provider, key, {
       model: "test-model",
