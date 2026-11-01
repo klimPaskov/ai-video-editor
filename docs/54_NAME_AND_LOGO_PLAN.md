@@ -1,6 +1,6 @@
 # Product name and logo plan
 
-Status: plan only. Nothing here is decided; "AI Video Editor" stays the working name until the owner picks one.
+Status (2026-11-02): the owner chose **Urushi** (Japanese lacquer) and approved the gold brush-stroke mark traced from the image-model draft (`docs/brand/imagegen/urushi-new-1-gold-stroke.png`, vectors in `docs/brand/urushi/`, regenerate with `docs/brand`'s trace script and `scripts/brand/make_icons.mjs`). The display name, window title, installer, Apps and features entry, header mark and app/installer icons use it. The internal slug `ai-video-editor`, the user-data folder, the registry key and `ai-video-editor.exe` are unchanged on purpose, so existing installs keep their projects. Still open: trademark and domain checks (owner), the wordmark typeface and outlined letters, a `.icns` for macOS, and renaming the repository.
 
 ## Why decide now
 

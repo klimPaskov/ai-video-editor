@@ -1,10 +1,10 @@
-# AI Video Editor
+# Urushi
 
 Record your screen, let AI make the first cut, polish it with simple tools, and export a lossless master, all in one desktop app.
 
 ![The Refine step with a zoom and a sped-up part on the timeline](docs/images/edit.png)
 
-AI Video Editor is a standalone desktop recorder and editor for screen recordings, tutorials, demos and talking-head videos. Every edit, whether you make it or an AI assistant does, goes into the same non-destructive draft with full Undo. Your original footage is never changed.
+Urushi is a standalone desktop recorder and editor for screen recordings, tutorials, demos and talking-head videos. Every edit, whether you make it or an AI assistant does, goes into the same non-destructive draft with full Undo. Your original footage is never changed.
 
 > **Status:** early preview. The desktop app currently builds and runs on Linux with X11. Windows packaging and installers are in progress; macOS is not supported yet.
 
