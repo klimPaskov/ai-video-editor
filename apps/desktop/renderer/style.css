@@ -3610,3 +3610,15 @@ details.more[open] .restore-actions {
     margin: 0;
   }
 }
+
+/* The brand mark is the app icon. */
+img.mark {
+  display: block;
+  object-fit: contain;
+  background: none;
+  box-shadow: none;
+  border-radius: 8px;
+}
+img.mark::after {
+  display: none;
+}

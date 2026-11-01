@@ -219,6 +219,7 @@ await build({
 for (const file of [
   "index.html",
   "style.css",
+  "logo.png",
   "region.html",
   "region.css",
   "stage.html",
