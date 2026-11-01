@@ -123,3 +123,7 @@ Claude's compositions (HyperFrames or free-form pages) run in a sandboxed frame 
 ## Claude's project data (2026-10-24)
 
 Claude keeps a workspace per project (`claude/workspaces/<project id>`: the whole edited transcript, timeline, notes and composition sources) and Claude Code keeps session logs for it (transcript text and pictures of the footage). Both are deleted with the project; the notices say that Claude reads the whole edited transcript and sees small pictures of the edit. Sign-in data stays in the separate Claude Code profile folder and is never read or copied by the app. The user's mirrored skills never include secret-looking files. Private failure notes (`exports/last-failure.json`, `claude/last-turn-failure.json`) hold technical error text with personal paths replaced, are deleted by the next success and never reach the renderer.
+
+## Web permissions (2026-11-02)
+
+The app denies every web permission request except `fullscreen`, and only for its own pages (the app scheme). The player's full-screen button needs it; camera, microphone, notifications, clipboard and the rest stay denied.
