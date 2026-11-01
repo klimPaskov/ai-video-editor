@@ -121,6 +121,16 @@ try {
   const listed = await page.evaluate(() => window.desktop.listProjects());
   assert.ok(listed.ok);
   const projectId = listed.value[0]!.id;
+  // The step bar answers once a pending edit has settled: click until it does.
+  const toMagicEdit = () =>
+    expect(async () => {
+      await page
+        .getByRole("button", { name: "Magic Edit", exact: true })
+        .click();
+      await expect(page.locator("#auto-edit-actions")).toBeVisible({
+        timeout: 3_000,
+      });
+    }).toPass({ timeout: 30_000 });
   const sounds = async () => {
     const reply = await page.evaluate(
       (id) =>
@@ -130,7 +140,7 @@ try {
     assert.ok(reply.ok);
     return reply.value.layers;
   };
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await toMagicEdit();
   await expect(page.locator("#sound-card")).toBeVisible();
   assert.deepEqual(await sounds(), []);
 
@@ -165,7 +175,7 @@ try {
   await page.locator("#redo-edit").click();
   await page.locator("#redo-edit").click();
   await expect.poll(async () => (await sounds())[0]?.gain_db).toBe(-12);
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await toMagicEdit();
   // Changing step closes the disclosures again.
   await openDisclosures(page);
   await expect(page.locator(".sound-row")).toHaveCount(1);
@@ -239,7 +249,7 @@ try {
   result.effectDb = middle;
 
   step = "remove";
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await toMagicEdit();
   await openDisclosures(page);
   await page.getByRole("button", { name: /^Remove Hit$/u }).click();
   await expect(page.locator(".sound-row")).toHaveCount(1);
