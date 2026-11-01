@@ -20,4 +20,4 @@ The rough cut must never be deterministic. An AI model always sits between the a
 - Magic Edit needs Claude sign-in and spends the user's Claude usage; its messages say so.
 - The deterministic planner (`packages/domain/src/magic-wand.ts`) now only produces evidence.
 - Tests use a labeled test double of the Claude Code CLI for the packaged path; real-model quality needs signed-in runs on real footage.
-- Codex and the API providers do not run the rough cut yet.
+- Since ADR 0030 Codex and the API providers also run the story pass (Claude gives the best results), and a connection that is not ready no longer blocks the deterministic tightening.

@@ -587,12 +587,30 @@ class DesktopIpcContractTests(unittest.TestCase):
         raw = deepcopy(example)
         raw['response']['value']['message'] = 'TypeError: cannot read'
         self.invalid(raw)
-        self.valid({'channel': 'magic:start',
-                    'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'tight'},
-                    'response': {'ok': True, 'value': example['response']['value']}})
+        for provider in ['claude', 'codex', 'deepseek', 'openai', 'gemini']:
+            self.valid({'channel': 'magic:start',
+                        'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'tight',
+                                    'provider': provider},
+                        'response': {'ok': True, 'value': example['response']['value']}})
         self.invalid({'channel': 'magic:start',
-                      'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'extreme'},
+                      'payload': {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'extreme',
+                                  'provider': 'claude'},
                       'response': {'ok': True, 'value': example['response']['value']}})
+        # The chosen connection is required and must be one the app offers.
+        for payload in [
+            {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'tight'},
+            {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'tight', 'provider': 'astra'},
+            {'schema_version': '1.0', 'project_id': 'project-1', 'preset': 'tight', 'provider': 'claude',
+             'apiKey': 'sk-test'},
+        ]:
+            self.invalid({'channel': 'magic:start', 'payload': payload,
+                          'response': {'ok': True, 'value': example['response']['value']}})
+        # A skipped story edit explains how to fix it, in one of the fixed messages.
+        skipped = deepcopy(example)
+        skipped['response']['value']['message'] = (
+            'The story edit was skipped. Claude Code is out of date: run claude update in a terminal, '
+            'choose Check again in Settings, then run Magic Edit again.')
+        self.valid(skipped)
 
     def test_export_channels_expose_file_names_only(self):
         example = json.loads(

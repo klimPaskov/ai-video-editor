@@ -9,6 +9,9 @@ import {
   assertMagicWandView,
   idleMagicWandView,
   magicWandIssues,
+  magicWandSkipMessage,
+  type MagicWandBlock,
+  type MagicWandProvider,
   type MagicWandView,
 } from "../../../packages/domain/src/magic-wand-view.ts";
 import {
@@ -52,21 +55,29 @@ export interface Tightener {
   ): Promise<void>;
 }
 
-/** How a rough-cut run by Claude ended, as Magic Edit reports it. */
+/** How the story edit by the chosen connection ended, as Magic Edit reports it. */
 export type RoughCutOutcome =
   "completed" | "stopped" | "signIn" | "limit" | "failed";
 
-/** The assistant that makes the rough cut; main backs it with Claude. */
+/**
+ * The assistant that makes the story edit; main backs it with the connection
+ * the user chose (Claude, Codex or an API provider).
+ */
 export interface RoughCutEditor {
+  /** Why this connection cannot make the story edit now, or null when it can. */
+  blocked?(provider: MagicWandProvider): Promise<MagicWandBlock | null>;
   /** Starts the run, or returns the reason it cannot start. */
   start(
     projectId: string,
     preset: MagicWandPreset,
     request: string,
+    provider?: MagicWandProvider,
   ): Promise<RoughCutOutcome | null>;
   /** Null while the run is going, then how it ended. */
   outcome(projectId: string): RoughCutOutcome | null;
   stop(projectId: string): Promise<void>;
+  /** The run is over for Magic Edit: lift its tool restrictions. */
+  release?(projectId: string): void;
 }
 
 export interface DraftSummary {
@@ -95,6 +106,7 @@ interface Tightened {
 interface Job {
   projectId: string;
   preset: MagicWandPreset;
+  provider: MagicWandProvider;
   stop: boolean;
 }
 
@@ -111,11 +123,14 @@ function draftOf(value: unknown): DraftSummary {
 }
 
 /**
- * Main-owned Magic Edit: the rough cut. Main transcribes locally and finds
- * pauses, fillers and repeated wording; Claude then makes the story edit
- * through the guarded cutting tools, using that analysis only as evidence.
- * Nothing is cut mechanically. One run per project; Stop stops Claude's turn
- * and every committed cut stays undoable.
+ * Main-owned Magic Edit: the rough cut. Main transcribes locally, finds
+ * pauses, fillers and repeated wording and tightens them as one undoable
+ * transaction; the chosen connection (Claude gives the best results, Codex
+ * and the API providers work too) then makes the story edit through the
+ * guarded cutting tools, using the rest of the analysis only as evidence.
+ * When that connection cannot run, the tightening still stands and the
+ * result says what was skipped and how to fix it. One run per project; Stop
+ * stops the assistant's turn and every committed cut stays undoable.
  */
 export class DesktopMagicWand {
   private readonly transcriptions: Transcriptions;
@@ -156,9 +171,13 @@ export class DesktopMagicWand {
     this.views.set(projectId, view);
   }
 
-  start(projectId: string, preset: MagicWandPreset): MagicWandView {
+  start(
+    projectId: string,
+    preset: MagicWandPreset,
+    provider: MagicWandProvider = "claude",
+  ): MagicWandView {
     if (this.jobs.has(projectId)) return this.get(projectId);
-    const job: Job = { projectId, preset, stop: false };
+    const job: Job = { projectId, preset, provider, stop: false };
     this.jobs.set(projectId, job);
     this.set(projectId, {
       status: "transcribing",
@@ -199,7 +218,7 @@ export class DesktopMagicWand {
       projectId: job.projectId,
       preset: job.preset,
       progress: null,
-      // Measured from the draft: what Claude's committed cuts removed.
+      // Measured from the draft: what the committed cuts removed.
       summary:
         !change || (status === "failed" && change.cuts === 0 && !tightened)
           ? null
@@ -349,6 +368,21 @@ export class DesktopMagicWand {
         this.end(job, "stopped", magicWandIssues.stopped, null);
         return;
       }
+      // The tightening above stands even when the story edit cannot run.
+      const block = (await this.editor.blocked?.(job.provider)) ?? null;
+      if (block) {
+        const kept = await change();
+        this.end(
+          job,
+          kept?.cuts || tightened?.pauses || tightened?.fillers
+            ? "completed"
+            : "failed",
+          magicWandSkipMessage(job.provider, block),
+          kept,
+          tightened,
+        );
+        return;
+      }
       this.set(job.projectId, {
         ...this.get(job.projectId),
         status: "applying",
@@ -357,7 +391,8 @@ export class DesktopMagicWand {
       const refused = await this.editor.start(
         job.projectId,
         job.preset,
-        roughCutRequest(job.preset, evidence, tightened),
+        roughCutRequest(job.preset, evidence, tightened, job.provider),
+        job.provider,
       );
       let outcome = refused;
       while (!outcome) {
@@ -375,15 +410,21 @@ export class DesktopMagicWand {
         );
       else if (outcome === "stopped")
         this.end(job, "stopped", magicWandIssues.stopped, changed, tightened);
+      else if (outcome === "signIn")
+        this.end(
+          job,
+          changed?.cuts || tightened?.pauses || tightened?.fillers
+            ? "completed"
+            : "failed",
+          magicWandSkipMessage(job.provider, "signIn"),
+          changed,
+          tightened,
+        );
       else
         this.end(
           job,
           "failed",
-          outcome === "signIn"
-            ? magicWandIssues.claude
-            : outcome === "limit"
-              ? magicWandIssues.limit
-              : magicWandIssues.failed,
+          outcome === "limit" ? magicWandIssues.limit : magicWandIssues.failed,
           changed,
           tightened,
         );
@@ -395,6 +436,8 @@ export class DesktopMagicWand {
           ? error.message
           : magicWandIssues.failed;
       this.end(job, "failed", message, await change().catch(() => null));
+    } finally {
+      this.editor.release?.(job.projectId);
     }
   }
 }

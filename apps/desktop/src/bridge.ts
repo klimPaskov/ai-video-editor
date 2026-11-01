@@ -325,6 +325,10 @@ export interface DesktopBridge {
   onProjectDraftChanged(
     listener: (reply: Reply<ProjectDraftView>) => void,
   ): () => void;
+  /** The assistant moved the app to another step. */
+  onProjectStageChanged(
+    listener: (reply: Reply<ProjectView>) => void,
+  ): () => void;
   getPreferences(): Promise<Reply<Preferences>>;
   setPreferences(value: Preferences): Promise<Reply<Preferences>>;
   listMedia(): Promise<Reply<MediaSummary[]>>;
@@ -442,6 +446,7 @@ export const channels = Object.freeze({
   projectManualUndo: "projects:manual-undo",
   projectManualRedo: "projects:manual-redo",
   projectDraftChanged: "projects:draft-changed",
+  projectStageChanged: "projects:stage-changed",
   preferencesGet: "preferences:get",
   preferencesSet: "preferences:set",
   list: "library:list",

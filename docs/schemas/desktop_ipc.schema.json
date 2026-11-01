@@ -3673,11 +3673,32 @@
           "minimum": 1.1,
           "maximum": 4
         },
-        "motion": { "enum": ["hold", "push"] },
-        "end_center_x": { "type": "number", "minimum": 0, "maximum": 1 },
-        "end_center_y": { "type": "number", "minimum": 0, "maximum": 1 },
-        "ease_in_us": { "type": "integer", "minimum": 100000, "maximum": 1500000 },
-        "ease_out_us": { "type": "integer", "minimum": 100000, "maximum": 1500000 }
+        "motion": {
+          "enum": [
+            "hold",
+            "push"
+          ]
+        },
+        "end_center_x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "end_center_y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "ease_in_us": {
+          "type": "integer",
+          "minimum": 100000,
+          "maximum": 1500000
+        },
+        "ease_out_us": {
+          "type": "integer",
+          "minimum": 100000,
+          "maximum": 1500000
+        }
       }
     },
     "audioSettings": {
@@ -4595,7 +4616,8 @@
       "required": [
         "schema_version",
         "project_id",
-        "preset"
+        "preset",
+        "provider"
       ],
       "properties": {
         "schema_version": {
@@ -4610,6 +4632,16 @@
             "gentle",
             "balanced",
             "tight"
+          ]
+        },
+        "provider": {
+          "description": "The AI connection the user chose in the assistant drawer; it makes the story edit after the app tightens pauses and fillers.",
+          "enum": [
+            "claude",
+            "codex",
+            "deepseek",
+            "openai",
+            "gemini"
           ]
         }
       }
@@ -4722,9 +4754,20 @@
             "The draft changed while Magic Edit was running. Applied cuts are kept and can be undone.",
             "Magic Edit could not finish. Applied cuts are kept and can be undone.",
             "Magic Edit stopped. Applied cuts are kept and can be undone.",
-            "Claude found nothing to cut for this preset.",
-            "Magic Edit uses Claude for the rough cut. Sign in to Claude in Settings, then run it again.",
-            "Your Claude usage limit was reached. Cuts made so far are kept; run Magic Edit again after it resets."
+            "The story edit found nothing more to cut for this preset.",
+            "Your AI provider's usage limit was reached. Cuts made so far are kept; run Magic Edit again after it resets.",
+            "The story edit was skipped. Sign in with your Claude account in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Claude Code is out of date: run claude update in a terminal, choose Check again in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Claude Code is not installed: install it from claude.com/claude-code, then run Magic Edit again.",
+            "The story edit was skipped. Claude is not ready: open Settings, choose Check again under Claude, then run Magic Edit again.",
+            "The story edit was skipped. Sign in to Codex in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Codex is not ready: open Settings, reconnect Codex and choose a model, then run Magic Edit again.",
+            "The story edit was skipped. Add your DeepSeek key in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Choose a DeepSeek model in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Add your OpenAI API key in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Choose an OpenAI API model in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Add your Gemini API key in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Choose a Gemini API model in Settings, then run Magic Edit again."
           ]
         }
       }

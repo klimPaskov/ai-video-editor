@@ -1,8 +1,12 @@
-import type { MagicWandView } from "../../../packages/domain/src/magic-wand-view.ts";
+import type {
+  MagicWandProvider,
+  MagicWandView,
+} from "../../../packages/domain/src/magic-wand-view.ts";
 import type { ClaudeThreadView } from "../../../packages/domain/src/claude-view.ts";
 import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
 
-type Phase = "idle" | "rough" | "production" | "done" | "stopped" | "failed";
+type Phase =
+  "idle" | "rough" | "production" | "done" | "partial" | "stopped" | "failed";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -14,7 +18,10 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * edits as when started by hand; this panel only starts them in order,
  * shows one line of progress and a Stop that reaches whichever is running.
  * The user starts it explicitly, which also starts the production turns of
- * their Claude account.
+ * their Claude account. When Claude is not ready, the rough cut still runs
+ * with the connection chosen in the assistant drawer (its pauses and fillers
+ * are tightened even if the story edit cannot run), and the panel says plainly
+ * that the second step needs Claude and how to fix that.
  */
 export function setupAutoPanel(options: {
   /** The rough cut finished: reload the transcript and draft. */
@@ -23,6 +30,8 @@ export function setupAutoPanel(options: {
   review(): void;
   /** The rough-cut preset chosen under More options. */
   presetValue(): "gentle" | "balanced" | "tight";
+  /** The connection chosen in the assistant drawer. */
+  provider(): MagicWandProvider;
 }): {
   render(project: ProjectView | undefined, visible: boolean): void;
 } {
@@ -41,6 +50,7 @@ export function setupAutoPanel(options: {
   let message: string | null = null;
   let stopRequested = false;
   let runProject: string | undefined;
+  let roughNote: string | null = null;
 
   const request = (id: string) => ({
     schema_version: "1.0" as const,
@@ -53,18 +63,22 @@ export function setupAutoPanel(options: {
     start.hidden = running() || phase === "done";
     start.disabled = !project || running();
     start.textContent =
-      phase === "stopped" || phase === "failed" ? "Try again" : "Edit my video";
+      phase === "stopped" || phase === "failed" || phase === "partial"
+        ? "Try again"
+        : "Edit my video";
     stop.hidden = !running();
     stop.disabled = stopRequested;
-    review.hidden = phase !== "done";
+    review.hidden = phase !== "done" && phase !== "partial";
     progress.hidden = !running();
     const text = running()
       ? `${phase === "rough" ? "Step 1 of 2: rough cut" : "Step 2 of 2: graphics, captions and sound"}${detail ? ` · ${detail}` : ""}`
       : phase === "done"
         ? "Your video is edited. Review it, or undo any step in Edit."
-        : phase === "stopped"
-          ? "Stopped. What was already done stays in the edit and can be undone."
-          : "";
+        : phase === "partial"
+          ? "The rough cut is done. Review it, or undo any step in Edit."
+          : phase === "stopped"
+            ? "Stopped. What was already done stays in the edit and can be undone."
+            : "";
     status.textContent = text;
     status.hidden = !text;
     errorText.textContent = message ?? "";
@@ -78,10 +92,15 @@ export function setupAutoPanel(options: {
     paint();
   }
 
-  async function roughCut(id: string): Promise<boolean> {
+  async function roughCut(
+    id: string,
+    provider: MagicWandProvider,
+  ): Promise<boolean> {
+    roughNote = null;
     const first = await window.desktop.startMagicWand({
       ...request(id),
       preset: options.presetValue(),
+      provider,
     });
     if (!first.ok) {
       fail(first.message);
@@ -93,9 +112,13 @@ export function setupAutoPanel(options: {
       if (reply.ok) {
         const view: MagicWandView = reply.value;
         if (view.status === "transcribing") detail = "listening to the speech";
-        else if (view.status === "applying") detail = "Claude is cutting";
+        else if (view.status === "applying")
+          detail = `${provider === "claude" ? "Claude" : "the assistant"} is cutting`;
         else {
-          if (view.status === "completed") return true;
+          if (view.status === "completed") {
+            roughNote = view.message;
+            return true;
+          }
           if (stopRequested || view.status === "stopped") {
             phase = "stopped";
             paint();
@@ -166,7 +189,6 @@ export function setupAutoPanel(options: {
     if (!project || running()) return;
     const id = project.id;
     const blocked = await claudeReady();
-    if (blocked) return fail(blocked);
     runProject = id;
     stopRequested = false;
     message = null;
@@ -174,10 +196,25 @@ export function setupAutoPanel(options: {
     phase = "rough";
     paint();
     try {
-      if (!(await roughCut(id))) return;
+      // Edit my video is Claude's flow; without Claude the rough cut runs
+      // with the chosen connection and the second step is explained.
+      if (!(await roughCut(id, blocked ? options.provider() : "claude")))
+        return;
       options.onFinished();
       if (stopRequested) {
         phase = "stopped";
+        paint();
+        return;
+      }
+      if (blocked) {
+        phase = "partial";
+        message = [
+          roughNote,
+          `Step 2 (graphics, captions and sound) needs Claude and was not run. ${blocked}`,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        detail = "";
         paint();
         return;
       }

@@ -654,6 +654,16 @@ const bridge: DesktopBridge = {
     return () =>
       ipcRenderer.removeListener(channels.projectDraftChanged, receive);
   },
+  onProjectStageChanged: (listener) => {
+    if (typeof listener !== "function")
+      throw new Error("Invalid project listener");
+    const receive = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      listener(reply(value, assertProjectView));
+    };
+    ipcRenderer.on(channels.projectStageChanged, receive);
+    return () =>
+      ipcRenderer.removeListener(channels.projectStageChanged, receive);
+  },
   getPreferences: () =>
     invoke(channels.preferencesGet, undefined, assertPreferences),
   setPreferences: (value) => {

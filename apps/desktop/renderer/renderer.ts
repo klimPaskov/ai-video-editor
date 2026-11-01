@@ -51,6 +51,7 @@ import type {
 import type { CodexThreadView } from "../../../packages/domain/src/codex-thread-view.ts";
 import type { ApiThreadView } from "../../../packages/domain/src/api-thread-view.ts";
 import type { ApiProviderId } from "../../../packages/domain/src/api-providers.ts";
+import type { MagicWandProvider } from "../../../packages/domain/src/magic-wand-view.ts";
 import type { ClaudeThreadView } from "../../../packages/domain/src/claude-view.ts";
 import type {
   SpokenCandidate,
@@ -1079,13 +1080,21 @@ function syncTranscriptionPolling(): void {
     transcriptionPollTimer = undefined;
   }
 }
-const magicPanel = setupMagicPanel(() => void loadTranscription());
+const assistantProviderChoice = (): MagicWandProvider =>
+  (["claude", "codex", "deepseek", "openai", "gemini"] as const).find(
+    (name) => name === element<HTMLSelectElement>("assistant-provider").value,
+  ) ?? "claude";
+const magicPanel = setupMagicPanel(
+  () => void loadTranscription(),
+  assistantProviderChoice,
+);
 const autoPanel = setupAutoPanel({
   onFinished: () => void loadTranscription(),
   review: () => void navigate("review"),
   presetValue: () =>
     element<HTMLSelectElement>("magic-preset").value as
       "gentle" | "balanced" | "tight",
+  provider: assistantProviderChoice,
 });
 function renderTranscriptionActions(): void {
   refreshCaptions();
@@ -3204,6 +3213,23 @@ canvas.parentElement!.addEventListener("click", (event) => {
 undoEdit.addEventListener("click", () => void submitManualUndo());
 redoEdit.addEventListener("click", () => void submitManualRedo());
 window.desktop.onProjectDraftChanged(applyProjectDraft);
+// The assistant moved the app to another step (the same as the step bar).
+window.desktop.onProjectStageChanged((reply) => {
+  if (
+    !reply.ok ||
+    !activeProject ||
+    activeProject.id !== reply.value.id ||
+    activeProject.stage === reply.value.stage
+  )
+    return;
+  playback.stop();
+  transcriptCutIssue = null;
+  transcriptCutMessage = null;
+  activeProject = reply.value;
+  renderStage();
+  if (activeProject.stage === "auto_edit" || activeProject.stage === "edit")
+    void loadTranscription();
+});
 void loadLibrary().catch(() =>
   showError(
     "The library could not be opened. Restart the application to retry.",

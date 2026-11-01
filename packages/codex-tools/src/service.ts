@@ -71,6 +71,9 @@ export const codexVideoEditToolNames = [
   "media.get_frames",
   "transition.set",
   "transition.remove",
+  "app.start_magic_edit",
+  "app.stop_edit",
+  "app.go_to_step",
 ] as const;
 
 /**
@@ -88,7 +91,32 @@ export const claudeOnlyToolNames = [
   "layout.set",
   "layout.remove",
   "layout.plan",
+  "app.start_edit_my_video",
 ] as const;
+
+/**
+ * The app actions a chat may take (the same code the buttons run). Export
+ * and cleanup are deliberately absent: they stay explicit user actions.
+ */
+export const appActionToolNames: ReadonlySet<string> = new Set([
+  "app.start_magic_edit",
+  "app.stop_edit",
+  "app.go_to_step",
+  "app.start_edit_my_video",
+]);
+export const appActionPresets = ["gentle", "balanced", "tight"] as const;
+export const appActionLevels = ["tidy", "polished", "bold"] as const;
+/** The workflow steps, in order (the same as the project's stages). */
+export const appActionSteps = [
+  "record_import",
+  "auto_edit",
+  "edit",
+  "review",
+  "export",
+] as const;
+export type AppActionPreset = (typeof appActionPresets)[number];
+export type AppActionLevel = (typeof appActionLevels)[number];
+export type AppActionStep = (typeof appActionSteps)[number];
 /** Claude's guarded editor tools: the shared tools plus its own. */
 export const claudeEditorToolNames = [
   ...codexVideoEditToolNames,
@@ -160,6 +188,38 @@ export interface ShortsProposer {
       reasons: string[];
     }[],
   ): Promise<{ accepted: number; rejected: string[] }>;
+}
+
+/** What an app action did, in plain words the assistant relays to the user. */
+export interface AppActionResult {
+  status:
+    | "started"
+    | "queued"
+    | "stopped"
+    | "nothing_running"
+    | "moved"
+    | "busy"
+    | "not_available";
+  message: string;
+}
+
+/**
+ * Actions the assistant may take in the app, running the same code as the
+ * buttons for the connection that is chatting. Main implements them; there
+ * is no export, deletion or cleanup here (those stay explicit user actions).
+ */
+export interface AppActions {
+  startMagicEdit(
+    projectId: string,
+    preset: AppActionPreset,
+  ): Promise<AppActionResult>;
+  /** Only Claude can run the full "Edit my video". */
+  startEditMyVideo?(
+    projectId: string,
+    level: AppActionLevel,
+  ): Promise<AppActionResult>;
+  stopEdit(projectId: string): Promise<AppActionResult>;
+  goToStep(projectId: string, step: AppActionStep): Promise<AppActionResult>;
 }
 
 /**
@@ -653,6 +713,7 @@ export class CodexVideoEditToolService {
   private readonly zoomTargeter: ZoomTargeter | undefined;
   private readonly cameraCatalog: CameraCatalog | undefined;
   private readonly layoutPlanner: LayoutPlanner | undefined;
+  private readonly appActions: AppActions | undefined;
 
   constructor(
     activeProjectId: string,
@@ -667,6 +728,7 @@ export class CodexVideoEditToolService {
     zoomTargeter?: ZoomTargeter,
     cameraCatalog?: CameraCatalog,
     layoutPlanner?: LayoutPlanner,
+    appActions?: AppActions,
   ) {
     if (!idPattern.test(activeProjectId)) reject("invalid_request");
     this.activeProjectId = activeProjectId;
@@ -681,6 +743,7 @@ export class CodexVideoEditToolService {
     this.zoomTargeter = zoomTargeter;
     this.cameraCatalog = cameraCatalog;
     this.layoutPlanner = layoutPlanner;
+    this.appActions = appActions;
   }
 
   private applier():
@@ -765,6 +828,14 @@ export class CodexVideoEditToolService {
           return await this.removeLayout(input);
         case "layout.plan":
           return await this.planLayout(input);
+        case "app.start_magic_edit":
+          return await this.startMagicEdit(input);
+        case "app.start_edit_my_video":
+          return await this.startEditMyVideo(input);
+        case "app.stop_edit":
+          return await this.stopEdit(input);
+        case "app.go_to_step":
+          return await this.goToStep(input);
         case "timeline.undo":
           return await this.undo(input);
         default:
@@ -2547,6 +2618,75 @@ export class CodexVideoEditToolService {
       request.speed === 1
         ? "Normal speed restored on the active draft."
         : `${request.speed}x speed applied to the active draft.`,
+    );
+  }
+
+  private appResult(result: AppActionResult): unknown {
+    if (
+      !result ||
+      typeof result.message !== "string" ||
+      !result.message ||
+      result.message.length > 600
+    )
+      reject("service_unavailable");
+    return {
+      schema_version: "1.0",
+      project_id: this.activeProjectId,
+      status: result.status,
+      message: result.message,
+    };
+  }
+
+  private async startMagicEdit(input: unknown): Promise<unknown> {
+    const request = exact(input, ["schema_version", "project_id", "preset"]);
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    if (!(appActionPresets as readonly unknown[]).includes(request.preset))
+      reject("invalid_request");
+    if (!this.appActions) reject("service_unavailable");
+    return this.appResult(
+      await this.appActions.startMagicEdit(
+        this.activeProjectId,
+        request.preset as AppActionPreset,
+      ),
+    );
+  }
+
+  private async startEditMyVideo(input: unknown): Promise<unknown> {
+    const request = exact(input, ["schema_version", "project_id", "level"]);
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    if (!(appActionLevels as readonly unknown[]).includes(request.level))
+      reject("invalid_request");
+    // Only Claude's tool list offers this action; any other origin is refused.
+    if (this.origin !== "claude" || !this.appActions?.startEditMyVideo)
+      reject("tool_not_available");
+    return this.appResult(
+      await this.appActions.startEditMyVideo(
+        this.activeProjectId,
+        request.level as AppActionLevel,
+      ),
+    );
+  }
+
+  private async stopEdit(input: unknown): Promise<unknown> {
+    const projectId = readRequest(input, this.activeProjectId);
+    if (!this.appActions) reject("service_unavailable");
+    return this.appResult(await this.appActions.stopEdit(projectId));
+  }
+
+  private async goToStep(input: unknown): Promise<unknown> {
+    const request = exact(input, ["schema_version", "project_id", "step"]);
+    if (request.schema_version !== "1.0") reject("invalid_request");
+    assertActiveProject(request, this.activeProjectId);
+    if (!(appActionSteps as readonly unknown[]).includes(request.step))
+      reject("invalid_request");
+    if (!this.appActions) reject("service_unavailable");
+    return this.appResult(
+      await this.appActions.goToStep(
+        this.activeProjectId,
+        request.step as AppActionStep,
+      ),
     );
   }
 
