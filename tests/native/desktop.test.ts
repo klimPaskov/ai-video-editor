@@ -127,7 +127,7 @@ try {
   await expect(
     window.getByRole("button", { name: "Import video", exact: true }),
   ).toBeVisible();
-  assert.equal(await window.title(), "AI Video Editor");
+  assert.equal(await window.title(), "Urushi");
   assert.equal(window.url(), "ai-video-editor://app/index.html");
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   // Electron's sandboxed metric is macOS/Windows-only. Verify Linux kernel state.

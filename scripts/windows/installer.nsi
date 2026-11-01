@@ -1,11 +1,11 @@
-; AI Video Editor Windows installer (NSIS 3, Unicode, per-user, 64-bit only).
+; Urushi Windows installer (NSIS 3, Unicode, per-user, 64-bit only).
 ;
 ; Built by scripts/windows/installer.ts with `makensis`; the defines below are
 ; passed on the command line. The installer is UNSIGNED unless the builder is
 ; given a signing command (docs/adr/0022-windows-release.md).
 ;
 ; Install: per user, no administrator prompt, into
-;   %LOCALAPPDATA%\Programs\AI Video Editor
+;   %LOCALAPPDATA%\Programs\Urushi
 ; with one Start-menu shortcut and a normal Apps & features entry.
 ;
 ; Uninstall: removes exactly the files this installer wrote (the generated
@@ -43,7 +43,7 @@ RequestExecutionLevel user
   !define EXE_NAME "ai-video-editor.exe"
 !endif
 !ifndef PUBLISHER
-  !define PUBLISHER "AI Video Editor project"
+  !define PUBLISHER "Urushi project"
 !endif
 
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\ai-video-editor"

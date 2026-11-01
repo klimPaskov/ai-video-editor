@@ -517,7 +517,7 @@ try {
       timeout: 30_000,
     });
     application = broken;
-    await nativeDialog("Could not open AI Video Editor", broken);
+    await nativeDialog("Could not open Urushi", broken);
     assert.equal(
       await broken.evaluate(
         ({ BrowserWindow }) => BrowserWindow.getAllWindows().length,

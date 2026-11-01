@@ -369,7 +369,7 @@ try {
       .toBe("ready");
     step = "claude-split";
     const prompt =
-      "Use the AI Video Editor tools to read the project and timeline, then split the only clip at exactly 500000 microseconds on the output timeline. Apply exactly one split and no other edit, read the timeline again to confirm, then reply in one short sentence.";
+      "Use the Urushi tools to read the project and timeline, then split the only clip at exactly 500000 microseconds on the output timeline. Apply exactly one split and no other edit, read the timeline again to confirm, then reply in one short sentence.";
     await page.locator("#codex-thread-input").fill(prompt);
     await page.locator("#send-codex-thread").click();
     let committedDuringTurn = false;

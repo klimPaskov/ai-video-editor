@@ -337,7 +337,7 @@ await writeFile(
   join(staging, "package.json"),
   JSON.stringify({
     name: "ai-video-editor",
-    productName: "AI Video Editor",
+    productName: "Urushi",
     version: "0.0.1",
     main: "main.cjs",
     license: "MIT",
@@ -365,9 +365,9 @@ const packages = await packager({
         // resedit writes these into the exe; no Wine is needed.
         appCopyright: "MIT licence; third-party notices ship with the app",
         win32metadata: {
-          CompanyName: "AI Video Editor project",
-          FileDescription: "AI Video Editor",
-          ProductName: "AI Video Editor",
+          CompanyName: "Urushi project",
+          FileDescription: "Urushi",
+          ProductName: "Urushi",
           OriginalFilename: "ai-video-editor.exe",
         },
       }
@@ -383,7 +383,7 @@ if (windows) {
   installer = await buildInstaller({
     appDirectory: packages[0],
     outputDirectory: output,
-    productName: "AI Video Editor",
+    productName: "Urushi",
     version: "0.0.1",
     licenseFile: join(root, "LICENSE"),
     iconFile: join(root, "apps/desktop/assets/icon.ico"),

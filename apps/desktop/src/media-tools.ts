@@ -21,7 +21,7 @@ export interface MediaTools {
 }
 
 export const mediaToolsMissingMessage =
-  "The video tools that come with AI Video Editor are missing or damaged. Reinstall the app to repair them.";
+  "The video tools that come with Urushi are missing or damaged. Reinstall the app to repair them.";
 
 export class MediaToolsError extends Error {
   constructor() {

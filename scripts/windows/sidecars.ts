@@ -127,13 +127,13 @@ export function ffmpegNotice(
   configuration: string,
 ): string {
   return [
-    "FFmpeg (bundled with AI Video Editor)",
+    "FFmpeg (bundled with Urushi)",
     "",
     `Version: ${pins.version} (FFmpeg commit ${pins.ffmpegCommit})`,
     `Build: ${pins.recipeRepository} release ${pins.release}, recipe commit ${pins.recipeCommit}`,
     `Licence: ${pins.license}. FFmpeg is licensed under the GNU Lesser General Public Licence (LICENSE.txt in this folder). The build contains no GPL or nonfree components and is shared (DLLs), so the FFmpeg libraries can be replaced by compatible builds.`,
     "",
-    "AI Video Editor runs ffmpeg.exe and ffprobe.exe as separate programs.",
+    "Urushi runs ffmpeg.exe and ffprobe.exe as separate programs.",
     "",
     "Corresponding source: the FFmpeg source at the commit above (https://github.com/FFmpeg/FFmpeg) and the build recipe at the recipe commit above, which pins every external library with its own source and licence.",
     "",
