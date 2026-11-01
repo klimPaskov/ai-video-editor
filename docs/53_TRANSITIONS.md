@@ -20,9 +20,9 @@ A cut is a boundary where the next clip does not continue the previous one unbro
 
 A transition is anchored to the source moment where the incoming clip starts (`source_id`, `source_us`), so it follows later cuts the same way graphics and zooms do. When the cut it belongs to disappears (the two parts are joined again, or the incoming part is cut away) the transition becomes dormant: it stays in the draft, draws nothing, and returns if Undo brings the cut back. A cut holds one transition; setting another replaces it.
 
-## Edit step
+## Refine step
 
-In Edit, More tools has a style choice (Dip to black, Dip to white, Wipe right, Wipe left, Iris), a length (0.3, 0.6, 1 s) and Add transition. The control acts on the cut nearest the playhead:
+In Refine, More tools has a style choice (Dip to black, Dip to white, Wipe right, Wipe left, Iris), a length (0.3, 0.6, 1 s) and Add transition. The control acts on the cut nearest the playhead:
 
 - With no cut yet it is off, and its name says there is no cut.
 - Add transition puts the chosen style and length on that cut; the player moves to the start of the transition.
@@ -55,4 +55,4 @@ A placed transition expands to a graphic interval above every graphic (layer 100
 - `tests/media/transitions.test.ts`: validation, cut detection (splits and speed changes are not cuts), centred windows clamped to the neighbouring clips, dormant transitions, markup of every style passing the graphic content rules, graphic intervals on layer 100.
 - `tests/media/draft-transactions.test.ts`: set, replace on the same cut, refusals, remove, Undo and replay after reopen.
 - `tests/media/*` tool, MCP, dynamic-tool, Claude and API-provider tests for the nineteen, twenty-three and eighteen tool inventories; foundation tests and `scripts/validate_package.py` for the schemas and examples (`draft_transaction_transition`, `desktop_ipc_manual_transition`).
-- `tests/native/transitions.test.ts` (packaged app, isolated guest): the control is off without a cut, a time that is not a cut is refused, a dip added in Edit is drawn in the live preview (opacity 1 at the cut, partial before it, absent outside its window), every style covers the centre of the preview in its colour at the cut, a verified lossless master differs from the cut footage only inside the window and its first frame after the cut is black, Remove and Undo restore the draft, and the source file is unchanged.
+- `tests/native/transitions.test.ts` (packaged app, isolated guest): the control is off without a cut, a time that is not a cut is refused, a dip added in Refine is drawn in the live preview (opacity 1 at the cut, partial before it, absent outside its window), every style covers the centre of the preview in its colour at the cut, a verified lossless master differs from the cut footage only inside the window and its first frame after the cut is black, Remove and Undo restore the draft, and the source file is unchanged.

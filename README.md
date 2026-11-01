@@ -2,7 +2,7 @@
 
 Record your screen, let AI make the first cut, polish it with simple tools, and export a lossless master, all in one desktop app.
 
-![The Edit step with a zoom and a sped-up part on the timeline](docs/images/edit.png)
+![The Refine step with a zoom and a sped-up part on the timeline](docs/images/edit.png)
 
 AI Video Editor is a standalone desktop recorder and editor for screen recordings, tutorials, demos and talking-head videos. Every edit, whether you make it or an AI assistant does, goes into the same non-destructive draft with full Undo. Your original footage is never changed.
 
@@ -15,7 +15,7 @@ AI Video Editor is a standalone desktop recorder and editor for screen recording
 - Countdown, pause and resume. Recordings are saved losslessly (FFV1 video, PCM audio).
 - If the app quits during a take, recording stops with it and the take can be recovered on the next launch.
 
-**Auto Edit**
+**Magic Edit**
 - **Edit my video**: one button. Claude makes the rough cut, then adds motion graphics, captions and sound, as undoable edits you can review.
 - Local speech-to-text transcription (Whisper, runs on your device).
 - **Magic Edit** makes a safe first cut: long pauses, filler words and repeated takes, at a gentle, balanced or tight setting.
@@ -49,8 +49,8 @@ Light Canvas is the default. Settings > Appearance also offers Studio Dark, Pape
 
 Each project moves through five steps. Only the current step's tools are shown.
 
-1. **Record or Import**: start a recording or bring in a video.
-2. **Auto Edit**: press Edit my video, or open More options for Magic Edit alone, captions, audio and sound.
+1. **Import**: start a recording or bring in a video.
+2. **Magic Edit**: press Edit my video, or open More options for Magic Edit alone, captions, audio and sound.
 3. **Edit**: refine by hand or with the assistant.
 4. **Review**: watch the edit and verify the draft.
 5. **Export**: save the master or an MP4, or make short clips.

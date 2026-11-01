@@ -130,7 +130,7 @@ try {
     assert.ok(reply.ok);
     return reply.value.layers;
   };
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
   await expect(page.locator("#sound-card")).toBeVisible();
   assert.deepEqual(await sounds(), []);
 
@@ -156,7 +156,7 @@ try {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await expect.poll(async () => (await sounds())[0]!.gain_db).toBe(-12);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await page.locator("#undo-edit").click();
   await expect.poll(async () => (await sounds())[0]!.gain_db).toBe(-18);
   await page.locator("#undo-edit").click();
@@ -165,7 +165,7 @@ try {
   await page.locator("#redo-edit").click();
   await page.locator("#redo-edit").click();
   await expect.poll(async () => (await sounds())[0]?.gain_db).toBe(-12);
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
   await expect(page.locator(".sound-row")).toHaveCount(1);
   // Back to the default level for the audio check below.
   await page.locator(".sound-row input[type=range]").evaluate((input) => {
@@ -237,7 +237,7 @@ try {
   result.effectDb = middle;
 
   step = "remove";
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
   await page.getByRole("button", { name: /^Remove Hit$/u }).click();
   await expect(page.locator(".sound-row")).toHaveCount(1);
   await page.getByRole("button", { name: /^Remove Bed$/u }).click();

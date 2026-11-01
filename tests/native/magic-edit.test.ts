@@ -199,7 +199,7 @@ try {
     .toBe("signed_in");
 
   step = "magic-edit";
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
   await expect(page.locator("#magic-start")).toBeVisible();
   await expect(page.locator("#magic-preset")).toHaveValue("balanced");
   await page.locator("#magic-start").click();
@@ -323,7 +323,7 @@ try {
   };
 
   step = "undo";
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   const applied = magic.length + tightening.length;
   for (let index = 0; index < applied; index++) {
     await page.locator("#undo-edit").click();

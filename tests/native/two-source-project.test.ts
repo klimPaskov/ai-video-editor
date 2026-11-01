@@ -168,7 +168,7 @@ try {
   await expect(page.locator("#source-properties")).toContainText("Part 1");
   await expect(page.locator("#source-properties")).toContainText("Part 2");
   await page.screenshot({ path: join(evidence, "two-source-join.png") });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible();
   await expect(page.locator("#trim-start")).toBeDisabled();
   await expect(page.locator("#trim-end")).toBeDisabled();

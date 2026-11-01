@@ -205,7 +205,7 @@ try {
       { timeout: 120_000 },
     )
     .toBe("signed_in");
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
   await expect(page.locator("#magic-start")).toBeVisible();
   await expect(page.locator("#magic-preset")).toHaveValue("balanced");
   await page.locator("#magic-start").click();
@@ -268,7 +268,7 @@ try {
   result.presentation = { captions, loudness: true };
 
   mark("manual-refinement");
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 300_000 });
   const beforeManual = (await project(page)).draft.sequence;
   // Split at the join between the recordings, then check shared Undo/Redo.

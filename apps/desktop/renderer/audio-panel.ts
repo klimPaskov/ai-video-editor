@@ -10,7 +10,7 @@ function element<T extends HTMLElement>(id: string): T {
 }
 
 /**
- * Audio card (Auto Edit): export cleanup choices. They are part of the draft,
+ * Audio card (Magic Edit step): export cleanup choices. They are part of the draft,
  * so the card re-reads them whenever the draft head changes (Undo, Redo or
  * an assistant edit).
  */

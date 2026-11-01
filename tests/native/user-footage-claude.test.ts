@@ -215,10 +215,10 @@ try {
     result.imported = { sources: 2, inOrder: true };
 
     mark("magic-edit");
-    await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+    await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
     await page.locator("#magic-start").click();
     await expect(page.locator("#magic-stop")).toBeVisible({ timeout: 60_000 });
-    // Claude's rough cut ends when Run Magic Edit comes back.
+    // Claude's rough cut ends when Rough cut only comes back.
     await expect(page.locator("#magic-start")).toBeVisible({
       timeout: 4 * 3_600_000,
     });
@@ -288,7 +288,7 @@ try {
 
   if (!skipEdit) {
     mark("claude-full-edit");
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("button", { name: "Refine", exact: true }).click();
     await expect(page.locator("#edit-actions")).toBeVisible({
       timeout: 300_000,
     });

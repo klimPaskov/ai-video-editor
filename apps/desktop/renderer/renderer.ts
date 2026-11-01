@@ -267,9 +267,9 @@ let transcriptCutIssue: string | null = null;
 let transcriptCutMessage: string | null = null;
 let transcriptCutPending = false;
 const stageLabels: Record<ProjectStage, string> = {
-  record_import: "Record or Import",
-  auto_edit: "Auto Edit",
-  edit: "Edit",
+  record_import: "Import",
+  auto_edit: "Magic Edit",
+  edit: "Refine",
   review: "Review",
   export: "Export",
 };
@@ -290,7 +290,7 @@ for (const stage of Object.keys(stageLabels) as ProjectStage[]) {
   const text = document.createElement("span");
   text.className = "step-text";
   text.setAttribute("aria-hidden", "true");
-  text.textContent = stage === "record_import" ? "Import" : stageLabels[stage];
+  text.textContent = stageLabels[stage];
   button.append(number, text);
   button.addEventListener("click", () => {
     void navigate(stage);
@@ -333,7 +333,7 @@ function renderStage(): void {
   // One clear way forward from the steps that have nothing else to do.
   const forward =
     activeProject?.stage === "record_import"
-      ? (["auto_edit", "Continue to Auto Edit"] as const)
+      ? (["auto_edit", "Continue to Magic Edit"] as const)
       : activeProject?.stage === "review"
         ? (["export", "Continue to Export"] as const)
         : null;
@@ -906,7 +906,7 @@ function renderTranscriptWordChoices(force = false): void {
     transcriptEditNote.textContent = `Showing the first 500 of ${matches.length} matching words. Refine the search to find another word. Transcript edits do not alter recorded audio.`;
   else
     transcriptEditNote.textContent =
-      "Transcript text changes do not alter recorded audio. Undo shares the edit history.";
+      "Text changes do not alter the audio. Undo covers them.";
   if (matches.some((word) => word.word_id === previousWordId))
     transcriptEditWord.value = previousWordId;
   else transcriptEditWord.selectedIndex = 0;
@@ -1304,7 +1304,7 @@ async function saveTranscriptCorrection(): Promise<void> {
   } catch {
     if (activeProject?.id === project.id)
       transcriptCorrectionIssue =
-        "The transcript could not be corrected. Refresh the word selection and try again.";
+        "The correction could not be saved. Pick the word again and retry.";
   } finally {
     transcriptCorrectionPending = false;
     manualEditPending = false;
@@ -1729,7 +1729,7 @@ async function createProject(
   } catch {
     if (generation === routeGeneration)
       showError(
-        "The project could not be created. Your imported source is preserved. Try Create project again.",
+        "The project could not be created. Your video is kept. Try again.",
       );
   } finally {
     if (origin) origin.disabled = false;
@@ -2049,7 +2049,7 @@ function select(media: MediaSummary): void {
   const message = element("preview-message");
   message.hidden = media.previewAvailable;
   message.textContent =
-    "This video's format does not have a verified preview yet. Its original file has been preserved.";
+    "This format has no verified preview yet. Your file is kept.";
   element("frame-controls").hidden = !media.previewAvailable;
   playButton.hidden = !activeProject || !media.previewAvailable;
   if (media.previewAvailable) requestFrame(0);
@@ -2221,7 +2221,7 @@ addFootageButton.addEventListener("click", async () => {
   } catch {
     if (generation === routeGeneration && activeProject?.id === project.id)
       showError(
-        "Footage could not be added. Any completed import remains in the source library.",
+        "Footage could not be added. Anything already imported is kept.",
       );
   } finally {
     addingFootage = false;
@@ -2757,7 +2757,7 @@ async function submitManualRestoreRange(): Promise<void> {
         );
       } else
         restoreRangeIssue =
-          "The source range could not be restored. Check the missing interval and try again.";
+          "The range could not be restored. Check the times and retry.";
     }
   } finally {
     manualEditPending = false;
@@ -3940,7 +3940,7 @@ async function openSettings(): Promise<void> {
   } catch {
     if (settingsDialog.open && load === settingsLoad) {
       message.textContent =
-        "Settings could not be loaded. Close this dialog and retry. Your saved settings have been preserved.";
+        "Settings could not be loaded. Close and retry; your saved settings are kept.";
       message.hidden = false;
     }
   } finally {
@@ -4012,7 +4012,7 @@ async function savePreferences(): Promise<void> {
     showToast("Settings saved");
   } catch {
     message.textContent =
-      "Settings could not be saved. Your previous interface size is unchanged. Try again.";
+      "Settings could not be saved. Nothing changed. Try again.";
     message.hidden = false;
   } finally {
     savingPreferences = false;

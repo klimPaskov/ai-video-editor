@@ -16,7 +16,7 @@ function clock(us: number): string {
 }
 
 /**
- * Sound card (Auto Edit): music and sound effects mixed into the edit. Layers are
+ * Sound card (Magic Edit step): music and sound effects mixed into the edit. Layers are
  * part of the draft, so the card re-reads them whenever the draft head changes
  * (Undo, Redo or an assistant edit). Adding opens a file dialog in the main
  * process; no file path reaches this page.

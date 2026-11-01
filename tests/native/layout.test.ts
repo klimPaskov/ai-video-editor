@@ -1,17 +1,22 @@
 /**
- * Layout audit: a synthetic recording (2 s of tone, 2 s of
- * silence) gets a music bed and a sound effect from audio files chosen in the
- * Sound card; the layers are shared-Undo draft edits that survive Redo, are
- * mixed (audible in the recording's silent
- * half), and can be removed.
+ * Layout audit of the packaged app: every step, the assistant drawer, source
+ * details, Settings, the recording and project dialogs, in every theme at
+ * several window sizes and interface scales, on a long file name. It reports
+ * controls cut off, overlapping or too small, unreadable text, and checks that
+ * each step's primary action (such as Continue) is visible and clickable.
  *
- * node tests/native/sound.test.ts <packaged-executable>
+ * node tests/native/layout.test.ts <packaged-executable> [--enforce]
+ * AUDIT_THEMES and AUDIT_SIZES (comma lists, e.g. 900x600@1) narrow a run.
  */
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect as baseExpect } from "playwright/test";
-import { auditLayout, type LayoutFinding } from "./layout-audit.ts";
+import {
+  auditLayout,
+  checkPrimaryAction,
+  type LayoutFinding,
+} from "./layout-audit.ts";
 import { openDisclosures } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
@@ -45,7 +50,11 @@ for (let frame = 0; frame < frames; frame++)
     );
 const videoPath = join(evidence, "video.bgra");
 const audioPath = join(evidence, "tone.s16le");
-const sourcePath = join(evidence, "Tone then silence.mkv");
+// A long name, as a recording gets: it must not push the step's actions away.
+const sourcePath = join(
+  evidence,
+  "Screen recording of the quarterly product walkthrough with the whole team 2026-10-30 14-22-11.mkv",
+);
 await writeFile(videoPath, video, { mode: 0o600 });
 await writeFile(audioPath, audio, { mode: 0o600 });
 await encodeVerifiedMaster(
@@ -85,6 +94,8 @@ const sizes = subset("AUDIT_SIZES", [
   "1440x900@1",
   "1200x800@1",
   "1000x700@1",
+  "1000x650@1.5",
+  "900x600@1",
   "1200x800@1.5",
   "1200x800@2",
 ]);
@@ -134,16 +145,62 @@ try {
     await page.waitForTimeout(500);
     const findings = await auditLayout(page);
     report.push({ where, findings });
+    // AUDIT_SHOTS=1 keeps a picture of every audited screen for review.
+    if (process.env.AUDIT_SHOTS) {
+      const name = where.replaceAll(/[^a-z0-9]+/giu, "-").toLowerCase();
+      await shot(join(evidence, `look-${name}.png`));
+      // A page taller than the window also gets a picture of its end.
+      const scrolls = await page.evaluate(() => {
+        // The content area, not the document, is what scrolls.
+        const main = document.querySelector("main")!;
+        if (main.scrollHeight <= main.clientHeight + 2) return false;
+        main.scrollTo(0, main.scrollHeight);
+        return true;
+      });
+      if (scrolls) {
+        await page.waitForTimeout(250);
+        await shot(join(evidence, `look-${name}-end.png`));
+        await page.evaluate(() =>
+          document.querySelector("main")!.scrollTo(0, 0),
+        );
+      }
+    }
     if (findings.length) {
       console.log(`${where}: ${findings.length} finding(s)`);
       for (const finding of findings)
         console.log(`    ${finding.kind}: ${finding.detail}`);
-      await page.screenshot({
-        path: join(
+      await shot(
+        join(
           evidence,
           `finding-${where.replaceAll(/[^a-z0-9]+/giu, "-").toLowerCase()}.png`,
         ),
-      });
+      );
+    }
+  };
+  /**
+   * A picture of the window itself: page screenshots ignore the interface
+   * scale (they show the top-left corner of the zoomed page).
+   */
+  const shot = async (path: string) => {
+    const png = await electron.evaluate(async ({ BrowserWindow }) => {
+      const image =
+        await BrowserWindow.getAllWindows()[0]!.webContents.capturePage();
+      return image.toPNG().toString("base64");
+    });
+    await writeFile(path, Buffer.from(png, "base64"));
+  };
+  /** The step's main action must be on screen and receive a click. */
+  const primary = async (where: string) => {
+    const findings = await checkPrimaryAction(page);
+    report.push({ where: `${where} primary action`, findings });
+    if (findings.length) {
+      console.log(`${where} primary action: ${findings[0]!.detail}`);
+      await shot(
+        join(
+          evidence,
+          `finding-primary-${where.replaceAll(/[^a-z0-9]+/giu, "-").toLowerCase()}.png`,
+        ),
+      );
     }
   };
   const go = async (name: string, id: string) => {
@@ -176,27 +233,25 @@ try {
         .toBe(themeId);
       await page.waitForTimeout(800);
       await audit(`${tag} / Home`);
-      await page.screenshot({
-        path: join(evidence, `${themeId}-${size.replace("@", "x")}-home.png`),
-      });
+      await shot(
+        join(evidence, `${themeId}-${size.replace("@", "x")}-home.png`),
+      );
       await page.locator(`[data-project-id="${projectId}"]`).click();
       await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
       const stages: Array<[string, string]> = [
-        ["Record or Import", "record_import"],
-        ["Auto Edit", "auto_edit"],
-        ["Edit", "edit"],
+        ["Import", "record_import"],
+        ["Magic Edit", "auto_edit"],
+        ["Refine", "edit"],
         ["Review", "review"],
         ["Export", "export"],
       ];
       for (const [name, id] of stages) {
         await go(name, id);
         await audit(`${tag} / ${name}`);
-        await page.screenshot({
-          path: join(
-            evidence,
-            `${themeId}-${size.replace("@", "x")}-${id}.png`,
-          ),
-        });
+        await primary(`${tag} / ${name}`);
+        await shot(
+          join(evidence, `${themeId}-${size.replace("@", "x")}-${id}.png`),
+        );
         if (id === "auto_edit" || id === "edit" || id === "export") {
           await openDisclosures(page);
           await audit(`${tag} / ${name} with more open`);
@@ -212,11 +267,11 @@ try {
         size === "1200x800@1" ||
         (themeId === "light_canvas" && size === "1200x800@2")
       ) {
-        await go("Auto Edit", "auto_edit");
+        await go("Magic Edit", "auto_edit");
         // Claude is not signed in here: starting shows the plain failure.
         await page.locator("#auto-all-start").click();
         await expect(page.locator("#auto-all-error")).toBeVisible();
-        await audit(`${tag} / Auto Edit after a failed start`);
+        await audit(`${tag} / Magic Edit after a failed start`);
         await go("Review", "review");
         await page.locator("#check-draft-integrity").click();
         await expect(page.locator("#draft-integrity-result")).toBeVisible();
@@ -250,35 +305,67 @@ try {
         await page.locator(`[data-project-id="${projectId}"]`).click();
         await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
       }
+      // Import with the assistant drawer open and with a message banner showing
+      // (what a first run without Claude sets up): Continue must stay reachable.
+      await go("Import", "record_import");
+      const assistant = page.getByRole("button", {
+        name: "Claude",
+        exact: true,
+      });
+      if (await assistant.isVisible()) {
+        await assistant.click();
+        await audit(`${tag} / Import with the Claude drawer`);
+        // Below 900 px of page width the drawer covers the step by design.
+        if (w! / Number(scale) > 900)
+          await primary(`${tag} / Import with the Claude drawer`);
+        await shot(
+          join(
+            evidence,
+            `${themeId}-${size.replace("@", "x")}-import-drawer.png`,
+          ),
+        );
+        await assistant.click();
+      }
+      await page.evaluate(() => {
+        const banner = document.getElementById("error")!;
+        banner.textContent =
+          "Claude Code is not installed. Open Settings > Claude to set it up.";
+        banner.hidden = false;
+      });
+      await audit(`${tag} / Import with a message banner`);
+      await primary(`${tag} / Import with a message banner`);
+      await shot(
+        join(
+          evidence,
+          `${themeId}-${size.replace("@", "x")}-import-banner.png`,
+        ),
+      );
+      await page.evaluate(() => {
+        document.getElementById("error")!.hidden = true;
+      });
       // The assistant drawer and the source details.
-      await go("Edit", "edit");
+      await go("Refine", "edit");
       const claude = page.getByRole("button", { name: "Claude", exact: true });
       if (await claude.isVisible()) {
         await claude.click();
-        await audit(`${tag} / Edit with the Claude drawer`);
-        await page.screenshot({
-          path: join(
-            evidence,
-            `${themeId}-${size.replace("@", "x")}-drawer.png`,
-          ),
-        });
+        await audit(`${tag} / Refine with the Claude drawer`);
+        await shot(
+          join(evidence, `${themeId}-${size.replace("@", "x")}-drawer.png`),
+        );
         await claude.click();
       }
       const details = page.locator("#source-details");
       if (await details.isVisible()) {
         await details.click();
-        await audit(`${tag} / Edit with source details`);
+        await audit(`${tag} / Refine with source details`);
         await details.click();
       }
       // Settings, section by section.
       await page.getByRole("button", { name: "Settings" }).click();
       await audit(`${tag} / Settings Appearance`);
-      await page.screenshot({
-        path: join(
-          evidence,
-          `${themeId}-${size.replace("@", "x")}-settings.png`,
-        ),
-      });
+      await shot(
+        join(evidence, `${themeId}-${size.replace("@", "x")}-settings.png`),
+      );
       for (const [section, id] of [
         ["Claude", "settings-claude"],
         ["Codex", "settings-codex"],

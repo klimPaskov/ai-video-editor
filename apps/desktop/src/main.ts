@@ -1562,7 +1562,7 @@ async function start(): Promise<void> {
     if (activeProjectId !== projectId)
       throw new UserFacingError("The active project changed. Try again.");
     if (project.stage !== "auto_edit")
-      throw new UserFacingError("Switch to Auto Edit to transcribe locally.");
+      throw new UserFacingError("Switch to Magic Edit to transcribe locally.");
   };
   const activeTranscriptProject = async (projectId: string): Promise<void> => {
     if (activeProjectId !== projectId)
@@ -1574,7 +1574,7 @@ async function start(): Promise<void> {
       throw new UserFacingError("The active project changed. Try again.");
     if (project.stage !== "auto_edit" && project.stage !== "edit")
       throw new UserFacingError(
-        "Switch to Auto Edit or Edit to view the transcript.",
+        "Switch to Magic Edit or Refine to view the transcript.",
       );
   };
   const readTranscriptForTool = async (projectId: string) => {
@@ -2587,7 +2587,7 @@ async function start(): Promise<void> {
     if (activeProjectId !== request.id) throw new Error("Inactive project");
     if (request.stage !== "auto_edit" && transcription!.isRunning(request.id))
       throw new UserFacingError(
-        "Stop local transcription before leaving Auto Edit.",
+        "Stop local transcription before leaving Magic Edit.",
       );
     await projects.navigate(request.id, request.stage);
     return projectRuntime.view(request.id);
@@ -3563,7 +3563,7 @@ async function start(): Promise<void> {
       throw new UserFacingError("Reopen the project before restoring footage.");
     }
     if (project.stage !== "edit")
-      throw new UserFacingError("Switch to Edit to restore a source range.");
+      throw new UserFacingError("Switch to Refine to restore a source range.");
     if (activeProjectId !== request.projectId)
       throw new UserFacingError("The active project changed. Try again.");
     try {
@@ -3617,7 +3617,7 @@ async function start(): Promise<void> {
     }
     if (project.stage !== "edit")
       throw new UserFacingError(
-        "Switch to Edit to correct transcript wording.",
+        "Switch to Refine to correct transcript wording.",
       );
     if (activeProjectId !== request.projectId)
       throw new UserFacingError(
@@ -3706,7 +3706,7 @@ async function start(): Promise<void> {
     }
     if (project.stage !== "edit")
       throw new UserFacingError(
-        "Switch to Edit to cut selected transcript words.",
+        "Switch to Refine to cut selected transcript words.",
       );
     if (activeProjectId !== request.projectId)
       throw new UserFacingError(

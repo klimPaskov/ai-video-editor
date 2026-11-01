@@ -82,3 +82,9 @@ Support native menus, file dialogs, keyboard shortcuts, drag and drop, window re
 ## No redundant chrome
 
 Do not add hero headings, instructional subtitles, permanent Ready or Saved indicators, debug footers, repeated selected-tool names, or marketing language. Use one concise progress label when work is running. Default to a restrained dark theme with a single violet accent. Provider choice belongs in the compact AI settings/drawer only when more than one implemented provider is available, not on every editor screen. Model choice is scoped to the selected provider and its validated catalog.
+
+## Icons and copy (2026-11-01)
+
+One icon set in `apps/desktop/renderer/icons.ts`: a 24 px grid with a 3 px margin, a 1.75 stroke, round caps and joins, 1.5 corner radii and outline circles of radius 9; play, pause, stop and record are filled shapes of the same footprint. The Magic Edit step's wand has a sparkle at its tip. Copy is as short as it can be and still useful: a label or one short sentence, never a paragraph of explanation, except where a privacy disclosure must be complete. Step names are Import, Magic Edit, Refine, Review and Export (ADR 0003).
+
+In the Cinematic layout the step's primary action (Continue to Magic Edit, Edit my video, Continue to Export, Export) must always be visible and clickable, with the assistant drawer closed, with a long file name, and with a message banner showing; messages that normally sit in the page flow float over the full-window viewer. `tests/native/layout.test.ts` checks this in every theme and size.

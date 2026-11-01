@@ -51,16 +51,12 @@
           >
             <span class="tile-icon record" data-icon="record-large"></span
             ><span class="tile-title" aria-hidden="true">New recording</span
-            ><span class="tile-sub" aria-hidden="true"
-              >Capture your screen or camera</span
-            >
+            ><span class="tile-sub" aria-hidden="true">Screen or camera</span>
           </button>
           <button id="import" class="action-tile" aria-label="Import video">
             <span class="tile-icon" data-icon="folder-large"></span
             ><span class="tile-title" aria-hidden="true">Import video</span
-            ><span class="tile-sub" aria-hidden="true"
-              >Start with a video from your device</span
-            >
+            ><span class="tile-sub" aria-hidden="true">From your device</span>
           </button>
         </div>
         <section
@@ -97,7 +93,7 @@
                 <canvas id="frame" aria-label="Source frame"></canvas>
                 <p id="preview-message" hidden></p>
                 <p id="zoom-hint" class="zoom-hint" role="status" hidden>
-                  Click the picture where the zoom should point. Esc cancels.
+                  Click where the zoom should point. Esc cancels.
                 </p>
               </div>
               <aside id="inspector" aria-label="Source details" hidden>
@@ -131,24 +127,20 @@
                   <option value="gemini">Gemini API</option>
                 </select>
                 <p id="claude-context-notice">
-                  Requests and what Claude reads are sent to Anthropic: project
-                  and timeline details, the whole edited transcript (Claude
-                  keeps it in its project workspace), and small pictures of your
-                  edit that it asks to see, which show your footage. Earlier
-                  messages in this conversation are included in later turns.
-                  Your source audio and video files stay on this device.
+                  Claude receives your requests, project and timeline details,
+                  the transcript and small pictures of your edit. Earlier
+                  messages are included in later turns. Source audio and video
+                  stay on this device.
                 </p>
                 <p id="claude-api-notice" hidden>
-                  This Claude Code sign-in uses Anthropic Console API billing,
-                  so each turn you send can use paid credits.
+                  This sign-in uses Anthropic API billing: each turn can use
+                  paid credits.
                 </p>
                 <p id="codex-context-notice" hidden>
-                  Requests and the project information Codex reads are sent to
-                  OpenAI, including small pictures of your edit when it asks to
-                  see them. Speech work may include bounded local transcript
-                  text; transcript pages may remain in this conversation and be
-                  included in later turns. Your source audio and video files
-                  stay on this device.
+                  Codex receives your requests, project details and small
+                  pictures of your edit. Transcript text may stay in the
+                  conversation and be included in later turns. Source audio and
+                  video stay on this device.
                 </p>
                 <p id="codex-thread-status" role="status"></p>
                 <div id="codex-thread-messages" aria-live="polite"></div>
@@ -157,12 +149,10 @@
                   aria-label="Assistant activity"
                 ></ul>
                 <p id="api-turn-notice" hidden>
-                  Sending shares your request and project/timeline tool results
-                  with this provider. Speech work may also share local
-                  transcript text; transcript pages may remain in this
-                  conversation and be included in later turns. API calls can use
-                  paid credits and up to four model calls; source audio and
-                  video stay on this device.
+                  Sending shares your request and timeline details with this
+                  provider. Transcript text may stay in the conversation and be
+                  included in later turns. Calls can use paid credits; source
+                  audio and video stay on this device.
                 </p>
                 <button id="open-codex-thread">Open conversation</button>
                 <details id="claude-full-edit" hidden>
@@ -325,8 +315,7 @@
             <section id="auto-edit-actions" class="auto-edit-actions" hidden>
               <div id="auto-all" class="auto-all">
                 <p class="auto-all-lead">
-                  Claude cuts the video, adds graphics and captions, and
-                  balances the sound.
+                  Cuts, graphics, captions and sound, in one go.
                 </p>
                 <div class="auto-all-actions">
                   <button
@@ -369,7 +358,7 @@
                 <div id="magic-edit" class="magic-edit">
                   <div class="magic-edit-controls">
                     <span class="card-title" data-icon="wand"
-                      ><label for="magic-preset">Magic Edit</label></span
+                      ><label for="magic-preset">Rough cut</label></span
                     >
                     <select id="magic-preset">
                       <option value="gentle">Natural</option>
@@ -382,7 +371,7 @@
                       type="button"
                       data-icon="wand"
                     >
-                      Run Magic Edit
+                      Rough cut only
                     </button>
                     <button id="magic-stop" type="button" hidden>Stop</button>
                   </div>
@@ -391,7 +380,7 @@
                     id="magic-progress"
                     max="1000"
                     value="0"
-                    aria-label="Magic Edit progress"
+                    aria-label="Rough cut progress"
                     hidden
                   ></progress>
                   <p id="magic-status" role="status" hidden></p>
@@ -476,10 +465,7 @@
                 </p>
                 <details id="transcript-results" hidden>
                   <summary id="transcript-summary">Transcript</summary>
-                  <p id="transcript-timing-note">
-                    Word timings are local model estimates. Verify before
-                    editing.
-                  </p>
+                  <p id="transcript-timing-note">Word timings are estimates.</p>
                   <p id="transcript-language-note" hidden>
                     The local model did not identify a language.
                   </p>
@@ -490,8 +476,7 @@
                   <details id="speech-candidate-results" hidden>
                     <summary id="speech-candidate-summary">Speech cues</summary>
                     <p id="speech-candidate-note">
-                      Original local transcript cues. Preview selects a frame;
-                      no cut is applied.
+                      Preview jumps to the cue. Nothing is cut.
                     </p>
                     <p id="speech-candidate-error" role="alert" hidden></p>
                     <div id="speech-candidate-content"></div>
@@ -539,8 +524,7 @@
                   </button>
                 </div>
                 <p id="transcript-edit-note">
-                  Transcript text changes do not alter recorded audio. Undo
-                  shares the edit history.
+                  Text fixes do not change the audio. Undo covers them.
                 </p>
                 <p id="transcript-correction-status" role="status" hidden></p>
                 <p id="transcript-correction-error" role="alert" hidden></p>
@@ -1048,12 +1032,11 @@
         <section id="claude-settings" aria-label="Claude account" hidden>
           <p id="claude-account" role="status"></p>
           <p id="claude-disclosure">
-            Claude runs through Claude Code on this device. You sign in through
+            Claude runs through Claude Code on this device. You sign in with
             Anthropic in your browser; this app never receives your password or
-            sign-in token. During a turn you start, Claude may receive your
-            request, project and timeline details, the whole edited transcript
-            and small pictures of your edit (which show your footage). Your
-            source audio and video files stay on this device.
+            sign-in token. A turn you start shares your request, timeline
+            details, the transcript and small pictures of your edit. Source
+            audio and video stay on this device.
           </p>
           <div class="codex-actions">
             <button type="button" id="claude-sign-in" hidden>
@@ -1077,24 +1060,22 @@
             <label for="claude-rough-cut-model">Rough cut model</label
             ><select id="claude-rough-cut-model"></select>
           </div>
-          <label for="asset-policy">Material Claude may use</label
+          <label for="asset-policy">Material to use</label
           ><select id="asset-policy">
-            <option value="any">Any material, including copyrighted</option>
-            <option value="copyright_free">Copyright-free material only</option>
+            <option value="any">Any, including copyrighted</option>
+            <option value="copyright_free">Copyright-free only</option>
           </select>
           <p id="asset-policy-note" class="field-note">
-            Copyrighted material can get a video claimed, muted or blocked on
-            some platforms.
+            Copyrighted material can get a video claimed or blocked.
           </p>
         </section>
         <section id="codex-settings" aria-label="Codex account" hidden>
           <p id="codex-account" role="status"></p>
           <p id="codex-disclosure">
-            Codex may receive project instructions, bounded local transcript
-            pages, timeline state, requested preview frames and tool results
-            during a turn. Transcript pages may remain in thread history and be
-            included in later turns. Source audio/video stays on this device by
-            default.
+            Codex may receive project details, bounded local transcript pages,
+            timeline state and requested preview frames. Transcript pages may
+            stay in the thread and be included in later turns. Source
+            audio/video stays on this device by default.
           </p>
           <div class="codex-actions">
             <button type="button" id="codex-login" hidden>
@@ -1151,8 +1132,7 @@
             this device</label
           >
           <p id="api-provider-session-note" hidden>
-            Secure storage is unavailable; keys can be used for this session
-            only.
+            Secure storage is unavailable. The key lasts this session only.
           </p>
           <div class="codex-actions">
             <button type="button" id="api-provider-connect" disabled>
@@ -1168,8 +1148,7 @@
           </div>
           <p id="api-provider-error" role="alert" hidden></p>
           <p class="api-provider-disclosure">
-            A request can use paid API credits. Connecting a key does not start
-            one.
+            Requests can use paid API credits. Connecting does not start one.
           </p>
         </section>
         <p id="settings-error" role="alert" hidden></p>
@@ -1272,12 +1251,9 @@
         <label for="record-camera" class="field-label">Camera</label>
         <select id="record-camera"></select>
         <p id="record-camera-note" class="muted" hidden>
-          The camera is saved as its own video, so the editor can place it
-          anywhere on the screen, or full screen. It stays on this device.
+          Saved as its own video, so you can place it anywhere.
         </p>
-        <p id="record-note" class="muted">
-          Saved losslessly (FFV1 video, PCM audio) on this device.
-        </p>
+        <p id="record-note" class="muted">Saved losslessly on this device.</p>
         <div class="dialog-actions">
           <button type="button" id="record-cancel">Cancel</button
           ><button

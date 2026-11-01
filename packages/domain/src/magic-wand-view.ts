@@ -49,42 +49,42 @@ export interface MagicWandStartRequest extends MagicWandProjectRequest {
 export type MagicWandBlock = "signIn" | "outdated" | "missing" | "setup";
 
 export const magicWandIssues = Object.freeze({
-  busy: "Magic Edit is already running for this project.",
+  busy: "A rough cut is already running for this project.",
   transcription:
-    "Magic Edit needs a local transcript, and transcription did not finish. Try again from Auto Edit.",
-  noAudio: "Magic Edit needs a video with spoken audio.",
+    "The rough cut needs a transcript, and transcription did not finish. Try again from Magic Edit.",
+  noAudio: "The rough cut needs a video with speech.",
   changed:
-    "The draft changed while Magic Edit was running. Applied cuts are kept and can be undone.",
+    "The draft changed during the rough cut. Applied cuts are kept and can be undone.",
   failed:
-    "Magic Edit could not finish. Applied cuts are kept and can be undone.",
-  stopped: "Magic Edit stopped. Applied cuts are kept and can be undone.",
+    "The rough cut could not finish. Applied cuts are kept and can be undone.",
+  stopped: "Rough cut stopped. Applied cuts are kept and can be undone.",
   nothing: "The story edit found nothing more to cut for this preset.",
   limit:
-    "Your AI provider's usage limit was reached. Cuts made so far are kept; run Magic Edit again after it resets.",
+    "Your AI provider's usage limit was reached. Cuts made so far are kept; run the rough cut again after it resets.",
   claudeSignIn:
-    "The story edit was skipped. Sign in with your Claude account in Settings, then run Magic Edit again.",
+    "The story edit was skipped. Sign in with your Claude account in Settings, then run the rough cut again.",
   claudeOutdated:
-    "The story edit was skipped. Claude Code is out of date: run claude update in a terminal, choose Check again in Settings, then run Magic Edit again.",
+    "The story edit was skipped. Claude Code is out of date: run claude update in a terminal, choose Check again in Settings, then run the rough cut again.",
   claudeMissing:
-    "The story edit was skipped. Claude Code is not installed: install it from claude.com/claude-code, then run Magic Edit again.",
+    "The story edit was skipped. Claude Code is not installed: install it from claude.com/claude-code, then run the rough cut again.",
   claudeSetup:
-    "The story edit was skipped. Claude is not ready: open Settings, choose Check again under Claude, then run Magic Edit again.",
+    "The story edit was skipped. Claude is not ready: open Settings, choose Check again under Claude, then run the rough cut again.",
   codexSignIn:
-    "The story edit was skipped. Sign in to Codex in Settings, then run Magic Edit again.",
+    "The story edit was skipped. Sign in to Codex in Settings, then run the rough cut again.",
   codexSetup:
-    "The story edit was skipped. Codex is not ready: open Settings, reconnect Codex and choose a model, then run Magic Edit again.",
+    "The story edit was skipped. Codex is not ready: open Settings, reconnect Codex and choose a model, then run the rough cut again.",
   deepseekKey:
-    "The story edit was skipped. Add your DeepSeek key in Settings, then run Magic Edit again.",
+    "The story edit was skipped. Add your DeepSeek key in Settings, then run the rough cut again.",
   deepseekModel:
-    "The story edit was skipped. Choose a DeepSeek model in Settings, then run Magic Edit again.",
+    "The story edit was skipped. Choose a DeepSeek model in Settings, then run the rough cut again.",
   openaiKey:
-    "The story edit was skipped. Add your OpenAI API key in Settings, then run Magic Edit again.",
+    "The story edit was skipped. Add your OpenAI API key in Settings, then run the rough cut again.",
   openaiModel:
-    "The story edit was skipped. Choose an OpenAI API model in Settings, then run Magic Edit again.",
+    "The story edit was skipped. Choose an OpenAI API model in Settings, then run the rough cut again.",
   geminiKey:
-    "The story edit was skipped. Add your Gemini API key in Settings, then run Magic Edit again.",
+    "The story edit was skipped. Add your Gemini API key in Settings, then run the rough cut again.",
   geminiModel:
-    "The story edit was skipped. Choose a Gemini API model in Settings, then run Magic Edit again.",
+    "The story edit was skipped. Choose a Gemini API model in Settings, then run the rough cut again.",
 } as const);
 
 /** What to tell the user when the chosen connection cannot make the story edit. */

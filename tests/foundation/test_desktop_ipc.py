@@ -609,7 +609,7 @@ class DesktopIpcContractTests(unittest.TestCase):
         skipped = deepcopy(example)
         skipped['response']['value']['message'] = (
             'The story edit was skipped. Claude Code is out of date: run claude update in a terminal, '
-            'choose Check again in Settings, then run Magic Edit again.')
+            'choose Check again in Settings, then run the rough cut again.')
         self.valid(skipped)
 
     def test_export_channels_expose_file_names_only(self):

@@ -507,7 +507,7 @@ try {
   assert.ok(!conversation.includes(key));
 
   step = "shared-manual-undo";
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#undo-edit")).toBeVisible();
   await page.locator("#undo-edit").click();
   await expect

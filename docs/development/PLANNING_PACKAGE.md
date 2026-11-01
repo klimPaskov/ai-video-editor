@@ -11,7 +11,7 @@ A user can record or import a video, press Magic Wand, receive a useful non-dest
 ## Product principles
 
 1. **Native and focused.** One desktop window, no localhost UI, no browser product shell.
-2. **Step by step.** Home, then Record or Import, Auto Edit, Edit, Review, Export.
+2. **Step by step.** Home, then Import, Magic Edit, Refine, Review, Export.
 3. **Real tools.** Every visible control must work against the project model.
 4. **AI as an editor.** Claude, Codex and selected API providers can inspect disclosed context and propose guarded live draft edits.
 5. **Manual control remains.** Users can split, trim, restore, zoom, retime, caption, place B-roll, and undo.

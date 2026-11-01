@@ -78,7 +78,7 @@
     },
     {
       "screen_id": "S07",
-      "name": "Auto Edit",
+      "name": "Magic Edit",
       "step": "auto_edit",
       "primary_action": "Transcribe locally",
       "panel_policy": "one_context_panel",

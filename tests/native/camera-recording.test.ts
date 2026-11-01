@@ -127,7 +127,7 @@ try {
   result.frames = counts[0];
 
   step = "tools";
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await openDisclosures(page);
   await expect(page.locator("#camera-status")).toHaveText("Camera in sync");
   await expect(page.locator("#camera-add")).toBeHidden();

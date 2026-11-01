@@ -153,7 +153,7 @@ try {
   assert.ok(project);
 
   step = "cut-green";
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible();
   await seekTo(page, 1_000_000);
   await page.locator("#mark-in").click();

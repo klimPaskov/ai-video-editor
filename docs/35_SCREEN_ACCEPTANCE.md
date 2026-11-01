@@ -40,7 +40,7 @@
 - A corrupt file gives a specific repair route.
 - A tagged H.264/BT.709 import shows a native-size frame only after decode; unknown color or higher-precision paths remain explicitly unavailable. Source bytes stay unchanged. This still-frame check does not satisfy smooth A/V preview or multi-source append acceptance.
 
-## S07 Auto Edit
+## S07 Magic Edit
 
 - Magic Wand is the primary control.
 - Presets and switches are understandable without technical terms.

@@ -34,7 +34,7 @@ try {
   )[0]!;
   await page.locator(`#projects [data-project-id="${project.id}"]`).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 300_000 });
   await expect(page.locator("#preview-message")).toBeHidden({
     timeout: 120_000,

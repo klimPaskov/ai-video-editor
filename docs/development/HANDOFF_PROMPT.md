@@ -36,7 +36,7 @@ Read `CLAUDE.md`, `AGENTS.md`, `docs/development/AUTHORITATIVE_ORDER.md`, `docs/
 
 ## User constraints that remain binding
 
-Build a standalone packaged Electron desktop app with secure typed IPC and local storage. Follow Record or Import -> Auto Edit -> Edit -> Review -> Export. AI, Magic Wand and manual operations share one validated non-destructive transaction engine and Undo history. Authorized reversible edits can commit during a turn; timeline, controls and preview must reflect committed state. Sources remain immutable. Keep the UI restrained, with one relevant inspector or AI drawer, working controls, useful progress/errors and hidden technical logs. Transcript corrections do not resynthesize speech.
+Build a standalone packaged Electron desktop app with secure typed IPC and local storage. Follow Import -> Magic Edit -> Refine -> Review -> Export. AI, Magic Wand and manual operations share one validated non-destructive transaction engine and Undo history. Authorized reversible edits can commit during a turn; timeline, controls and preview must reflect committed state. Sources remain immutable. Keep the UI restrained, with one relevant inspector or AI drawer, working controls, useful progress/errors and hidden technical logs. Transcript corrections do not resynthesize speech.
 
 Default capture, intermediates and master output are lossless. Preserve dimensions, rational timing, precision and color metadata; verify FFV1/PCM decoded equality against canonical edited samples. Preview/sharing quality is separately opt-in and never master input. Ordinary H.264/AAC and ProRes 422 HQ are not mathematically lossless. Unsupported paths require an honest block or explicit conversion.
 

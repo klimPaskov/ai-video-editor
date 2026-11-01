@@ -46,7 +46,7 @@ Use a fake protocol server for parser and recovery tests. Keep a separate real a
 
 The `--batch` route of `tests/native/codex-range-cut.test.ts` checks a real Luna/high dynamic host call with two ordered ranges, one across the source join and one earlier in the first source. Synthetic and both privately staged supplied recordings passed one committed two-operation transaction during the turn, exact edited join frame, shared manual Undo, reopen, original/managed source and baseline integrity. The supplied run's actual guest Electron window was visually inspected. These are requested time cuts, not semantic speech cleanup or A/V join certification.
 
-For a fresh large-media run, the harness must navigate Home and reopen the combined project after the second import, then wait for committed duration and Edit controls before sending the Codex turn. A final-package rerun passed with that focus/wait sequence; earlier attempts failed before mutation when the first project remained selected or its Edit stage had not settled.
+For a fresh large-media run, the harness must navigate Home and reopen the combined project after the second import, then wait for committed duration and Edit controls before sending the Codex turn. A final-package rerun passed with that focus/wait sequence; earlier attempts failed before mutation when the first project remained selected or its Refine stage had not settled.
 
 ## API-provider fixtures
 
