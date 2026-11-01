@@ -3329,11 +3329,10 @@ function renderCodexThread(view: CodexThreadView): void {
   for (const item of view.messages) {
     const message = document.createElement("p");
     message.className = `codex-message ${item.role}`;
-    const role = document.createElement("strong");
-    role.textContent = item.role === "user" ? "You" : "Codex";
+    message.setAttribute("aria-label", item.role === "user" ? "You" : "Codex");
     const text = document.createElement("span");
     text.textContent = item.text;
-    message.append(role, text);
+    message.append(text);
     messages.append(message);
   }
   const activity = element("codex-thread-activity");
@@ -3384,11 +3383,13 @@ function renderApiThread(view: ApiThreadView): void {
   for (const item of view.messages) {
     const message = document.createElement("p");
     message.className = `codex-message ${item.role}`;
-    const role = document.createElement("strong");
-    role.textContent = item.role === "user" ? "You" : assistantName();
+    message.setAttribute(
+      "aria-label",
+      item.role === "user" ? "You" : assistantName(),
+    );
     const text = document.createElement("span");
     text.textContent = item.text;
-    message.append(role, text);
+    message.append(text);
     messages.append(message);
   }
   element("codex-thread-activity").replaceChildren();
@@ -3434,11 +3435,10 @@ function renderClaudeThread(view: ClaudeThreadView): void {
   for (const item of entries) {
     const message = document.createElement("p");
     message.className = `codex-message ${item.role}`;
-    const role = document.createElement("strong");
-    role.textContent = item.role === "user" ? "You" : "Claude";
+    message.setAttribute("aria-label", item.role === "user" ? "You" : "Claude");
     const text = document.createElement("span");
     text.textContent = item.text;
-    message.append(role, text);
+    message.append(text);
     messages.append(message);
   }
   const activity = element("codex-thread-activity");

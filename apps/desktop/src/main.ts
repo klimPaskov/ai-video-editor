@@ -647,10 +647,18 @@ async function start(): Promise<void> {
       },
     });
   });
+  // Only the player's full-screen button is allowed, and only for the app's
+  // own pages; every other permission stays denied.
+  const ownPage = (url: string | undefined) =>
+    !!url && url.startsWith(`${appIdentity.urlScheme}://`);
   session.defaultSession.setPermissionRequestHandler(
-    (_contents, _permission, callback) => callback(false),
+    (_contents, permission, callback, details) =>
+      callback(permission === "fullscreen" && ownPage(details.requestingUrl)),
   );
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionCheckHandler(
+    (_contents, permission, requestingOrigin) =>
+      permission === "fullscreen" && ownPage(requestingOrigin),
+  );
   session.defaultSession.on("will-download", (event) => event.preventDefault());
   // The app's pages (and the sealed compositions in them) never reach the
   // network: they load packaged content over the app scheme only. This
@@ -1239,9 +1247,59 @@ async function start(): Promise<void> {
       window?.focus();
     }
   });
+  // During a take the window shrinks to a small bar in a corner and is kept
+  // out of the capture, so the controls are never in the middle of the
+  // recorded screen. Everything is put back when the take ends.
+  let beforeRecording: {
+    bounds: Electron.Rectangle;
+    maximized: boolean;
+    minimum: [number, number];
+  } | null = null;
+  const collapseForRecording = () => {
+    if (!window || beforeRecording) return;
+    beforeRecording = {
+      bounds: window.getNormalBounds(),
+      maximized: window.isMaximized(),
+      minimum: window.getMinimumSize() as [number, number],
+    };
+    if (window.isMaximized()) window.unmaximize();
+    const area = screen.getDisplayMatching(window.getBounds()).workArea;
+    const width = Math.round(380 * committedScale);
+    const height = Math.round(96 * committedScale);
+    window.setMinimumSize(1, 1);
+    window.setResizable(false);
+    window.setContentProtection(true);
+    window.setAlwaysOnTop(true, "screen-saver");
+    window.setBounds({
+      width,
+      height,
+      x: area.x + area.width - width - 16,
+      y: area.y + area.height - height - 16,
+    });
+  };
+  const restoreAfterRecording = () => {
+    const saved = beforeRecording;
+    beforeRecording = null;
+    if (!window || !saved) return;
+    window.setAlwaysOnTop(false);
+    window.setContentProtection(false);
+    window.setResizable(true);
+    window.setMinimumSize(...saved.minimum);
+    window.setBounds(saved.bounds);
+    if (saved.maximized) window.maximize();
+    window.focus();
+  };
   register(channels.recordingStart, async (request) => {
     assertRecordingStartRequest(request);
-    return recording(() => recorder!.start(request));
+    collapseForRecording();
+    // Let the bar settle on screen before the first frame is captured.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    try {
+      return await recording(() => recorder!.start(request));
+    } catch (error) {
+      restoreAfterRecording();
+      throw error;
+    }
   });
   register(channels.recordingPause, async (request) => {
     assertEmptyRequest(request);
@@ -1253,11 +1311,19 @@ async function start(): Promise<void> {
   });
   register(channels.recordingStop, async (request) => {
     assertEmptyRequest(request);
-    return recording(() => recorder!.stop());
+    try {
+      return await recording(() => recorder!.stop());
+    } finally {
+      restoreAfterRecording();
+    }
   });
   register(channels.recordingCancel, async (request) => {
     assertEmptyRequest(request);
-    return recording(() => recorder!.cancel());
+    try {
+      return await recording(() => recorder!.cancel());
+    } finally {
+      restoreAfterRecording();
+    }
   });
   // Leftovers of an export or picture render that was interrupted last time.
   void sweepTemporaryFolders().catch(() => undefined);

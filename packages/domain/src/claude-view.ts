@@ -94,9 +94,9 @@ export const claudeEfforts: readonly ClaudeEffort[] = Object.freeze([
 /** Fixed user-facing connection issues; raw CLI output never reaches the renderer. */
 export const claudeIssues = Object.freeze({
   missing:
-    "Claude Code was not found. Install it from Anthropic, then choose Check again.",
+    "Claude Code is not installed. Install it from claude.com/claude-code, then choose Check again.",
   outdated:
-    "This Claude Code version is too old. Update Claude Code, then choose Check again.",
+    "Claude Code is out of date. Open a terminal, run: claude update, then choose Check again.",
   runtime:
     "Claude Code could not be started. Check the installation, then choose Check again.",
   status: "Claude sign-in status could not be read. Choose Check again.",

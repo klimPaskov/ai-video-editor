@@ -99,6 +99,17 @@ Function .onInit
     MessageBox MB_OK|MB_ICONSTOP "${PRODUCT_NAME} needs Windows 10 or newer."
     Abort
   ${EndIf}
+
+  ; Say so when the app is already installed, and ask before replacing it.
+  ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $0 != ""
+  ${AndIf} ${FileExists} "$0\${EXE_NAME}"
+    ReadRegStr $1 HKCU "${UNINSTALL_KEY}" "DisplayVersion"
+    ${IfNot} ${Silent}
+      MessageBox MB_YESNO|MB_ICONQUESTION "${PRODUCT_NAME} $1 is already installed.$\r$\n$\r$\nReplace it with ${PRODUCT_VERSION}? Your projects and settings are kept." IDYES +2
+      Abort
+    ${EndIf}
+  ${EndIf}
 FunctionEnd
 
 Section "Install"

@@ -7397,8 +7397,8 @@
         "message": {
           "enum": [
             null,
-            "Claude Code was not found. Install it from Anthropic, then choose Check again.",
-            "This Claude Code version is too old. Update Claude Code, then choose Check again.",
+            "Claude Code is not installed. Install it from claude.com/claude-code, then choose Check again.",
+            "Claude Code is out of date. Open a terminal, run: claude update, then choose Check again.",
             "Claude Code could not be started. Check the installation, then choose Check again.",
             "Claude sign-in status could not be read. Choose Check again.",
             "Sign-in did not finish. Choose Sign in with Claude to try again.",
