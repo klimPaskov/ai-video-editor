@@ -97,6 +97,8 @@ export const recordingIssues = Object.freeze({
   device: "The selected screen or microphone is no longer available.",
   start:
     "Recording could not start. Check screen and microphone permissions and try again.",
+  microphone:
+    "The microphone could not be opened. Close other apps that use it, or choose another microphone, then try again.",
   interrupted:
     "Recording stopped unexpectedly. The part recorded so far was kept.",
   finish: "The recording could not be saved. Try recording again.",

@@ -35,7 +35,8 @@ function recorder(
     root: join(root, "recordings"),
     platform,
     env,
-    importFile: (file) => library.importFile(file),
+    importFile: (file, adopt) =>
+      library.importFile(file, undefined, adopt ? { adopt } : {}),
     displays: () => [
       {
         id: "display-1",

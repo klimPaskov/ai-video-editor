@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { open, readFile, rename, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { killProcessTree } from "./process-tree.ts";
 import {
@@ -48,6 +49,19 @@ export interface FinishedRecording {
   frames: number;
   durationUs: number;
   record: string;
+  /** SHA-256 of `path`, computed once so the library need not read it again. */
+  sha256: string;
+}
+
+/** Why a capture did not start; main maps it to a plain, actionable message. */
+export type CaptureStartFailure = "microphone" | "screen" | "timeout";
+
+export class CaptureStartError extends Error {
+  readonly failure: CaptureStartFailure;
+  constructor(failure: CaptureStartFailure) {
+    super("The capture could not be started.");
+    this.failure = failure;
+  }
 }
 
 export interface SessionOptions {
@@ -74,6 +88,71 @@ interface Running {
   stopping: boolean;
   done: Promise<void>;
   counters: CaptureCounters;
+  /** FFmpeg's final "progress=end" arrived, so `counters.frames` is exact. */
+  ended: boolean;
+  /** Called once when the first frame has been captured. */
+  onFrame?: () => void;
+}
+
+const lockedCodes = new Set(["EBUSY", "EPERM", "EACCES"]);
+
+/**
+ * Renames a file, waiting out the short lock Windows (antivirus, search
+ * indexing) keeps on a file that was just written.
+ */
+export async function renameWithRetry(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (attempt >= 8 || !code || !lockedCodes.has(code)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 75 * (attempt + 1)));
+    }
+  }
+}
+
+/** SHA-256 of a file, read in large blocks (the 64 KiB default is slow). */
+export async function hashFile(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path, {
+    highWaterMark: 8 * 1024 * 1024,
+  }))
+    hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+
+/** Runs `tasks` with at most `limit` at once, keeping result order. */
+async function pooled<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number,
+): Promise<T[]> {
+  const results: T[] = new Array<T>(tasks.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+      while (next < tasks.length) {
+        const index = next++;
+        results[index] = await tasks[index]!();
+      }
+    }),
+  );
+  return results;
+}
+
+/** Which input an early FFmpeg exit blames, from its own error text. */
+function startFailure(
+  stderr: string,
+  hasMicrophone: boolean,
+): CaptureStartFailure {
+  return hasMicrophone &&
+    /dshow|audio=|pulse|alsa|avfoundation|Could not run graph|Error opening input/iu.test(
+      stderr,
+    ) &&
+    !/gdigrab|x11grab|screen capture/iu.test(stderr)
+    ? "microphone"
+    : "screen";
 }
 
 /**
@@ -138,6 +217,8 @@ export class CaptureSession {
   private readonly frameRate: number;
   private readonly createdAt = new Date().toISOString();
   private saving: Promise<void> = Promise.resolve();
+  /** Frame counts FFmpeg reported at a clean stop; no re-count needed. */
+  private readonly exactFrames = new Map<string, number>();
 
   constructor(options: SessionOptions) {
     this.options = options;
@@ -261,10 +342,25 @@ export class CaptureSession {
     };
   }
 
-  /** Starts (or resumes with) a new capture segment. */
+  /**
+   * Starts (or resumes with) a new capture segment. A device that is briefly
+   * busy makes FFmpeg exit at once; that is retried one time.
+   */
   async record(): Promise<void> {
     if (this.current || !["paused"].includes(this.status))
       throw new Error("Recording is already running.");
+    try {
+      await this.launch();
+    } catch (error) {
+      if (!(error instanceof CaptureStartError) || error.failure === "timeout")
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      this.status = "paused";
+      await this.launch();
+    }
+  }
+
+  private async launch(): Promise<void> {
     const file = join(
       this.options.directory,
       `segment-${String(this.segments.length + 1).padStart(3, "0")}.mkv`,
@@ -294,6 +390,7 @@ export class CaptureSession {
       child,
       stderr: "",
       stopping: false,
+      ended: false,
       counters: { frames: 0, duplicated: 0, dropped: 0 },
       record: {
         file,
@@ -311,6 +408,8 @@ export class CaptureSession {
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       running.counters = parseProgress(chunk, running.counters);
+      if (chunk.includes("progress=end")) running.ended = true;
+      if (running.counters.frames > 0) running.onFrame?.();
       this.options.onUpdate?.();
     });
     child.stderr.setEncoding("utf8");
@@ -323,19 +422,34 @@ export class CaptureSession {
     }).then(() => this.closed(running));
     this.current = running;
     this.status = "recording";
-    // The capture must actually produce frames before the take counts as started.
-    const deadline = Date.now() + 10_000;
-    while (running.counters.frames === 0 && this.current === running) {
-      if (Date.now() > deadline) {
-        await this.end();
-        this.status = "failed";
-        throw new Error("The screen could not be captured.");
-      }
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    if (this.current !== running) {
-      this.status = "failed";
-      throw new Error("The screen could not be captured.");
+    // The capture must actually produce frames before the take counts as
+    // started. The wait ends on the first frame, not on a polling tick.
+    const outcome = await new Promise<"frame" | "closed" | "timeout">(
+      (resolve) => {
+        const timer = setTimeout(() => resolve("timeout"), 10_000);
+        running.onFrame = () => {
+          clearTimeout(timer);
+          resolve("frame");
+        };
+        void running.done.then(() => {
+          clearTimeout(timer);
+          resolve("closed");
+        });
+      },
+    );
+    if (outcome !== "frame" || this.current !== running) {
+      if (outcome === "timeout") await this.end();
+      else await running.done;
+      // A segment that never captured a frame is not part of the take.
+      const index = this.segments.indexOf(running.record);
+      if (index >= 0) this.segments.splice(index, 1);
+      await rm(file, { force: true }).catch(() => undefined);
+      this.status = outcome === "timeout" ? "failed" : "paused";
+      throw new CaptureStartError(
+        outcome === "timeout"
+          ? "timeout"
+          : startFailure(running.stderr, !!this.options.request.microphone),
+      );
     }
     this.saveTake();
     this.options.onUpdate?.();
@@ -351,6 +465,8 @@ export class CaptureSession {
       ? (starts[1] ?? null)
       : null;
     running.record.interrupted = !running.stopping;
+    if (running.stopping && running.ended && running.counters.frames > 0)
+      this.exactFrames.set(running.record.file, running.counters.frames);
     this.segments.push(running.record);
     if (this.current === running) {
       this.current = null;
@@ -383,6 +499,30 @@ export class CaptureSession {
     this.status = "cancelled";
   }
 
+  /** Whether a segment is tagged exactly as the stream-copy remux would tag it. */
+  private async hasCaptureColor(
+    file: string,
+    probe: (executable: string, args: string[]) => Promise<string>,
+  ): Promise<boolean> {
+    const tags = await probe(this.options.ffprobe, [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_entries",
+      "stream=color_range,color_space,color_primaries,color_transfer",
+      "-of",
+      "default=nw=1",
+      file,
+    ]).catch(() => "");
+    return (
+      tags.includes("color_range=pc") &&
+      tags.includes("color_space=gbr") &&
+      tags.includes("color_primaries=bt709") &&
+      tags.includes("color_transfer=iec61966-2-1")
+    );
+  }
+
   /** Stops, aligns and joins the take; returns the finished lossless file. */
   async stop(): Promise<FinishedRecording> {
     await this.end();
@@ -390,116 +530,135 @@ export class CaptureSession {
     this.status = "finishing";
     this.options.onUpdate?.();
     try {
-      const usable: SegmentRecord[] = [];
-      const aligned: string[] = [];
-      const fd = 1;
       const fn = this.frameRate;
+      const microphone = this.options.request.microphone;
+      // Frame counts: a clean stop already reported its exact count, so the
+      // file need not be read again; anything else is counted by FFmpeg.
+      const counts = await Promise.all(
+        this.segments.map(async (segment) => {
+          const known = this.exactFrames.get(segment.file);
+          if (known !== undefined) return known;
+          const counted = await run(this.options.ffprobe, [
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-count_packets",
+            "-show_entries",
+            "stream=nb_read_packets",
+            "-of",
+            "csv=p=0",
+            segment.file,
+          ]).catch(() => "0");
+          return Number(counted.trim());
+        }),
+      );
+      const usable: SegmentRecord[] = [];
+      const counted: number[] = [];
       for (const [index, segment] of this.segments.entries()) {
-        const counted = await run(this.options.ffprobe, [
-          "-v",
-          "error",
-          "-select_streams",
-          "v:0",
-          "-count_packets",
-          "-show_entries",
-          "stream=nb_read_packets",
-          "-of",
-          "csv=p=0",
-          segment.file,
-        ]).catch(() => "0");
-        const frames = Number(counted.trim());
+        const frames = counts[index]!;
         if (!Number.isSafeInteger(frames) || frames <= 0) continue;
         segment.frames = frames;
-        const target = join(this.options.directory, `aligned-${index + 1}.mkv`);
-        const samples = (frames * captureSampleRate * fd) / fn;
-        const args = [
-          "-hide_banner",
-          "-nostdin",
-          "-loglevel",
-          "error",
-          "-i",
-          segment.file,
-          "-map",
-          "0:v:0",
-          "-c:v",
-          "copy",
-        ];
-        if (
-          this.options.request.microphone &&
-          segment.audioStartSeconds !== null
-        ) {
-          const filter = audioAlignmentFilter({
-            videoStartSeconds: segment.videoStartSeconds ?? 0,
-            audioStartSeconds: segment.audioStartSeconds,
-          });
-          segment.audioOffsetSamples = Math.round(
-            ((segment.audioStartSeconds ?? 0) -
-              (segment.videoStartSeconds ?? 0)) *
-              captureSampleRate,
-          );
-          args.push(
-            "-map",
-            "0:a:0",
-            "-af",
-            // Exactly one video duration of audio per segment keeps joins exact.
-            `${filter},atrim=end_sample=${samples},apad=whole_len=${samples}`,
-            "-c:a",
-            "pcm_s16le",
-          );
-        }
-        args.push(
-          ...captureColor,
-          "-fflags",
-          "+bitexact",
-          "-f",
-          "matroska",
-          target,
-        );
-        await run(this.options.ffmpeg, args);
         usable.push(segment);
-        aligned.push(target);
+        counted.push(index);
       }
-      if (aligned.length === 0) throw new Error("Nothing was recorded.");
+      if (usable.length === 0) throw new Error("Nothing was recorded.");
       const finalPath = join(this.options.directory, "recording.mkv");
-      if (aligned.length === 1) await rename(aligned[0]!, finalPath);
-      else {
-        const list = join(this.options.directory, "segments.txt");
-        await writeFile(
-          list,
-          aligned
-            .map((file) => `file '${file.replaceAll("'", "'\\''")}'`)
-            .join("\n") + "\n",
+      if (
+        usable.length === 1 &&
+        !microphone &&
+        (await this.hasCaptureColor(usable[0]!.file, run))
+      ) {
+        // One video-only segment that already carries the capture's colour
+        // tags is the finished lossless file: it is renamed, not rewritten.
+        await renameWithRetry(usable[0]!.file, finalPath);
+      } else {
+        // Segments are independent, so they are aligned a few at a time.
+        const aligned = await pooled(
+          usable.map((segment, position) => async () => {
+            const target = join(
+              this.options.directory,
+              `aligned-${counted[position]! + 1}.mkv`,
+            );
+            const samples = (segment.frames * captureSampleRate) / fn;
+            const args = [
+              "-hide_banner",
+              "-nostdin",
+              "-loglevel",
+              "error",
+              "-i",
+              segment.file,
+              "-map",
+              "0:v:0",
+              "-c:v",
+              "copy",
+            ];
+            if (microphone && segment.audioStartSeconds !== null) {
+              const filter = audioAlignmentFilter({
+                videoStartSeconds: segment.videoStartSeconds ?? 0,
+                audioStartSeconds: segment.audioStartSeconds,
+              });
+              segment.audioOffsetSamples = Math.round(
+                ((segment.audioStartSeconds ?? 0) -
+                  (segment.videoStartSeconds ?? 0)) *
+                  captureSampleRate,
+              );
+              args.push(
+                "-map",
+                "0:a:0",
+                "-af",
+                // Exactly one video duration of audio per segment keeps joins exact.
+                `${filter},atrim=end_sample=${samples},apad=whole_len=${samples}`,
+                "-c:a",
+                "pcm_s16le",
+              );
+            }
+            args.push(
+              ...captureColor,
+              "-fflags",
+              "+bitexact",
+              "-f",
+              "matroska",
+              target,
+            );
+            await run(this.options.ffmpeg, args);
+            return target;
+          }),
+          3,
         );
-        await run(this.options.ffmpeg, [
-          "-hide_banner",
-          "-nostdin",
-          "-loglevel",
-          "error",
-          "-f",
-          "concat",
-          "-safe",
-          "0",
-          "-i",
-          list,
-          "-c",
-          "copy",
-          ...captureColor,
-          "-fflags",
-          "+bitexact",
-          "-f",
-          "matroska",
-          finalPath,
-        ]);
+        if (aligned.length === 1) await renameWithRetry(aligned[0]!, finalPath);
+        else {
+          const list = join(this.options.directory, "segments.txt");
+          await writeFile(
+            list,
+            aligned
+              .map((file) => `file '${file.replaceAll("'", "'\\''")}'`)
+              .join("\n") + "\n",
+          );
+          await run(this.options.ffmpeg, [
+            "-hide_banner",
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            list,
+            "-c",
+            "copy",
+            ...captureColor,
+            "-fflags",
+            "+bitexact",
+            "-f",
+            "matroska",
+            finalPath,
+          ]);
+        }
       }
       const frames = usable.reduce((sum, segment) => sum + segment.frames, 0);
-      const hash = createHash("sha256");
-      const handle = await open(finalPath, "r");
-      try {
-        for await (const chunk of handle.createReadStream())
-          hash.update(chunk as Buffer);
-      } finally {
-        await handle.close();
-      }
+      const sha256 = await hashFile(finalPath);
       const record = join(this.options.directory, "session.json");
       await writeFile(
         record,
@@ -516,7 +675,7 @@ export class CaptureSession {
             segments: usable,
             pauses: this.pauses,
             frames,
-            output_sha256: hash.digest("hex"),
+            output_sha256: sha256,
           },
           null,
           2,
@@ -530,6 +689,7 @@ export class CaptureSession {
         frames,
         durationUs: Math.round((frames * 1_000_000) / fn),
         record,
+        sha256,
       };
     } catch (error) {
       this.status = "failed";

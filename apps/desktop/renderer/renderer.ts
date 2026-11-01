@@ -1585,13 +1585,15 @@ async function createProject(
   try {
     const reply = await window.desktop.createProject({ id: media.id });
     if (generation !== routeGeneration) return;
-    await loadLibrary();
-    if (generation !== routeGeneration) return;
     if (!reply.ok) {
+      await loadLibrary();
+      if (generation !== routeGeneration) return;
       showError(reply.message);
       return;
     }
+    // The new project opens at once; the home lists refresh behind it.
     selectProject(reply.value);
+    void loadLibrary().catch(() => undefined);
   } catch {
     if (generation === routeGeneration)
       showError(

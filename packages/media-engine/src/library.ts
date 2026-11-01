@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
+import type { Stats } from "node:fs";
 import {
   lstat,
   mkdir,
@@ -7,9 +8,11 @@ import {
   readFile,
   readdir,
   realpath,
+  rename,
   writeFile,
 } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve } from "node:path";
+import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -78,11 +81,33 @@ async function hash(path: string, signal?: AbortSignal): Promise<string> {
     path,
     constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
   );
-  for await (const chunk of handle.createReadStream()) {
+  // Large blocks: the 64 KiB default makes hashing a multi-gigabyte master
+  // several times slower.
+  for await (const chunk of handle.createReadStream({
+    highWaterMark: 8 * 1024 * 1024,
+  })) {
     assertNotCancelled(signal);
     digest.update(chunk as Buffer);
   }
   return digest.digest("hex");
+}
+/** Identity of a file's current bytes: changes whenever it is written. */
+function signature(stat: Stats): string {
+  return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+}
+const retryableRename = new Set(["EBUSY", "EPERM", "EACCES"]);
+/** Moves a file; Windows briefly locks a file that was just written. */
+async function moveWithRetry(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (attempt >= 8 || !code || !retryableRename.has(code)) throw error;
+      await new Promise((done) => setTimeout(done, 75 * (attempt + 1)));
+    }
+  }
 }
 type PreviewProfile = "native-bgra" | "h264-yuv420p";
 function previewProfile(
@@ -202,6 +227,15 @@ export class MediaLibrary {
     Promise<PresentationTiming>
   >();
   private readonly thumbnails = new Map<string, Promise<MediaFrame>>();
+  /**
+   * Managed sources whose full SHA-256 was checked by this process, with the
+   * file identity at that time. While the identity is unchanged the bytes
+   * cannot have changed, so later checks need no further full read.
+   */
+  private readonly verified = new Map<
+    string,
+    { signature: string; sha256: string }
+  >();
   constructor(
     root: string,
     options: { ffmpeg?: string; ffprobe?: string } = {},
@@ -248,22 +282,50 @@ export class MediaLibrary {
     assertMediaList(result);
     return result;
   }
-  async verifiedSource(id: string): Promise<VerifiedLibrarySource> {
-    await this.initialize();
-    const entry = await this.entry(id);
-    const managedPath = join(this.root, "assets", entry.source.file);
-    const stat = await lstat(managedPath);
+  /** Throws unless the managed file still has the indexed bytes. */
+  private async assertIntact(
+    id: string,
+    path: string,
+    source: Entry["source"],
+    stat: Stats,
+    signal?: AbortSignal,
+  ): Promise<void> {
     if (
       !stat.isFile() ||
       stat.isSymbolicLink() ||
       stat.nlink !== 1 ||
-      stat.size !== entry.source.size ||
-      (await hash(managedPath)) !== entry.source.sha256
+      stat.size !== source.size
     )
       throw new MediaError(
         "FIDELITY_MISMATCH",
         "The managed source has changed.",
       );
+    const known = this.verified.get(id);
+    if (known?.signature === signature(stat) && known.sha256 === source.sha256)
+      return;
+    if ((await hash(path, signal)) !== source.sha256)
+      throw new MediaError(
+        "FIDELITY_MISMATCH",
+        "The managed source has changed.",
+      );
+    // Hashing read the file once; it only counts if nothing wrote meanwhile.
+    const after = await lstat(path);
+    if (signature(after) !== signature(stat))
+      throw new MediaError(
+        "FIDELITY_MISMATCH",
+        "The managed source changed during verification.",
+      );
+    this.verified.set(id, {
+      signature: signature(stat),
+      sha256: source.sha256,
+    });
+  }
+  async verifiedSource(id: string): Promise<VerifiedLibrarySource> {
+    await this.initialize();
+    const entry = await this.entry(id);
+    const managedPath = join(this.root, "assets", entry.source.file);
+    const stat = await lstat(managedPath);
+    await this.assertIntact(id, managedPath, entry.source, stat);
     const result = await runProcess({
       executable: this.ffprobe,
       args: [
@@ -286,7 +348,6 @@ export class MediaLibrary {
         "FIDELITY_MISMATCH",
         "The stored source measurements no longer match the media.",
       );
-    const afterHash = await hash(managedPath);
     const after = await lstat(managedPath);
     if (
       !after.isFile() ||
@@ -296,8 +357,7 @@ export class MediaLibrary {
       after.dev !== stat.dev ||
       after.ino !== stat.ino ||
       after.mtimeMs !== stat.mtimeMs ||
-      after.ctimeMs !== stat.ctimeMs ||
-      afterHash !== entry.source.sha256
+      after.ctimeMs !== stat.ctimeMs
     )
       throw new MediaError(
         "FIDELITY_MISMATCH",
@@ -416,6 +476,7 @@ export class MediaLibrary {
   async importFile(
     sourcePath: string,
     signal?: AbortSignal,
+    options: { adopt?: { sha256: string } } = {},
   ): Promise<MediaSummary> {
     await this.initialize();
     assertNotCancelled(signal);
@@ -423,33 +484,122 @@ export class MediaLibrary {
     await regular(sourcePath);
     const size = (await lstat(sourcePath)).size;
     if (size <= 0 || size > 100 * 1024 ** 3) invalid();
-    const originalHash = await hash(sourcePath, signal);
     const id = randomUUID();
     const file = `${id}.media`;
     const target = join(this.root, "assets", file);
-    const sourceHandle = await open(
-      sourcePath,
-      constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
-    );
-    try {
-      const destination = await open(target, "wx", 0o600);
-      await pipeline(
-        sourceHandle.createReadStream(),
-        destination.createWriteStream(),
-        signal ? { signal } : {},
-      );
-    } finally {
-      await sourceHandle.close();
+    let originalHash: string;
+    /**
+     * Adoption: the app's own just-finished recording (private folder, the
+     * recorder already hashed it) is moved into the library instead of
+     * copied and re-read. The index records that hash, and every later use
+     * checks the file against it, so a wrong value can only fail closed.
+     */
+    let moved = false;
+    if (options.adopt) {
+      if (!/^[a-f0-9]{64}$/u.test(options.adopt.sha256)) invalid();
+      try {
+        await moveWithRetry(sourcePath, target);
+        moved = true;
+      } catch (error) {
+        // Another volume cannot be renamed into; copy (and verify) instead.
+        if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+      }
     }
-    assertNotCancelled(signal);
-    if (
-      (await hash(target, signal)) !== originalHash ||
-      (await hash(sourcePath, signal)) !== originalHash
-    )
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "Source changed during import; no media was indexed.",
+    let published = false;
+    try {
+      let probe: unknown;
+      if (moved) {
+        originalHash = options.adopt!.sha256;
+        probe = await this.probe(target, signal);
+      } else {
+        // The source is hashed while it is copied: one read, not two.
+        const digest = createHash("sha256");
+        const sourceHandle = await open(
+          sourcePath,
+          constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
+        );
+        try {
+          const destination = await open(target, "wx", 0o600);
+          await pipeline(
+            sourceHandle.createReadStream({ highWaterMark: 4 * 1024 * 1024 }),
+            new Transform({
+              transform(chunk: Buffer, _encoding, done) {
+                digest.update(chunk);
+                done(null, chunk);
+              },
+            }),
+            destination.createWriteStream({ highWaterMark: 4 * 1024 * 1024 }),
+            signal ? { signal } : {},
+          );
+        } finally {
+          await sourceHandle.close();
+        }
+        assertNotCancelled(signal);
+        originalHash = digest.digest("hex");
+        // The copy, the source (unchanged while read) and the container
+        // measurements are independent checks, so they run together.
+        const [copied, again, measured] = await Promise.all([
+          hash(target, signal),
+          hash(sourcePath, signal),
+          this.probe(target, signal),
+        ]);
+        if (copied !== originalHash || again !== originalHash)
+          throw new MediaError(
+            "FIDELITY_MISMATCH",
+            "Source changed during import; no media was indexed.",
+          );
+        probe = measured;
+      }
+      if (
+        !object(probe) ||
+        !Array.isArray(probe.streams) ||
+        !object(probe.format)
+      )
+        invalid();
+      const summary: MediaSummary = {
+        id,
+        name: basename(sourcePath),
+        ...mediaMeasurements(probe),
+      };
+      assertMediaSummary(summary);
+      const entry: Entry = {
+        version: 1,
+        summary,
+        source: { file, originalPath: sourcePath, sha256: originalHash, size },
+        probe,
+      };
+      const staged = join(this.root, "assets", `${id}.index-stage`);
+      await writeFile(staged, JSON.stringify(entry), {
+        flag: "wx",
+        mode: 0o600,
+      });
+      await publishFileWithoutOverwrite(
+        staged,
+        join(this.root, "index", `${id}.json`),
+        signal,
       );
+      published = true;
+      // Its bytes were just checked (or adopted), so the first preview needs
+      // no further full read.
+      try {
+        const placed = await lstat(target);
+        if (placed.size === size)
+          this.verified.set(id, {
+            signature: signature(placed),
+            sha256: originalHash,
+          });
+      } catch {
+        /* The next use verifies the file in full. */
+      }
+      return summary;
+    } catch (error) {
+      // An adopted recording goes back where the recorder can still find it.
+      if (moved && !published)
+        await rename(target, sourcePath).catch(() => undefined);
+      throw error;
+    }
+  }
+  private async probe(path: string, signal?: AbortSignal): Promise<unknown> {
     const result = await runProcess({
       executable: this.ffprobe,
       args: [
@@ -463,42 +613,11 @@ export class MediaLibrary {
         "-show_format",
         "-of",
         "json",
-        target,
+        path,
       ],
       ...(signal ? { signal } : {}),
     });
-    const probe: unknown = JSON.parse(result.stdout.toString("utf8"));
-    if (
-      !object(probe) ||
-      !Array.isArray(probe.streams) ||
-      !object(probe.format)
-    )
-      invalid();
-    const summary: MediaSummary = {
-      id,
-      name: basename(sourcePath),
-      ...mediaMeasurements(probe),
-    };
-    assertMediaSummary(summary);
-    if ((await hash(sourcePath, signal)) !== originalHash)
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "Source changed during import; no media was indexed.",
-      );
-    const entry: Entry = {
-      version: 1,
-      summary,
-      source: { file, originalPath: sourcePath, sha256: originalHash, size },
-      probe,
-    };
-    const staged = join(this.root, "assets", `${id}.index-stage`);
-    await writeFile(staged, JSON.stringify(entry), { flag: "wx", mode: 0o600 });
-    await publishFileWithoutOverwrite(
-      staged,
-      join(this.root, "index", `${id}.json`),
-      signal,
-    );
-    return summary;
+    return JSON.parse(result.stdout.toString("utf8")) as unknown;
   }
   async frame(
     id: string,
@@ -524,11 +643,9 @@ export class MediaLibrary {
         "This source is preserved, but its preview color or precision path is not yet verified.",
       );
     const path = join(this.root, "assets", entry.source.file);
-    if ((await hash(path, signal)) !== entry.source.sha256)
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "The managed source has changed.",
-      );
+    // Every preview frame used to hash the whole master; it is now read in
+    // full once per file identity and re-checked by its identity afterwards.
+    await this.assertIntact(id, path, entry.source, await lstat(path), signal);
     const timingKey = `${id}:${entry.source.sha256}`;
     let timing = this.presentationTimings.get(timingKey);
     if (!timing) {

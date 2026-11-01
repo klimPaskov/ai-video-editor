@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   captureSize,
@@ -13,6 +13,8 @@ import {
 } from "../../../packages/recorder/src/capture.ts";
 import {
   CaptureSession,
+  CaptureStartError,
+  renameWithRetry,
   takeRecordName,
 } from "../../../packages/recorder/src/session.ts";
 import type { MediaSummary } from "../../../packages/domain/src/library.ts";
@@ -51,7 +53,11 @@ export interface RecorderOptions {
   ffmpeg?: string;
   ffprobe?: string;
   displays(): PhysicalDisplay[];
-  importFile(path: string): Promise<MediaSummary>;
+  /**
+   * `adopt` carries the SHA-256 the recorder already computed for its own
+   * finished take, so the library can move it in without reading it again.
+   */
+  importFile(path: string, adopt?: { sha256: string }): Promise<MediaSummary>;
   /** Runs captures under the capture supervisor (see the session). */
   supervisor?: {
     executable: string;
@@ -105,6 +111,9 @@ export class DesktopRecorder {
   private readonly ffprobe: string;
   private displays = new Map<string, DisplayTarget>();
   private microphones = new Map<string, AudioInput>();
+  /** Last good microphone listing; each probe starts a process (~0.8 s). */
+  private microphoneCache: { at: number; list: AudioInput[] } | null = null;
+  private microphoneProbe: Promise<AudioInput[]> | null = null;
   private session: CaptureSession | null = null;
   private directory: string | null = null;
   private view: RecordingView = idle;
@@ -139,26 +148,68 @@ export class DesktopRecorder {
     return null;
   }
 
-  private async listMicrophones(): Promise<AudioInput[]> {
+  /** One listing; `reliable` is false when the probe printed nothing at all. */
+  private async listMicrophones(): Promise<{
+    list: AudioInput[];
+    reliable: boolean;
+  }> {
     const list = this.options.listOutput ?? output;
-    if (this.testCapture()) return [testToneInput];
-    if (this.options.platform === "linux")
-      return parsePulseSources(
-        await list("pactl", ["list", "short", "sources"]),
-      );
-    if (this.options.platform === "win32")
-      return parseDshowAudio(
-        await list(this.ffmpeg, [
-          "-hide_banner",
-          "-list_devices",
-          "true",
-          "-f",
-          "dshow",
-          "-i",
-          "dummy",
-        ]),
-      );
-    return [];
+    if (this.testCapture()) return { list: [testToneInput], reliable: true };
+    if (this.options.platform === "linux") {
+      const text = await list("pactl", ["list", "short", "sources"]);
+      return { list: parsePulseSources(text), reliable: text.trim() !== "" };
+    }
+    if (this.options.platform === "win32") {
+      const text = await list(this.ffmpeg, [
+        "-hide_banner",
+        "-list_devices",
+        "true",
+        "-f",
+        "dshow",
+        "-i",
+        "dummy",
+      ]);
+      return { list: parseDshowAudio(text), reliable: text.trim() !== "" };
+    }
+    return { list: [], reliable: true };
+  }
+
+  /**
+   * Microphones for the setup dialog. Probing starts FFmpeg, so a listing is
+   * reused: a recent one is returned at once, an older one is returned at
+   * once while a fresh one is read in the background for the next open. Only
+   * the very first call (or after a failed probe) waits for the probe.
+   */
+  private async microphoneList(): Promise<AudioInput[]> {
+    const cached = this.microphoneCache;
+    if (cached) {
+      if (Date.now() - cached.at > 20_000)
+        void this.probeMicrophones().catch(() => undefined);
+      return cached.list;
+    }
+    return this.probeMicrophones();
+  }
+
+  /** One probe at a time; a blank answer is retried once, never cached. */
+  private probeMicrophones(): Promise<AudioInput[]> {
+    this.microphoneProbe ??= (async () => {
+      try {
+        let found = await this.listMicrophones();
+        if (!found.reliable) found = await this.listMicrophones();
+        if (found.reliable)
+          this.microphoneCache = { at: Date.now(), list: found.list };
+        return found.list;
+      } finally {
+        this.microphoneProbe = null;
+      }
+    })();
+    return this.microphoneProbe;
+  }
+
+  /** Reads the device lists ahead of the first time the dialog opens. */
+  warm(): void {
+    if (this.unavailable() === null && !this.testCapture())
+      void this.probeMicrophones().catch(() => undefined);
   }
 
   async devices(): Promise<RecordingDevices> {
@@ -181,7 +232,7 @@ export class DesktopRecorder {
         : this.options.displays();
       for (const display of displays.slice(0, 16))
         this.displays.set(display.id, display);
-      for (const microphone of (await this.listMicrophones()).slice(0, 64))
+      for (const microphone of (await this.microphoneList()).slice(0, 64))
         this.microphones.set(microphone.id, microphone);
     }
     const value: RecordingDevices = {
@@ -327,14 +378,24 @@ export class DesktopRecorder {
     this.view = { ...idle, status: "starting" };
     try {
       await session.record();
-    } catch {
+    } catch (error) {
       await this.discard();
-      this.view = { ...idle, status: "failed", message: recordingIssues.start };
-      throw new RecordingError(recordingIssues.start);
+      const message = this.startMessage(error);
+      // A device that vanished or failed may have changed the listing.
+      this.microphoneCache = null;
+      this.view = { ...idle, status: "failed", message };
+      throw new RecordingError(message);
     }
     this.wantRecording = true;
     this.view = { ...idle, status: "recording" };
     return this.get();
+  }
+
+  /** The plain message for a capture that would not start. */
+  private startMessage(error: unknown): string {
+    return error instanceof CaptureStartError && error.failure === "microphone"
+      ? recordingIssues.microphone
+      : recordingIssues.start;
   }
 
   async pause(): Promise<RecordingView> {
@@ -350,9 +411,10 @@ export class DesktopRecorder {
     if (this.session && this.view.status === "paused") {
       try {
         await this.session.record();
-      } catch {
-        this.view = { ...this.get(), message: recordingIssues.start };
-        throw new RecordingError(recordingIssues.start);
+      } catch (error) {
+        const message = this.startMessage(error);
+        this.view = { ...this.get(), message };
+        throw new RecordingError(message);
       }
       this.wantRecording = true;
       this.view = { ...this.get(), status: "recording", message: null };
@@ -376,8 +438,14 @@ export class DesktopRecorder {
       const finished = await session.stop();
       // The file name becomes the source and project name.
       const named = join(this.directory!, `${takeName(new Date())}.mkv`);
-      await rename(finished.path, named);
-      media = await this.options.importFile(named);
+      await renameWithRetry(finished.path, named);
+      // The working segments are deleted while the take is imported, and the
+      // take is moved in (already hashed) rather than copied and re-read.
+      const [imported] = await Promise.all([
+        this.options.importFile(named, { sha256: finished.sha256 }),
+        this.removeWorking(this.directory!, named),
+      ]);
+      media = imported;
     } catch (error) {
       // The take folder is kept only while the session can still use it.
       await this.discard();
@@ -407,6 +475,19 @@ export class DesktopRecorder {
       message: null,
     };
     return this.get();
+  }
+
+  /** Deletes a take's working media (not its record or `keep`). */
+  private async removeWorking(directory: string, keep: string): Promise<void> {
+    await Promise.all(
+      (await readdir(directory).catch(() => [] as string[]))
+        .filter(
+          (name) => name !== "session.json" && join(directory, name) !== keep,
+        )
+        .map((name) =>
+          rm(join(directory, name), { force: true }).catch(() => undefined),
+        ),
+    );
   }
 
   /** Take folders a crash left without a finished recording, newest first. */
@@ -469,8 +550,11 @@ export class DesktopRecorder {
         directory,
         `${takeName(new Date(take.createdAt))}.mkv`,
       );
-      await rename(finished.path, named);
-      media = await this.options.importFile(named);
+      await renameWithRetry(finished.path, named);
+      // The segments stay until the import has worked, for another try.
+      media = await this.options.importFile(named, {
+        sha256: finished.sha256,
+      });
     } catch {
       // The segments stay so the user can try again or discard them.
       throw new RecordingError(recordingIssues.recover);
@@ -515,8 +599,11 @@ export class DesktopRecorder {
     const directory = this.directory;
     this.directory = null;
     if (directory)
-      await rm(directory, { recursive: true, force: true }).catch(
-        () => undefined,
-      );
+      await rm(directory, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      }).catch(() => undefined);
   }
 }

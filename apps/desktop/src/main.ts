@@ -436,13 +436,21 @@ async function start(): Promise<void> {
     ["/stage.css", ["stage.css", "text/css; charset=utf-8"]],
   ]);
   // Fail before opening a product window if any required packaged resource is absent.
-  const preload = await readFile(path.join(app.getAppPath(), "preload.cjs"));
-  if (!preload.length) throw new Error("Required preload is empty");
+  // The packaged editing service is verified (hashed) while everything else
+  // starts; it is awaited where the assistants need it.
+  const editingScript = resolveCodexMcpScript(process.resourcesPath);
+  editingScript.catch(() => undefined);
+  // The preload and renderer files are read together, not one after another.
+  const [preload, ...loaded] = await Promise.all([
+    readFile(path.join(app.getAppPath(), "preload.cjs")),
+    ...[...files.values()].map(([filename]) =>
+      readFile(path.join(app.getAppPath(), "renderer", filename!)),
+    ),
+  ]);
+  if (!preload!.length) throw new Error("Required preload is empty");
   const assets = new Map<string, { bytes: Buffer; mime: string }>();
-  for (const [route, [filename, mime]] of files) {
-    const bytes = await readFile(
-      path.join(app.getAppPath(), "renderer", filename!),
-    );
+  for (const [index, [route, [, mime]]] of [...files].entries()) {
+    const bytes = loaded[index]!;
     if (!bytes.length) throw new Error("Required renderer resource is empty");
     assets.set(route, { bytes, mime: mime! });
   }
@@ -630,7 +638,8 @@ async function start(): Promise<void> {
     root: path.join(userData, "recordings"),
     platform: process.platform,
     env: process.env,
-    importFile: (file) => library.importFile(file),
+    importFile: (file, adopt) =>
+      library.importFile(file, undefined, adopt ? { adopt } : {}),
     displays: () =>
       screen.getAllDisplays().map((display, index) => {
         // Capture uses physical pixels; Windows maps per-monitor DPI itself.
@@ -947,10 +956,7 @@ async function start(): Promise<void> {
     path.join(userData, "mcp-runtime"),
     invokeCodexTool,
   );
-  const mcpRuntime = mcpBroker.runtime(
-    process.execPath,
-    await resolveCodexMcpScript(process.resourcesPath),
-  );
+  const mcpRuntime = mcpBroker.runtime(process.execPath, await editingScript);
   codex = new DesktopCodex(
     process.resourcesPath,
     userData,
@@ -1029,7 +1035,7 @@ async function start(): Promise<void> {
   );
   const claudeMcpRuntime = claudeBroker.runtime(
     process.execPath,
-    await resolveCodexMcpScript(process.resourcesPath),
+    await editingScript,
   );
   claude = new DesktopClaude(userData, {
     platform: process.platform,
@@ -2301,6 +2307,9 @@ async function start(): Promise<void> {
     // preference (or the explicit 100% read-failure fallback) before showing it.
     startupWindow.webContents.setZoomFactor(committedScale);
     startupWindow.show();
+    // Reading the microphone list starts a process; do it now, after the
+    // first paint, so opening the recording dialog does not wait for it.
+    recorder?.warm();
   }
 }
 async function showStartupFailure(): Promise<void> {

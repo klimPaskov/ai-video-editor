@@ -78,6 +78,12 @@ export function segmentArguments(request: SegmentRequest): string[] {
       break;
     case "win32":
       video = [
+        // The screen device states its own size and format, so FFmpeg need
+        // not read ahead before it starts (measured ~0.15 s faster).
+        "-analyzeduration",
+        "0",
+        "-probesize",
+        "32",
         "-f",
         "gdigrab",
         "-framerate",
@@ -145,8 +151,10 @@ export function segmentArguments(request: SegmentRequest): string[] {
     // Progress (frame, dup_frames, drop_frames) on stdout for evidence.
     "-progress",
     "pipe:1",
+    // Frequent enough that the first captured frame is seen within ~100 ms
+    // (the start waits for it); at 0.5 s every start paid up to half a second.
     "-stats_period",
-    "0.5",
+    "0.1",
     "-thread_queue_size",
     "1024",
     ...video,
@@ -167,6 +175,10 @@ export function segmentArguments(request: SegmentRequest): string[] {
     "cfr",
     "-r",
     rate,
+    // Tags the frames themselves: encoder options alone do not reach the
+    // file in every FFmpeg build. The samples are not touched.
+    "-vf",
+    "setparams=color_primaries=bt709:color_trc=iec61966-2-1:colorspace=gbr:range=pc",
     "-c:v",
     "ffv1",
     "-level",
