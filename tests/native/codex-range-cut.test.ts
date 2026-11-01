@@ -617,7 +617,7 @@ try {
     "base64",
   );
   mark("open-edit-stage");
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 120_000 });
   await page.locator("#codex-drawer-button").click();
   await page.locator("#assistant-provider").selectOption("codex");

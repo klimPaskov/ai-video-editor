@@ -163,7 +163,7 @@ try {
   );
 
   step = "transcribe";
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
   await openDisclosures(page);
   await page.locator("#transcribe-local").click();
   await expect(page.locator("#transcript-results")).toBeVisible({
@@ -171,7 +171,7 @@ try {
   });
 
   step = "camera";
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await openDisclosures(page);
   await electron.evaluate(({ dialog }, file) => {
     const state = globalThis as unknown as { __next?: string };

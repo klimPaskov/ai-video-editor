@@ -20,4 +20,4 @@ Check hierarchy, clutter, text clipping, spacing, focus, tooltips, keyboard flow
 
 Inspect each mapped original image separately. Do not use a contact sheet as the sole reference. Apply the mandatory corrections: no Ready footers, oversized titles, obvious descriptions, repeated status, or all-panels-open layout. Check the Codex drawer, manual controls, and canvas at common desktop sizes.
 
-Verify the five project stages (Record or Import, Auto Edit, Edit, Review, Export). The editor belongs to Edit; comparison and the internal QA screen belong to Review. Test that changing stages preserves draft and undo state and that already authorized reversible edits do not trigger repeated confirmation. Final export still requires an explicit user action.
+Verify the five project stages (Import, Magic Edit, Refine, Review, Export). The editor belongs to Refine; comparison and the internal QA screen belong to Review. Test that changing stages preserves draft and undo state and that already authorized reversible edits do not trigger repeated confirmation. Final export still requires an explicit user action.

@@ -99,7 +99,7 @@ try {
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 120_000 });
   step = "transcribe-offline";
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
   await page.locator("#auto-edit-more > summary").click();
   await page.getByRole("button", { name: "Transcribe locally" }).click();
   await expect(page.locator("#transcription-error")).toBeVisible({

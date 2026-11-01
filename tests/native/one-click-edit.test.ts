@@ -157,7 +157,7 @@ try {
   );
 
   step = "auto-edit-is-minimal";
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
   await expect(page.locator("#auto-all-start")).toBeVisible();
   // Only the one action shows; everything else is under More options.
   for (const id of [

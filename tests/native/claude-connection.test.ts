@@ -319,7 +319,7 @@ try {
   const baselineBytes = await readFile(join(projectFolder, "baseline.json"));
 
   step = "default-drawer";
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Claude", exact: true }).click();
   await expect(

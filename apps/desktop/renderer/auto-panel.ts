@@ -7,7 +7,7 @@ type Phase = "idle" | "rough" | "production" | "done" | "stopped" | "failed";
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Auto Edit's one action: "Edit my video" runs the whole AI edit the user
+ * The Magic Edit step's one action: "Edit my video" runs the whole AI edit the user
  * would otherwise start in two places. First Claude's rough cut (Magic Edit,
  * which transcribes locally first), then Claude's full edit with motion
  * graphics, captions and audio choices. Both are the same guarded, undoable
@@ -61,7 +61,7 @@ export function setupAutoPanel(options: {
     const text = running()
       ? `${phase === "rough" ? "Step 1 of 2: rough cut" : "Step 2 of 2: graphics, captions and sound"}${detail ? ` · ${detail}` : ""}`
       : phase === "done"
-        ? "Your video is edited. Review it, or undo any step in Edit."
+        ? "Done. Review it, or undo steps in Refine."
         : phase === "stopped"
           ? "Stopped. What was already done stays in the edit and can be undone."
           : "";

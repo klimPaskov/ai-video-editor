@@ -3,12 +3,9 @@ import type { MagicWandView } from "../../../packages/domain/src/magic-wand-view
 import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
 
 const presetNotes: Record<MagicWandPreset, string> = {
-  gentle:
-    "Shortens only long pauses to about half a second and removes clear fillers, then Claude removes clear retakes and dead air.",
-  balanced:
-    "Shortens pauses over half a second to a short beat and removes fillers, then Claude makes a story edit.",
-  tight:
-    "Keeps only a hint of a pause and removes fillers, then Claude makes a brisk story edit.",
+  gentle: "Trims long pauses and fillers, then clear retakes and dead air.",
+  balanced: "Tightens pauses and fillers, then a story edit.",
+  tight: "Leaves only a hint of a pause, then a brisk story edit.",
 };
 
 function seconds(us: number): string {
@@ -35,14 +32,14 @@ export function magicSummaryText(view: MagicWandView): string {
     : "";
   // Claude's rough cut explains itself in the conversation.
   const detail = parts.length ? `: ${parts.join(", ")}` : "";
-  return `Removed ${seconds(summary.removedUs)} in ${plural(summary.cuts, "cut", "cuts")}${detail}.${review} Undo in Edit reverses each step.`;
+  return `Removed ${seconds(summary.removedUs)} in ${plural(summary.cuts, "cut", "cuts")}${detail}.${review} Undo in Refine reverses each step.`;
 }
 
 export interface MagicPanel {
   render(project: ProjectView | undefined, visible: boolean): void;
 }
 
-/** Auto Edit's Magic Edit controls: preset, run, live progress, Stop, summary. */
+/** The Magic Edit step's rough cut controls: preset, run, live progress, Stop, summary. */
 export function setupMagicPanel(onFinished: () => void): MagicPanel {
   const element = <T extends HTMLElement = HTMLElement>(id: string) =>
     document.getElementById(id)! as T;
@@ -85,8 +82,8 @@ export function setupMagicPanel(onFinished: () => void): MagicPanel {
     else if (active) progress.removeAttribute("value");
     const text = active
       ? view?.status === "transcribing"
-        ? "Transcribing locally before editing…"
-        : "Claude is making the rough cut…"
+        ? "Transcribing on this device…"
+        : "Claude is cutting…"
       : view?.status === "completed" || view?.status === "stopped"
         ? magicSummaryText(view)
         : "";
@@ -126,7 +123,7 @@ export function setupMagicPanel(onFinished: () => void): MagicPanel {
     try {
       const reply = await work();
       if (!reply.ok)
-        localError = reply.message ?? "Magic Edit could not start.";
+        localError = reply.message ?? "The rough cut could not start.";
       else view = reply.value as MagicWandView;
     } finally {
       pending = false;

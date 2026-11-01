@@ -129,7 +129,7 @@ try {
   step = "import";
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible();
   const listed = await page.evaluate(() => window.desktop.listProjects());
   assert.ok(listed.ok);

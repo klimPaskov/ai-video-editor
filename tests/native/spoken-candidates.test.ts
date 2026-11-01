@@ -269,11 +269,11 @@ try {
 
   await page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true })
+    .getByRole("button", { name: "Magic Edit", exact: true })
     .click();
   const autoEdit = page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true });
+    .getByRole("button", { name: "Magic Edit", exact: true });
   await expect(autoEdit).toHaveAttribute("aria-current", "step");
   const transcriptDetails = page.locator("#transcript-results");
   await expect(transcriptDetails).toBeVisible({ timeout: 30000 });

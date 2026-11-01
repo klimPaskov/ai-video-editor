@@ -72,7 +72,7 @@ await encodeVerifiedMaster(
 
 /** Long, irreversible, leaving-the-step or credentialed controls. */
 const skipped =
-  /delete|remove project|discard|quit|exit|record|capture|sign|log ?(in|out)|transcribe|edit my video|auto-all|magic|next-step|export|download|cleanup|clean up|reveal|open folder|^home$|^back$|record or import|auto edit|^edit$|^review$|continue|verify|ask|send|stop/iu;
+  /delete|remove project|discard|quit|exit|record|capture|sign|log ?(in|out)|transcribe|edit my video|auto-all|magic|next-step|export|download|cleanup|clean up|reveal|open folder|^home$|^back$|^import$|magic edit|rough cut|^refine$|^review$|continue|verify|ask|send|stop/iu;
 
 const problems: string[] = [];
 const pressed: Record<string, string[]> = {};
@@ -135,13 +135,7 @@ try {
       return false;
     }, key);
 
-  for (const name of [
-    "Record or Import",
-    "Auto Edit",
-    "Edit",
-    "Review",
-    "Export",
-  ]) {
+  for (const name of ["Import", "Magic Edit", "Refine", "Review", "Export"]) {
     step = name;
     await page.getByRole("button", { name, exact: true }).click();
     await page.waitForTimeout(1500);

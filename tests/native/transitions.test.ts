@@ -121,7 +121,7 @@ try {
   step = "import";
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible();
   await page.locator("#edit-more > summary").click();
 
@@ -156,7 +156,7 @@ try {
   await page.getByRole("button", { name: "Home", exact: true }).click();
   await page.getByRole("button", { name: /Demo/u }).first().click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible();
   if (
     !(await page
@@ -380,7 +380,7 @@ try {
   };
 
   step = "remove-and-undo";
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toHaveAttribute(
     "aria-busy",
     "false",

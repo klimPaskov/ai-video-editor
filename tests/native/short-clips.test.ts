@@ -200,7 +200,7 @@ try {
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
 
   step = "transcribe";
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
   await page
     .getByRole("button", { name: "Transcribe locally", exact: true })
     .click();

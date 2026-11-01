@@ -468,23 +468,23 @@ try {
     .getByRole("button");
   await observe(
     "edit-stage",
-    /(?:^Edit$|'Edit button')/,
+    /(?:^Refine$|'Refine button')/,
     async () => {
       for (let i = 0; i < 10; i++) {
         await page.keyboard.press("Tab");
         if (
           (await page.evaluate(() =>
             document.activeElement?.textContent?.trim(),
-          )) === "Edit"
+          )) === "Refine"
         )
           break;
       }
-      await expect(stages.filter({ hasText: /^Edit$/ })).toBeFocused();
+      await expect(stages.filter({ hasText: /^Refine$/ })).toBeFocused();
     },
-    "Edit",
+    "Refine",
   );
   await page.keyboard.press("Enter");
-  await expect(stages.filter({ hasText: /^Edit$/ })).toHaveAttribute(
+  await expect(stages.filter({ hasText: /^Refine$/ })).toHaveAttribute(
     "aria-current",
     "step",
     { timeout: 30000 },

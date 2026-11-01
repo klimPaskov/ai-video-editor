@@ -4716,15 +4716,15 @@
         "message": {
           "enum": [
             null,
-            "Magic Edit is already running for this project.",
-            "Magic Edit needs a local transcript, and transcription did not finish. Try again from Auto Edit.",
-            "Magic Edit needs a video with spoken audio.",
-            "The draft changed while Magic Edit was running. Applied cuts are kept and can be undone.",
-            "Magic Edit could not finish. Applied cuts are kept and can be undone.",
-            "Magic Edit stopped. Applied cuts are kept and can be undone.",
+            "A rough cut is already running for this project.",
+            "The rough cut needs a transcript, and transcription did not finish. Try again from Magic Edit.",
+            "The rough cut needs a video with speech.",
+            "The draft changed during the rough cut. Applied cuts are kept and can be undone.",
+            "The rough cut could not finish. Applied cuts are kept and can be undone.",
+            "Rough cut stopped. Applied cuts are kept and can be undone.",
             "Claude found nothing to cut for this preset.",
-            "Magic Edit uses Claude for the rough cut. Sign in to Claude in Settings, then run it again.",
-            "Your Claude usage limit was reached. Cuts made so far are kept; run Magic Edit again after it resets."
+            "The rough cut uses Claude. Sign in under Settings, then try again.",
+            "Your Claude usage limit was reached. Cuts so far are kept; try again after it resets."
           ]
         }
       }
@@ -4937,7 +4937,7 @@
             "This source cannot be read.",
             "Graphics cannot be drawn on video of this precision yet.",
             "Music and sound effects need a recording that has audio to mix them into.",
-            "A music or sound file of this video is missing or was changed. Add it again in Edit."
+            "A music or sound file of this video is missing or was changed. Add it again in Magic Edit."
           ]
         }
       }

@@ -22,7 +22,7 @@ Proxies, previews, transcripts, waveforms, contact sheets, renders, and QA repor
 
 ### Navigation state
 
-The active project stage selects one of the five workspace views. Persist it separately from media operation history and draft sequence. A transition preserves source/draft state and is announced only after its save succeeds. Visiting Auto Edit, Review or Export does not mean automation ran, review passed or an output exists. Reopen restores the stage and the same committed draft context.
+The active project stage selects one of the five workspace views. Persist it separately from media operation history and draft sequence. A transition preserves source/draft state and is announced only after its save succeeds. Visiting Magic Edit, Review or Export does not mean automation ran, review passed or an output exists. Reopen restores the stage and the same committed draft context.
 
 ## Initial baseline
 

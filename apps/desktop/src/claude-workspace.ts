@@ -43,7 +43,9 @@ export function editedTranscript(
     "",
   ];
   if (!transcripts.length) {
-    lines.push("No transcript yet. Run Magic Edit or transcribe in Auto Edit.");
+    lines.push(
+      "No transcript yet. Run the rough cut or transcribe in Magic Edit.",
+    );
     return `${lines.join("\n")}\n`;
   }
   const bySource = new Map(transcripts.map((item) => [item.source_id, item]));

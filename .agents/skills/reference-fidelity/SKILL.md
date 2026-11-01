@@ -11,4 +11,4 @@ Update this reusable workflow when implementation reveals a repeatable failure o
 
 For a selected assistant drawer, inspect the native message-history height and error containment as well as the preview. A screenshot can reveal a clipped alert even when a DOM assertion passes; repeat at 1366×768 after correcting layout and retain the first failed run as failed evidence.
 
-For a precision restore form in Edit, keep source and interval inputs beside the committed preview without opening another inspector. Inspect the filled form at the default window size and enlarged scale; verify labels and actionable overlap errors remain visible.
+For a precision restore form in Refine, keep source and interval inputs beside the committed preview without opening another inspector. Inspect the filled form at the default window size and enlarged scale; verify labels and actionable overlap errors remain visible.

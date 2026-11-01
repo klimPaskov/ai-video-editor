@@ -729,7 +729,7 @@ try {
       "base64",
     ),
   );
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible();
   await page.locator("#codex-drawer-button").click();
   await page.locator("#assistant-provider").selectOption("codex");
@@ -808,7 +808,7 @@ try {
     electron = await launch();
     page = await electron.firstWindow();
     await page.locator(`#projects [data-project-id="${combined.id}"]`).click();
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("button", { name: "Refine", exact: true }).click();
     await expect(page.locator("#edit-actions")).toBeVisible();
     await page.locator("#codex-drawer-button").click();
     await page.locator("#assistant-provider").selectOption("codex");

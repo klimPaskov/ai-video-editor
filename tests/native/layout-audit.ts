@@ -8,7 +8,8 @@ export interface LayoutFinding {
     | "overlap"
     | "text-clipped"
     | "tiny-target"
-    | "contrast";
+    | "contrast"
+    | "primary-action";
   detail: string;
 }
 
@@ -312,4 +313,73 @@ export async function auditLayout(page: Page): Promise<LayoutFinding[]> {
     }
     return findings;
   });
+}
+
+/** The control a person presses to move a step forward, most important first. */
+const primaryActions: Record<string, string[]> = {
+  record_import: ["#next-step-button"],
+  auto_edit: ["#auto-all-review", "#auto-all-start"],
+  review: ["#next-step-button"],
+  export: ["#export-open", "#export-start"],
+};
+
+/** Why a trial click failed, in a few words. */
+function whyNot(error: unknown): string {
+  const line = String(error instanceof Error ? error.message : error)
+    .split(/\r?\n/u)
+    .find((text) => /intercepts|outside|not visible|not enabled/u.test(text));
+  return line ? `: ${line.trim().slice(0, 140)}` : "";
+}
+
+/**
+ * Two things must always work: the step's primary action (such as Continue)
+ * and the way to another step. Both must be on screen and receive a click:
+ * Playwright's trial click scrolls the control into view the way a person
+ * would, then checks that it is visible, enabled, still and not covered by
+ * anything else. It does not press the button.
+ */
+export async function checkPrimaryAction(page: Page): Promise<LayoutFinding[]> {
+  const stage = await page.evaluate(
+    () => document.getElementById("viewer")?.dataset.stage ?? "",
+  );
+  const findings: LayoutFinding[] = [];
+  const candidates = primaryActions[stage];
+  if (candidates) {
+    let found = false;
+    for (const selector of candidates) {
+      const target = page.locator(selector);
+      if (!(await target.isVisible())) continue;
+      found = true;
+      try {
+        await target.click({ trial: true, timeout: 2_500 });
+      } catch (error) {
+        findings.push({
+          kind: "primary-action",
+          detail: `${selector} on ${stage} cannot be clicked${whyNot(error)}`,
+        });
+      }
+      break;
+    }
+    if (!found)
+      findings.push({
+        kind: "primary-action",
+        detail: `${stage} shows no primary action`,
+      });
+  }
+  // The steps: the row of buttons, or the menu when the window is narrow.
+  const targets = (await page.locator("#stage-buttons").isVisible())
+    ? await page.locator("#stage-buttons button").all()
+    : [page.locator("#stage-select")];
+  for (const target of targets) {
+    try {
+      await target.click({ trial: true, timeout: 2_500 });
+    } catch (error) {
+      const name = (await target.getAttribute("aria-label")) ?? "stage menu";
+      findings.push({
+        kind: "primary-action",
+        detail: `the ${name} step control on ${stage} cannot be clicked${whyNot(error)}`,
+      });
+    }
+  }
+  return findings;
 }

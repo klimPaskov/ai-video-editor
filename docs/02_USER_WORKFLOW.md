@@ -4,8 +4,8 @@
 
 The app uses a top stepper with five project stages:
 
-1. Record or Import
-2. Auto Edit
+1. Import
+2. Magic Edit
 3. Edit
 4. Review
 5. Export
@@ -30,9 +30,9 @@ The user chooses a screen source, microphone, optional system audio, optional ca
 
 The user picks one or more local media files and sees one plain processing view. For a sequential import, the chosen order is visible and adjustable before project creation; the initial draft appends each immutable source in that order. File probing, proxy creation, transcription, and analysis appear as a short progress list. Detailed commands remain hidden.
 
-## Auto Edit
+## Magic Edit
 
-The current Auto Edit action is Transcribe locally. On the first explicit start, the app downloads the pinned Whisper model weights into private application storage, then produces local word timing and separate silence evidence. Source audio remains on this device. The app preserves one live job identity across repeated Start requests and polling, offers Stop, caches results by immutable source hash and model revision, and restores completed transcripts when the project reopens. Model word times are estimates; the local model does not identify a language in this runtime, so the view labels language as unidentified. These results do not change the draft.
+The current Magic Edit action is Transcribe locally. On the first explicit start, the app downloads the pinned Whisper model weights into private application storage, then produces local word timing and separate silence evidence. Source audio remains on this device. The app preserves one live job identity across repeated Start requests and polling, offers Stop, caches results by immutable source hash and model revision, and restores completed transcripts when the project reopens. Model word times are estimates; the local model does not identify a language in this runtime, so the view labels language as unidentified. These results do not change the draft.
 
 The planned Magic Wand remains the main editorial action. It will offer a small preset menu and clear switches, stream validated edits to the active draft, and retain completed reversible work when stopped. Edit supports text-only correction of a locally transcribed word and a selected-word ripple cut. Captions and automatic effects are not implemented yet.
 
@@ -55,7 +55,7 @@ The Edit transcript controls can correct one locally transcribed word or cut a s
 
 ## Review
 
-Watch the whole draft, compare revisions, and inspect actionable quality findings. QA is an internal screen within Review. Jump back to Edit to correct an issue with shared undo history preserved; continue to Export when ready. Review does not require approval of every ordinary reversible edit.
+Watch the whole draft, compare revisions, and inspect actionable quality findings. QA is an internal screen within Review. Jump back to Refine to correct an issue with shared undo history preserved; continue to Export when ready. Review does not require approval of every ordinary reversible edit.
 
 ## Export
 
@@ -65,4 +65,4 @@ The final screen shows a preview summary, required warnings, a small set of expo
 
 Reopening a project restores the last autosave. If an interrupted draft exists, the app explains what was recovered and what needs to be rerun.
 
-After local transcription completes, Auto Edit offers deterministic speech-cue review with original-transcript context excerpts and a still-frame seek through the committed clip map. Reviewing cues and seeking a frame do not cut or otherwise change the draft; Magic Wand remains the only automatic edit action and is still under implementation.
+After local transcription completes, Magic Edit offers deterministic speech-cue review with original-transcript context excerpts and a still-frame seek through the committed clip map. Reviewing cues and seeking a frame do not cut or otherwise change the draft; Magic Wand remains the only automatic edit action and is still under implementation.

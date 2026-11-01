@@ -31,7 +31,7 @@ Added for the full edit:
 
 - `graphics.set` / `graphics.remove`: add, replace or remove a graphic.
 - `media.get_frames`: rendered pictures of the edit at chosen output times, with zooms, captions and graphics, so the assistant can check its work.
-- `captions.configure` and `audio.configure`: the same choices as the Auto Edit cards.
+- `captions.configure` and `audio.configure`: the same choices as the Magic Edit cards.
 
 Every edit checks the current draft head and is one undoable transaction; the full-edit run uses one pass group so it can be undone together.
 
@@ -58,7 +58,7 @@ In progress. Implemented parts are listed below as they land.
 
 ## Implemented: undoable caption and audio choices (2026-10-15)
 
-- The Auto Edit caption and audio choices are now draft data (`timeline.captions`, `timeline.audio`) changed by single-operation `set_captions`/`set_audio` transactions, so they share Undo, Redo and journal replay with every other edit, which a full AI edit's "Undo all" needs. The existing `captions:*`/`audio:*` IPC keeps its shape; main commits a manual transaction and the cards re-read the choice when the draft head changes. Drafts without their own choice use the per-project choice saved by earlier versions (read only) or the default.
+- The Magic Edit caption and audio choices are now draft data (`timeline.captions`, `timeline.audio`) changed by single-operation `set_captions`/`set_audio` transactions, so they share Undo, Redo and journal replay with every other edit, which a full AI edit's "Undo all" needs. The existing `captions:*`/`audio:*` IPC keeps its shape; main commits a manual transaction and the cards re-read the choice when the draft head changes. Drafts without their own choice use the per-project choice saved by earlier versions (read only) or the default.
 - `captions.configure` and `audio.configure` expose the same choices to Claude, Codex and the API providers.
 - Evidence: `tests/media/draft-transactions.test.ts` (apply, no-op conflict, invalid values, Undo back to no own choice, Redo, reopen replay), `tests/media/codex-tools.test.ts`, inventory tests and a signed-out real-CLI init probe of the sixteen tools. No packaged native run of the changed cards exists yet.
 
@@ -72,7 +72,7 @@ In progress. Implemented parts are listed below as they land.
 The project's isolated Docker guest (`scripts/desktop_environment.py`: unprivileged UID 1000, dropped capabilities, reviewed seccomp profile, no host mounts, Xvfb) was rebuilt after the earlier WSL guest was removed from the machine. Packaged Linux Electron passed the desktop, graphics, captions, export, short-clips, zoom, speed, Magic Edit, playback and app-identity native tests.
 
 - The graphics run found a real defect: a graphic's first frame was captured before the offscreen page painted it, so frame 30 of the fixture lacked the title. It had passed before only because FFmpeg's premultiplied rounding altered that frame anyway. The renderer now waits for two animation frames after a change before capturing; all 45 graphic frames are drawn and every other frame stays bit-identical.
-- The captions test now also turns a caption choice back with Undo and forward with Redo from the Edit step and checks that the Auto Edit card follows the draft.
+- The captions test now also turns a caption choice back with Undo and forward with Redo from the Refine step and checks that the Magic Edit card follows the draft.
 
 Not covered: an assistant (Claude or Codex) adding a graphic or using `media.get_frames` in the packaged app, and Windows packaging.
 

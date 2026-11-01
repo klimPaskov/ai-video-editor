@@ -80,7 +80,7 @@ export function setupShortsPanel(options: {
         : (view.pick.message ??
           view.message ??
           (view.status === "none"
-            ? "Finds self-contained moments of 15 to 60 seconds in the transcript of this edit, or lets Claude choose them."
+            ? "Finds 15 to 60 second moments, or lets Claude choose."
             : `${view.candidates.length} ${view.candidates.length === 1 ? "clip" : "clips"} ${view.candidates.every((candidate) => candidate.origin === "ai") ? "chosen by Claude" : "found from the transcript"}.`));
     // One status for exporting every clip: which one, and progress.
     const job = view?.job;

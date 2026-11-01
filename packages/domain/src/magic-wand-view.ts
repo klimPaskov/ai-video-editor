@@ -31,20 +31,19 @@ export interface MagicWandStartRequest extends MagicWandProjectRequest {
 }
 
 export const magicWandIssues = Object.freeze({
-  busy: "Magic Edit is already running for this project.",
+  busy: "A rough cut is already running for this project.",
   transcription:
-    "Magic Edit needs a local transcript, and transcription did not finish. Try again from Auto Edit.",
-  noAudio: "Magic Edit needs a video with spoken audio.",
+    "The rough cut needs a transcript, and transcription did not finish. Try again from Magic Edit.",
+  noAudio: "The rough cut needs a video with speech.",
   changed:
-    "The draft changed while Magic Edit was running. Applied cuts are kept and can be undone.",
+    "The draft changed during the rough cut. Applied cuts are kept and can be undone.",
   failed:
-    "Magic Edit could not finish. Applied cuts are kept and can be undone.",
-  stopped: "Magic Edit stopped. Applied cuts are kept and can be undone.",
+    "The rough cut could not finish. Applied cuts are kept and can be undone.",
+  stopped: "Rough cut stopped. Applied cuts are kept and can be undone.",
   nothing: "Claude found nothing to cut for this preset.",
-  claude:
-    "Magic Edit uses Claude for the rough cut. Sign in to Claude in Settings, then run it again.",
+  claude: "The rough cut uses Claude. Sign in under Settings, then try again.",
   limit:
-    "Your Claude usage limit was reached. Cuts made so far are kept; run Magic Edit again after it resets.",
+    "Your Claude usage limit was reached. Cuts so far are kept; try again after it resets.",
 } as const);
 
 const messages = new Set<string>(Object.values(magicWandIssues));

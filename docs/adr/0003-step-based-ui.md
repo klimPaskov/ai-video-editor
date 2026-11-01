@@ -5,7 +5,7 @@
 
 ## Decision
 
-Use five project stages: Record or Import, Auto Edit, Edit, Review, and Export. Show only the current stage and one selected tool inspector.
+Use five project stages: Import, Magic Edit, Refine, Review, and Export. Show only the current stage and one selected tool inspector.
 
 ## Consequences
 
@@ -18,3 +18,7 @@ Use five project stages: Record or Import, Auto Edit, Edit, Review, and Export. 
 ## Revision, 2026-09-05
 
 The current user instruction supersedes the historical four-stage starting decision. Edit owns manual timeline refinement; Review owns watch-through, revision comparison and quality findings. QA remains an internal screen identifier within Review, not an additional project stage. Home, onboarding and settings remain outside the five project stages. Revisit stages without discarding the active draft. This contract correction is not evidence of implemented navigation.
+
+## Update (2026-11-01): visible step names
+
+The stage ids (`record_import`, `auto_edit`, `edit`, `review`, `export`) and their order are unchanged. The visible names are now Import, Magic Edit, Refine, Review and Export, because "Auto Edit" and "Edit" read as the same thing. Magic Edit is the AI step: its main action is Edit my video (cuts, zooms, transitions, graphics, captions and sound), with the rough cut alone offered as Rough cut only under More options. Refine holds the manual tools. The forward actions read Continue to Magic Edit and Continue to Export.

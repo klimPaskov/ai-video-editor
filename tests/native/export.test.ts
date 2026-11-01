@@ -201,7 +201,7 @@ try {
   const project = listed.value[0]!;
 
   step = "cut";
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Refine", exact: true }).click();
   await expect(page.locator("#edit-actions")).toBeVisible();
   // Remove 1.0 s .. 2.5 s of output time (not frame-aligned at the end).
   const cut = await page.evaluate(

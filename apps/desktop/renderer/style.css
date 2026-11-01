@@ -208,13 +208,13 @@ h2 {
   flex: none;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.8;
+  stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 .icon.filled {
   fill: currentColor;
-  stroke-width: 1.2;
+  stroke-width: 1.5;
 }
 
 /* Controls */
@@ -2121,6 +2121,7 @@ dd {
 }
 #toast {
   position: fixed;
+  z-index: 30;
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
@@ -3165,22 +3166,39 @@ dialog {
     border: 1px solid var(--border);
     border-radius: 24px;
   }
+  /* The controls float over the video, below the step bar. A tall step (the
+     timeline and every tool in a short window) scrolls inside this area instead
+     of growing upward over the step bar, which would cover it. */
   html[data-layout="cinematic"] .stage-card {
     position: absolute;
-    inset: 0;
+    inset: 184px 0 0;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
     gap: 8px;
     padding: 0 0 20px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     pointer-events: none;
+  }
+  html[data-layout="cinematic"] .stage-card::before {
+    content: "";
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  html[data-layout="cinematic"] .stage-card > *,
+  html[data-layout="cinematic"] .stage-media > * {
+    flex-shrink: 0;
+  }
+  html[data-layout="cinematic"] #frame-controls {
+    flex: none;
+    max-height: none;
   }
   html[data-layout="cinematic"] .stage-media {
     display: contents;
   }
   html[data-layout="cinematic"] #viewer .workspace,
   html[data-layout="cinematic"] .workspace {
-    position: absolute;
+    position: fixed;
     inset: 0;
     height: auto;
     gap: 0;
@@ -3193,7 +3211,7 @@ dialog {
   html[data-layout="cinematic"] #codex-drawer {
     position: relative;
     z-index: 6;
-    margin: 150px 16px 260px 0;
+    margin: 184px 16px 20px 0;
     background: var(--glass);
     backdrop-filter: blur(18px);
   }
@@ -3220,9 +3238,14 @@ dialog {
     display: none;
   }
   html[data-layout="cinematic"] .edit-actions,
-  html[data-layout="cinematic"] .export-actions {
+  html[data-layout="cinematic"] .export-actions,
+  html[data-layout="cinematic"] .transcript-edit-panel {
     background: transparent;
     box-shadow: none;
+  }
+  html[data-layout="cinematic"] .transcript-edit-panel {
+    padding: 0;
+    border: 0;
   }
   /* The floating controls leave room for an open side panel. */
   html[data-layout="cinematic"]
@@ -3237,6 +3260,19 @@ dialog {
   }
   html[data-layout="cinematic"] #viewer[data-stage="export"] .stage-card {
     display: flex;
+  }
+  /* The viewer covers the window, so messages that normally sit in the page
+     flow float over it instead of hiding underneath. */
+  html[data-layout="cinematic"] main:has(#viewer:not([hidden])) > #error,
+  html[data-layout="cinematic"] main:has(#viewer:not([hidden])) > #progress {
+    position: fixed;
+    top: 184px;
+    left: 50%;
+    z-index: 9;
+    width: min(640px, calc(100% - 32px));
+    margin: 0;
+    transform: translateX(-50%);
+    box-shadow: var(--shadow-lg);
   }
 }
 
@@ -3403,6 +3439,135 @@ html:not([data-layout="cinematic"]) #viewer:has(#inspector:not([hidden])) {
     #viewer:has(#codex-drawer:not([hidden]), #inspector:not([hidden])) {
     padding-right: 40px;
   }
+}
+
+/* Refinements (2026-11-01): one set of sizes, radii and alignments. */
+
+/* Labels read the same in Settings, the recording dialog and the project dialog. */
+.field-label,
+#settings-form
+  label:not(.switch):not(.api-provider-check):not(.custom-theme label),
+#project-form label {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+#appearance-settings,
+#claude-settings,
+#codex-settings,
+#api-provider-settings {
+  min-height: min(340px, 45vh);
+}
+
+/* Theme tiles: names sit on one line height so the pictures line up. */
+.theme-tile {
+  justify-content: flex-start;
+}
+.theme-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.4em;
+  text-align: center;
+}
+
+/* The two-way choice in the recording dialog is one pill with two halves. */
+.area-choice {
+  padding: 3px;
+  background: var(--surface-3);
+  border: 0;
+  border-radius: 999px;
+}
+.area-choice button {
+  min-height: 32px;
+  padding: 0 16px;
+  border-radius: 999px;
+}
+.area-choice button:hover:not(:disabled) {
+  background: transparent;
+}
+
+/* A text button at the start of a row lines up with the field above it. */
+.project-actions .ghost {
+  margin-left: -12px;
+}
+
+/* Export done: the result, one main action, two quiet ones in a tidy grid. */
+.export-done {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.export-done > #export-result,
+.export-done > #export-open {
+  grid-column: 1 / -1;
+}
+
+/* The options button on a project card: its dots sit in the middle. */
+.card-grid .card-options,
+.card-grid .card-options:hover:not(:disabled) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.card-grid .card-options .icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* One chevron on every menu, drawn crisp at any scale. */
+select {
+  padding-right: 34px;
+  background-image: conic-gradient(
+    from -45deg at 50% 100%,
+    var(--text-2) 90deg,
+    transparent 0
+  );
+  background-position: right 13px center;
+  background-size: 10px 5px;
+  background-repeat: no-repeat;
+}
+
+/* More tools: one row of 36 px controls, groups divided by a hairline. */
+details.more[open] > .range-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.range-actions #mark-in {
+  margin-left: 0;
+  padding-left: 10px;
+  border-left: 0;
+  border-radius: var(--radius-sm);
+}
+.speed-control {
+  padding-left: 0;
+}
+.zoom-controls,
+.transition-tools,
+.camera-tools {
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.transition-tools,
+.camera-tools {
+  margin-left: 4px;
+}
+.zoom-controls select,
+.transition-tools select,
+.camera-tools select,
+.speed-control select {
+  min-height: 36px;
+}
+.restore-actions,
+details.more[open] .restore-actions {
+  margin-left: 0;
 }
 
 /* While a take runs the window shrinks to a small bar (see main.ts), so only

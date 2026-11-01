@@ -22,8 +22,8 @@ The build prints the path of the packaged app, for example
 ## First steps
 
 1. On **Home**, choose **New recording** or **Import video**. Imported files are copied into the app's library; the originals are never changed.
-2. The project opens in **Record or Import**. Move through the steps at the top: **Auto Edit**, **Edit**, **Review** and **Export**.
-3. In **Auto Edit**, choose **Transcribe locally** to create a local transcript. The first time, the app asks before downloading the speech model (about 76 MiB).
+2. The project opens in **Import**. Move through the steps at the top: **Magic Edit**, **Edit**, **Review** and **Export**.
+3. In **Magic Edit**, choose **Transcribe locally** to create a local transcript. The first time, the app asks before downloading the speech model (about 76 MiB).
 4. Run **Magic Edit** for a first cut, then refine it in **Edit**.
 5. In **Export**, save a lossless master or a smaller MP4.
 

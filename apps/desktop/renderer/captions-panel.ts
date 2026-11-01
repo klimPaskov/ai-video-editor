@@ -17,7 +17,7 @@ function element<T extends HTMLElement>(id: string): T {
 }
 
 /**
- * Captions card (Auto Edit) and the caption overlay on the preview. Cues
+ * Captions card (Magic Edit step) and the caption overlay on the preview. Cues
  * are derived from the transcript, its text corrections and the current
  * clip map, so they follow every edit; only the style is stored.
  */

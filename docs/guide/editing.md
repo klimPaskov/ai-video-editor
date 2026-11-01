@@ -2,7 +2,7 @@
 
 All edits go into one draft. Your original footage is never changed, and every edit can be undone with **Undo** (Ctrl+Z) and redone with **Redo** (Ctrl+Shift+Z).
 
-## Auto Edit
+## Magic Edit
 
 - **Transcribe locally** creates a word-timed transcript on your computer.
 - **Magic Edit** proposes a first cut from the transcript and the audio: long pauses, filler words and repeated takes. Choose **Natural**, **Balanced** or **Tight** pacing. Long pauses are shortened and fillers removed as one step you can undo, then Claude makes the story edit.

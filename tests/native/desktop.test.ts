@@ -205,13 +205,7 @@ try {
     denominator: 1,
   });
   assert.equal(baseline.timeline.duration_us, 1_500_000);
-  const stageNames = [
-    "Record or Import",
-    "Auto Edit",
-    "Edit",
-    "Review",
-    "Export",
-  ];
+  const stageNames = ["Import", "Magic Edit", "Refine", "Review", "Export"];
   for (const [index, stage] of projectStages.entries()) {
     const control = window
       .getByRole("navigation", { name: "Project stages" })
@@ -233,7 +227,7 @@ try {
   try {
     await window
       .getByRole("navigation", { name: "Project stages" })
-      .getByRole("button", { name: "Edit", exact: true })
+      .getByRole("button", { name: "Refine", exact: true })
       .click();
     await expect(window.locator("#error")).toBeVisible();
     await expect(
@@ -252,7 +246,7 @@ try {
   }
   const editStageButton = window
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Edit", exact: true });
+    .getByRole("button", { name: "Refine", exact: true });
   await editStageButton.click();
   await expect(editStageButton).toHaveAttribute("aria-current", "step");
   await expect(window.locator("#stage-select")).toHaveValue("edit");

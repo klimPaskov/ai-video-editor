@@ -12,7 +12,7 @@ import {
 import type { Reply } from "../src/bridge.ts";
 
 /**
- * Manual transitions in the Edit step's More tools. The control acts on the
+ * Manual transitions in the Refine step's More tools. The control acts on the
  * cut nearest the playhead: with a style and a length chosen it adds a
  * transition there, changes the one it has, or removes it. Nothing is
  * stored in the page; main anchors the transition to the cut.

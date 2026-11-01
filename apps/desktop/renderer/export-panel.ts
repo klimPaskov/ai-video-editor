@@ -6,9 +6,9 @@ import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
 
 const profileNotes: Record<ExportProfileChoice, string> = {
   lossless_master:
-    "Matroska with FFV1 video and PCM audio. Every edited frame and audio sample is kept exactly; files are large.",
+    "Matroska, FFV1 video and PCM audio. Nothing is lost; files are large.",
   smaller_mp4:
-    "Compressed H.264/AAC copy for sharing. Some detail is lost; the lossless master is not affected.",
+    "Compressed H.264/AAC copy for sharing. Your lossless master is untouched.",
 };
 
 function size(bytes: number): string {

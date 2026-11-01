@@ -36,7 +36,7 @@ export const exportUnsupported = Object.freeze([
   "This source cannot be read.",
   "Graphics cannot be drawn on video of this precision yet.",
   "Music and sound effects need a recording that has audio to mix them into.",
-  "A music or sound file of this video is missing or was changed. Add it again in Edit.",
+  "A music or sound file of this video is missing or was changed. Add it again in Magic Edit.",
 ] as const);
 
 const messageSet = new Set<string>([

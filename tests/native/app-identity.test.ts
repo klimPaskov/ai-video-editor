@@ -147,7 +147,7 @@ for (const legacy of [false, true]) {
     assert.deepEqual(await readFile(managedPath), sourceBytes);
     const edit = page
       .getByRole("navigation", { name: "Project stages" })
-      .getByRole("button", { name: "Edit", exact: true });
+      .getByRole("button", { name: "Refine", exact: true });
     await edit.click();
     await expect(edit).toHaveAttribute("aria-current", "step");
     await electron.close();
@@ -166,7 +166,7 @@ for (const legacy of [false, true]) {
     await expect(
       page
         .getByRole("navigation", { name: "Project stages" })
-        .getByRole("button", { name: "Edit", exact: true }),
+        .getByRole("button", { name: "Refine", exact: true }),
     ).toHaveAttribute("aria-current", "step");
     const pixels = await page
       .locator("#frame")

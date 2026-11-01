@@ -13,7 +13,7 @@ import {
 import type { Reply } from "../src/bridge.ts";
 
 /**
- * The Edit step's Camera tools. Without a camera video the only control is
+ * The Refine step's Camera tools. Without a camera video the only control is
  * Add camera video. With one, a layout (screen only, camera, camera in a
  * corner) is chosen for the picture from the playhead on; a change already
  * there is replaced, and the one in effect can be removed. The offset

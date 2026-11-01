@@ -219,7 +219,7 @@ try {
   page = await electron.firstWindow();
   watch(page);
   await openProject(page, project.id);
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
   await page.locator("#auto-edit-more > summary").click();
   await page.getByRole("button", { name: "Transcribe locally" }).click();
   await expect(page.locator("#transcription-error")).toBeVisible({

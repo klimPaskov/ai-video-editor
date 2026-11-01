@@ -81,13 +81,7 @@ try {
   await page.screenshot({ path: join(evidence, "0-home.png") });
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
-  for (const name of [
-    "Record or Import",
-    "Auto Edit",
-    "Edit",
-    "Review",
-    "Export",
-  ]) {
+  for (const name of ["Import", "Magic Edit", "Refine", "Review", "Export"]) {
     await page.getByRole("button", { name, exact: true }).click();
     await expect(
       page.getByRole("button", { name, exact: true }),

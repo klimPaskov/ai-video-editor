@@ -237,7 +237,7 @@ try {
   mark("start-local-transcription");
   await page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true })
+    .getByRole("button", { name: "Magic Edit", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Transcribe locally", exact: true })
@@ -402,7 +402,7 @@ try {
   await expect(page.locator("#frame")).toBeVisible({ timeout: 120_000 });
   await page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true })
+    .getByRole("button", { name: "Magic Edit", exact: true })
     .click();
   const reopenedTranscript = await transcriptionView(page, project.id);
   assert.equal(reopenedTranscript.job.status, "completed");

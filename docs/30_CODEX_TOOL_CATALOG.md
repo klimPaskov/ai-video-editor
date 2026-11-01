@@ -104,7 +104,7 @@ Implemented assistant-invoked equivalents of the manual graphic edit (ADR 0019, 
 
 ### `captions.configure`, `audio.configure`
 
-Implemented assistant-invoked equivalents of the Auto Edit captions and audio cards. `captions.configure` takes `enabled`, `style` (plain, highlight, minimal), `size` (small, medium, large), `position` (bottom, top) and `burn_in`; `audio.configure` takes `normalize` and `denoise`. Each needs every field, the common freshness fields and a pass group, and commits one `set_captions` or `set_audio` transaction (pass kind `captions` or `audio`) that shares Undo with every origin; repeating the current choice returns `unchanged` without a transaction. Caption text stays derived from the transcript; the summary's `captions`/`audio` are null while the draft has no choice of its own (the earlier per-project choice or the default applies).
+Implemented assistant-invoked equivalents of the Magic Edit captions and audio cards. `captions.configure` takes `enabled`, `style` (plain, highlight, minimal), `size` (small, medium, large), `position` (bottom, top) and `burn_in`; `audio.configure` takes `normalize` and `denoise`. Each needs every field, the common freshness fields and a pass group, and commits one `set_captions` or `set_audio` transaction (pass kind `captions` or `audio`) that shares Undo with every origin; repeating the current choice returns `unchanged` without a transaction. Caption text stays derived from the transcript; the summary's `captions`/`audio` are null while the draft has no choice of its own (the earlier per-project choice or the default applies).
 
 ### `media.get_frames`
 
