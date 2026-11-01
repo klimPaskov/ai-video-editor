@@ -18,7 +18,13 @@ The interface should feel like a focused creator tool. It should not look like a
 - Keep warnings close to the affected item.
 - Do not fill empty space with metrics or status cards.
 
-## Editor layout
+## Current interface (ADR 0024, 2026-10-24)
+
+The interface follows the Light Canvas reference designs (kept privately in `local-data/design-options/`): a plain application bar (logo, name, a quiet Claude button, source details, Home, Settings); a stepper row under it (five 40 px circles joined by long lines, labels below; done = outlined with a check, current = filled with a bold label); the picture, player bar and timeline together in one white rounded card; the step's one action below the card (Auto Edit: "Edit my video" pill and a "More options" disclosure; Import: file chip, duration, Add footage, then "Continue to Auto Edit"; Edit: a floating toolbar of icon-over-label tools with "More tools" (marks, cut range, zoom, speed, transition and restore); Review: Original, Edited and Clips figures with "Verify draft" and "Continue to Export"; Export: the card on the left, quality and Export… on the right with Short clips as a disclosure: find or pick clips, format, framing, captions, title and speed, export one or all, and the list of saved clips). Home is a headline, two large tiles (New recording, Import video) and the Recent projects. Themes (Light Canvas default, Studio Dark, Paper, Cinematic, Custom) are chosen in Settings; Cinematic lets the picture fill the window with frosted-glass controls.
+
+Deviations from the references, because the real app needs them: the player bar has a Full screen control (Esc leaves it) but no volume control, because the preview plays no audio and such a control would do nothing; the Edit timeline has a thumbnail filmstrip and a time ruler but marks zooms, graphics and transitions as small bars and hatched markers rather than the reference's flag pins; at 820 px and narrower the stepper becomes a list; the Export step has no "Export video" heading or subtitle (the step name already says it, and repeated headings are not shipped), its Short clips is a small disclosure rather than a card row, and the Claude button sits in the app bar rather than as a blue circle in the Edit toolbar.
+
+## Editor layout (earlier text, kept for the tool details)
 
 ### Top bar
 
@@ -92,3 +98,5 @@ Use short labels for real controls and screen-reader names for icon-only control
 No Ready indicator or debug footer appears in the bottom-left corner. No tool versions, local-service health list, QA dump, model logs, or filesystem paths occupy the normal editing view. A capture timer and microphone meter are recording controls, not debug clutter.
 
 The Codex drawer is readily accessible and can stream edits without being permanently expanded. Opening it replaces the inspector at every window width. Closing it can restore the selected tool inspector. Never squeeze the preview behind a transcript, inspector, chat, and global sidebar all opened by default.
+
+Update (2026-10-25): the Edit step's More tools also holds the Camera tools (docs/05, ADR 0029); the recording dialog has a Camera menu. Both follow the same quiet, labelled-control pattern; nothing else about the layout changed.

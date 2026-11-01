@@ -3,6 +3,7 @@ import type { ShortClipsView } from "../../../packages/domain/src/short-clips-vi
 import type {
   ShortFormat,
   ShortFraming,
+  ShortSpeed,
 } from "../../../packages/domain/src/short-clips.ts";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -24,6 +25,13 @@ export function setupShortsPanel(options: {
   preview(startUs: number, endUs: number): void;
 }): { render(project: ProjectView | undefined, visible: boolean): void } {
   const find = element<HTMLButtonElement>("shorts-find");
+  const pick = element<HTMLButtonElement>("shorts-pick");
+  const exportAll = element<HTMLButtonElement>("shorts-export-all");
+  const titleSwitch = element<HTMLInputElement>("shorts-title");
+  const speed = element<HTMLSelectElement>("shorts-speed");
+  const batch = element("shorts-batch");
+  const libraryBox = element("shorts-library-box");
+  const library = element("shorts-library");
   const format = element<HTMLSelectElement>("shorts-format");
   const framing = element<HTMLSelectElement>("shorts-framing");
   const position = element<HTMLInputElement>("shorts-position");
@@ -43,19 +51,99 @@ export function setupShortsPanel(options: {
     error.hidden = !message;
   }
 
+  function exportOptions() {
+    return {
+      format: format.value as ShortFormat,
+      framing: framing.value as ShortFraming,
+      position: Number(position.value) / 100,
+      captions: captions.checked,
+      title: titleSwitch.checked,
+      speed: Number(speed.value) as ShortSpeed,
+    };
+  }
+
   function draw(): void {
     position.hidden = framing.value !== "fill";
-    find.disabled = pending || !projectId;
+    const picking = view?.pick.running === true;
+    find.disabled = pending || !projectId || picking;
+    pick.disabled = pending || !projectId || picking;
+    pick.textContent = picking ? "Claude is choosing…" : "Pick with Claude";
     find.textContent =
       view?.status === "none" || !view ? "Find clips" : "Find again";
     const running = view?.job.status === "running";
+    const shown = view?.status === "ready" ? view.candidates : [];
+    exportAll.disabled = pending || running || picking || shown.length === 0;
     note.textContent = !view
       ? ""
-      : view.message
-        ? view.message
-        : view.status === "none"
-          ? "Finds self-contained moments of 15 to 60 seconds in the transcript of this edit."
-          : `${view.candidates.length} ${view.candidates.length === 1 ? "clip" : "clips"} found from the transcript.`;
+      : picking
+        ? "Claude is reading the edit and choosing clips. This can take a minute."
+        : (view.pick.message ??
+          view.message ??
+          (view.status === "none"
+            ? "Finds self-contained moments of 15 to 60 seconds in the transcript of this edit, or lets Claude choose them."
+            : `${view.candidates.length} ${view.candidates.length === 1 ? "clip" : "clips"} ${view.candidates.every((candidate) => candidate.origin === "ai") ? "chosen by Claude" : "found from the transcript"}.`));
+    // One status for exporting every clip: which one, and progress.
+    const job = view?.job;
+    batch.hidden = !(job?.batch && job.status !== "idle");
+    batch.replaceChildren();
+    if (job?.batch && job.status !== "idle") {
+      if (job.status === "running") {
+        const text = document.createElement("span");
+        text.textContent = `Exporting clip ${job.batch.index + 1} of ${job.batch.total}${job.fileName ? `: ${job.fileName}` : ""}`;
+        const bar = document.createElement("progress");
+        bar.max = 1000;
+        bar.value = Math.round((job.fraction ?? 0) * 1000);
+        bar.setAttribute("aria-label", "Clip export progress");
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.textContent = "Cancel";
+        cancel.addEventListener("click", () => void act("cancel"));
+        batch.append(text, bar, cancel);
+      } else
+        batch.textContent =
+          job.status === "completed"
+            ? `Saved ${job.batch.total} ${job.batch.total === 1 ? "clip" : "clips"}.`
+            : (job.message ?? "");
+    }
+    // The clips exported from this project, newest first.
+    libraryBox.hidden = !view || view.library.length === 0;
+    library.replaceChildren(
+      ...(view?.library ?? []).map((saved) => {
+        const item = document.createElement("li");
+        item.className = "short-saved";
+        item.dataset.exportId = saved.id;
+        const name = document.createElement("strong");
+        name.textContent = saved.fileName;
+        const meta = document.createElement("span");
+        meta.className = "short-time";
+        meta.textContent = `${{ vertical: "9:16", square: "1:1", landscape: "16:9" }[saved.format]} · ${clock(saved.durationUs)}${saved.speed === 2 ? " · 2×" : ""}${saved.exists ? "" : " · file moved or deleted"}`;
+        const show = document.createElement("button");
+        show.type = "button";
+        show.className = "ghost";
+        show.textContent = "Show in folder";
+        show.setAttribute("aria-label", `Show ${saved.fileName} in its folder`);
+        show.disabled = pending || !saved.exists;
+        show.addEventListener(
+          "click",
+          () => void act("reveal", undefined, saved.id),
+        );
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "ghost";
+        remove.textContent = "Remove from list";
+        remove.setAttribute(
+          "aria-label",
+          `Remove ${saved.fileName} from the list`,
+        );
+        remove.disabled = pending;
+        remove.addEventListener(
+          "click",
+          () => void act("forget", undefined, saved.id),
+        );
+        item.append(name, meta, show, remove);
+        return item;
+      }),
+    );
     list.replaceChildren(
       ...(view?.status === "ready" ? view.candidates : []).map((candidate) => {
         const item = document.createElement("li");
@@ -71,6 +159,12 @@ export function setupShortsPanel(options: {
         head.append(title, time);
         const reasons = document.createElement("div");
         reasons.className = "short-reasons";
+        if (candidate.origin === "ai") {
+          const chip = document.createElement("span");
+          chip.className = "short-origin";
+          chip.textContent = "Claude's pick";
+          reasons.append(chip);
+        }
         for (const reason of candidate.reasons) {
           const chip = document.createElement("span");
           chip.textContent = reason;
@@ -144,7 +238,7 @@ export function setupShortsPanel(options: {
   function schedule(): void {
     if (poll !== undefined) window.clearTimeout(poll);
     poll = undefined;
-    if (view?.job.status === "running" && shown)
+    if ((view?.job.status === "running" || view?.pick.running) && shown)
       poll = window.setTimeout(() => void refresh(), 500);
   }
 
@@ -161,8 +255,17 @@ export function setupShortsPanel(options: {
   }
 
   async function act(
-    action: "find" | "discard" | "export" | "cancel",
+    action:
+      | "find"
+      | "pick"
+      | "discard"
+      | "export"
+      | "exportAll"
+      | "cancel"
+      | "reveal"
+      | "forget",
     clipId?: string,
+    exportId?: string,
   ): Promise<void> {
     const id = projectId;
     if (!id || pending) return;
@@ -173,18 +276,32 @@ export function setupShortsPanel(options: {
     const reply = await (
       action === "find"
         ? window.desktop.findShortClips(base)
-        : action === "cancel"
-          ? window.desktop.cancelShortClip(base)
-          : action === "discard"
-            ? window.desktop.discardShortClip({ ...base, clip_id: clipId! })
-            : window.desktop.exportShortClip({
-                ...base,
-                clip_id: clipId!,
-                format: format.value as ShortFormat,
-                framing: framing.value as ShortFraming,
-                position: Number(position.value) / 100,
-                captions: captions.checked,
-              })
+        : action === "pick"
+          ? window.desktop.pickShortClips(base)
+          : action === "cancel"
+            ? window.desktop.cancelShortClip(base)
+            : action === "discard"
+              ? window.desktop.discardShortClip({ ...base, clip_id: clipId! })
+              : action === "exportAll"
+                ? window.desktop.exportAllShortClips({
+                    ...base,
+                    ...exportOptions(),
+                  })
+                : action === "reveal"
+                  ? window.desktop.revealShortClip({
+                      ...base,
+                      export_id: exportId!,
+                    })
+                  : action === "forget"
+                    ? window.desktop.forgetShortClip({
+                        ...base,
+                        export_id: exportId!,
+                      })
+                    : window.desktop.exportShortClip({
+                        ...base,
+                        clip_id: clipId!,
+                        ...exportOptions(),
+                      })
     ).catch(() => null);
     pending = false;
     if (id !== projectId) return;
@@ -198,6 +315,8 @@ export function setupShortsPanel(options: {
   }
 
   find.addEventListener("click", () => void act("find"));
+  pick.addEventListener("click", () => void act("pick"));
+  exportAll.addEventListener("click", () => void act("exportAll"));
   framing.addEventListener("change", draw);
 
   return {

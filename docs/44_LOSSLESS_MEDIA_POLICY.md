@@ -42,6 +42,8 @@ Preserve high precision through compositing. Test the actual decode, pixel trans
 
 Audio cleanup, normalization, ducking, fades, pitch preservation, and zoom interpolation intentionally change samples. Apply them only as selected draft operations. Encode their canonical result losslessly, preserve originals, and make edits undoable. Do not normalize or resample on export unless the project explicitly requests it.
 
+Frame timing is never resampled. A source is exported on its nominal frame grid only when every frame lies within one tick (at least 1 ms) of its own slot. When a screen recorder missed a capture, the previous frame stays on screen through the empty slot, so the export repeats it there; every source frame stays bit-identical and audio keeps its own clock. Off-grid timing is refused as variable frame rate instead of converted.
+
 ## Opt-in smaller output
 
 Offer two clear choices: Lossless master (default) and Smaller file. The latter may use a compatible H.264/AAC MP4 preset, with resolution and rate choices under Advanced. Explain its quality tradeoff briefly. Use a distinct filename and profile. Never overwrite the lossless master or reuse a proxy as its input. The container extension must match the muxer.

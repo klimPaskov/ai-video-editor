@@ -1,0 +1,502 @@
+/**
+ * Packaged native full AI edit by a real, signed-in Claude on the user's own
+ * two recordings (P10 with Claude, docs/40 and docs/50).
+ *
+ * node tests/native/user-footage-claude.test.ts <packaged-executable>
+ *   <claude-bin-dir> <profile-config-root> <first.mp4> <second.mp4> [--export]
+ *   [--continue <project-id> [--no-edit]] [--level tidy|polished|bold]
+ *   [--brief "<style line, at most 300 characters>"]
+ *
+ * The profile is a private config root whose Claude Code sign-in the user
+ * completed themselves (docs/48); no credential is copied. The run imports the
+ * recordings in order, runs Magic Edit (which also transcribes), then Edit
+ * with Claude (Polished) with a light brief, and records what changed. With
+ * --export it also exports and verifies the lossless master. With --continue
+ * it opens that existing project of an earlier run instead of importing and
+ * cutting, and starts another full edit in the same Claude conversation
+ * (Claude keeps its workspace notes), for example after an interrupted run;
+ * --no-edit then skips the full edit and only reopens and exports.
+ * Footage,
+ * transcripts, screenshots and the conversation stay in the guest; only
+ * aggregate facts are printed.
+ */
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { _electron, expect } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
+import type { ElectronApplication, Page } from "playwright/test";
+import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
+import { appIdentity } from "../../packages/domain/src/app-identity.ts";
+
+await assertNativeTestEnvironment();
+const [executablePath, claudeBin, profileRoot, firstPath, secondPath] =
+  process.argv.slice(2);
+assert.ok(
+  executablePath && claudeBin && profileRoot && firstPath && secondPath,
+  "Executable, Claude bin directory, profile and both recordings are required",
+);
+const exportMaster = process.argv.includes("--export");
+/** With --export, make the smaller MP4 for sharing instead of the lossless master. */
+const exportMp4 = process.argv.includes("--mp4");
+/** The value after a flag, or null. */
+const flagValue = (name: string): string | null => {
+  const at = process.argv.indexOf(name);
+  return at > 0 ? (process.argv[at + 1] ?? null) : null;
+};
+// A style line for the full edit's brief (at most 300 characters) and its
+// level (tidy, polished or bold); polished without a line by default.
+const briefStyle = flagValue("--brief");
+const briefLevel = flagValue("--level") ?? "polished";
+const continueAt = process.argv.indexOf("--continue");
+const continueProject = continueAt > 0 ? process.argv[continueAt + 1] : null;
+assert.ok(continueAt < 0 || continueProject, "--continue needs a project id");
+/** Stop after Magic Edit (tightening and the rough cut); no full edit. */
+const roughOnly = process.argv.includes("--rough-only");
+const skipEdit =
+  roughOnly || (continueProject !== null && process.argv.includes("--no-edit"));
+const evidenceRoot = resolve("test-results");
+await mkdir(evidenceRoot, { recursive: true, mode: 0o700 });
+const evidence = await mkdtemp(join(evidenceRoot, "native-footage-claude-"));
+const configRoot = resolve(profileRoot);
+const userData = join(configRoot, appIdentity.slug);
+const started = Date.now();
+const elapsed = () => Math.round((Date.now() - started) / 1000);
+
+async function fileHash(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest("hex");
+}
+
+const originals = [firstPath, secondPath].map((path) => resolve(path));
+const originalHashes = await Promise.all(originals.map(fileHash));
+let step = "launch";
+const result: Record<string, unknown> = {
+  scope: "P10-user-footage-claude-full-edit",
+  assistant: "Claude (signed in, real model)",
+};
+const marks: Array<[string, number]> = [];
+const mark = (name: string) => {
+  step = name;
+  marks.push([name, elapsed()]);
+  console.log(JSON.stringify({ step: name, seconds: elapsed() }));
+};
+
+const launch = () =>
+  _electron.launch({
+    executablePath,
+    env: {
+      ...process.env,
+      XDG_CONFIG_HOME: configRoot,
+      PATH: `${resolve(claudeBin)}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+    },
+    chromiumSandbox: true,
+    timeout: 60_000,
+  });
+
+async function dialogs(electron: ElectronApplication, save: string | null) {
+  await electron.evaluate(
+    ({ dialog }, value) => {
+      let index = 0;
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [value.sources[index++]!],
+      });
+      dialog.showSaveDialog = async () =>
+        value.save
+          ? { canceled: false, filePath: value.save }
+          : { canceled: true, filePath: "" };
+    },
+    { sources: originals, save },
+  );
+}
+
+let electron = await launch();
+let projectId: string | null = null;
+async function project(page: Page) {
+  const listed = await page.evaluate(() => window.desktop.listProjects());
+  assert.ok(listed.ok);
+  const found = listed.value.find((view) => view.id === projectId);
+  assert.ok(found, "the run's project is listed");
+  return found;
+}
+/** Opens the run's project from Home (or finds it already open). */
+async function openProject(page: Page, id: string) {
+  const row = page.locator(`#projects [data-project-id="${id}"]`);
+  // Home lists it, or the app reopened it already.
+  await expect
+    .poll(
+      async () =>
+        (await row.isVisible()) || (await page.locator("#frame").isVisible()),
+      { timeout: 300_000 },
+    )
+    .toBe(true);
+  if (await row.isVisible()) await row.click();
+  await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
+}
+async function seek(page: Page, us: number) {
+  await page.evaluate((value) => {
+    const control = document.querySelector<HTMLInputElement>("#seek")!;
+    control.value = String(value);
+    control.dispatchEvent(new Event("input"));
+  }, us);
+  await expect(page.locator("#preview-message")).toBeHidden({
+    timeout: 120_000,
+  });
+}
+
+try {
+  await dialogs(electron, null);
+  let page = await electron.firstWindow();
+  await openDisclosures(page);
+  // The app checks Claude Code's status after launch.
+  await expect
+    .poll(
+      async () => {
+        const reply = await page.evaluate(() => window.desktop.getClaude());
+        return reply.ok ? reply.value.status : "error";
+      },
+      { timeout: 120_000 },
+    )
+    .toBe("signed_in");
+
+  let current: Awaited<ReturnType<typeof project>>;
+  let folder: string;
+  let baselineBytes: Buffer;
+  let baseline: { sources: Array<{ managed_path: string; sha256: string }> };
+  if (continueProject) {
+    mark("continue");
+    projectId = continueProject;
+    await openProject(page, continueProject);
+    current = await project(page);
+    folder = join(userData, "project-store", current.id);
+    baselineBytes = await readFile(join(folder, "baseline.json"));
+    baseline = JSON.parse(baselineBytes.toString("utf8"));
+    assert.deepEqual(
+      baseline.sources.map((source) => source.sha256),
+      originalHashes,
+    );
+    result.continued = {
+      editedSeconds: Math.round(current.timeline.durationUs / 1e6),
+      graphics: current.graphics?.length ?? 0,
+    };
+  } else {
+    mark("import");
+    const before = await page.evaluate(() => window.desktop.listProjects());
+    assert.ok(before.ok);
+    const known = new Set(before.value.map((view) => view.id));
+    await page
+      .getByRole("button", { name: "Import video", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Add footage" })
+      .click({ timeout: 600_000 });
+    await expect(page.getByRole("button", { name: "Add footage" })).toBeHidden({
+      timeout: 600_000,
+    });
+    await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
+    const listed = await page.evaluate(() => window.desktop.listProjects());
+    assert.ok(listed.ok);
+    projectId = listed.value.find(
+      (view) => !known.has(view.id) && view.sources?.length === 2,
+    )!.id;
+    current = await project(page);
+    folder = join(userData, "project-store", current.id);
+    baselineBytes = await readFile(join(folder, "baseline.json"));
+    baseline = JSON.parse(baselineBytes.toString("utf8"));
+    assert.deepEqual(
+      baseline.sources.map((source) => source.sha256),
+      originalHashes,
+    );
+    const originalDurationUs = current.timeline.durationUs;
+    result.imported = { sources: 2, inOrder: true };
+
+    mark("magic-edit");
+    await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+    await page.locator("#magic-start").click();
+    await expect(page.locator("#magic-stop")).toBeVisible({ timeout: 60_000 });
+    // Claude's rough cut ends when Run Magic Edit comes back.
+    await expect(page.locator("#magic-start")).toBeVisible({
+      timeout: 4 * 3_600_000,
+    });
+    const magicError = (await page.locator("#magic-error").isVisible())
+      ? await page.locator("#magic-error").textContent()
+      : null;
+    await page.screenshot({ path: join(evidence, "rough-cut.png") });
+    current = await project(page);
+    const afterMagicUs = current.timeline.durationUs;
+    result.magicEdit = {
+      by: "Claude rough cut",
+      status: await page.locator("#magic-status").textContent(),
+      error: magicError,
+      removedSeconds: Math.round((originalDurationUs - afterMagicUs) / 1e6),
+      editedSeconds: Math.round(afterMagicUs / 1e6),
+    };
+    // How much pacing is left: gaps between spoken words inside the kept
+    // material, measured from the local transcript.
+    const transcripts = await page.evaluate(
+      (id) =>
+        window.desktop.getTranscription({
+          schema_version: "1.0",
+          project_id: id,
+          job_id: null,
+        }),
+      current.id,
+    );
+    if (transcripts.ok) {
+      const kept = current.clips ?? [];
+      const gaps: number[] = [];
+      let fillers = 0;
+      for (const item of transcripts.value.results) {
+        const words = item.transcript.segments.flatMap((s) => s.words);
+        const clips = kept.filter((clip) => clip.sourceId === item.source_id);
+        const inside = words.filter((word) =>
+          clips.some(
+            (clip) =>
+              word.start_us >= clip.sourceStartUs &&
+              word.end_us <= clip.sourceEndUs,
+          ),
+        );
+        for (let index = 1; index < inside.length; index++) {
+          const before = inside[index - 1]!;
+          const word = inside[index]!;
+          const together = clips.some(
+            (clip) =>
+              before.start_us >= clip.sourceStartUs &&
+              word.end_us <= clip.sourceEndUs,
+          );
+          if (together) gaps.push(word.start_us - before.end_us);
+        }
+        fillers += inside.filter((word) =>
+          /^(um+|uh+|er+m?|hmm+)[.,]?$/iu.test(word.text),
+        ).length;
+      }
+      (result.magicEdit as Record<string, unknown>).remaining = {
+        gapsOver450ms: gaps.filter((gap) => gap >= 450_000).length,
+        gapsOver700ms: gaps.filter((gap) => gap >= 700_000).length,
+        gapsOver1500ms: gaps.filter((gap) => gap >= 1_500_000).length,
+        fillers,
+        words: gaps.length,
+      };
+    }
+    console.log(JSON.stringify({ roughCut: result.magicEdit }));
+    assert.equal(magicError, null, magicError ?? "");
+  }
+
+  if (!skipEdit) {
+    mark("claude-full-edit");
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(page.locator("#edit-actions")).toBeVisible({
+      timeout: 300_000,
+    });
+    await page.getByRole("button", { name: "Claude", exact: true }).click();
+    // Magic Edit already opened the conversation for its rough cut.
+    const open = page.getByRole("button", {
+      name: "Open conversation",
+      exact: true,
+    });
+    // The drawer may still be switching to the open conversation, so a click
+    // that finds the button gone is fine.
+    if (await open.isVisible())
+      await open.click({ timeout: 5_000 }).catch(() => undefined);
+    const request = { schema_version: "1.0" as const, project_id: current.id };
+    const thread = async () => {
+      const reply = await page.evaluate(
+        (value) => window.desktop.getClaudeThread(value),
+        request,
+      );
+      assert.ok(reply.ok);
+      return reply.value;
+    };
+    // An earlier run that was stopped leaves its turn "failed"; the app
+    // accepts a new run from there as from "ready".
+    await expect
+      .poll(async () => (await thread()).status, { timeout: 120_000 })
+      .toMatch(/^(ready|failed)$/u);
+    await page.locator("#claude-full-edit summary").click();
+    await page.locator("#full-edit-level").selectOption(briefLevel);
+    if (briefStyle) await page.locator("#full-edit-style").fill(briefStyle);
+    await page.screenshot({ path: join(evidence, "full-edit-brief.png") });
+    await page.locator("#start-full-edit").click();
+    const journal = join(folder, "draft", "journal");
+    const records = async () =>
+      Promise.all(
+        (await readdir(journal).catch(() => []))
+          .filter((name) => name.endsWith(".json"))
+          .sort()
+          .map(
+            async (name) =>
+              JSON.parse(await readFile(join(journal, name), "utf8")) as {
+                origin: string;
+                kind: string;
+                operations: Array<{ operation_type: string }>;
+              },
+          ),
+      );
+    let shot = 0;
+    let lastLog = 0;
+    let view = await thread();
+    for (;;) {
+      view = await thread();
+      if (view.fullEdit?.status !== "running" && view.status !== "running")
+        break;
+      if (Date.now() - lastLog > 60_000) {
+        lastLog = Date.now();
+        const claudeEdits = (await records()).filter(
+          (record) => record.origin === "claude",
+        ).length;
+        console.log(
+          JSON.stringify({
+            seconds: elapsed(),
+            status: view.status,
+            changes: view.fullEdit?.changes ?? 0,
+            claudeTransactions: claudeEdits,
+          }),
+        );
+        if (shot < 12)
+          await page.screenshot({
+            path: join(
+              evidence,
+              `running-${String(++shot).padStart(2, "0")}.png`,
+            ),
+          });
+      }
+      if (elapsed() > 4 * 3600) throw new Error("The full edit ran too long.");
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+    }
+    const applied = await records();
+    const claudeOps: Record<string, number> = {};
+    for (const record of applied)
+      if (record.origin === "claude")
+        for (const operation of record.operations)
+          claudeOps[operation.operation_type] =
+            (claudeOps[operation.operation_type] ?? 0) + 1;
+    current = await project(page);
+    result.fullEdit = {
+      status: view.fullEdit?.status ?? null,
+      threadStatus: view.status,
+      message: view.message,
+      changes: view.fullEdit?.changes ?? 0,
+      undoable: view.fullEdit?.undoable ?? false,
+      claudeOperations: claudeOps,
+      finalSummaryLength: view.messages.at(-1)?.text.length ?? 0,
+      editedSeconds: Math.round(current.timeline.durationUs / 1e6),
+      graphics: current.graphics?.length ?? 0,
+    };
+    console.log(JSON.stringify({ fullEdit: result.fullEdit }));
+    await page.screenshot({ path: join(evidence, "full-edit-finished.png") });
+    await page.locator("#close-codex").click();
+    // Pictures across the edit for review.
+    for (const fraction of [0.02, 0.1, 0.25, 0.5, 0.75, 0.95]) {
+      await seek(page, Math.round(current.timeline.durationUs * fraction));
+      await page.screenshot({
+        path: join(evidence, `review-${Math.round(fraction * 100)}.png`),
+      });
+    }
+  }
+
+  mark("reopen");
+  const head = {
+    sequence: current.draft.sequence,
+    sha: current.draft.timelineSha256,
+  };
+  await electron.close();
+  electron = await launch();
+  await dialogs(electron, null);
+  page = await electron.firstWindow();
+  await openDisclosures(page);
+  await openProject(page, current.id);
+  current = await project(page);
+  assert.deepEqual(
+    { sequence: current.draft.sequence, sha: current.draft.timelineSha256 },
+    head,
+  );
+  result.reopened = true;
+
+  if (exportMaster) {
+    mark("export-master");
+    const master = join(
+      process.env.EXPORT_DIR ?? evidence,
+      exportMp4 ? "Claude edit.mp4" : "Claude edit master.mkv",
+    );
+    await dialogs(electron, master);
+    await page.getByRole("button", { name: "Export", exact: true }).click();
+    if (exportMp4) await page.locator('[data-profile="smaller_mp4"]').click();
+    await expect(page.locator("#export-profile")).toHaveValue(
+      exportMp4 ? "smaller_mp4" : "lossless_master",
+    );
+    await page.locator("#export-start").click();
+    // Done, or failed: then the private failure note says why.
+    let exported: { status: string; message: string | null } = {
+      status: "running",
+      message: null,
+    };
+    while (Date.now() - started < 12 * 3_600_000) {
+      const reply = await page.evaluate(
+        (id) =>
+          window.desktop.getExport({ schema_version: "1.0", project_id: id }),
+        current.id,
+      );
+      assert.ok(reply.ok);
+      exported = reply.value;
+      // Idle until main has the destination and starts the job.
+      if (
+        exported.status !== "idle" &&
+        exported.status !== "running" &&
+        exported.status !== "cancelling"
+      )
+        break;
+      await new Promise((resolve) => setTimeout(resolve, 15_000));
+    }
+    if (exported.status !== "completed") {
+      const note = await readFile(
+        join(userData, "exports", "last-failure.json"),
+        "utf8",
+      ).catch(() => "no failure note");
+      console.log(JSON.stringify({ exportFailed: exported.message, note }));
+      await page.screenshot({ path: join(evidence, "export-failed.png") });
+      throw new Error(`The export did not complete: ${exported.status}`);
+    }
+    await expect(page.locator("#export-done")).toBeVisible();
+    const done = await page.evaluate(
+      (id) =>
+        window.desktop.getExport({ schema_version: "1.0", project_id: id }),
+      current.id,
+    );
+    assert.ok(done.ok);
+    if (!exportMp4) assert.equal(done.value.result?.samplesEqual, true);
+    await page.screenshot({ path: join(evidence, "export-master.png") });
+    result.master = exportMp4
+      ? { smallerMp4: master }
+      : { appVerifiedSampleEquality: true };
+  }
+
+  mark("immutability");
+  assert.deepEqual(await Promise.all(originals.map(fileHash)), originalHashes);
+  for (const [index, source] of baseline.sources.entries())
+    assert.equal(await fileHash(source.managed_path), originalHashes[index]);
+  assert.deepEqual(
+    await readFile(join(folder, "baseline.json")),
+    baselineBytes,
+  );
+  result.sourcesUnchanged = true;
+  result.step = "complete";
+  result.marks = marks;
+  await writeFile(
+    join(evidence, "result.json"),
+    JSON.stringify(result, null, 2),
+    { mode: 0o600 },
+  );
+  console.log(JSON.stringify({ evidence, result }));
+} catch (error) {
+  await writeFile(
+    join(evidence, "failure.json"),
+    JSON.stringify({ step, result, marks }, null, 2),
+  ).catch(() => undefined);
+  throw error;
+} finally {
+  await electron.close().catch(() => undefined);
+}

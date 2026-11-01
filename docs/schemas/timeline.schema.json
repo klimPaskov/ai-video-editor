@@ -255,6 +255,32 @@
       "items": { "$ref": "#/$defs/graphic_effect" },
       "description": "Draft motion graphics. Omitted when the draft has none."
     },
+    "transitions": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/transition_effect" },
+      "description": "Draft transitions anchored to cuts. Omitted when the draft has none."
+    },
+    "layouts": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/layout_change" },
+      "description": "How the camera and the screen share the picture, as changes anchored to moments of a recording; each holds until the next. Omitted when the draft has none (the screen alone)."
+    },
+    "captions": {
+      "$ref": "#/$defs/caption_settings",
+      "description": "The draft's caption choices. Omitted until the first change; the project's earlier per-project choice or the default applies until then."
+    },
+    "sounds": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/sound_layer" },
+      "description": "Draft music and sound effects mixed into the export audio (ADR 0023). Omitted when the draft has none."
+    },
+    "audio": {
+      "$ref": "#/$defs/audio_settings",
+      "description": "The draft's export audio treatment. Omitted until the first change, like captions."
+    },
     "zooms": {
       "type": "array",
       "maxItems": 256,
@@ -271,6 +297,73 @@
     }
   },
   "$defs": {
+    "caption_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "style", "size", "position", "burnIn"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "style": { "enum": ["plain", "highlight", "minimal"] },
+        "size": { "enum": ["small", "medium", "large"] },
+        "position": { "enum": ["bottom", "top"] },
+        "burnIn": { "type": "boolean" }
+      }
+    },
+    "audio_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalize", "denoise"],
+      "properties": {
+        "normalize": { "type": "boolean" },
+        "denoise": { "type": "boolean" }
+      }
+    },
+    "sound_layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sound_id", "name", "kind", "asset_id", "asset_sha256", "asset_start_us",
+        "duration_us", "start", "gain_db", "fade_in_us", "fade_out_us", "duck_db", "loop"
+      ],
+      "properties": {
+        "sound_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "kind": { "enum": ["music", "effect"] },
+        "asset_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "asset_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "asset_start_us": { "type": "integer", "minimum": 0, "maximum": 14400000000 },
+        "duration_us": { "type": "integer", "minimum": 50000, "maximum": 14400000000 },
+        "start": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "start_us"],
+              "properties": {
+                "type": { "const": "output" },
+                "start_us": { "type": "integer", "minimum": 0, "maximum": 14400000000 }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "source_id", "source_us"],
+              "properties": {
+                "type": { "const": "source" },
+                "source_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+                "source_us": { "type": "integer", "minimum": 0 }
+              }
+            }
+          ]
+        },
+        "gain_db": { "type": "integer", "minimum": -60, "maximum": 12 },
+        "fade_in_us": { "type": "integer", "minimum": 0, "maximum": 14400000000 },
+        "fade_out_us": { "type": "integer", "minimum": 0, "maximum": 14400000000 },
+        "duck_db": { "type": "integer", "minimum": 0, "maximum": 30 },
+        "loop": { "type": "boolean" }
+      },
+      "description": "A music bed or sound effect from one of the project's audio files, named by id and SHA-256. Fades together may not exceed the duration. An output start is a fixed time; a source start follows cuts and is silent when its moment was cut away. duck_db lowers the layer while the edit's own speech plays."
+    },
     "graphic_effect": {
       "type": "object",
       "additionalProperties": false,
@@ -283,9 +376,47 @@
         "duration_us": { "type": "integer", "minimum": 100000, "maximum": 600000000 },
         "layer": { "type": "integer", "minimum": 0, "maximum": 99 },
         "html": { "type": "string", "maxLength": 65536 },
-        "css": { "type": "string", "maxLength": 65536 }
+        "css": { "type": "string", "maxLength": 65536 },
+        "composition_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       },
-      "description": "A motion graphic: an HTML fragment and its CSS, starting where source moment source_us plays in the edit and lasting duration_us of output time. Runtime rejects scripts, event handlers, script URLs, embedded documents, form and media elements, @import and any non-data, non-fragment URL, and requires source_us inside the source and unique IDs."
+      "description": "A motion graphic: an HTML fragment and its CSS, or (with composition_sha256 and empty html and css) a stored HyperFrames composition played in a sealed child page, starting where source moment source_us plays in the edit and lasting duration_us of output time. Runtime rejects scripts, event handlers, script URLs, embedded documents, form and media elements, @import and any non-data, non-fragment URL, and requires source_us inside the source and unique IDs."
+    },
+    "layout_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layout_id", "source_id", "source_us", "kind"],
+      "properties": {
+        "layout_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_us": { "type": "integer", "minimum": 0 },
+        "kind": { "enum": ["screen", "camera", "pip"] },
+        "corner": { "enum": ["top_left", "top_right", "bottom_left", "bottom_right"] },
+        "size": { "type": "number", "minimum": 0.12, "maximum": 0.5 },
+        "shape": { "enum": ["circle", "rounded", "rect"] },
+        "face_zoom": { "type": "number", "minimum": 1, "maximum": 2.5 },
+        "focus_x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "focus_y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "move_us": { "type": "integer", "minimum": 0, "maximum": 2000000 }
+      },
+      "dependentRequired": {
+        "focus_x": ["focus_y"],
+        "focus_y": ["focus_x"]
+      },
+      "description": "An arrangement of the camera and screen from a moment of recording source_id: screen (the screen alone), camera (the camera fills the picture) or pip (the camera in a corner, in a shape). corner, size and shape belong to pip; face_zoom with focus_x/focus_y frames the camera picture; move_us (default 600000) is how long the change takes to play. It follows cuts: a moment that was cut away applies at the next retained moment. Runtime allows one change per moment and requires a linked camera recording to show the camera."
+    },
+    "transition_effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transition_id", "source_id", "source_us", "kind", "duration_us", "color"],
+      "properties": {
+        "transition_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
+        "source_us": { "type": "integer", "minimum": 0 },
+        "kind": { "enum": ["dip", "wipe_right", "wipe_left", "iris"] },
+        "duration_us": { "type": "integer", "minimum": 200000, "maximum": 2000000 },
+        "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+      },
+      "description": "A styled overlay that hides a cut, centred on the first frame of the incoming clip, which starts at source moment source_us of source_id. It follows later cuts and is dormant while no cut is there. At most one per cut. It draws like a motion graphic over the video and changes no audio."
     },
     "zoom_effect": {
       "type": "object",
@@ -312,9 +443,18 @@
         "source_end_us": { "type": "integer", "minimum": 1 },
         "center_x": { "type": "number", "minimum": 0, "maximum": 1 },
         "center_y": { "type": "number", "minimum": 0, "maximum": 1 },
-        "scale": { "type": "number", "minimum": 1.1, "maximum": 4 }
+        "scale": { "type": "number", "minimum": 1.1, "maximum": 4 },
+        "motion": { "enum": ["hold", "push"] },
+        "end_center_x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "end_center_y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "ease_in_us": { "type": "integer", "minimum": 100000, "maximum": 1500000 },
+        "ease_out_us": { "type": "integer", "minimum": 100000, "maximum": 1500000 }
       },
-      "description": "A zoom anchored to source time. It magnifies the point (center_x, center_y) of the frame by scale, eases in and out over at most 0.4 s at its real edges, and follows cuts. Runtime requires at least 0.5 s, a range inside its source, unique IDs and no overlap with another zoom of the same source."
+      "dependentRequired": {
+        "end_center_x": ["end_center_y"],
+        "end_center_y": ["end_center_x"]
+      },
+      "description": "A zoom anchored to source time. It magnifies the point (center_x, center_y) of the frame by scale, eases in and out (400 ms by default, ease_in_us / ease_out_us) at its real edges, and follows cuts. motion push grows the magnification slowly across the whole zoom; end_center_x/y pan to a second point across it. Runtime requires at least 0.5 s, a range inside its source, unique IDs and no overlap with another zoom of the same source."
     },
     "transcript_edit": {
       "type": "object",

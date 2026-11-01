@@ -13,14 +13,18 @@ const paths: Record<string, string> = {
     "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8ZM19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7Z",
   info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11v6M12 7.5v.5",
   close: "M6 6l12 12M18 6 6 18",
+  more: "M5.5 12h1M11.5 12h1M17.5 12h1",
   "frame-back": "M18 6 10 12l8 6V6ZM6 6v12",
   "frame-forward": "M6 6l8 6-8 6V6ZM18 6v12",
+  fullscreen: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
   play: "M7 4.5v15L19.5 12 7 4.5Z",
   pause: "M8 5v14M16 5v14",
   stop: "M6 6h12v12H6Z",
   record: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z",
   "record-large":
-    "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
+    "M3 7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2ZM15 10l6-3v10l-6-3Z",
+  video:
+    "M3 7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2ZM15 10l6-3v10l-6-3Z",
   folder:
     "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z",
   "folder-large":
@@ -44,6 +48,7 @@ const paths: Record<string, string> = {
   captions: "M3 5h18v14H3ZM7 11h4M13 11h4M7 15h7M16 15h1",
   clips: "M7 3h10v18H7ZM3 6h2v12H3ZM19 6h2v12h-2ZM10 9l4 3-4 3Z",
   audio: "M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2",
+  transition: "M3 7h7v10H3ZM14 7h7v10h-7ZM10 12h4M12.5 10l1.5 2-1.5 2",
   zoom: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4M11 8v6M8 11h6",
   speed: "M5 6l7 6-7 6ZM12 6l7 6-7 6Z",
   target:

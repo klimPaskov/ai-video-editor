@@ -91,10 +91,6 @@ async function hash(path: string, signal?: AbortSignal): Promise<string> {
   }
   return digest.digest("hex");
 }
-/** Identity of a file's current bytes: changes whenever it is written. */
-function signature(stat: Stats): string {
-  return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
-}
 const retryableRename = new Set(["EBUSY", "EPERM", "EACCES"]);
 /** Moves a file; Windows briefly locks a file that was just written. */
 async function moveWithRetry(from: string, to: string): Promise<void> {
@@ -227,14 +223,16 @@ export class MediaLibrary {
     Promise<PresentationTiming>
   >();
   private readonly thumbnails = new Map<string, Promise<MediaFrame>>();
+  private readonly stripFrames = new Map<string, Promise<MediaFrame>>();
   /**
-   * Managed sources whose full SHA-256 was checked by this process, with the
-   * file identity at that time. While the identity is unchanged the bytes
-   * cannot have changed, so later checks need no further full read.
+   * Sources fully verified in this process, keyed by their file identity and
+   * change times. Hashing a long recording on every draft read made each edit
+   * cost seconds; any change to the file (content, size, times, replacement)
+   * changes the key and forces a full re-verification.
    */
-  private readonly verified = new Map<
+  private readonly verifiedFiles = new Map<
     string,
-    { signature: string; sha256: string }
+    { key: string; value: VerifiedLibrarySource }
   >();
   constructor(
     root: string,
@@ -282,50 +280,46 @@ export class MediaLibrary {
     assertMediaList(result);
     return result;
   }
-  /** Throws unless the managed file still has the indexed bytes. */
-  private async assertIntact(
-    id: string,
-    path: string,
-    source: Entry["source"],
-    stat: Stats,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    if (
-      !stat.isFile() ||
-      stat.isSymbolicLink() ||
-      stat.nlink !== 1 ||
-      stat.size !== source.size
-    )
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "The managed source has changed.",
-      );
-    const known = this.verified.get(id);
-    if (known?.signature === signature(stat) && known.sha256 === source.sha256)
-      return;
-    if ((await hash(path, signal)) !== source.sha256)
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "The managed source has changed.",
-      );
-    // Hashing read the file once; it only counts if nothing wrote meanwhile.
-    const after = await lstat(path);
-    if (signature(after) !== signature(stat))
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "The managed source changed during verification.",
-      );
-    this.verified.set(id, {
-      signature: signature(stat),
-      sha256: source.sha256,
-    });
+  /** Identity of the managed file plus its stored record. */
+  private sourceKey(stat: Stats, entry: Entry): string {
+    return [
+      stat.dev,
+      stat.ino,
+      stat.size,
+      stat.mtimeMs,
+      stat.ctimeMs,
+      stat.nlink,
+      // The stored record too: changed measurements must be re-checked.
+      createHash("sha256").update(JSON.stringify(entry)).digest("hex"),
+    ].join(":");
   }
   async verifiedSource(id: string): Promise<VerifiedLibrarySource> {
     await this.initialize();
     const entry = await this.entry(id);
     const managedPath = join(this.root, "assets", entry.source.file);
     const stat = await lstat(managedPath);
-    await this.assertIntact(id, managedPath, entry.source, stat);
+    const key = this.sourceKey(stat, entry);
+    const known = this.verifiedFiles.get(id);
+    if (
+      known?.key === key &&
+      stat.isFile() &&
+      !stat.isSymbolicLink() &&
+      stat.nlink === 1
+    )
+      return structuredClone(known.value);
+    // One full read per file identity (the unchanged-identity check below
+    // replaces a second hash).
+    if (
+      !stat.isFile() ||
+      stat.isSymbolicLink() ||
+      stat.nlink !== 1 ||
+      stat.size !== entry.source.size ||
+      (await hash(managedPath)) !== entry.source.sha256
+    )
+      throw new MediaError(
+        "FIDELITY_MISMATCH",
+        "The managed source has changed.",
+      );
     const result = await runProcess({
       executable: this.ffprobe,
       args: [
@@ -363,7 +357,7 @@ export class MediaLibrary {
         "FIDELITY_MISMATCH",
         "The managed source changed during verification.",
       );
-    return {
+    const value: VerifiedLibrarySource = {
       summary: { ...entry.summary },
       originalPath: entry.source.originalPath,
       managedPath,
@@ -371,6 +365,8 @@ export class MediaLibrary {
       sizeBytes: entry.source.size,
       probe: structuredClone(entry.probe),
     };
+    this.verifiedFiles.set(id, { key, value: structuredClone(value) });
+    return value;
   }
   async prepareSpeechAudio(
     id: string,
@@ -579,14 +575,21 @@ export class MediaLibrary {
         signal,
       );
       published = true;
-      // Its bytes were just checked (or adopted), so the first preview needs
-      // no further full read.
+      // Its bytes were just checked (or adopted), so the first preview and
+      // project open need no further full read.
       try {
         const placed = await lstat(target);
         if (placed.size === size)
-          this.verified.set(id, {
-            signature: signature(placed),
-            sha256: originalHash,
+          this.verifiedFiles.set(id, {
+            key: this.sourceKey(placed, entry),
+            value: {
+              summary: { ...summary },
+              originalPath: sourcePath,
+              managedPath: target,
+              sha256: originalHash,
+              sizeBytes: size,
+              probe: structuredClone(entry.probe),
+            },
           });
       } catch {
         /* The next use verifies the file in full. */
@@ -642,10 +645,10 @@ export class MediaLibrary {
         "UNSUPPORTED_PROFILE",
         "This source is preserved, but its preview color or precision path is not yet verified.",
       );
-    const path = join(this.root, "assets", entry.source.file);
-    // Every preview frame used to hash the whole master; it is now read in
-    // full once per file identity and re-checked by its identity afterwards.
-    await this.assertIntact(id, path, entry.source, await lstat(path), signal);
+    // Verified once per file identity; re-hashing a long recording for every
+    // preview frame cost about as much as decoding the frame.
+    const path = (await this.verifiedSource(id)).managedPath;
+    signal?.throwIfAborted();
     const timingKey = `${id}:${entry.source.sha256}`;
     let timing = this.presentationTimings.get(timingKey);
     if (!timing) {
@@ -746,6 +749,96 @@ export class MediaLibrary {
       void pending.catch(() => this.thumbnails.delete(key));
     }
     return pending;
+  }
+  /**
+   * A small picture of a source at `timeUs` for the timeline filmstrip. Like
+   * the card thumbnail it is cosmetic (FFmpeg's default conversion, never a
+   * review frame). Times are rounded to half a second so a redrawn strip
+   * after an edit reuses the pictures of everything that did not change.
+   */
+  async stripFrame(
+    id: string,
+    timeUs: number,
+    signal?: AbortSignal,
+  ): Promise<MediaFrame> {
+    if (!Number.isSafeInteger(timeUs) || timeUs < 0)
+      throw new MediaError("INVALID_INPUT", "Seek is outside the video.");
+    await this.initialize();
+    const entry = await this.entry(id);
+    const { summary } = entry;
+    const atUs = Math.min(
+      // Seeking to the very end of a file yields no frame: stop short of it.
+      Math.max(0, summary.durationUs - 500_000),
+      Math.round(timeUs / 500_000) * 500_000,
+    );
+    const key = `${id}:${entry.source.sha256}:${atUs}`;
+    let pending = this.stripFrames.get(key);
+    if (!pending) {
+      pending = this.decodeStripFrame(entry, atUs, signal);
+      if (this.stripFrames.size >= 512)
+        this.stripFrames.delete(this.stripFrames.keys().next().value!);
+      this.stripFrames.set(key, pending);
+      void pending.catch(() => this.stripFrames.delete(key));
+    }
+    return pending;
+  }
+  private async decodeStripFrame(
+    entry: Entry,
+    atUs: number,
+    signal?: AbortSignal,
+  ): Promise<MediaFrame> {
+    const { summary } = entry;
+    const width = Math.min(160, summary.width);
+    const height = Math.max(
+      2,
+      Math.round((width * summary.height) / summary.width / 2) * 2,
+    );
+    const output = await runProcess({
+      executable: this.ffmpeg,
+      args: [
+        "-v",
+        "error",
+        "-nostdin",
+        "-protocol_whitelist",
+        "file",
+        "-format_whitelist",
+        "matroska,webm,mov,avi",
+        "-ss",
+        (atUs / 1_000_000).toFixed(6),
+        "-i",
+        join(this.root, "assets", entry.source.file),
+        "-map",
+        "0:v:0",
+        "-frames:v",
+        "1",
+        "-an",
+        "-sn",
+        "-dn",
+        "-threads",
+        "1",
+        "-vf",
+        `scale=${width}:${height}:flags=bilinear,format=rgba`,
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ],
+      maxOutputBytes: width * height * 4 + 64 * 1024,
+      ...(signal ? { signal } : {}),
+    });
+    if (output.stdout.length !== width * height * 4)
+      throw new MediaError(
+        "UNSUPPORTED_PROFILE",
+        "No picture could be decoded for this source.",
+      );
+    const rgba = Buffer.from(output.stdout);
+    for (let i = 3; i < rgba.length; i += 4) rgba[i] = 255;
+    const frame: MediaFrame = {
+      width,
+      height,
+      rgbaBase64: rgba.toString("base64"),
+    };
+    assertThumbnail(frame);
+    return frame;
   }
   private async decodeThumbnail(
     entry: Entry,

@@ -22,6 +22,10 @@ import type { ElectronApplication, Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 import { rawFrameBytes } from "../../packages/media-engine/src/render.ts";
+import {
+  fadeClipEdges,
+  joinFadeFrames,
+} from "../../packages/media-engine/src/join-fade.ts";
 
 await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
@@ -275,7 +279,22 @@ try {
     expectedVideo.push(
       full.video.subarray(first * frameBytes, end * frameBytes),
     );
-    expectedAudio.push(full.audio.subarray(first * 1600 * 8, end * 1600 * 8));
+    expectedAudio.push(
+      Buffer.from(full.audio.subarray(first * 1600 * 8, end * 1600 * 8)),
+    );
+  }
+  // Each cut between the two clips fades 8 ms on both sides of the join; the
+  // samples elsewhere are exactly the source's.
+  for (const [index, audio] of expectedAudio.entries()) {
+    const frames = audio.length / 8;
+    const fade = joinFadeFrames(48_000, 8, frames);
+    fadeClipEdges(audio, 0, {
+      raw: "f32le",
+      channels: 2,
+      totalFrames: frames,
+      inFrames: index > 0 ? fade : 0,
+      outFrames: index < expectedAudio.length - 1 ? fade : 0,
+    });
   }
   const exported = await decode(master, "yuv420p", "f32le");
   assert.equal(sha(exported.video), sha(Buffer.concat(expectedVideo)));
@@ -303,7 +322,7 @@ try {
   step = "smaller-export";
   await page.locator("#export-again").click();
   await expect(page.locator("#export-setup")).toBeVisible();
-  await page.locator("#export-profile").selectOption("smaller_mp4");
+  await page.locator('[data-profile="smaller_mp4"]').click();
   await expect(page.locator("#export-profile-note")).toContainText(
     "Compressed",
   );
@@ -323,7 +342,7 @@ try {
 
   step = "cancel";
   await page.locator("#export-again").click();
-  await page.locator("#export-profile").selectOption("lossless_master");
+  await page.locator('[data-profile="lossless_master"]').click();
   const cancelled = join(outputs, "Cancelled.mkv");
   await savePath(electron, cancelled);
   await page.locator("#export-start").click();

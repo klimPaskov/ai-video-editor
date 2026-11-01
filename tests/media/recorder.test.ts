@@ -12,6 +12,7 @@ import {
   parseProgress,
   parsePulseSources,
   segmentArguments,
+  testPatternCamera,
   testToneInput,
   type DisplayTarget,
 } from "../../packages/recorder/src/capture.ts";
@@ -366,6 +367,135 @@ test(
     } finally {
       // Never leave a capture running if an assertion failed.
       if (running) killProcessTree(running.child);
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test("a camera arguments add a second lossless file without moving the screen's inputs", () => {
+  const args = segmentArguments({
+    platform: "win32",
+    display,
+    microphone: {
+      id: "dshow-1",
+      label: "Mic",
+      format: "dshow",
+      device: "Mic",
+    },
+    camera: {
+      id: "dshow-video-1",
+      label: "Webcam",
+      format: "dshow",
+      device: "Webcam",
+    },
+    cameraOutputPath: "C:/take/camera-001.mkv",
+    frameRate: 30,
+    outputPath: "C:/take/segment-001.mkv",
+  });
+  // Screen is input 0, the microphone 1, the camera 2.
+  const inputs = args.reduce<string[]>(
+    (found, arg, index) =>
+      arg === "-i" ? [...found, args[index + 1]!] : found,
+    [],
+  );
+  assert.deepEqual(inputs, ["desktop", "audio=Mic", "video=Webcam"]);
+  assert.ok(args.includes("2:v:0"));
+  // The first output is the screen file; the camera's own file follows it.
+  assert.ok(
+    args.indexOf("C:/take/segment-001.mkv") <
+      args.indexOf("C:/take/camera-001.mkv"),
+  );
+  const cameraPart = args.slice(args.indexOf("C:/take/segment-001.mkv") + 1);
+  assert.ok(cameraPart.includes("ffv1") && cameraPart.includes("-an"));
+  assert.throws(() =>
+    segmentArguments({
+      platform: "win32",
+      display,
+      microphone: null,
+      camera: {
+        id: "x",
+        label: "x",
+        format: "dshow",
+        device: "x",
+      },
+      frameRate: 30,
+      outputPath: "C:/take/segment-001.mkv",
+    }),
+  );
+});
+
+test(
+  "a take with a camera gives a camera file with the screen's own frames, across a pause",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await realpath(
+      await mkdtemp(join(tmpdir(), "recorder-camera-")),
+    );
+    try {
+      const session = new CaptureSession({
+        ffmpeg: "ffmpeg",
+        ffprobe: "ffprobe",
+        directory,
+        request: {
+          platform: "test",
+          display: { ...display, x: 0, width: 160, height: 90 },
+          microphone: testToneInput,
+          camera: testPatternCamera,
+          frameRate: 30,
+        },
+      });
+      await session.record();
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await session.pause();
+      await session.record();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const finished = await session.stop();
+      assert.ok(finished.cameraPath, "a camera file");
+      const count = async (file: string) =>
+        Number(
+          (
+            await runProcess({
+              executable: "ffprobe",
+              args: [
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-count_packets",
+                "-show_entries",
+                "stream=nb_read_packets,width,height,codec_name,pix_fmt",
+                "-of",
+                "csv=p=0",
+                file,
+              ],
+            })
+          ).stdout
+            .toString()
+            .trim()
+            .split(",")
+            .at(-1),
+        );
+      assert.equal(await count(finished.cameraPath!), finished.frames);
+      const shape = (
+        await runProcess({
+          executable: "ffprobe",
+          args: [
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=codec_name,width,height",
+            "-of",
+            "csv=p=0",
+            finished.cameraPath!,
+          ],
+        })
+      ).stdout
+        .toString()
+        .trim();
+      assert.equal(shape, "ffv1,1280,720");
+    } finally {
       await rm(directory, { recursive: true, force: true });
     }
   },

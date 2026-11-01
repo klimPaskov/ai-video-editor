@@ -77,7 +77,11 @@ export class PreferencesStore {
         await handle.readFile({ encoding: "utf8" }),
       );
       assertPreferences(value);
-      return { interfaceScale: value.interfaceScale };
+      return {
+        interfaceScale: value.interfaceScale,
+        ...(value.assetPolicy ? { assetPolicy: value.assetPolicy } : {}),
+        ...(value.theme ? { theme: structuredClone(value.theme) } : {}),
+      };
     } finally {
       await handle.close();
     }
@@ -94,7 +98,11 @@ export class PreferencesStore {
   write(value: unknown): Promise<Preferences> {
     // Snapshot caller data before awaiting; renderer mutation cannot change a queued write.
     assertPreferences(value);
-    const snapshot: Preferences = { interfaceScale: value.interfaceScale };
+    const snapshot: Preferences = {
+      interfaceScale: value.interfaceScale,
+      ...(value.assetPolicy ? { assetPolicy: value.assetPolicy } : {}),
+      ...(value.theme ? { theme: structuredClone(value.theme) } : {}),
+    };
     return this.serialize(async () => {
       let staged: string | undefined;
       try {

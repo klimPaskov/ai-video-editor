@@ -64,7 +64,22 @@
     {
       "name": "media.get_frames",
       "mode": "read",
-      "description": "Render bounded preview frames or a contact sheet.",
+      "description": "Render 1–3 small JPEG pictures of the active draft at output times through the export compositor (zooms, motion graphics, captions as shown) so an assistant can check its work; analysis only, never part of the master.",
+      "undoable": false,
+      "user_confirmation": "none",
+      "allowed_scope": "bounded_media",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "composition.check",
+      "mode": "read",
+      "description": "Claude only: seal a HyperFrames composition from the project workspace, play it in the sealed stage at the video's size, and report runtime errors, duration, canvas size, text cut off, outside the safe area or too small, and frozen motion, with a contact sheet of the audited moments; analysis only, the edit is unchanged.",
       "undoable": false,
       "user_confirmation": "none",
       "allowed_scope": "bounded_media",
@@ -257,9 +272,69 @@
       ]
     },
     {
+      "name": "graphics.set",
+      "mode": "mutation",
+      "description": "Add or replace one HTML/CSS motion graphic anchored to the source moment at an output time, validated for content safety (no scripts, forms, embedded documents or network resources), with shared undo.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "graphics.remove",
+      "mode": "mutation",
+      "description": "Remove one motion graphic by ID with shared undo.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "transition.set",
+      "mode": "mutation",
+      "description": "Put one transition (dip to a colour, wipe right or left, or iris) on a real cut, given by the output time of the incoming clip's first frame, with duration 0.2-2 s and a #rrggbb colour; the transition is anchored to the source moment where the incoming clip starts, so it follows later cuts. A transition_id replaces that transition; one cut holds one transition. Audio is unchanged. Shared undo.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
+      "name": "transition.remove",
+      "mode": "mutation",
+      "description": "Remove one transition by transition_id with shared undo.",
+      "undoable": true,
+      "user_confirmation": "none",
+      "allowed_scope": "active_draft",
+      "input_schema": "generated from implementation types",
+      "output_schema": "generated from implementation types",
+      "forbidden_effects": [
+        "overwrite source",
+        "delete project",
+        "approve export"
+      ]
+    },
+    {
       "name": "captions.configure",
       "mode": "mutation",
-      "description": "Apply caption style settings.",
+      "description": "Set the draft's caption choices (on, style, size, position, burn-in) with shared undo; caption text stays derived from the transcript.",
       "undoable": true,
       "user_confirmation": "none",
       "allowed_scope": "active_draft",
@@ -349,7 +424,7 @@
     {
       "name": "audio.configure",
       "mode": "mutation",
-      "description": "Apply bounded cleanup, gain, fades, music, or ducking.",
+      "description": "Set the draft's export audio treatment (loudness normalisation, noise reduction) with shared undo; sources are unchanged.",
       "undoable": true,
       "user_confirmation": "none",
       "allowed_scope": "active_draft",

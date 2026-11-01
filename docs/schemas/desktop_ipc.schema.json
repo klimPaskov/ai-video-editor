@@ -7,261 +7,776 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "audio:get" },
-        "payload": { "$ref": "#/$defs/captionSettingsRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/audioSettings" } }
-          }
-        ] }
+        "channel": {
+          "const": "audio:get"
+        },
+        "payload": {
+          "$ref": "#/$defs/captionSettingsRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/audioSettings"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "audio:set" },
+        "channel": {
+          "const": "audio:set"
+        },
         "payload": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schema_version", "project_id", "settings"],
+          "required": [
+            "schema_version",
+            "project_id",
+            "settings"
+          ],
           "properties": {
-            "schema_version": { "const": "1.0" },
-            "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-            "settings": { "$ref": "#/$defs/audioSettings" }
+            "schema_version": {
+              "const": "1.0"
+            },
+            "project_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            },
+            "settings": {
+              "$ref": "#/$defs/audioSettings"
+            }
           }
         },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/audioSettings" } }
-          }
-        ] }
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/audioSettings"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "enum": ["shorts:get", "shorts:find", "shorts:cancel"] },
-        "payload": { "$ref": "#/$defs/shortProjectRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/shortClipsView" } }
-          }
-        ] }
+        "channel": {
+          "enum": [
+            "shorts:get",
+            "shorts:find",
+            "shorts:cancel",
+            "shorts:pick"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/shortProjectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/shortClipsView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "shorts:discard" },
-        "payload": { "$ref": "#/$defs/shortClipRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/shortClipsView" } }
-          }
-        ] }
+        "channel": {
+          "const": "shorts:discard"
+        },
+        "payload": {
+          "$ref": "#/$defs/shortClipRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/shortClipsView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "shorts:export" },
-        "payload": { "$ref": "#/$defs/shortExportRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/shortClipsView" } }
-          }
-        ] }
+        "channel": {
+          "const": "shorts:export"
+        },
+        "payload": {
+          "$ref": "#/$defs/shortExportRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/shortClipsView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "captions:get" },
-        "payload": { "$ref": "#/$defs/captionSettingsRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/captionSettings" } }
-          }
-        ] }
+        "channel": {
+          "const": "shorts:export-all"
+        },
+        "payload": {
+          "$ref": "#/$defs/shortExportAllRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/shortClipsView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "captions:set" },
+        "channel": {
+          "const": "shorts:reveal"
+        },
+        "payload": {
+          "$ref": "#/$defs/shortLibraryRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/shortClipsView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "shorts:forget"
+        },
+        "payload": {
+          "$ref": "#/$defs/shortLibraryRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/shortClipsView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "captions:get"
+        },
+        "payload": {
+          "$ref": "#/$defs/captionSettingsRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/captionSettings"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "captions:set"
+        },
         "payload": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schema_version", "project_id", "settings"],
+          "required": [
+            "schema_version",
+            "project_id",
+            "settings"
+          ],
           "properties": {
-            "schema_version": { "const": "1.0" },
-            "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-            "settings": { "$ref": "#/$defs/captionSettings" }
+            "schema_version": {
+              "const": "1.0"
+            },
+            "project_id": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            },
+            "settings": {
+              "$ref": "#/$defs/captionSettings"
+            }
           }
         },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/captionSettings" } }
-          }
-        ] }
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/captionSettings"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "playback:get" },
-        "payload": { "$ref": "#/$defs/playbackProjectRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/playbackView" } }
-          }
-        ] }
+        "channel": {
+          "const": "playback:get"
+        },
+        "payload": {
+          "$ref": "#/$defs/playbackProjectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/playbackView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "response"],
+      "required": [
+        "channel",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "recording:devices" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/recordingDevices" } }
-          }
-        ] }
+        "channel": {
+          "const": "recording:devices"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/recordingDevices"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "response"],
+      "required": [
+        "channel",
+        "response"
+      ],
       "properties": {
-        "channel": { "enum": ["recording:get", "recording:pause", "recording:resume", "recording:stop", "recording:cancel"] },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/recordingView" } }
-          }
-        ] }
+        "channel": {
+          "enum": [
+            "recording:get",
+            "recording:pause",
+            "recording:resume",
+            "recording:stop",
+            "recording:cancel"
+          ]
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/recordingView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "recording:interrupted" },
-        "payload": { "type": "null" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/interruptedTakes" } }
-          }
-        ] }
+        "channel": {
+          "const": "recording:interrupted"
+        },
+        "payload": {
+          "type": "null"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/interruptedTakes"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "recording:recover" },
-        "payload": { "$ref": "#/$defs/interruptedTakeRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/recordingView" } }
-          }
-        ] }
+        "channel": {
+          "const": "recording:recover"
+        },
+        "payload": {
+          "$ref": "#/$defs/interruptedTakeRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/recordingView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "recording:discard-interrupted" },
-        "payload": { "$ref": "#/$defs/interruptedTakeRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/interruptedTakes" } }
-          }
-        ] }
+        "channel": {
+          "const": "recording:discard-interrupted"
+        },
+        "payload": {
+          "$ref": "#/$defs/interruptedTakeRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/interruptedTakes"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "recording:pick-region" },
-        "payload": { "$ref": "#/$defs/recordingRegionRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": {
-              "type": "object", "additionalProperties": false,
-              "required": ["region"],
-              "properties": { "region": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/recordingRegion" }] } }
-            } }
-          }
-        ] }
+        "channel": {
+          "const": "recording:pick-region"
+        },
+        "payload": {
+          "$ref": "#/$defs/recordingRegionRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "region"
+                  ],
+                  "properties": {
+                    "region": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "$ref": "#/$defs/recordingRegion"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "recording:start" },
-        "payload": { "$ref": "#/$defs/recordingStartRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/recordingView" } }
-          }
-        ] }
+        "channel": {
+          "const": "recording:start"
+        },
+        "payload": {
+          "$ref": "#/$defs/recordingStartRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/recordingView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -519,17 +1034,41 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:transcript-cut" },
-        "payload": { "$ref": "#/$defs/manualTranscriptCutRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:transcript-cut"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualTranscriptCutRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -618,17 +1157,41 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "library:thumbnail" },
-        "payload": { "$ref": "#/$defs/thumbnailRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/thumbnail" } }
-          }
-        ] }
+        "channel": {
+          "const": "library:thumbnail"
+        },
+        "payload": {
+          "$ref": "#/$defs/thumbnailRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/thumbnail"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -839,19 +1402,30 @@
         },
         "response": {
           "oneOf": [
-            { "$ref": "#/$defs/error" },
+            {
+              "$ref": "#/$defs/error"
+            },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["ok", "value"],
+              "required": [
+                "ok",
+                "value"
+              ],
               "properties": {
-                "ok": { "const": true },
-                "value": { "$ref": "#/$defs/projectView" }
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectView"
+                }
               }
             }
           ]
         },
-        "payload": { "$ref": "#/$defs/twoSourceProjectRequest" }
+        "payload": {
+          "$ref": "#/$defs/twoSourceProjectRequest"
+        }
       }
     },
     {
@@ -1057,20 +1631,37 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "response", "payload"],
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
       "properties": {
-        "channel": { "const": "projects:verify-draft-integrity" },
-        "payload": { "$ref": "#/$defs/projectRequest" },
+        "channel": {
+          "const": "projects:verify-draft-integrity"
+        },
+        "payload": {
+          "$ref": "#/$defs/projectRequest"
+        },
         "response": {
           "oneOf": [
-            { "$ref": "#/$defs/error" },
+            {
+              "$ref": "#/$defs/error"
+            },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["ok", "value"],
+              "required": [
+                "ok",
+                "value"
+              ],
               "properties": {
-                "ok": { "const": true },
-                "value": { "$ref": "#/$defs/projectDraftIntegrityView" }
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftIntegrityView"
+                }
               }
             }
           ]
@@ -1086,7 +1677,12 @@
       ],
       "properties": {
         "channel": {
-          "enum": ["api-providers:get", "api-providers:connect", "api-providers:remove", "api-providers:select-model"]
+          "enum": [
+            "api-providers:get",
+            "api-providers:connect",
+            "api-providers:remove",
+            "api-providers:select-model"
+          ]
         },
         "response": {
           "oneOf": [
@@ -1126,8 +1722,25 @@
         },
         "response": {
           "oneOf": [
-            { "$ref": "#/$defs/error" },
-            { "type": "object", "additionalProperties": false, "required": ["ok", "value"], "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/codexView" } } }
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/codexView"
+                }
+              }
+            }
           ]
         }
       }
@@ -1431,31 +2044,167 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "response", "payload"],
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
       "properties": {
-        "channel": { "enum": ["api-thread:get", "api-thread:open", "api-thread:interrupt"] },
-        "payload": { "$ref": "#/$defs/apiThreadProjectRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false, "required": ["ok", "value"], "properties": {
-            "ok": { "const": true }, "value": { "$ref": "#/$defs/apiThreadView" }
-          } }
-        ] }
+        "channel": {
+          "const": "projects:rename"
+        },
+        "payload": {
+          "$ref": "#/$defs/projectRename"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectView"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "description": "Changes the project's display name in its metadata; the immutable baseline keeps the original name."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "const": "projects:delete"
+        },
+        "payload": {
+          "$ref": "#/$defs/projectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "type": "null"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "description": "Deletes a closed project's folder, conversations, per-project choices and export records after the user confirms. Its sources stay in the media library; original and exported files are never touched."
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "enum": [
+            "api-thread:get",
+            "api-thread:open",
+            "api-thread:interrupt"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/apiThreadProjectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/apiThreadView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "response", "payload"],
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
       "properties": {
-        "channel": { "const": "api-thread:send" },
-        "payload": { "$ref": "#/$defs/apiThreadSendRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false, "required": ["ok", "value"], "properties": {
-            "ok": { "const": true }, "value": { "$ref": "#/$defs/apiThreadView" }
-          } }
-        ] }
+        "channel": {
+          "const": "api-thread:send"
+        },
+        "payload": {
+          "$ref": "#/$defs/apiThreadSendRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/apiThreadView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -1661,145 +2410,481 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-trim" },
-        "payload": { "$ref": "#/$defs/manualTrimRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:strip"
+        },
+        "payload": {
+          "$ref": "#/$defs/projectStripRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectStripResult"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-split" },
-        "payload": { "$ref": "#/$defs/manualSplitRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:manual-trim"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualTrimRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-graphic" },
-        "payload": { "$ref": "#/$defs/manualGraphicRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:manual-split"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualSplitRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-graphic-remove" },
-        "payload": { "$ref": "#/$defs/manualGraphicRemoveRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:manual-graphic"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualGraphicRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-speed" },
-        "payload": { "$ref": "#/$defs/manualSpeedRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:manual-graphic-remove"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualGraphicRemoveRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-zoom" },
-        "payload": { "$ref": "#/$defs/manualZoomRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:manual-transition"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualTransitionRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-zoom-remove" },
-        "payload": { "$ref": "#/$defs/manualZoomRemoveRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:manual-transition-remove"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualTransitionRemoveRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-range-cut" },
-        "payload": { "$ref": "#/$defs/manualRangeCutRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:manual-speed"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualSpeedRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-restore-range" },
-        "payload": { "$ref": "#/$defs/manualRestoreRangeRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:manual-zoom"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualZoomRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "projects:manual-zoom-remove"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualZoomRemoveRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "projects:manual-range-cut"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualRangeCutRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "projects:manual-restore-range"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualRestoreRangeRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -1845,33 +2930,81 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-undo" },
-        "payload": { "$ref": "#/$defs/manualUndoRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:manual-undo"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualUndoRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
       "type": "object",
       "additionalProperties": false,
-      "required": ["channel", "payload", "response"],
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
       "properties": {
-        "channel": { "const": "projects:manual-redo" },
-        "payload": { "$ref": "#/$defs/manualUndoRequest" },
-        "response": { "oneOf": [
-          { "$ref": "#/$defs/error" },
-          { "type": "object", "additionalProperties": false,
-            "required": ["ok", "value"],
-            "properties": { "ok": { "const": true }, "value": { "$ref": "#/$defs/projectDraftView" } }
-          }
-        ] }
+        "channel": {
+          "const": "projects:manual-redo"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualUndoRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -1962,7 +3095,10 @@
       ],
       "properties": {
         "channel": {
-          "const": "claude:select"
+          "enum": [
+            "claude:select",
+            "claude:select-rough-cut"
+          ]
         },
         "payload": {
           "$ref": "#/$defs/claudeSelection"
@@ -2111,6 +3247,384 @@
           ]
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "const": "claude-thread:full-edit"
+        },
+        "payload": {
+          "$ref": "#/$defs/claudeFullEditRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/claudeThreadView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "response",
+        "payload"
+      ],
+      "properties": {
+        "channel": {
+          "const": "claude-thread:undo-full-edit"
+        },
+        "payload": {
+          "$ref": "#/$defs/claudeThreadProjectRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/claudeThreadView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "enum": [
+            "sounds:get",
+            "sounds:add",
+            "sounds:update",
+            "sounds:remove"
+          ]
+        },
+        "payload": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/soundsRequest"
+            },
+            {
+              "$ref": "#/$defs/soundAddRequest"
+            },
+            {
+              "$ref": "#/$defs/soundUpdateRequest"
+            },
+            {
+              "$ref": "#/$defs/soundRemoveRequest"
+            }
+          ]
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/soundsView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "projects:manual-layout"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualLayoutRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "projects:manual-layout-remove"
+        },
+        "payload": {
+          "$ref": "#/$defs/manualLayoutRemoveRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/projectDraftView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "camera:get"
+        },
+        "payload": {
+          "$ref": "#/$defs/cameraRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/cameraView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "camera:choose"
+        },
+        "payload": {
+          "$ref": "#/$defs/cameraRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/cameraView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "camera:remove"
+        },
+        "payload": {
+          "$ref": "#/$defs/cameraRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/cameraView"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "payload",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "camera:offset"
+        },
+        "payload": {
+          "$ref": "#/$defs/cameraOffsetRequest"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/cameraView"
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "$defs": {
@@ -2118,143 +3632,596 @@
       "description": "A zoom anchored to source time: it magnifies a point of the frame and follows cuts.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["zoom_id", "source_id", "source_start_us", "source_end_us", "center_x", "center_y", "scale"],
+      "required": [
+        "zoom_id",
+        "source_id",
+        "source_start_us",
+        "source_end_us",
+        "center_x",
+        "center_y",
+        "scale"
+      ],
       "properties": {
-        "zoom_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "source_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "source_start_us": { "type": "integer", "minimum": 0 },
-        "source_end_us": { "type": "integer", "minimum": 1 },
-        "center_x": { "type": "number", "minimum": 0, "maximum": 1 },
-        "center_y": { "type": "number", "minimum": 0, "maximum": 1 },
-        "scale": { "type": "number", "minimum": 1.1, "maximum": 4 }
+        "zoom_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_start_us": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_end_us": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "center_x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "center_y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 1.1,
+          "maximum": 4
+        },
+        "motion": {
+          "enum": [
+            "hold",
+            "push"
+          ]
+        },
+        "end_center_x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "end_center_y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "ease_in_us": {
+          "type": "integer",
+          "minimum": 100000,
+          "maximum": 1500000
+        },
+        "ease_out_us": {
+          "type": "integer",
+          "minimum": 100000,
+          "maximum": 1500000
+        }
       }
     },
     "audioSettings": {
       "description": "Per-project audio cleanup applied when exporting; sources are never changed.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["normalize", "denoise"],
+      "required": [
+        "normalize",
+        "denoise"
+      ],
       "properties": {
-        "normalize": { "type": "boolean" },
-        "denoise": { "type": "boolean" }
+        "normalize": {
+          "type": "boolean"
+        },
+        "denoise": {
+          "type": "boolean"
+        }
       }
     },
     "shortProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "project_id"],
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
       }
     },
-    "shortClipId": { "type": "string", "pattern": "^clip-\\d{1,16}-\\d{1,16}$" },
+    "shortClipId": {
+      "type": "string",
+      "pattern": "^clip-\\d{1,16}-\\d{1,16}$"
+    },
     "shortClipRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "project_id", "clip_id"],
+      "required": [
+        "schema_version",
+        "project_id",
+        "clip_id"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "clip_id": { "$ref": "#/$defs/shortClipId" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "clip_id": {
+          "$ref": "#/$defs/shortClipId"
+        }
       }
     },
     "shortExportRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "project_id", "clip_id", "format", "framing", "position", "captions"],
+      "required": [
+        "schema_version",
+        "project_id",
+        "clip_id",
+        "format",
+        "framing",
+        "position",
+        "captions",
+        "title",
+        "speed"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "clip_id": { "$ref": "#/$defs/shortClipId" },
-        "format": { "enum": ["vertical", "square", "landscape"] },
-        "framing": { "enum": ["fit", "fill"] },
-        "position": { "type": "number", "minimum": 0, "maximum": 1 },
-        "captions": { "type": "boolean" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "clip_id": {
+          "$ref": "#/$defs/shortClipId"
+        },
+        "format": {
+          "enum": [
+            "vertical",
+            "square",
+            "landscape"
+          ]
+        },
+        "framing": {
+          "enum": [
+            "fit",
+            "fill"
+          ]
+        },
+        "position": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "captions": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "boolean"
+        },
+        "speed": {
+          "enum": [
+            1,
+            2
+          ]
+        }
       }
     },
-    "shortMessage": { "anyOf": [{ "type": "null" }, { "enum": ["Short clips use the transcript. Transcribe the video first.", "No self-contained moments of 15 to 60 seconds were found in this draft.", "A clip is already exporting.", "The clip could not be exported. Try again.", "The draft changed since these clips were found. Find clips again.", "That clip is no longer available. Find clips again."] }] },
+    "shortMessage": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": [
+            "Short clips use the transcript. Transcribe the video first.",
+            "No self-contained moments of 15 to 60 seconds were found in this draft.",
+            "A clip is already exporting.",
+            "The clip could not be exported. Try again.",
+            "The draft changed since these clips were found. Find clips again.",
+            "That clip is no longer available. Find clips again.",
+            "Parts of this clip are already sped up too far to play faster. Choose normal speed.",
+            "Claude did not choose any clips. Try again.",
+            "Claude could not choose clips. Try again.",
+            "Claude is busy with another task. Try again when it is done.",
+            "Sign in to Claude in Settings to let it choose clips.",
+            "There are no clips to export.",
+            "That clip is no longer in the list."
+          ]
+        }
+      ]
+    },
     "shortClipsView": {
-      "description": "Short clips found locally in the draft transcript. Output paths stay in main; only the exported file name is shown.",
+      "description": "Short clips found in the draft transcript by rules or chosen by Claude, the export job and the list of exported clips. Output paths stay in main; only exported file names are shown.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "candidates", "job", "message"],
+      "required": [
+        "status",
+        "candidates",
+        "job",
+        "message",
+        "library",
+        "pick"
+      ],
       "properties": {
-        "status": { "enum": ["none", "ready", "stale"] },
+        "status": {
+          "enum": [
+            "none",
+            "ready",
+            "stale"
+          ]
+        },
         "candidates": {
           "type": "array",
           "maxItems": 32,
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["id", "title", "startUs", "endUs", "score", "reasons", "excerpt"],
+            "required": [
+              "id",
+              "title",
+              "startUs",
+              "endUs",
+              "score",
+              "reasons",
+              "excerpt",
+              "origin"
+            ],
             "properties": {
-              "id": { "$ref": "#/$defs/shortClipId" },
-              "title": { "type": "string", "maxLength": 120 },
-              "startUs": { "type": "integer", "minimum": 0 },
-              "endUs": { "type": "integer", "minimum": 1 },
-              "score": { "type": "number", "minimum": 0, "maximum": 1 },
-              "reasons": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 80 } },
-              "excerpt": { "type": "string", "maxLength": 400 }
+              "id": {
+                "$ref": "#/$defs/shortClipId"
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "startUs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "endUs": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "reasons": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                  "type": "string",
+                  "maxLength": 80
+                }
+              },
+              "excerpt": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "origin": {
+                "enum": [
+                  "rules",
+                  "ai"
+                ]
+              }
             }
           }
         },
         "job": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["status", "clipId", "fraction", "fileName", "message"],
+          "required": [
+            "status",
+            "clipId",
+            "fraction",
+            "fileName",
+            "message",
+            "batch"
+          ],
           "properties": {
-            "status": { "enum": ["idle", "running", "completed", "failed"] },
-            "clipId": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/shortClipId" }] },
-            "fraction": { "anyOf": [{ "type": "null" }, { "type": "number", "minimum": 0, "maximum": 1 }] },
-            "fileName": { "anyOf": [{ "type": "null" }, { "type": "string", "maxLength": 255, "pattern": "^[^\\\\/:\\u0000-\\u001f\\u007f]+\\.mp4$" }] },
-            "message": { "$ref": "#/$defs/shortMessage" }
+            "status": {
+              "enum": [
+                "idle",
+                "running",
+                "completed",
+                "failed"
+              ]
+            },
+            "clipId": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/shortClipId"
+                }
+              ]
+            },
+            "fraction": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              ]
+            },
+            "fileName": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "maxLength": 255,
+                  "pattern": "^[^\\\\/:\\u0000-\\u001f\\u007f]+\\.mp4$"
+                }
+              ]
+            },
+            "message": {
+              "$ref": "#/$defs/shortMessage"
+            },
+            "batch": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "index",
+                    "total"
+                  ],
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 31
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 32
+                    }
+                  }
+                }
+              ]
+            }
           }
         },
-        "message": { "$ref": "#/$defs/shortMessage" }
+        "message": {
+          "$ref": "#/$defs/shortMessage"
+        },
+        "library": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title",
+              "fileName",
+              "format",
+              "speed",
+              "durationUs",
+              "createdAt",
+              "exists"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^export-[A-Za-z0-9-]{8,48}$"
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "fileName": {
+                "type": "string",
+                "maxLength": 255,
+                "pattern": "^[^\\\\/:\\u0000-\\u001f\\u007f]+\\.mp4$"
+              },
+              "format": {
+                "enum": [
+                  "vertical",
+                  "square",
+                  "landscape"
+                ]
+              },
+              "speed": {
+                "enum": [
+                  1,
+                  2
+                ]
+              },
+              "durationUs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "createdAt": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "exists": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "pick": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "running",
+            "message"
+          ],
+          "properties": {
+            "running": {
+              "type": "boolean"
+            },
+            "message": {
+              "$ref": "#/$defs/shortMessage"
+            }
+          }
+        }
       }
     },
     "captionSettingsRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "project_id"],
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
       }
     },
     "captionSettings": {
       "description": "Per-project caption choices. Caption text and timing are derived from the transcript and the draft, never stored here.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "style", "size", "position", "burnIn"],
+      "required": [
+        "enabled",
+        "style",
+        "size",
+        "position",
+        "burnIn"
+      ],
       "properties": {
-        "enabled": { "type": "boolean" },
-        "burnIn": { "type": "boolean" },
-        "style": { "enum": ["plain", "highlight", "minimal"] },
-        "size": { "enum": ["small", "medium", "large"] },
-        "position": { "enum": ["bottom", "top"] }
+        "enabled": {
+          "type": "boolean"
+        },
+        "burnIn": {
+          "type": "boolean"
+        },
+        "style": {
+          "enum": [
+            "plain",
+            "highlight",
+            "minimal"
+          ]
+        },
+        "size": {
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ]
+        },
+        "position": {
+          "enum": [
+            "bottom",
+            "top"
+          ]
+        }
       }
     },
     "playbackProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "project_id"],
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "project_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
       }
     },
     "playbackView": {
       "description": "Whether the active project's preview can play. Sources Chromium cannot decode play through a display-only copy that main prepares; paths never cross.",
       "oneOf": [
-        { "type": "object", "additionalProperties": false, "required": ["status", "progress", "message"],
-          "properties": { "status": { "const": "ready" }, "progress": { "type": "null" }, "message": { "type": "null" } } },
-        { "type": "object", "additionalProperties": false, "required": ["status", "progress", "message"],
-          "properties": { "status": { "const": "preparing" }, "progress": { "type": "number", "minimum": 0, "maximum": 1 }, "message": { "type": "null" } } },
-        { "type": "object", "additionalProperties": false, "required": ["status", "progress", "message"],
-          "properties": { "status": { "const": "failed" }, "progress": { "type": "null" },
-            "message": { "const": "Playback could not be prepared for this video. Frame preview and export still work." } } }
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "progress",
+            "message"
+          ],
+          "properties": {
+            "status": {
+              "const": "ready"
+            },
+            "progress": {
+              "type": "null"
+            },
+            "message": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "progress",
+            "message"
+          ],
+          "properties": {
+            "status": {
+              "const": "preparing"
+            },
+            "progress": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "message": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "progress",
+            "message"
+          ],
+          "properties": {
+            "status": {
+              "const": "failed"
+            },
+            "progress": {
+              "type": "null"
+            },
+            "message": {
+              "const": "Playback could not be prepared for this video. Frame preview and export still work."
+            }
+          }
+        }
       ]
     },
     "recordingDeviceId": {
@@ -2267,12 +4234,38 @@
       "maxLength": 200,
       "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
     },
-    "recordingMessage": {"anyOf": [{"type": "null"}, {"enum": ["Screen recording needs FFmpeg screen capture on this device.", "Screen recording needs an X11 session on Linux. Sign in with an X11 session to record.", "A recording is already in progress.", "The selected screen or microphone is no longer available.", "Recording could not start. Check screen and microphone permissions and try again.", "Recording stopped unexpectedly. The part recorded so far was kept.", "The recording could not be saved. Try recording again.", "Nothing was recorded.", "Choose a larger area to record.", "This recording could not be recovered. You can try again or discard it.", "Recording part of the screen is not available on this device."]}]},
+    "recordingMessage": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "enum": [
+            "Screen recording needs FFmpeg screen capture on this device.",
+            "Screen recording needs an X11 session on Linux. Sign in with an X11 session to record.",
+            "A recording is already in progress.",
+            "The selected screen or microphone is no longer available.",
+            "Recording could not start. Check screen and microphone permissions and try again.",
+            "Recording stopped unexpectedly. The part recorded so far was kept.",
+            "The recording could not be saved. Try recording again.",
+            "Nothing was recorded.",
+            "Choose a larger area to record.",
+            "This recording could not be recovered. You can try again or discard it.",
+            "Recording part of the screen is not available on this device."
+          ]
+        }
+      ]
+    },
     "recordingDevices": {
-      "description": "Screens and microphones offered for recording. Ids are opaque; FFmpeg device names and coordinates stay in main.",
+      "description": "Screens, microphones and cameras offered for recording. Ids are opaque; FFmpeg device names and coordinates stay in main.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["displays", "microphones", "message"],
+      "required": [
+        "displays",
+        "microphones",
+        "cameras",
+        "message"
+      ],
       "properties": {
         "displays": {
           "type": "array",
@@ -2280,13 +4273,31 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["id", "label", "width", "height", "primary"],
+            "required": [
+              "id",
+              "label",
+              "width",
+              "height",
+              "primary"
+            ],
             "properties": {
-              "id": { "$ref": "#/$defs/recordingDeviceId" },
-              "label": { "$ref": "#/$defs/recordingLabel" },
-              "width": { "type": "integer", "minimum": 0 },
-              "height": { "type": "integer", "minimum": 0 },
-              "primary": { "type": "boolean" }
+              "id": {
+                "$ref": "#/$defs/recordingDeviceId"
+              },
+              "label": {
+                "$ref": "#/$defs/recordingLabel"
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "primary": {
+                "type": "boolean"
+              }
             }
           }
         },
@@ -2296,46 +4307,123 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["id", "label"],
+            "required": [
+              "id",
+              "label"
+            ],
             "properties": {
-              "id": { "$ref": "#/$defs/recordingDeviceId" },
-              "label": { "$ref": "#/$defs/recordingLabel" }
+              "id": {
+                "$ref": "#/$defs/recordingDeviceId"
+              },
+              "label": {
+                "$ref": "#/$defs/recordingLabel"
+              }
             }
           }
         },
-        "message": { "$ref": "#/$defs/recordingMessage" }
+        "cameras": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/recordingDeviceId"
+              },
+              "label": {
+                "$ref": "#/$defs/recordingLabel"
+              }
+            }
+          }
+        },
+        "message": {
+          "$ref": "#/$defs/recordingMessage"
+        }
       }
     },
     "recordingStartRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "display_id", "microphone_id"],
+      "required": [
+        "schema_version",
+        "display_id",
+        "microphone_id"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "display_id": { "$ref": "#/$defs/recordingDeviceId" },
-        "microphone_id": {
-          "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/recordingDeviceId" }]
+        "schema_version": {
+          "const": "1.0"
         },
-        "region": { "$ref": "#/$defs/recordingRegion" }
+        "display_id": {
+          "$ref": "#/$defs/recordingDeviceId"
+        },
+        "microphone_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/recordingDeviceId"
+            }
+          ]
+        },
+        "camera_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/recordingDeviceId"
+            }
+          ]
+        },
+        "region": {
+          "$ref": "#/$defs/recordingRegion"
+        }
       }
     },
     "recordingRegion": {
       "description": "Part of the chosen display to record, in its physical pixels. Omitted to record the whole display; main refuses a region outside the display.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["x", "y", "width", "height"],
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
       "properties": {
-        "x": { "type": "integer", "minimum": 0 },
-        "y": { "type": "integer", "minimum": 0 },
-        "width": { "type": "integer", "minimum": 64, "maximum": 16384 },
-        "height": { "type": "integer", "minimum": 64, "maximum": 16384 }
+        "x": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 16384
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 16384
+        }
       }
     },
     "interruptedTakes": {
       "description": "Takes a crash or forced quit left without a finished recording, newest first. Ids are the take folders' random UUIDs; no paths.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["takes"],
+      "required": [
+        "takes"
+      ],
       "properties": {
         "takes": {
           "type": "array",
@@ -2343,10 +4431,19 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["id", "createdAt"],
+            "required": [
+              "id",
+              "createdAt"
+            ],
             "properties": {
-              "id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-              "createdAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$" }
+              "id": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+              },
+              "createdAt": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?Z$"
+              }
             }
           }
         }
@@ -2355,44 +4452,112 @@
     "interruptedTakeRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "take_id"],
+      "required": [
+        "schema_version",
+        "take_id"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "take_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "take_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
       }
     },
     "recordingRegionRequest": {
       "description": "Opens main's area picker over the display; the renderer never sees coordinates of other windows.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "display_id"],
+      "required": [
+        "schema_version",
+        "display_id"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "display_id": { "$ref": "#/$defs/recordingDeviceId" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "display_id": {
+          "$ref": "#/$defs/recordingDeviceId"
+        }
       }
     },
     "recordingView": {
       "description": "Recording state. media is the imported take and is present only when finished.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "elapsedUs", "missedFrames", "media", "message"],
+      "required": [
+        "status",
+        "elapsedUs",
+        "missedFrames",
+        "media",
+        "message"
+      ],
       "properties": {
         "status": {
-          "enum": ["idle", "starting", "recording", "paused", "finishing", "finished", "failed"]
+          "enum": [
+            "idle",
+            "starting",
+            "recording",
+            "paused",
+            "finishing",
+            "finished",
+            "failed"
+          ]
         },
-        "elapsedUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "missedFrames": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "media": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/summary" }] },
-        "message": { "$ref": "#/$defs/recordingMessage" }
+        "elapsedUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "missedFrames": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "media": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/summary"
+            }
+          ]
+        },
+        "message": {
+          "$ref": "#/$defs/recordingMessage"
+        }
       },
-      "if": { "properties": { "status": { "const": "finished" } } },
-      "then": { "properties": { "media": { "$ref": "#/$defs/summary" } } },
-      "else": { "properties": { "media": { "type": "null" } } }
+      "if": {
+        "properties": {
+          "status": {
+            "const": "finished"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "media": {
+            "$ref": "#/$defs/summary"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "media": {
+            "type": "null"
+          }
+        }
+      }
     },
     "thumbnailRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id"],
+      "required": [
+        "id"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -2404,10 +4569,22 @@
       "description": "Small cosmetic RGBA picture for library and project cards; never a review frame. Runtime also checks the exact base64 length and padding.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["width", "height", "rgbaBase64"],
+      "required": [
+        "width",
+        "height",
+        "rgbaBase64"
+      ],
       "properties": {
-        "width": { "type": "integer", "minimum": 1, "maximum": 320 },
-        "height": { "type": "integer", "minimum": 1, "maximum": 1280 },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 320
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1280
+        },
         "rgbaBase64": {
           "type": "string",
           "minLength": 8,
@@ -2439,7 +4616,8 @@
       "required": [
         "schema_version",
         "project_id",
-        "preset"
+        "preset",
+        "provider"
       ],
       "properties": {
         "schema_version": {
@@ -2454,6 +4632,16 @@
             "gentle",
             "balanced",
             "tight"
+          ]
+        },
+        "provider": {
+          "description": "The AI connection the user chose in the assistant drawer; it makes the story edit after the app tightens pauses and fillers.",
+          "enum": [
+            "claude",
+            "codex",
+            "deepseek",
+            "openai",
+            "gemini"
           ]
         }
       }
@@ -2566,7 +4754,20 @@
             "The draft changed while Magic Edit was running. Applied cuts are kept and can be undone.",
             "Magic Edit could not finish. Applied cuts are kept and can be undone.",
             "Magic Edit stopped. Applied cuts are kept and can be undone.",
-            "No safe cuts were found for this preset."
+            "The story edit found nothing more to cut for this preset.",
+            "Your AI provider's usage limit was reached. Cuts made so far are kept; run Magic Edit again after it resets.",
+            "The story edit was skipped. Sign in with your Claude account in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Claude Code is out of date: run claude update in a terminal, choose Check again in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Claude Code is not installed: install it from claude.com/claude-code, then run Magic Edit again.",
+            "The story edit was skipped. Claude is not ready: open Settings, choose Check again under Claude, then run Magic Edit again.",
+            "The story edit was skipped. Sign in to Codex in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Codex is not ready: open Settings, reconnect Codex and choose a model, then run Magic Edit again.",
+            "The story edit was skipped. Add your DeepSeek key in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Choose a DeepSeek model in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Add your OpenAI API key in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Choose an OpenAI API model in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Add your Gemini API key in Settings, then run Magic Edit again.",
+            "The story edit was skipped. Choose a Gemini API model in Settings, then run Magic Edit again."
           ]
         }
       }
@@ -2727,7 +4928,9 @@
                 "captionsFileName": {
                   "description": "SubRip captions written beside the video when captions are on.",
                   "anyOf": [
-                    { "type": "null" },
+                    {
+                      "type": "null"
+                    },
                     {
                       "type": "string",
                       "minLength": 5,
@@ -2775,7 +4978,9 @@
             "A clip refers to an unknown source.",
             "This source has no video stream.",
             "This source cannot be read.",
-            "Graphics cannot be drawn on video of this precision yet."
+            "Graphics cannot be drawn on video of this precision yet.",
+            "Music and sound effects need a recording that has audio to mix them into.",
+            "A music or sound file of this video is missing or was changed. Add it again in Edit."
           ]
         }
       }
@@ -2907,6 +5112,83 @@
             1.5,
             2
           ]
+        },
+        "assetPolicy": {
+          "enum": [
+            "any",
+            "copyright_free"
+          ],
+          "description": "Which media Claude may use: any material including copyrighted (the default when absent) or copyright-free material only."
+        },
+        "theme": {
+          "description": "The interface theme (ADR 0024). Light Canvas when absent. A custom theme holds exactly four #rrggbb colours and a layout; the palette is derived from them in the renderer's style sheet. Custom colours must keep text readable (contrast 4.5:1 on the background and cards, 3:1 for white on the accent).",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "enum": [
+                    "light_canvas",
+                    "studio_dark",
+                    "paper",
+                    "cinematic"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "custom"
+              ],
+              "properties": {
+                "id": {
+                  "const": "custom"
+                },
+                "custom": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "background",
+                    "surface",
+                    "text",
+                    "accent",
+                    "layout"
+                  ],
+                  "properties": {
+                    "background": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-f]{6}$"
+                    },
+                    "surface": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-f]{6}$"
+                    },
+                    "text": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-f]{6}$"
+                    },
+                    "accent": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-f]{6}$"
+                    },
+                    "layout": {
+                      "enum": [
+                        "classic",
+                        "cinematic"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -2924,13 +5206,42 @@
       },
       "description": "For projects:create, id is an imported media ID. For projects:open, id is a project ID. Paths are never accepted."
     },
+    "projectRename": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^[^\\s\\u0000-\\u001f\\u007f/\\\\](?:[^\\u0000-\\u001f\\u007f/\\\\]*[^\\s\\u0000-\\u001f\\u007f/\\\\])?$"
+        }
+      }
+    },
     "twoSourceProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["firstId", "secondId"],
+      "required": [
+        "firstId",
+        "secondId"
+      ],
       "properties": {
-        "firstId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "secondId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" }
+        "firstId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "secondId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
       },
       "description": "Ordered, distinct managed library IDs. Runtime rejects duplicates and does not accept filesystem paths."
     },
@@ -3141,16 +5452,46 @@
         "endWordId"
       ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "sourceId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "transcriptId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "startWordId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "endWordId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "transcriptId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "startWordId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "endWordId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
       },
       "description": "Manual transcript-linked ripple cut bound to one path-free local source/transcript word range and the exact committed draft head. Main validates identity, order and one continuous visible clip mapping, then commits exact source/output times through the shared history."
     },
@@ -3197,23 +5538,33 @@
           "type": "array",
           "minItems": 2,
           "maxItems": 2,
-          "items": { "$ref": "#/$defs/summary" },
+          "items": {
+            "$ref": "#/$defs/summary"
+          },
           "description": "Present only for a two-source project, in timeline order. Runtime requires source to equal the first item and IDs to be distinct."
         },
         "clips": {
-          "type": "array", "minItems": 1, "maxItems": 4096,
-          "items": { "$ref": "#/$defs/projectClipView" },
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": {
+            "$ref": "#/$defs/projectClipView"
+          },
           "description": "Optional for older exchange fixtures. Runtime emits exact ordered committed clips and matches their source IDs to source or sources."
         },
         "zooms": {
           "type": "array",
           "maxItems": 256,
-          "items": { "$ref": "#/$defs/zoomEffect" }
+          "items": {
+            "$ref": "#/$defs/zoomEffect"
+          }
         },
         "graphics": {
           "type": "array",
           "maxItems": 256,
-          "items": { "$ref": "timeline.schema.json#/$defs/graphic_effect" }
+          "items": {
+            "$ref": "timeline.schema.json#/$defs/graphic_effect"
+          }
         },
         "transcriptEdits": {
           "type": "array",
@@ -3228,6 +5579,20 @@
         },
         "draft": {
           "$ref": "#/$defs/projectDraftHead"
+        },
+        "transitions": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/transitionEffect"
+          }
+        },
+        "layouts": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/layoutChange"
+          }
         }
       },
       "description": "Path-free committed project and draft view. Runtime additionally requires project, revision, draft, source and timeline IDs to be distinct, an ordered two-source inventory when present, and draft.baseRevisionId to equal revisionId. A stage identifies navigation, not successful feature execution or export."
@@ -3235,7 +5600,9 @@
     "apiProvidersView": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["providers"],
+      "required": [
+        "providers"
+      ],
       "properties": {
         "providers": {
           "type": "array",
@@ -3244,16 +5611,63 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["id", "connected", "remembered", "canRemember", "models", "selectedModel", "busy", "message"],
+            "required": [
+              "id",
+              "connected",
+              "remembered",
+              "canRemember",
+              "models",
+              "selectedModel",
+              "busy",
+              "message"
+            ],
             "properties": {
-              "id": { "enum": ["deepseek", "gemini", "openai"] },
-              "connected": { "type": "boolean" },
-              "remembered": { "type": "boolean" },
-              "canRemember": { "type": "boolean" },
-              "models": { "type": "array", "maxItems": 1024, "uniqueItems": true, "items": { "type": "string", "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$" } },
-              "selectedModel": { "type": ["string", "null"] },
-              "busy": { "type": "boolean" },
-              "message": { "enum": [null, "Connection failed. Check the key and try again.", "Secure storage is unavailable. Use this session only.", "Provider models are unavailable. Try reconnecting.", "Saved key is unavailable on this device. Remove it or connect again.", "No supported editing models are available for this key.", "Model choice could not be saved. Try again."] }
+              "id": {
+                "enum": [
+                  "deepseek",
+                  "gemini",
+                  "openai"
+                ]
+              },
+              "connected": {
+                "type": "boolean"
+              },
+              "remembered": {
+                "type": "boolean"
+              },
+              "canRemember": {
+                "type": "boolean"
+              },
+              "models": {
+                "type": "array",
+                "maxItems": 1024,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+                }
+              },
+              "selectedModel": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "busy": {
+                "type": "boolean"
+              },
+              "message": {
+                "enum": [
+                  null,
+                  "Connection failed. Check the key and try again.",
+                  "Secure storage is unavailable. Use this session only.",
+                  "Provider models are unavailable. Try reconnecting.",
+                  "Saved key is unavailable on this device. Remove it or connect again.",
+                  "No supported editing models are available for this key.",
+                  "Model choice could not be saved. Try again."
+                ]
+              }
             }
           }
         }
@@ -3263,43 +5677,179 @@
     "apiThreadProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "project_id", "provider"],
+      "required": [
+        "schema_version",
+        "project_id",
+        "provider"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "project_id": { "$ref": "#/$defs/codexThreadId" },
-        "provider": { "enum": ["deepseek", "gemini", "openai"] }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "$ref": "#/$defs/codexThreadId"
+        },
+        "provider": {
+          "enum": [
+            "deepseek",
+            "gemini",
+            "openai"
+          ]
+        }
       }
     },
     "apiThreadSendRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "project_id", "provider", "text"],
+      "required": [
+        "schema_version",
+        "project_id",
+        "provider",
+        "text"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "project_id": { "$ref": "#/$defs/codexThreadId" },
-        "provider": { "enum": ["deepseek", "gemini", "openai"] },
-        "text": { "type": "string", "minLength": 1, "maxLength": 16384 }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "$ref": "#/$defs/codexThreadId"
+        },
+        "provider": {
+          "enum": [
+            "deepseek",
+            "gemini",
+            "openai"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        }
       }
     },
     "apiThreadView": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "projectId", "provider", "messages", "message"],
+      "required": [
+        "status",
+        "projectId",
+        "provider",
+        "messages",
+        "message"
+      ],
       "properties": {
-        "status": { "enum": ["closed", "ready", "running", "interrupting", "failed"] },
-        "projectId": { "anyOf": [{ "$ref": "#/$defs/codexThreadId" }, { "type": "null" }] },
-        "provider": { "enum": ["deepseek", "gemini", "openai", null] },
-        "messages": { "type": "array", "maxItems": 48, "items": {
-          "type": "object", "additionalProperties": false, "required": ["id", "role", "text"],
-          "properties": {
-            "id": { "$ref": "#/$defs/codexThreadId" },
-            "role": { "enum": ["user", "assistant"] },
-            "text": { "type": "string", "minLength": 1, "maxLength": 32768 }
+        "status": {
+          "enum": [
+            "closed",
+            "ready",
+            "running",
+            "interrupting",
+            "failed"
+          ]
+        },
+        "projectId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/codexThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provider": {
+          "enum": [
+            "deepseek",
+            "gemini",
+            "openai",
+            null
+          ]
+        },
+        "messages": {
+          "type": "array",
+          "maxItems": 48,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "role",
+              "text"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/codexThreadId"
+              },
+              "role": {
+                "enum": [
+                  "user",
+                  "assistant"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32768
+              }
+            }
           }
-        } },
-        "message": { "enum": [null, "Choose a connected provider and model in Settings before sending.", "The provider request failed. Check the connection and try a new turn.", "The provider rate or quota limit was reached. Check your API account before sending again.", "The provider rejected this API connection. Check the key and account access in Settings before sending again.", "The provider rejected this response. Check the selected model and try a new turn.", "This turn stopped. Review the current draft before sending again.", "The edit may have been saved. Reopen the project before sending again.", "The conversation could not be saved. Check local storage and reopen the project."] }
+        },
+        "message": {
+          "enum": [
+            null,
+            "Choose a connected provider and model in Settings before sending.",
+            "The provider request failed. Check the connection and try a new turn.",
+            "The provider rate or quota limit was reached. Check your API account before sending again.",
+            "The provider rejected this API connection. Check the key and account access in Settings before sending again.",
+            "The provider rejected this response. Check the selected model and try a new turn.",
+            "This turn stopped. Review the current draft before sending again.",
+            "The edit may have been saved. Reopen the project before sending again.",
+            "The conversation could not be saved. Check local storage and reopen the project."
+          ]
+        }
       },
-      "allOf": [{ "if": { "properties": { "status": { "const": "closed" } } }, "then": { "properties": { "projectId": { "type": "null" }, "provider": { "type": "null" }, "messages": { "maxItems": 0 }, "message": { "type": "null" } } }, "else": { "properties": { "projectId": { "$ref": "#/$defs/codexThreadId" }, "provider": { "enum": ["deepseek", "gemini", "openai"] } } } }]
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "closed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "projectId": {
+                "type": "null"
+              },
+              "provider": {
+                "type": "null"
+              },
+              "messages": {
+                "maxItems": 0
+              },
+              "message": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "projectId": {
+                "$ref": "#/$defs/codexThreadId"
+              },
+              "provider": {
+                "enum": [
+                  "deepseek",
+                  "gemini",
+                  "openai"
+                ]
+              }
+            }
+          }
+        }
+      ]
     },
     "codexDeviceLogin": {
       "type": "object",
@@ -3783,7 +6333,9 @@
                 "const": true
               }
             },
-            "required": ["retryable"]
+            "required": [
+              "retryable"
+            ]
           },
           "then": {
             "properties": {
@@ -3797,7 +6349,9 @@
                       "const": "user"
                     }
                   },
-                  "required": ["role"]
+                  "required": [
+                    "role"
+                  ]
                 }
               }
             }
@@ -3859,16 +6413,53 @@
       }
     },
     "projectClipView": {
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "sourceId", "timelineStartUs", "timelineEndUs", "sourceStartUs", "sourceEndUs"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sourceId",
+        "timelineStartUs",
+        "timelineEndUs",
+        "sourceStartUs",
+        "sourceEndUs"
+      ],
       "properties": {
-        "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "sourceId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "timelineStartUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "timelineEndUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
-        "sourceStartUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "sourceEndUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
-        "speed": { "enum": [2, 3, 4, 8] }
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "sourceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "timelineStartUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "timelineEndUs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "sourceStartUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sourceEndUs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "speed": {
+          "enum": [
+            2,
+            3,
+            4,
+            8
+          ]
+        }
       },
       "description": "Half-open committed clip map; runtime additionally validates ordered source identity, contiguity, a timeline span of ceil(source span / speed) (speed omitted at normal speed), and total duration."
     },
@@ -3915,10 +6506,17 @@
     "projectDraftIntegrityView": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["draft", "structuralCheckpointRecorded"],
+      "required": [
+        "draft",
+        "structuralCheckpointRecorded"
+      ],
       "properties": {
-        "draft": { "$ref": "#/$defs/projectDraftView" },
-        "structuralCheckpointRecorded": { "type": "boolean" }
+        "draft": {
+          "$ref": "#/$defs/projectDraftView"
+        },
+        "structuralCheckpointRecorded": {
+          "type": "boolean"
+        }
       }
     },
     "projectDraftView": {
@@ -3941,18 +6539,26 @@
           "$ref": "#/$defs/projectTimelineView"
         },
         "clips": {
-          "type": "array", "minItems": 1, "maxItems": 4096,
-          "items": { "$ref": "#/$defs/projectClipView" }
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": {
+            "$ref": "#/$defs/projectClipView"
+          }
         },
         "zooms": {
           "type": "array",
           "maxItems": 256,
-          "items": { "$ref": "#/$defs/zoomEffect" }
+          "items": {
+            "$ref": "#/$defs/zoomEffect"
+          }
         },
         "graphics": {
           "type": "array",
           "maxItems": 256,
-          "items": { "$ref": "timeline.schema.json#/$defs/graphic_effect" }
+          "items": {
+            "$ref": "timeline.schema.json#/$defs/graphic_effect"
+          }
         },
         "transcriptEdits": {
           "type": "array",
@@ -3960,166 +6566,595 @@
           "items": {
             "$ref": "#/$defs/transcriptTextOverride"
           }
+        },
+        "transitions": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/transitionEffect"
+          }
+        },
+        "layouts": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/layoutChange"
+          }
         }
       },
       "description": "Path-free current draft identity and timeline. Runtime requires distinct project, base revision, draft, and timeline IDs."
     },
     "manualTrimRequest": {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "clipId", "edge", "timelinePositionUs"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "clipId",
+        "edge",
+        "timelinePositionUs"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "clipId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "edge": { "enum": ["start", "end"] },
-        "timelinePositionUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "clipId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "edge": {
+          "enum": [
+            "start",
+            "end"
+          ]
+        },
+        "timelinePositionUs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
       },
       "description": "Renderer sends intent and freshness. Main injects request, pass and operation IDs, origin, and reason."
     },
     "manualSplitRequest": {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "clipId", "timelinePositionUs"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "clipId",
+        "timelinePositionUs"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "clipId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "timelinePositionUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "clipId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "timelinePositionUs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
       },
       "description": "Renderer sends split intent and freshness. Main injects transaction, pass and operation IDs and manual origin."
     },
     "manualZoomRequest": {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "zoomId", "startUs", "endUs", "centerX", "centerY", "scale"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "zoomId",
+        "startUs",
+        "endUs",
+        "centerX",
+        "centerY",
+        "scale"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "zoomId": { "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }] },
-        "startUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "endUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
-        "centerX": { "type": "number", "minimum": 0, "maximum": 1 },
-        "centerY": { "type": "number", "minimum": 0, "maximum": 1 },
-        "scale": { "type": "number", "minimum": 1.1, "maximum": 4 }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "zoomId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            }
+          ]
+        },
+        "startUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endUs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "centerX": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "centerY": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 1.1,
+          "maximum": 4
+        }
       },
       "description": "Adds a zoom over an output-timeline half-open range of at least 0.5 s within one source, or (with zoomId) changes an existing zoom's target and strength while it keeps its source range. Main maps output to source time and injects the zoom ID and manual authority."
     },
     "manualGraphicRequest": {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "graphicId", "name", "startUs", "durationUs", "layer", "html", "css"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "graphicId",
+        "name",
+        "startUs",
+        "durationUs",
+        "layer",
+        "html",
+        "css"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "graphicId": { "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }] },
-        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
-        "startUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "durationUs": { "type": "integer", "minimum": 100000, "maximum": 600000000 },
-        "layer": { "type": "integer", "minimum": 0, "maximum": 99 },
-        "html": { "type": "string", "maxLength": 65536 },
-        "css": { "type": "string", "maxLength": 65536 }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "graphicId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "startUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "durationUs": {
+          "type": "integer",
+          "minimum": 100000,
+          "maximum": 600000000
+        },
+        "layer": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 99
+        },
+        "html": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "css": {
+          "type": "string",
+          "maxLength": 65536
+        }
       },
       "description": "Adds a motion graphic at an output time, or replaces graphicId. Main anchors it to the source moment shown at startUs and rejects unsafe content (see timeline graphic_effect)."
     },
     "manualGraphicRemoveRequest": {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "graphicId"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "graphicId"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "graphicId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "graphicId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
       },
       "description": "Removes one motion graphic as an undoable edit."
     },
     "manualSpeedRequest": {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "startUs", "endUs", "speed"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "startUs",
+        "endUs",
+        "speed"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "startUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "endUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
-        "speed": { "enum": [1, 2, 3, 4, 8] }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "startUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endUs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "speed": {
+          "enum": [
+            1,
+            2,
+            3,
+            4,
+            8
+          ]
+        }
       },
       "description": "Plays an output-timeline half-open range at a whole-number speed (1 restores normal speed) as one undoable edit. Main injects manual authority."
     },
     "manualZoomRemoveRequest": {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "zoomId"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "zoomId"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "zoomId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "zoomId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
       },
       "description": "Removes one zoom from the committed draft head as an undoable edit."
     },
     "manualRangeCutRequest": {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "startUs", "endUs"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "startUs",
+        "endUs"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "startUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "endUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "startUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endUs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
       },
       "description": "Renderer sends an output-timeline half-open range and committed head. Main injects trusted manual authority."
     },
     "manualRestoreRangeRequest": {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "sourceId", "sourceStartUs", "sourceEndUs"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "sourceId",
+        "sourceStartUs",
+        "sourceEndUs"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "sourceId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "sourceStartUs": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "sourceEndUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991, "x-greaterThan": "sourceStartUs" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "sourceStartUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sourceEndUs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "x-greaterThan": "sourceStartUs"
+        }
       },
       "description": "Renderer sends one exact missing half-open source-time interval and committed head. Runtime additionally requires sourceStartUs < sourceEndUs; main resolves the immutable baseline and injects manual authority."
     },
     "manualUndoRequest": {
-      "type": "object", "additionalProperties": false,
-      "required": ["schema_version", "projectId", "draftId", "baseRevisionId", "expectedSequence", "expectedTimelineSha256", "targetTransactionId"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "targetTransactionId"
+      ],
       "properties": {
-        "schema_version": { "const": "1.0" },
-        "projectId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "draftId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" },
-        "baseRevisionId": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
-        "expectedSequence": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-        "expectedTimelineSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "targetTransactionId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" }
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "targetTransactionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
       },
       "description": "Undo only the committed head transaction. Main supplies a fresh request ID and reason."
     },
@@ -4275,6 +7310,7 @@
         "account",
         "models",
         "selection",
+        "roughCutSelection",
         "message"
       ],
       "properties": {
@@ -4390,11 +7426,22 @@
             }
           ]
         },
+        "roughCutSelection": {
+          "description": "The rough cut's model (Magic Edit); Haiku by default when the account offers it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/claudeSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "message": {
           "enum": [
             null,
-            "Claude Code was not found. Install it from Anthropic, then choose Check again.",
-            "This Claude Code version is too old. Update Claude Code, then choose Check again.",
+            "Claude Code is not installed. Install it from claude.com/claude-code, then choose Check again.",
+            "Claude Code is out of date. Open a terminal, run: claude update, then choose Check again.",
             "Claude Code could not be started. Check the installation, then choose Check again.",
             "Claude sign-in status could not be read. Choose Check again.",
             "Sign-in did not finish. Choose Sign in with Claude to try again.",
@@ -4487,7 +7534,8 @@
         "activities",
         "streaming",
         "billing",
-        "message"
+        "message",
+        "fullEdit"
       ],
       "properties": {
         "status": {
@@ -4603,8 +7651,44 @@
             "The edit may have been saved. Reopen the project before sending again.",
             "Claude did not start with the editor's restricted tools. Update the app or Claude Code, then try again.",
             "The earlier Claude conversation could not be resumed. Your next message starts a new conversation.",
-            "The conversation could not be saved. Check local storage and reopen the project."
+            "The conversation could not be saved. Check local storage and reopen the project.",
+            "Undo the edits made after the full edit first, then try again."
           ]
+        },
+        "fullEdit": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "changes",
+                "undoable"
+              ],
+              "properties": {
+                "status": {
+                  "enum": [
+                    "running",
+                    "finished",
+                    "stopped",
+                    "failed"
+                  ]
+                },
+                "changes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                "undoable": {
+                  "type": "boolean"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The latest full AI edit of the project. undoable is true only while its edits are the newest in the draft history."
         }
       },
       "allOf": [
@@ -4663,6 +7747,990 @@
               "streaming": {
                 "type": "null"
               }
+            }
+          }
+        }
+      ]
+    },
+    "claudeFullEditRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "brief"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "$ref": "#/$defs/codexThreadId"
+        },
+        "brief": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "goal",
+            "audience",
+            "style",
+            "level"
+          ],
+          "properties": {
+            "goal": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "audience": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "style": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "level": {
+              "enum": [
+                "tidy",
+                "polished",
+                "bold"
+              ]
+            }
+          }
+        }
+      },
+      "description": "Starts a full AI edit, or a polish run after a finished one. The brief is the user's description of the video, not instructions to the app."
+    },
+    "soundsRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      }
+    },
+    "soundAddRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "kind",
+        "start_us"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "kind": {
+          "enum": [
+            "music",
+            "effect"
+          ]
+        },
+        "start_us": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 14400000000
+        }
+      }
+    },
+    "soundUpdateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "sound_id",
+        "gain_db",
+        "duck_db"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "sound_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "gain_db": {
+          "type": "integer",
+          "minimum": -60,
+          "maximum": 12
+        },
+        "duck_db": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        }
+      }
+    },
+    "soundRemoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "sound_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "sound_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      }
+    },
+    "soundsView": {
+      "description": "Music and sound effects in the draft, with where each plays. No file path is included; audio files are chosen in a dialog owned by the main process.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "layers"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "layers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "sound_id",
+              "name",
+              "kind",
+              "file_name",
+              "asset_id",
+              "asset_start_us",
+              "fade_in_us",
+              "fade_out_us",
+              "gain_db",
+              "duck_db",
+              "loop",
+              "timeline_range"
+            ],
+            "properties": {
+              "sound_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "kind": {
+                "enum": [
+                  "music",
+                  "effect"
+                ]
+              },
+              "file_name": {
+                "type": "string",
+                "maxLength": 400
+              },
+              "asset_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+              },
+              "asset_start_us": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 14400000000
+              },
+              "fade_in_us": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 14400000000
+              },
+              "fade_out_us": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 14400000000
+              },
+              "gain_db": {
+                "type": "integer",
+                "minimum": -60,
+                "maximum": 12
+              },
+              "duck_db": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 30
+              },
+              "loop": {
+                "type": "boolean"
+              },
+              "timeline_range": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "start_us",
+                      "end_us"
+                    ],
+                    "properties": {
+                      "start_us": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 14400000000
+                      },
+                      "end_us": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 14400000000
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "manualTransitionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "transitionId",
+        "atUs",
+        "kind",
+        "durationUs",
+        "color"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "transitionId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            }
+          ]
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "enum": [
+            "dip",
+            "wipe_right",
+            "wipe_left",
+            "iris"
+          ]
+        },
+        "durationUs": {
+          "type": "integer",
+          "minimum": 200000,
+          "maximum": 2000000
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      },
+      "description": "Adds a transition at the cut at output time atUs (the first frame of the incoming clip), or replaces transitionId. Main anchors it to the source moment where the incoming clip starts and refuses a time that is not a cut."
+    },
+    "manualTransitionRemoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "transitionId"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "transitionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      }
+    },
+    "manualLayoutRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "layoutId",
+        "atUs",
+        "kind",
+        "corner",
+        "size",
+        "shape",
+        "faceZoom",
+        "focusX",
+        "focusY",
+        "moveUs"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "layoutId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+            }
+          ]
+        },
+        "atUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "enum": [
+            "screen",
+            "camera",
+            "pip"
+          ]
+        },
+        "corner": {
+          "enum": [
+            "top_left",
+            "top_right",
+            "bottom_left",
+            "bottom_right"
+          ]
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.12,
+          "maximum": 0.5
+        },
+        "shape": {
+          "enum": [
+            "circle",
+            "rounded",
+            "rect"
+          ]
+        },
+        "faceZoom": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2.5
+        },
+        "focusX": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "focusY": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "moveUs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000000
+        }
+      },
+      "description": "Changes how the camera and screen share the picture from output time atUs (or replaces layoutId, keeping its moment). Main anchors it to the recording's moment there and refuses a camera layout when no camera video is linked. corner, size and shape matter for pip; faceZoom, focusX and focusY for camera and pip."
+    },
+    "manualLayoutRemoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "layoutId"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "layoutId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      }
+    },
+    "cameraRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        }
+      },
+      "description": "camera:choose opens a file dialog owned by main; no path crosses this boundary."
+    },
+    "cameraOffsetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "offset_us"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "offset_us": {
+          "type": "integer",
+          "minimum": -600000000,
+          "maximum": 600000000
+        }
+      }
+    },
+    "cameraView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "linked",
+        "file_name",
+        "offset_us",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "linked": {
+          "type": "boolean"
+        },
+        "file_name": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          ]
+        },
+        "offset_us": {
+          "type": "integer",
+          "minimum": -600000000,
+          "maximum": 600000000
+        },
+        "width": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ]
+        },
+        "height": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ]
+        }
+      },
+      "description": "The camera recording linked to the project's recording, if any. Camera time is recording time plus offset_us."
+    },
+    "layoutChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layout_id",
+        "source_id",
+        "source_us",
+        "kind"
+      ],
+      "properties": {
+        "layout_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_us": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "screen",
+            "camera",
+            "pip"
+          ]
+        },
+        "corner": {
+          "enum": [
+            "top_left",
+            "top_right",
+            "bottom_left",
+            "bottom_right"
+          ]
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0.12,
+          "maximum": 0.5
+        },
+        "shape": {
+          "enum": [
+            "circle",
+            "rounded",
+            "rect"
+          ]
+        },
+        "face_zoom": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2.5
+        },
+        "focus_x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "focus_y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "move_us": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000000
+        }
+      },
+      "description": "An arrangement of the camera and screen from a moment of a recording; it holds until the next change and follows cuts."
+    },
+    "transitionEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transition_id",
+        "source_id",
+        "source_us",
+        "kind",
+        "duration_us",
+        "color"
+      ],
+      "properties": {
+        "transition_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "source_us": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kind": {
+          "enum": [
+            "dip",
+            "wipe_right",
+            "wipe_left",
+            "iris"
+          ]
+        },
+        "duration_us": {
+          "type": "integer",
+          "minimum": 200000,
+          "maximum": 2000000
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      },
+      "description": "A styled overlay that hides a cut, centred on the first frame of the incoming clip, which starts at source moment source_us of source_id. It follows later cuts and is dormant while no cut is there. At most one per cut. It draws like a motion graphic over the video and changes no audio."
+    },
+    "shortExportAllRequest": {
+      "description": "Exports every clip of the project in one folder chosen through a system dialog, one after another.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "format",
+        "framing",
+        "position",
+        "captions",
+        "title",
+        "speed"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "format": {
+          "enum": [
+            "vertical",
+            "square",
+            "landscape"
+          ]
+        },
+        "framing": {
+          "enum": [
+            "fit",
+            "fill"
+          ]
+        },
+        "position": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "captions": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "boolean"
+        },
+        "speed": {
+          "enum": [
+            1,
+            2
+          ]
+        }
+      }
+    },
+    "shortLibraryRequest": {
+      "description": "Acts on one entry of the project's list of exported clips.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "export_id"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "export_id": {
+          "type": "string",
+          "pattern": "^export-[A-Za-z0-9-]{8,48}$"
+        }
+      }
+    },
+    "projectStripRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "expectedSequence",
+        "expectedTimelineSha256",
+        "timesUs"
+      ],
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "expectedSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expectedTimelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "timesUs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "description": "Increasing output times."
+        }
+      },
+      "description": "Binds a request for small filmstrip pictures of the edit at output times to the exact committed draft head. The pictures are cosmetic, never review frames; no source identity, source time or path crosses the renderer boundary."
+    },
+    "projectStripReady": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "projectId",
+        "draftId",
+        "baseRevisionId",
+        "draftSequence",
+        "timelineSha256",
+        "frames"
+      ],
+      "properties": {
+        "status": {
+          "const": "ready"
+        },
+        "projectId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
+        },
+        "baseRevisionId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "draftSequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "timelineSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "frames": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "timelineTimeUs",
+              "frame"
+            ],
+            "properties": {
+              "timelineTimeUs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "frame": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/$defs/thumbnail"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "projectStripResult": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/projectStripReady"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "draft"
+          ],
+          "properties": {
+            "status": {
+              "const": "stale"
+            },
+            "draft": {
+              "$ref": "#/$defs/projectDraftView"
             }
           }
         }

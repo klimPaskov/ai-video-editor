@@ -305,11 +305,16 @@ try {
   await page.getByRole("button", { name: "Close settings" }).click();
 
   step = "import";
+  // A reused private profile can hold earlier runs' projects.
+  const earlier = await page.evaluate(() => window.desktop.listProjects());
+  assert.ok(earlier.ok);
+  const known = new Set(earlier.value.map((item) => item.id));
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 30_000 });
   const listed = await page.evaluate(() => window.desktop.listProjects());
   assert.ok(listed.ok);
-  const project = listed.value[0]!;
+  const project = listed.value.find((item) => !known.has(item.id))!;
+  assert.ok(project, "the imported project is listed");
   const projectFolder = join(userData, "project-store", project.id);
   const baselineBytes = await readFile(join(projectFolder, "baseline.json"));
 

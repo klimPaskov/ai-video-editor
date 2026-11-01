@@ -64,7 +64,7 @@ Automatically apply only high-confidence, low-risk edits under the chosen preset
 
 ## Presets
 
-- Gentle: remove only clear dead air and failed takes.
+- Natural (`gentle`): pauses over 0.8 s shortened to 0.5 s, fillers removed, clear dead air and failed takes.
 - Balanced: normal tutorial pacing.
 - Tight: stronger filler and pause cleanup, still protects meaning.
 - Custom: user-selected switches and thresholds.
@@ -81,13 +81,19 @@ The configured cue defaults to Hey Codex. Contextual variants are conservative; 
 
 The spoken pass preserves the final complete redo, useful unique context and conversational/demonstration pauses. The 200–300 ms breathing-space suggestion is contextual, never an automatic silence threshold. Verify every cut join, scan the whole source for omissions, reread the full edited transcript, and restore damaged wording through shared undo. Separate cut/layout/zoom pass groups retain live reversible commits and verified checkpoints. Graphics requests produce selective timed prompt suggestions only. This is future P5/P7/P8 acceptance work, not a current-feature claim.
 
-## Deterministic Magic Edit (2026-10-07)
+## Magic Edit is Claude's rough cut (2026-10-18, ADR 0020)
 
-Auto Edit now has Magic Edit with a Gentle, Balanced (default) or Tight preset and Run Magic Edit. It uses only local evidence and sends nothing to an AI provider.
+The rough cut is never deterministic. Run Magic Edit transcribes locally, runs the analysis below to find pauses, fillers and the earlier copy of repeated wording, and hands the rough cut to Claude with those findings listed as evidence, not cuts. Claude makes a story edit with the rough-cut playbook (`apps/desktop/src/rough-cut-playbook.ts`): it reads the whole transcript, works out the story, removes repeated ideas, retakes, false starts, tangents and dead air on sentence boundaries, rereads the result and restores anything lost. While it runs, main allows only reading, transcript, picture and cutting tools. It uses Haiku when the account's catalog offers it. Magic Edit itself makes no cut and says so when Claude is not signed in; Stop interrupts Claude and keeps its cuts; the summary is measured from the draft ("Removed 13.1 s in 1 cut"), and Claude's own summary is in the conversation. Evidence: `tests/media/rough-cut.test.ts` and the packaged `tests/native/magic-edit.test.ts` with the labeled Claude Code test double (decorating tool refused, Haiku requested, the earlier take removed as one `claude` transaction, no word partly cut, Undo restores the original). A real-model rough cut on real footage is not yet recorded.
+
+## Deterministic analysis (2026-10-07; evidence only since 2026-10-18)
+
+The steps below described the earlier rule-based Magic Edit. Its plan now only produces evidence for Claude; step 3 no longer applies cuts.
+
+Auto Edit now has Magic Edit with a Natural, Balanced (default) or Tight preset and Run Magic Edit. It uses only local evidence and sends nothing to an AI provider.
 
 1. **Transcript.** It reuses a completed local transcript, or starts transcription once and follows that job; a failed or cancelled transcription ends the run with a fixed message.
 2. **Plan** (`packages/domain/src/magic-wand.ts`). From the deterministic candidate report and silence analysis it cuts only:
-   - word-free detected silence of at least 2.0 / 1.0 / 0.6 s (Gentle / Balanced / Tight), shortened to keep 0.8 / 0.5 / 0.3 s split across both sides;
+   - ADR 0026 (this replaces the older detected-silence rule): a gap between words (or before the first / after the last word) of at least 0.8 / 0.45 / 0.3 s (Natural / Balanced / Tight), shortened to keep 0.5 / 0.3 / 0.2 s. The cut sits in the quietest part of the gap by a 10 ms loudness track and is refused unless that stretch is clearly under the speech level; without loudness data a gap must be mostly detected silence. The app applies pause and filler cuts itself as one undoable transaction; Claude is told how many and handles the story-level cuts;
    - Balanced and Tight: a single configured filler (um, uh, erm, hmm for English) with at least 40 ms of non-speech on both sides and no confidence below 0.5, cut at the midpoints of the surrounding gaps;
    - the earlier copy of an exactly repeated sentence, so the final take is kept, with the same clean-gap rule.
    Any cut that would touch a protected, uncertain, name, number, negation or overlapping word, or split a word it does not remove entirely, is dropped. False starts, self-corrections, spoken editor cues and skipped items are counted as left for review.

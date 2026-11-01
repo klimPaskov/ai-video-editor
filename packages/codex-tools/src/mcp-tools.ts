@@ -1,10 +1,12 @@
-import { codexVideoEditToolNames } from "./service.ts";
+import { claudeOnlyToolNames, codexVideoEditToolNames } from "./service.ts";
 
 const id = { type: "string", pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$" };
 const hash = { type: "string", pattern: "^[a-f0-9]{64}$" };
 const prose = { type: "string", minLength: 1, maxLength: 1000 };
+// Every constant and choice declares its type: without one, Claude Code
+// passes a numeric-looking value such as "1.0" as the number 1.
 const freshness = {
-  schema_version: { const: "1.0" },
+  schema_version: { type: "string", const: "1.0" },
   request_id: id,
   project_id: id,
   draft_id: id,
@@ -24,7 +26,7 @@ export const codexVideoEditMcpTools = [
       additionalProperties: false,
       required: ["schema_version", "project_id"],
       properties: {
-        schema_version: { const: "1.0" },
+        schema_version: { type: "string", const: "1.0" },
         project_id: id,
       },
     },
@@ -44,7 +46,7 @@ export const codexVideoEditMcpTools = [
       additionalProperties: false,
       required: ["schema_version", "project_id"],
       properties: {
-        schema_version: { const: "1.0" },
+        schema_version: { type: "string", const: "1.0" },
         project_id: id,
       },
     },
@@ -73,7 +75,7 @@ export const codexVideoEditMcpTools = [
         ...freshness,
         pass_group_id: id,
         clip_id: id,
-        edge: { enum: ["start", "end"] },
+        edge: { type: "string", enum: ["start", "end"] },
         timeline_position_us: { type: "integer", minimum: 1 },
       },
     },
@@ -238,7 +240,7 @@ export const codexVideoEditMcpTools = [
         "limit",
       ],
       properties: {
-        schema_version: { const: "1.0" },
+        schema_version: { type: "string", const: "1.0" },
         project_id: id,
         source_id: id,
         transcript_id: id,
@@ -258,7 +260,7 @@ export const codexVideoEditMcpTools = [
   {
     name: codexVideoEditToolNames[9],
     description:
-      "Zoom into one point of the frame for a half-open output-time range of at least 0.5 s within one recording's footage, as one undoable transaction. Use it briefly (typically a few seconds at scale 1.5–2), only to make a small on-screen detail readable. center_x and center_y are frame fractions (0–1); scale is 1.1–4. Zooms of the same recording cannot overlap. With zoom_id, the existing zoom keeps its range and only its point and scale change.",
+      'Zoom into one point of the frame for a half-open output-time range of at least 0.5 s within one recording\'s footage, as one undoable transaction. Zoom only where a viewer needs a detail (a place from zoom.targets), never as decoration; most of a video has no zoom. center_x and center_y are frame fractions (0–1); scale is 1.1–4 (1.3–2.4 is usual). Motion: "hold" (default) eases in, stays and eases out, for a detail to read; "push" grows the magnification slowly across the whole range, for emphasis during a sentence. Optional end_center_x/end_center_y pan to a second point across the range (to follow a result or move between two places; give both). ease_in_us/ease_out_us (100000–1500000, default 400000) set the ramps; a longer ease feels calmer. Zooms of the same recording cannot overlap. With zoom_id, the existing zoom keeps its range and only its point, scale and motion change.',
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -280,6 +282,11 @@ export const codexVideoEditMcpTools = [
         center_x: { type: "number", minimum: 0, maximum: 1 },
         center_y: { type: "number", minimum: 0, maximum: 1 },
         scale: { type: "number", minimum: 1.1, maximum: 4 },
+        motion: { type: "string", enum: ["hold", "push"] },
+        end_center_x: { type: "number", minimum: 0, maximum: 1 },
+        end_center_y: { type: "number", minimum: 0, maximum: 1 },
+        ease_in_us: { type: "integer", minimum: 100000, maximum: 1500000 },
+        ease_out_us: { type: "integer", minimum: 100000, maximum: 1500000 },
       },
     },
     annotations: {
@@ -339,4 +346,589 @@ export const codexVideoEditMcpTools = [
       openWorldHint: false,
     },
   },
+  {
+    name: codexVideoEditToolNames[12],
+    description:
+      "Add or replace a motion graphic (title card, lower third, callout, label or transition) drawn over the video and under captions, as one undoable transaction. start_us is an output time; the graphic is anchored to the source moment shown there, so it follows later cuts, and stays duration_us on screen (0.1–600 s). html is one HTML fragment and css its stylesheet (each at most 24 KiB) for a transparent stage the size of the video, with --stage-width, --stage-height and safe-area custom properties. CSS animations start when the graphic starts and are seeked frame-exactly in preview and export. No scripts, event handlers, forms, embedded documents, audio/video elements or network resources; images must be inline SVG or data: URLs. Keep text inside the safe area, on screen long enough to read, and clear of captions and important footage. With graphic_id the existing graphic is replaced. Higher layer draws on top (0–99). Instead of html and css, Claude can pass composition_path: a page in its workspace that draws itself for any time, in any technology: either free-form (the page defines window.__seek(seconds) and window.__duration and draws with canvas, WebGL, three.js, shaders, SVG or the DOM; CSS, Web and SVG animations are seeked for it) or a HyperFrames composition (a root with data-composition-id and a paused GSAP timeline). Local scripts, styles, images and fonts next to it are bundled in; libraries, ES modules (with an import map), fonts and models load only as pinned cdn.jsdelivr.net/npm files with an exact version, sealed into the composition and cached; the page has no other network. It plays in a sealed frame seeked to each time, identically in preview, pictures and export; if it fails to load or render, the error says why.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "start_us",
+        "duration_us",
+        "name",
+        "layer",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        graphic_id: id,
+        start_us: { type: "integer", minimum: 0 },
+        duration_us: { type: "integer", minimum: 100000, maximum: 600000000 },
+        name: { type: "string", minLength: 1, maxLength: 80 },
+        layer: { type: "integer", minimum: 0, maximum: 99 },
+        html: { type: "string", maxLength: 24576 },
+        css: { type: "string", maxLength: 24576 },
+        composition_path: { type: "string", minLength: 1, maxLength: 260 },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[13],
+    description:
+      "Remove one motion graphic from the active draft by graphic_id as one undoable transaction.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "graphic_id"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        graphic_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[14],
+    description:
+      "Set the draft's caption choices (the same as the Auto Edit captions card) as one undoable transaction. Captions are always derived from the transcript; this only turns them on or off and chooses style (plain, highlight or minimal), size (small, medium or large), position (bottom or top) and whether export burns them into the picture (burn_in) as well as writing an .srt. Pass every field; the timeline summary's captions shows the current choice (null: the project's earlier choice or the default applies).",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "enabled",
+        "style",
+        "size",
+        "position",
+        "burn_in",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        enabled: { type: "boolean" },
+        style: { type: "string", enum: ["plain", "highlight", "minimal"] },
+        size: { type: "string", enum: ["small", "medium", "large"] },
+        position: { type: "string", enum: ["bottom", "top"] },
+        burn_in: { type: "boolean" },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[15],
+    description:
+      "Set the draft's export audio treatment (the same as the Auto Edit audio card) as one undoable transaction: normalize evens loudness to -16 LUFS; denoise reduces steady background noise. Sources are never changed. Pass both fields.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "normalize",
+        "denoise",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        normalize: { type: "boolean" },
+        denoise: { type: "boolean" },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[16],
+    description:
+      "See the edit: render 1–3 pictures of the active draft at output times (microseconds), exactly as export draws them with zooms, motion graphics and captions (when captions are on). Use it to check a graphic's text, placement and timing, a zoom's target, or that captions stay clear, before moving on. Pictures are small JPEGs for review (max_width sets the longer side, 320–1280 pixels, default 960); they are never part of the video. To judge motion (timing, easing, choreography of a graphic or a zoom), use layout \"sheet\" with 2–16 times across the range: they are tiled four across into one picture in reading order, each cell max_width 320–480 (default 320).",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "times_us"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        times_us: {
+          type: "array",
+          minItems: 1,
+          maxItems: 16,
+          items: { type: "integer", minimum: 0 },
+        },
+        max_width: { type: "integer", minimum: 320, maximum: 1280 },
+        layout: { type: "string", enum: ["frames", "sheet"] },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[17],
+    description:
+      "Put a transition on a cut, as one undoable transaction. A transition is a styled overlay centred on the cut that hides the jump between two moments: 'dip' fades to a colour and back, 'wipe_right' and 'wipe_left' sweep a colour panel across, 'iris' opens a circle of colour over the frame and closes it again. at_us is the output time of the first frame after the cut; the timeline summary lists every real cut in `cuts` (a cut that already has a transition shows its transition_id, and setting another replaces it). duration_us is the total time on screen (0.2 to 2 s, default 0.6 s), color is #rrggbb (default black; use the video's own palette for wipes and irises). Place them where the video moves to a new section or subject, not on every cut: a handful in a few minutes reads as designed, one on each cut as noise. Pass transition_id from the summary to change one. Audio is not changed.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "at_us", "kind"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        transition_id: id,
+        at_us: { type: "integer", minimum: 1 },
+        kind: {
+          type: "string",
+          enum: ["dip", "wipe_right", "wipe_left", "iris"],
+        },
+        duration_us: { type: "integer", minimum: 200000, maximum: 2000000 },
+        color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[18],
+    description:
+      "Remove one transition from the active draft by transition_id as one undoable transaction.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "transition_id"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        transition_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[19],
+    description:
+      "Start Magic Edit, the same as the Magic Edit button in Auto Edit: the app transcribes the recording locally, tightens long pauses and fillers as one undoable transaction, then the assistant makes a story edit (repeated ideas, retakes, false starts, tangents) with the guarded cutting tools. preset is how far to go: gentle, balanced or tight. It uses the connection chosen in this conversation. If this reply is still being written the run starts as soon as it ends. Progress and the result show in Auto Edit; every cut can be undone. Tell the user plainly that it has started (or what blocked it); do not claim it finished.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "preset"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        preset: { type: "string", enum: ["gentle", "balanced", "tight"] },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[20],
+    description:
+      "Stop what the app is doing for the edit, the same as the Stop button: cancels a queued Magic Edit or Edit my video, or stops one that is running. Cuts already made stay in the draft and can be undone. Reports in plain words when nothing was running.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: codexVideoEditToolNames[21],
+    description:
+      "Move the app to a workflow step, the same as choosing it in the step bar: record_import, auto_edit, edit, review or export. This only shows the step; it never exports. Exporting and cleaning up stay actions the user takes with the buttons themselves.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "step"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        step: {
+          type: "string",
+          enum: ["record_import", "auto_edit", "edit", "review", "export"],
+        },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+] as const;
+
+/** Claude's own tools, on files in its project workspace (ADR 0021). */
+export const claudeOnlyMcpTools = [
+  {
+    name: claudeOnlyToolNames[0],
+    description:
+      "Check a composition (free-form or HyperFrames) in your workspace before or after placing it, the way `npx hyperframes check` and `snapshot` would: it is sealed exactly as graphics.set seals it, loaded in the app's sealed stage at the video's size and seeked to each audited time. The result reports whether it became ready, its first script error, its duration, the root's declared size against the video's, its registered timelines, and findings at each audited moment: text cut off by the frame edge, text outside the title-safe margin (6% of the shorter side), text too small to read (under about 2.2% of the shorter side), and whether anything on screen moved between moments. A finding held across moments is an error or warning; one seen at a single moment (an entrance or exit) is info. It does not check colour contrast, overlap between elements or audio; look at the picture for those. times_us are composition times (2–16, increasing); without them eight moments spread over its duration are audited. The moments are tiled four across into one picture over a checkerboard (transparent areas), each cell max_width 320–480 (default 320). The composition is not added to the edit.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "composition_path"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        composition_path: { type: "string", minLength: 1, maxLength: 260 },
+        times_us: {
+          type: "array",
+          minItems: 2,
+          maxItems: 16,
+          items: { type: "integer", minimum: 0 },
+        },
+        max_width: { type: "integer", minimum: 320, maximum: 480 },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[1],
+    description:
+      "List the audio files (music and sound effects) in the project that sound layers can use: asset_id, name, length, sample rate and channels. The user adds files in Edit; you cannot download, generate or find sound yourself, so these are all there is. Nothing is read from the files except what is listed.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[2],
+    description:
+      'Add or replace a sound layer: music or a sound effect from one of the project\'s audio files (see sound.list), as one undoable transaction. It is mixed into the audio at export (after speech cleanup) and in the preview. kind "music" is a bed: by default it starts at start_us in output time, repeats to fill the rest of the edit, sits at -18 dB, fades in 1 s and out 2 s and ducks 12 dB under speech. kind "effect" is a short sound at a moment: by default it is anchored to the source moment shown at start_us so it follows later cuts, plays once at -6 dB and does not duck. Override anything: follows_cuts, asset_start_us (where in the file it begins), duration_us (output time it plays), gain_db (-60 to 12, whole dB relative to the file), fade_in_us and fade_out_us, duck_db (0 to 30, how far the speech lowers it), loop. With sound_id the existing layer is replaced. Keep the speech clear: music well under it, effects short and motivated. The recording must have audio.',
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "name",
+        "kind",
+        "asset_id",
+        "start_us",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        sound_id: id,
+        name: { type: "string", minLength: 1, maxLength: 80 },
+        kind: { type: "string", enum: ["music", "effect"] },
+        asset_id: id,
+        start_us: { type: "integer", minimum: 0 },
+        follows_cuts: { type: "boolean" },
+        asset_start_us: { type: "integer", minimum: 0 },
+        duration_us: { type: "integer", minimum: 50000 },
+        gain_db: { type: "integer", minimum: -60, maximum: 12 },
+        fade_in_us: { type: "integer", minimum: 0 },
+        fade_out_us: { type: "integer", minimum: 0 },
+        duck_db: { type: "integer", minimum: 0, maximum: 30 },
+        loop: { type: "boolean" },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[3],
+    description:
+      "Remove one sound layer from the active draft by sound_id as one undoable transaction. The audio file stays in the project.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "sound_id"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        sound_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[4],
+    description:
+      "Propose up to six short clips of the active edit for the Short clips panel, in rank order (strongest first). It does not change the edit. Each clip is a half-open range of edit time (microseconds; read the times from edit.md) of 15 to 60 seconds that starts at the first word of a sentence and ends at the last word of one, stands on its own for someone who has not seen the rest, and does not overlap another. The app snaps each edge to the nearest spoken word and refuses a clip that is too short or long, has no spoken words at an edge, or overlaps one already chosen; the answer lists what it refused and why, and the accepted clips replace the panel's earlier set. A title (at most 80 characters) and one to four short reasons come with each clip. Needs a transcript of the edit.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "clips"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        clips: {
+          type: "array",
+          minItems: 1,
+          maxItems: 6,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["start_us", "end_us", "title", "reasons"],
+            properties: {
+              start_us: { type: "integer", minimum: 0 },
+              end_us: { type: "integer", minimum: 1 },
+              title: { type: "string", minLength: 1, maxLength: 120 },
+              reasons: {
+                type: "array",
+                maxItems: 4,
+                items: { type: "string", maxLength: 120 },
+              },
+            },
+          },
+        },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[5],
+    description:
+      "Find the places in the edit where something happens on screen (a dialog opens, text appears, a panel updates), by comparing the recording's frames. Returns up to 40 targets in edit time (microseconds), each with the rectangle that changed (fractions of the frame), a suggested zoom centre and scale, and a score. This is the evidence for a zoom: zoom only at a target and only when the viewer needs the detail; a range with no targets has nothing to zoom to. Changes across most of the picture (scrolling, scene changes) are not reported. Read-only. start_us and end_us (or null) limit the range.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "start_us", "end_us"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        start_us: { type: ["integer", "null"], minimum: 0 },
+        end_us: { type: ["integer", "null"], minimum: 1 },
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[6],
+    description:
+      "Place one designed graphic from the app's component library as one undoable transaction. The app renders a finished, animated layout (entry, hold, exit, sized to the video, clear of the title-safe margin); you supply the content, the moment and an accent colour, so the result looks designed without writing code. Kinds: lower_third (title = name, subtitle = role or detail; side left or right), chapter_card (title = chapter name, subtitle = small kicker such as \"Part 2\"; side left or right), stat_callout (title = the number or value, subtitle = what it measures; side and place), highlight_box (frames an area of the screen: x, y, width, height are frame fractions 0–1, title = the label on the tag; get the area from zoom.targets or a picture), keyword (title = a short phrase to emphasise; side and place), step_badge (subtitle = step number 1–99, title = the step; side and place). Use accent as #RRGGBB, the same for the whole video (pick it from the footage or the user's brand). Needs at least 1.5 s on screen; 3–5 s is usual. Use it for graphics that clarify what is said (a name when someone is introduced, the number just spoken, the section being entered, the control being pointed at); for a hero moment that needs custom motion, author a composition and use graphics.set instead. With graphic_id the existing graphic is replaced.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        ...Object.keys(freshness),
+        "pass_group_id",
+        "start_us",
+        "duration_us",
+        "kind",
+        "title",
+      ],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        graphic_id: id,
+        start_us: { type: "integer", minimum: 0 },
+        duration_us: { type: "integer", minimum: 1500000 },
+        kind: {
+          type: "string",
+          enum: [
+            "lower_third",
+            "chapter_card",
+            "stat_callout",
+            "highlight_box",
+            "keyword",
+            "step_badge",
+          ],
+        },
+        title: { type: "string", minLength: 1, maxLength: 60 },
+        subtitle: { type: "string", maxLength: 90 },
+        accent: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
+        side: { type: "string", enum: ["left", "right"] },
+        place: { type: "string", enum: ["top", "middle", "bottom"] },
+        x: { type: "number", minimum: 0, maximum: 1 },
+        y: { type: "number", minimum: 0, maximum: 1 },
+        width: { type: "number", minimum: 0, maximum: 1 },
+        height: { type: "number", minimum: 0, maximum: 1 },
+        layer: { type: "integer", minimum: 0, maximum: 99 },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[7],
+    description:
+      "Change how the camera and the screen share the picture, from at_us (edit time, microseconds) until the next layout change, as one undoable transaction. Needs a camera recording of the video (the screen layout always works). Kinds: screen (the screen alone, the default before any change), camera (the camera fills the picture; use it for introductions, opinions, conclusions and moments where the screen adds nothing), pip (the camera in a corner of the screen; use it while demonstrating, so the viewer sees the screen and the speaker). For pip: corner (top_left, top_right, bottom_left, bottom_right; move it away from what the viewer needs to see, such as a result, a control being pointed at or the captions), size (0.12–0.5 of the picture width, 0.2–0.3 is usual), shape (circle, rounded, rect). face_zoom (1–2.5) magnifies the camera picture around focus_x/focus_y (give both, 0–1) to frame the face. move_us (0–2000000, default 600000) is how long the change takes: a camera in a corner glides to another corner, grows to fill the picture or shrinks back, and fades in or out. Change layouts when the content changes, not on a timer; avoid more than a few changes a minute. With layout_id the existing change is updated.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "at_us", "kind"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        layout_id: id,
+        at_us: { type: "integer", minimum: 0 },
+        kind: { type: "string", enum: ["screen", "camera", "pip"] },
+        corner: {
+          type: "string",
+          enum: ["top_left", "top_right", "bottom_left", "bottom_right"],
+        },
+        size: { type: "number", minimum: 0.12, maximum: 0.5 },
+        shape: { type: "string", enum: ["circle", "rounded", "rect"] },
+        face_zoom: { type: "number", minimum: 1, maximum: 2.5 },
+        focus_x: { type: "number", minimum: 0, maximum: 1 },
+        focus_y: { type: "number", minimum: 0, maximum: 1 },
+        move_us: { type: "integer", minimum: 0, maximum: 2000000 },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[8],
+    description:
+      "Remove one layout change by layout_id (from the timeline summary) as one undoable transaction; the arrangement before it applies again.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: [...Object.keys(freshness), "pass_group_id", "layout_id"],
+      properties: {
+        ...freshness,
+        pass_group_id: id,
+        layout_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[9],
+    description:
+      "Propose how the camera and the screen could share the picture over the whole edit, without changing it. The app uses where the screen changes (a dialog opens, text appears) and where each sentence of the speech starts: the speaker opens and closes the video full screen, sits in a corner (away from what is changing) while something is demonstrated, takes the whole picture while explaining with nothing changing on screen, and steps aside when the screen is too busy for the camera to fit. Each change has at_us (edit time), kind, corner, size, shape and a reason. Treat it as a draft: apply the changes you agree with using layout.set, adjust or skip the others (a quick look at pictures from media.get_frames helps), and keep changes few. Needs a camera recording of the video.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+      },
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: claudeOnlyToolNames[10],
+    description:
+      'Start the full "Edit my video", the same as the Edit my video button in Auto Edit: first the rough cut (Magic Edit: local transcript, tightened pauses and fillers, then a story edit), then the full production edit with motion graphics, captions and sound. level is tidy, polished or bold. It starts as soon as this reply is finished and runs to the end on its own; progress shows in Auto Edit, every step can be undone, and the user can stop it. Tell the user plainly that it has started; do not claim it finished.',
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["schema_version", "project_id", "level"],
+      properties: {
+        schema_version: { type: "string", const: "1.0" },
+        project_id: id,
+        level: { type: "string", enum: ["tidy", "polished", "bold"] },
+      },
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
+  },
+] as const;
+
+/** Every tool Claude's editor server lists. */
+export const claudeEditorMcpTools = [
+  ...codexVideoEditMcpTools,
+  ...claudeOnlyMcpTools,
 ] as const;

@@ -116,6 +116,21 @@ export function setupClaudeSettings(
       ],
       view.selection?.model ?? "",
     );
+    options(
+      element<HTMLSelectElement>("claude-rough-cut-model"),
+      [
+        ...(view.roughCutSelection
+          ? []
+          : [{ value: "", label: "Same as production" }]),
+        ...view.models.map((model) => ({
+          value: model.value,
+          label: model.detail
+            ? `${model.label} · ${model.detail}`
+            : model.label,
+        })),
+      ],
+      view.roughCutSelection?.model ?? "",
+    );
     const model = view.models.find(
       (entry) => entry.value === view.selection?.model,
     );
@@ -228,6 +243,24 @@ export function setupClaudeSettings(
       }
       void action(() =>
         window.desktop.selectClaudeModel({ model: model.value, effort: null }),
+      );
+    },
+  );
+  element<HTMLSelectElement>("claude-rough-cut-model").addEventListener(
+    "change",
+    (event) => {
+      const model = current?.models.find(
+        (entry) => entry.value === (event.target as HTMLSelectElement).value,
+      );
+      if (!model) {
+        if (current) render(current);
+        return;
+      }
+      void action(() =>
+        window.desktop.selectClaudeRoughCutModel({
+          model: model.value,
+          effort: null,
+        }),
       );
     },
   );

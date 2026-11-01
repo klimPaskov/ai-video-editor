@@ -26,9 +26,27 @@ export interface MagicWandProjectRequest {
   project_id: string;
 }
 
+/**
+ * The connection that makes the story edit. Claude gives the best results;
+ * Codex and the API-key providers run the same guarded cutting tools.
+ */
+export const magicWandProviders = [
+  "claude",
+  "codex",
+  "deepseek",
+  "openai",
+  "gemini",
+] as const;
+export type MagicWandProvider = (typeof magicWandProviders)[number];
+
 export interface MagicWandStartRequest extends MagicWandProjectRequest {
   preset: MagicWandPreset;
+  /** The connection the user chose in the assistant drawer. */
+  provider: MagicWandProvider;
 }
+
+/** Why the story edit could not run: how the user fixes it differs. */
+export type MagicWandBlock = "signIn" | "outdated" | "missing" | "setup";
 
 export const magicWandIssues = Object.freeze({
   busy: "Magic Edit is already running for this project.",
@@ -40,8 +58,58 @@ export const magicWandIssues = Object.freeze({
   failed:
     "Magic Edit could not finish. Applied cuts are kept and can be undone.",
   stopped: "Magic Edit stopped. Applied cuts are kept and can be undone.",
-  nothing: "No safe cuts were found for this preset.",
+  nothing: "The story edit found nothing more to cut for this preset.",
+  limit:
+    "Your AI provider's usage limit was reached. Cuts made so far are kept; run Magic Edit again after it resets.",
+  claudeSignIn:
+    "The story edit was skipped. Sign in with your Claude account in Settings, then run Magic Edit again.",
+  claudeOutdated:
+    "The story edit was skipped. Claude Code is out of date: run claude update in a terminal, choose Check again in Settings, then run Magic Edit again.",
+  claudeMissing:
+    "The story edit was skipped. Claude Code is not installed: install it from claude.com/claude-code, then run Magic Edit again.",
+  claudeSetup:
+    "The story edit was skipped. Claude is not ready: open Settings, choose Check again under Claude, then run Magic Edit again.",
+  codexSignIn:
+    "The story edit was skipped. Sign in to Codex in Settings, then run Magic Edit again.",
+  codexSetup:
+    "The story edit was skipped. Codex is not ready: open Settings, reconnect Codex and choose a model, then run Magic Edit again.",
+  deepseekKey:
+    "The story edit was skipped. Add your DeepSeek key in Settings, then run Magic Edit again.",
+  deepseekModel:
+    "The story edit was skipped. Choose a DeepSeek model in Settings, then run Magic Edit again.",
+  openaiKey:
+    "The story edit was skipped. Add your OpenAI API key in Settings, then run Magic Edit again.",
+  openaiModel:
+    "The story edit was skipped. Choose an OpenAI API model in Settings, then run Magic Edit again.",
+  geminiKey:
+    "The story edit was skipped. Add your Gemini API key in Settings, then run Magic Edit again.",
+  geminiModel:
+    "The story edit was skipped. Choose a Gemini API model in Settings, then run Magic Edit again.",
 } as const);
+
+/** What to tell the user when the chosen connection cannot make the story edit. */
+export function magicWandSkipMessage(
+  provider: MagicWandProvider,
+  block: MagicWandBlock,
+): string {
+  if (provider === "claude")
+    return {
+      signIn: magicWandIssues.claudeSignIn,
+      outdated: magicWandIssues.claudeOutdated,
+      missing: magicWandIssues.claudeMissing,
+      setup: magicWandIssues.claudeSetup,
+    }[block];
+  if (provider === "codex")
+    return block === "signIn"
+      ? magicWandIssues.codexSignIn
+      : magicWandIssues.codexSetup;
+  const key = block === "signIn" || block === "missing";
+  return {
+    deepseek: key ? magicWandIssues.deepseekKey : magicWandIssues.deepseekModel,
+    openai: key ? magicWandIssues.openaiKey : magicWandIssues.openaiModel,
+    gemini: key ? magicWandIssues.geminiKey : magicWandIssues.geminiModel,
+  }[provider];
+}
 
 const messages = new Set<string>(Object.values(magicWandIssues));
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$/u;
@@ -90,7 +158,12 @@ export function assertMagicWandProjectRequest(
 export function assertMagicWandStartRequest(
   value: unknown,
 ): asserts value is MagicWandStartRequest {
-  const request = exact(value, ["schema_version", "project_id", "preset"]);
+  const request = exact(value, [
+    "schema_version",
+    "project_id",
+    "preset",
+    "provider",
+  ]);
   if (
     request.schema_version !== "1.0" ||
     typeof request.project_id !== "string" ||
@@ -98,6 +171,8 @@ export function assertMagicWandStartRequest(
   )
     invalid();
   preset(request.preset);
+  if (!magicWandProviders.includes(request.provider as MagicWandProvider))
+    invalid();
 }
 
 export function assertMagicWandView(
@@ -138,8 +213,10 @@ export function assertMagicWandView(
     invalid();
   if (view.message !== null && !messages.has(view.message as string)) invalid();
   const running = view.status === "transcribing" || view.status === "applying";
+  // Transcription reports progress; Claude's rough cut has no measurable one.
   if (
-    running !== (view.progress !== null) ||
+    (view.status === "transcribing" && view.progress === null) ||
+    (!running && view.progress !== null) ||
     (view.status === "idle") !== (view.projectId === null) ||
     (view.status === "idle" &&
       (view.preset !== null ||

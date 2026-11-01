@@ -6,13 +6,17 @@ import { createInterface, type Interface } from "node:readline";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { once } from "node:events";
+import { connect } from "node:net";
 
 import {
   CodexMcpBroker,
   resolveCodexMcpScript,
 } from "../../packages/codex-tools/src/broker.ts";
 import { CodexVideoEditToolError } from "../../packages/codex-tools/src/service.ts";
-import { codexVideoEditMcpTools } from "../../packages/codex-tools/src/mcp-tools.ts";
+import {
+  claudeEditorMcpTools,
+  codexVideoEditMcpTools,
+} from "../../packages/codex-tools/src/mcp-tools.ts";
 import {
   buildCodexAppServerArguments,
   codexClientInternals,
@@ -31,12 +35,14 @@ type RpcHarness = {
 async function childFor(
   runtime: ReturnType<CodexMcpBroker["runtime"]>,
   token = runtime.token,
+  extraEnv: Record<string, string> = {},
 ): Promise<RpcHarness> {
   const child = spawn(runtime.command, [runtime.script], {
     env: {
       AI_VIDEO_EDITOR_MCP_ENDPOINT: runtime.endpoint,
       AI_VIDEO_EDITOR_MCP_TOKEN: token,
       NODE_NO_WARNINGS: "1",
+      ...extraEnv,
     },
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
@@ -132,8 +138,29 @@ test("packaged MCP protocol lists only reviewed tools and forwards a bounded cal
         "zoom.set",
         "zoom.remove",
         "speed.set",
+        "graphics.set",
+        "graphics.remove",
+        "captions.configure",
+        "audio.configure",
+        "media.get_frames",
+        "transition.set",
+        "transition.remove",
+        "app.start_magic_edit",
+        "app.stop_edit",
+        "app.go_to_step",
       ],
     );
+    const graphic = tools.find((tool) => tool.name === "graphics.set");
+    assert.ok(graphic);
+    for (const field of ["start_us", "duration_us", "name", "layer"])
+      assert.ok(graphic.inputSchema.required.includes(field));
+    // Either an HTML/CSS fragment or a HyperFrames composition file.
+    for (const field of ["graphic_id", "html", "css", "composition_path"]) {
+      assert.ok(!graphic.inputSchema.required.includes(field), field);
+      assert.ok(field in graphic.inputSchema.properties, field);
+    }
+    const ungraphic = tools.find((tool) => tool.name === "graphics.remove");
+    assert.ok(ungraphic?.inputSchema.required.includes("graphic_id"));
     const zoom = tools.find((tool) => tool.name === "zoom.set");
     assert.ok(zoom);
     assert.equal(zoom.inputSchema.additionalProperties, false);
@@ -147,7 +174,7 @@ test("packaged MCP protocol lists only reviewed tools and forwards a bounded cal
       assert.ok(speed.inputSchema.required.includes(field));
     const unzoom = tools.find((tool) => tool.name === "zoom.remove");
     assert.ok(unzoom?.inputSchema.required.includes("zoom_id"));
-    for (const tool of [zoom, speed, unzoom!])
+    for (const tool of [zoom, speed, unzoom!, graphic, ungraphic!])
       assert.ok(!Object.hasOwn(tool.inputSchema.properties, "origin"));
     const transcript = tools.find(
       (tool) => tool.name === "transcript.get_range",
@@ -781,4 +808,241 @@ test("App Server startup accepts only the reviewed owned MCP schemas", () => {
     () => codexClientInternals.validateOwnedMcpStatus(changed),
     CodexTransportError,
   );
+});
+
+test("rendered pictures reach Claude and Codex MCP clients as image content", async () => {
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64");
+  const state = await fixture(async (name) => {
+    assert.equal(name, "media.get_frames");
+    return {
+      schema_version: "1.0",
+      project_id: "project-1",
+      draft_sequence: 3,
+      timeline_sha256: "a".repeat(64),
+      frames: [
+        {
+          time_us: 500_000,
+          width: 960,
+          height: 540,
+          mime_type: "image/jpeg",
+          data_base64: jpeg,
+        },
+      ],
+    };
+  });
+  const rpc = await childFor(state.runtime);
+  try {
+    await rpc.request({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: "2025-06-18" },
+    });
+    const called = await rpc.request({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "media.get_frames",
+        arguments: {
+          schema_version: "1.0",
+          project_id: "project-1",
+          times_us: [500_000],
+        },
+      },
+    });
+    const result = called.result as {
+      isError: boolean;
+      content: Array<Record<string, unknown>>;
+      structuredContent?: unknown;
+    };
+    assert.equal(result.isError, false);
+    assert.equal(result.structuredContent, undefined);
+    assert.equal(result.content.length, 2);
+    assert.equal(result.content[0]!.type, "text");
+    const metadata = JSON.parse(result.content[0]!.text as string) as {
+      frames: Array<Record<string, unknown>>;
+    };
+    assert.deepEqual(metadata.frames, [
+      {
+        time_us: 500_000,
+        width: 960,
+        height: 540,
+        mime_type: "image/jpeg",
+        image_index: 0,
+      },
+    ]);
+    assert.doesNotMatch(result.content[0]!.text as string, /data_base64/u);
+    assert.deepEqual(result.content[1], {
+      type: "image",
+      data: jpeg,
+      mimeType: "image/jpeg",
+    });
+  } finally {
+    await rpc.close();
+    await state.broker.close();
+    await rm(state.root, { recursive: true, force: true });
+  }
+});
+
+test("every constant and choice in the editor tool schemas declares its type", () => {
+  // Claude Code passes an untyped numeric-looking constant such as "1.0" as
+  // the number 1, which the tools then reject.
+  const untyped: string[] = [];
+  const walk = (node: unknown, path: string) => {
+    if (!node || typeof node !== "object") return;
+    const record = node as Record<string, unknown>;
+    if (("const" in record || "enum" in record) && !("type" in record))
+      untyped.push(path);
+    for (const [key, value] of Object.entries(record))
+      walk(value, `${path}.${key}`);
+  };
+  for (const tool of claudeEditorMcpTools) walk(tool.inputSchema, tool.name);
+  assert.deepEqual(untyped, []);
+});
+
+test("only Claude's server lists composition.check, with its picture as an image", async () => {
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64");
+  const state = await fixture(async (name) => {
+    assert.equal(name, "composition.check");
+    return {
+      schema_version: "1.0",
+      project_id: "project-1",
+      composition_path: "compositions/intro/index.html",
+      ok: true,
+      findings: [],
+      frames: [
+        {
+          width: 1300,
+          height: 380,
+          mime_type: "image/jpeg",
+          data_base64: jpeg,
+        },
+      ],
+    };
+  });
+  const codex = await childFor(state.runtime);
+  const claude = await childFor(state.runtime, state.runtime.token, {
+    AI_VIDEO_EDITOR_MCP_TOOLS: "claude",
+  });
+  const call = {
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: {
+      name: "composition.check",
+      arguments: {
+        schema_version: "1.0",
+        project_id: "project-1",
+        composition_path: "compositions/intro/index.html",
+      },
+    },
+  };
+  try {
+    for (const rpc of [codex, claude])
+      await rpc.request({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-06-18" },
+      });
+    const list = async (rpc: RpcHarness) =>
+      (
+        (await rpc.request({ jsonrpc: "2.0", id: 2, method: "tools/list" }))
+          .result as { tools: { name: string }[] }
+      ).tools.map((tool) => tool.name);
+    assert.deepEqual(
+      await list(codex),
+      codexVideoEditMcpTools.map((tool) => tool.name),
+    );
+    assert.equal((await list(codex)).length, 22);
+    assert.deepEqual(
+      await list(claude),
+      claudeEditorMcpTools.map((tool) => tool.name),
+    );
+    for (const name of [
+      "composition.check",
+      "sound.list",
+      "sound.set",
+      "sound.remove",
+      "shorts.propose",
+    ])
+      assert.ok((await list(claude)).includes(name), name);
+    assert.equal((await list(codex)).includes("sound.set"), false);
+    assert.equal((await list(codex)).includes("shorts.propose"), false);
+    assert.equal(
+      ((await codex.request(call)).error as { code: number }).code,
+      -32602,
+    );
+    const result = (await claude.request(call)).result as {
+      isError: boolean;
+      content: Array<Record<string, unknown>>;
+    };
+    assert.equal(result.isError, false);
+    assert.equal(result.content.length, 2);
+    assert.match(result.content[0]!.text as string, /"ok":true/u);
+    assert.deepEqual(result.content[1], {
+      type: "image",
+      data: jpeg,
+      mimeType: "image/jpeg",
+    });
+  } finally {
+    await codex.close();
+    await claude.close();
+    await state.broker.close();
+    await rm(state.root, { recursive: true, force: true });
+  }
+});
+
+test("a tool call may outlast the idle limit once its request has arrived", async () => {
+  const parent = resolve("test-results", "codex-mcp");
+  await mkdir(parent, { recursive: true });
+  const root = await mkdtemp(join(parent, "timeouts-"));
+  // Pictures of a long recording take longer than an idle connection may wait.
+  const broker = await CodexMcpBroker.open(
+    root,
+    async () => {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 600));
+      return { schema_version: "1.0", project_id: "project-1" };
+    },
+    { idleMs: 150, callMs: 5_000 },
+  );
+  const runtime = broker.runtime(
+    process.execPath,
+    resolve("packages/codex-tools/src/mcp-server.ts"),
+  );
+  const exchange = (request: string | null) =>
+    new Promise<string>((resolveReply, reject) => {
+      const socket = connect(runtime.endpoint);
+      let reply = "";
+      socket.on("data", (chunk) => (reply += chunk.toString("utf8")));
+      socket.once("close", () => resolveReply(reply));
+      socket.once("error", reject);
+      if (request !== null)
+        socket.once("connect", () =>
+          socket.write(`${request}
+`),
+        );
+    });
+  try {
+    const reply = JSON.parse(
+      await exchange(
+        JSON.stringify({
+          schema_version: "1.0",
+          token: runtime.token,
+          request_id: "slow-call",
+          tool_name: "project.get_summary",
+          input: { schema_version: "1.0", project_id: "project-1" },
+        }),
+      ),
+    ) as { ok: boolean };
+    assert.equal(reply.ok, true);
+    // A connection that never sends its request is still closed quickly.
+    const started = Date.now();
+    assert.equal(await exchange(null), "");
+    assert.ok(Date.now() - started < 2_000);
+  } finally {
+    await broker.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });

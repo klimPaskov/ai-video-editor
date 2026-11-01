@@ -1,16 +1,23 @@
 /**
  * Packaged native Magic Edit: a public speech sample, a 2.5 s silent gap and
- * the same sample again. Magic Edit transcribes locally, then applies only
- * safe cuts through the shared journal; no word may be partly removed, and
- * Edit's Undo must restore the original draft.
+ * the same sample again. Magic Edit transcribes locally and hands the rough
+ * cut to Claude with the local analysis as evidence. A clearly labeled test
+ * double of the Claude Code CLI (tests/media/support/fake-claude-code.ts)
+ * stands in for the model: it reads the timeline, is refused a decorating
+ * tool, removes the earlier take named by the evidence and looks at the
+ * result. The packaged app runs everything else for real. No word may be
+ * partly removed, and Edit's Undo must restore the original draft. It proves
+ * no model quality.
  *
  * node tests/native/magic-edit.test.ts <packaged-executable> [--inspect]
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -111,9 +118,36 @@ const originalDurationUs = frames * 500_000;
 let step = "launch";
 const result: Record<string, unknown> = { scope: "P5-04-native-magic-edit" };
 const configRoot = join(evidence, "config");
+// The scripted CLI starts signed in, so no account is involved.
+const claudeConfig = join(
+  configRoot,
+  "ai-video-editor",
+  "claude",
+  "claude-code",
+);
+await mkdir(claudeConfig, { recursive: true, mode: 0o700 });
+await writeFile(
+  join(claudeConfig, "fake-state.json"),
+  JSON.stringify({ loggedIn: true, method: "claude.ai" }),
+);
+await writeFile(
+  join(claudeConfig, "fake-scenario.json"),
+  JSON.stringify({ kind: "scripted_rough_cut" }),
+);
+const bin = join(evidence, "bin");
+await mkdir(bin, { mode: 0o700 });
+await writeFile(
+  join(bin, "claude"),
+  `#!/bin/sh\nexec "${process.execPath}" "${resolve("tests/media/support/fake-claude-code.ts")}" "$@"\n`,
+);
+await chmod(join(bin, "claude"), 0o700);
 const electron = await _electron.launch({
   executablePath,
-  env: { ...process.env, XDG_CONFIG_HOME: configRoot },
+  env: {
+    ...process.env,
+    XDG_CONFIG_HOME: configRoot,
+    PATH: `${bin}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+  },
   chromiumSandbox: true,
   timeout: 30_000,
 });
@@ -125,6 +159,7 @@ try {
     });
   }, sourcePath);
   const page = await electron.firstWindow();
+  await openDisclosures(page);
   step = "import";
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
@@ -152,6 +187,17 @@ try {
         ),
     );
 
+  step = "claude-ready";
+  await expect
+    .poll(
+      async () => {
+        const reply = await page.evaluate(() => window.desktop.getClaude());
+        return reply.ok ? reply.value.status : "error";
+      },
+      { timeout: 60_000 },
+    )
+    .toBe("signed_in");
+
   step = "magic-edit";
   await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
   await expect(page.locator("#magic-start")).toBeVisible();
@@ -171,10 +217,43 @@ try {
   const after = edited.value.find((item) => item.id === project.id)!;
   const removedUs = originalDurationUs - after.timeline.durationUs;
   assert.ok(removedUs >= 1_500_000, `removed only ${removedUs} us`);
-  const magic = (await records()).filter(
+  // The app tightens pauses and fillers itself, as one transaction of
+  // ripple deletes (ADR 0026); the rest of the rough cut is Claude's.
+  const tightening = (await records()).filter(
     (record) => record.origin === "magic_wand",
   );
+  assert.equal(tightening.length, 1);
+  assert.equal(tightening[0]!.status, "committed");
+  assert.ok(
+    tightening[0]!.operations.length >= 1 &&
+      tightening[0]!.operations.every(
+        (operation) => operation.operation_type === "ripple_delete",
+      ),
+  );
+  const magic = (await records()).filter(
+    (record) => record.origin === "claude",
+  );
   assert.ok(magic.length >= 1);
+  const log = (await readFile(join(claudeConfig, "fake-log.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+  assert.equal(log.find((entry) => entry.scriptedError) ?? null, null);
+  const scripted = log.find((entry) => entry.scriptedRoughCut)
+    ?.scriptedRoughCut as
+    | { refusedDecoration: boolean; evidence: number; repeated: boolean }
+    | undefined;
+  assert.equal(scripted?.refusedDecoration, true);
+  assert.ok((scripted?.evidence ?? 0) > 0);
+  const turnArgs = log
+    .map((entry) => entry.args as string[] | undefined)
+    .filter((value) => value?.includes("--max-turns"))
+    .at(-1)!;
+  assert.equal(turnArgs[turnArgs.indexOf("--model") + 1], "haiku");
+  assert.match(
+    turnArgs[turnArgs.indexOf("--system-prompt") + 1]!,
+    /Rough cut playbook/u,
+  );
   for (const record of magic) {
     assert.equal(record.kind, "apply");
     assert.equal(record.status, "committed");
@@ -233,7 +312,10 @@ try {
   );
   result.magicEdit = {
     summary: summaryText,
+    roughCutBy: "scripted Claude test double (haiku)",
+    refusedDecoration: true,
     transactions: magic.length,
+    tightenedRanges: tightening[0]!.operations.length,
     removedUs,
     words: words.length,
     removedWords,
@@ -242,11 +324,12 @@ try {
 
   step = "undo";
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  for (let index = 0; index < magic.length; index++) {
+  const applied = magic.length + tightening.length;
+  for (let index = 0; index < applied; index++) {
     await page.locator("#undo-edit").click();
     await expect
       .poll(async () => (await records()).length, { timeout: 30_000 })
-      .toBe(magic.length + index + 1);
+      .toBe(applied + index + 1);
   }
   const undone = await page.evaluate(() => window.desktop.listProjects());
   assert.ok(undone.ok);

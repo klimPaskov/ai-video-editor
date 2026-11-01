@@ -1,4 +1,19 @@
 import { assertZoomEffect, zoomLimits, type ZoomEffect } from "./zoom.ts";
+import {
+  assertTransitionEffect,
+  transitionKinds,
+  transitionLimits,
+  type TransitionEffect,
+  type TransitionKind,
+} from "./transitions.ts";
+import {
+  assertLayoutChange,
+  layoutLimits,
+  type LayoutChange,
+  type LayoutCorner,
+  type LayoutKind,
+  type LayoutShape,
+} from "./layouts.ts";
 import { isClipSpeed, speedLength } from "./speed.ts";
 import {
   assertGraphicEffect,
@@ -8,6 +23,7 @@ import {
 import {
   assertMediaFrame,
   assertMediaSummary,
+  assertThumbnail,
   mediaIdPattern,
 } from "./library.ts";
 import type { MediaFrame, MediaSummary } from "./library.ts";
@@ -33,6 +49,10 @@ export interface TwoSourceProjectRequest {
 export interface ProjectNavigation extends ProjectRequest {
   stage: ProjectStage;
 }
+/** A new display name; the immutable baseline keeps the original one. */
+export interface ProjectRename extends ProjectRequest {
+  name: string;
+}
 export interface ProjectFrameRequest {
   projectId: string;
   draftId: string;
@@ -53,6 +73,32 @@ export interface ProjectFrameView {
 }
 export type ProjectFrameResult =
   ProjectFrameView | { status: "stale"; draft: ProjectDraftView };
+/**
+ * Small pictures of the edit at output times, for the timeline filmstrip.
+ * They are cosmetic: never review frames, and a time with no picture
+ * (a source whose preview is not supported) comes back as null.
+ */
+export interface ProjectStripRequest {
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  /** Increasing output times, 1 to 32 of them. */
+  timesUs: number[];
+}
+export interface ProjectStripView {
+  status: "ready";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  draftSequence: number;
+  timelineSha256: string;
+  frames: { timelineTimeUs: number; frame: MediaFrame | null }[];
+}
+export type ProjectStripResult =
+  ProjectStripView | { status: "stale"; draft: ProjectDraftView };
+export const maxStripFrames = 32;
 export interface ProjectDraftView {
   projectId: string;
   draft: {
@@ -75,6 +121,10 @@ export interface ProjectDraftView {
   /** Zoom effects anchored to source time. */
   zooms?: ZoomEffect[];
   graphics?: GraphicEffect[];
+  /** Transitions anchored to cuts. */
+  transitions?: TransitionEffect[];
+  /** Camera and screen arrangements anchored to moments. */
+  layouts?: LayoutChange[];
 }
 export interface ProjectDraftIntegrityView {
   draft: ProjectDraftView;
@@ -180,6 +230,65 @@ export interface ManualGraphicRemoveRequest {
   expectedSequence: number;
   expectedTimelineSha256: string;
   graphicId: string;
+}
+/**
+ * Adds a transition at the cut at output time `atUs` (the first frame of the
+ * incoming clip), or replaces transition `transitionId`. Main anchors it to
+ * the source moment where the incoming clip starts.
+ */
+export interface ManualTransitionRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  transitionId: string | null;
+  atUs: number;
+  kind: TransitionKind;
+  durationUs: number;
+  color: string;
+}
+/**
+ * Changes how the camera and screen share the picture from output time
+ * `atUs` (or replaces layout change `layoutId`). Main anchors it to the
+ * recording's moment there.
+ */
+export interface ManualLayoutRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  layoutId: string | null;
+  atUs: number;
+  kind: LayoutKind;
+  corner: LayoutCorner;
+  size: number;
+  shape: LayoutShape;
+  faceZoom: number;
+  focusX: number;
+  focusY: number;
+  moveUs: number;
+}
+export interface ManualLayoutRemoveRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  layoutId: string;
+}
+export interface ManualTransitionRemoveRequest {
+  schema_version: "1.0";
+  projectId: string;
+  draftId: string;
+  baseRevisionId: string;
+  expectedSequence: number;
+  expectedTimelineSha256: string;
+  transitionId: string;
 }
 /** Plays output interval [startUs, endUs) at `speed` (1 is normal speed). */
 export interface ManualSpeedRequest {
@@ -300,6 +409,24 @@ export function assertTwoSourceProjectRequest(
   id(value.secondId);
   if (value.firstId === value.secondId) invalid();
 }
+/** Names are one line of at most 160 characters, without path separators. */
+export function assertProjectName(value: unknown): asserts value is string {
+  if (
+    typeof value !== "string" ||
+    !value.length ||
+    value.length > 160 ||
+    value.trim() !== value ||
+    /[\x00-\x1f\x7f/\\]/u.test(value)
+  )
+    invalid();
+}
+export function assertProjectRename(
+  value: unknown,
+): asserts value is ProjectRename {
+  exact(value, ["id", "name"]);
+  id(value.id);
+  assertProjectName(value.name);
+}
 export function assertProjectNavigation(
   value: unknown,
 ): asserts value is ProjectNavigation {
@@ -328,6 +455,72 @@ export function assertProjectFrameRequest(
     new Set([value.projectId, value.baseRevisionId, value.draftId]).size !== 3
   )
     invalid();
+}
+export function assertProjectStripRequest(
+  value: unknown,
+): asserts value is ProjectStripRequest {
+  exact(value, [
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "timesUs",
+  ]);
+  id(value.projectId);
+  opaqueId(value.draftId);
+  id(value.baseRevisionId);
+  integer(value.expectedSequence);
+  hash(value.expectedTimelineSha256);
+  const times = value.timesUs;
+  if (
+    !Array.isArray(times) ||
+    times.length < 1 ||
+    times.length > maxStripFrames
+  )
+    invalid();
+  let previous = -1;
+  for (const time of times) {
+    integer(time);
+    if ((time as number) <= previous) invalid();
+    previous = time as number;
+  }
+  if (
+    new Set([value.projectId, value.baseRevisionId, value.draftId]).size !== 3
+  )
+    invalid();
+}
+export function assertProjectStripResult(
+  value: unknown,
+): asserts value is ProjectStripResult {
+  const record = value as Record<string, unknown> | null;
+  if (record && typeof record === "object" && record.status === "stale") {
+    exact(record, ["status", "draft"]);
+    assertProjectDraftView(record.draft);
+    return;
+  }
+  exact(value, [
+    "status",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "draftSequence",
+    "timelineSha256",
+    "frames",
+  ]);
+  if (value.status !== "ready") invalid();
+  id(value.projectId);
+  opaqueId(value.draftId);
+  id(value.baseRevisionId);
+  integer(value.draftSequence);
+  hash(value.timelineSha256);
+  if (!Array.isArray(value.frames) || value.frames.length > maxStripFrames)
+    invalid();
+  for (const entry of value.frames) {
+    exact(entry, ["timelineTimeUs", "frame"]);
+    integer(entry.timelineTimeUs);
+    if (entry.frame !== null) assertThumbnail(entry.frame);
+  }
 }
 function assertManualHead(value: Record<string, unknown>): void {
   if (value.schema_version !== "1.0") invalid();
@@ -430,6 +623,109 @@ export function assertManualZoomRequest(
     !(value.scale >= zoomLimits.minScale && value.scale <= zoomLimits.maxScale)
   )
     invalid();
+}
+export function assertManualTransitionRequest(
+  value: unknown,
+): asserts value is ManualTransitionRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "transitionId",
+    "atUs",
+    "kind",
+    "durationUs",
+    "color",
+  ]);
+  assertManualHead(value);
+  if (value.transitionId !== null) opaqueId(value.transitionId);
+  positive(value.atUs);
+  if (
+    !transitionKinds.includes(value.kind as TransitionKind) ||
+    !Number.isSafeInteger(value.durationUs) ||
+    (value.durationUs as number) < transitionLimits.minDurationUs ||
+    (value.durationUs as number) > transitionLimits.maxDurationUs ||
+    typeof value.color !== "string" ||
+    !/^#[0-9a-fA-F]{6}$/u.test(value.color)
+  )
+    invalid();
+}
+export function assertManualLayoutRequest(
+  value: unknown,
+): asserts value is ManualLayoutRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "layoutId",
+    "atUs",
+    "kind",
+    "corner",
+    "size",
+    "shape",
+    "faceZoom",
+    "focusX",
+    "focusY",
+    "moveUs",
+  ]);
+  assertManualHead(value);
+  if (value.layoutId !== null) opaqueId(value.layoutId);
+  integer(value.atUs);
+  // Checked as the change it becomes (its recording is filled in by main).
+  const change: Record<string, unknown> = {
+    layout_id: "layout-check",
+    source_id: "source-check",
+    source_us: 0,
+    kind: value.kind,
+    move_us: value.moveUs,
+  };
+  if (value.kind === "pip") {
+    change.corner = value.corner;
+    change.size = value.size;
+    change.shape = value.shape;
+  }
+  if (value.kind !== "screen") {
+    change.face_zoom = value.faceZoom;
+    change.focus_x = value.focusX;
+    change.focus_y = value.focusY;
+  }
+  assertLayoutChange(change);
+}
+export function assertManualLayoutRemoveRequest(
+  value: unknown,
+): asserts value is ManualLayoutRemoveRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "layoutId",
+  ]);
+  assertManualHead(value);
+  opaqueId(value.layoutId);
+}
+export function assertManualTransitionRemoveRequest(
+  value: unknown,
+): asserts value is ManualTransitionRemoveRequest {
+  exact(value, [
+    "schema_version",
+    "projectId",
+    "draftId",
+    "baseRevisionId",
+    "expectedSequence",
+    "expectedTimelineSha256",
+    "transitionId",
+  ]);
+  assertManualHead(value);
+  opaqueId(value.transitionId);
 }
 export function assertManualGraphicRequest(
   value: unknown,
@@ -672,6 +968,16 @@ export function assertProjectDraftView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "graphics");
+  const hasTransitions =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "transitions");
+  const hasLayouts =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "layouts");
   exact(value, [
     "projectId",
     "draft",
@@ -680,6 +986,8 @@ export function assertProjectDraftView(
     ...(hasTranscriptEdits ? ["transcriptEdits"] : []),
     ...(hasZooms ? ["zooms"] : []),
     ...(hasGraphics ? ["graphics"] : []),
+    ...(hasTransitions ? ["transitions"] : []),
+    ...(hasLayouts ? ["layouts"] : []),
   ]);
   id(value.projectId);
   exact(value.draft, [
@@ -776,6 +1084,29 @@ export function assertProjectDraftView(
   if (hasTranscriptEdits) assertTranscriptTextOverrides(value.transcriptEdits);
   if (hasZooms) assertViewZooms(value.zooms);
   if (hasGraphics) assertViewGraphics(value.graphics);
+  if (hasTransitions) assertViewTransitions(value.transitions);
+  if (hasLayouts) assertViewLayouts(value.layouts);
+}
+function assertViewLayouts(value: unknown): void {
+  if (!Array.isArray(value) || value.length > layoutLimits.maxLayouts)
+    invalid();
+  for (const layout of value) assertLayoutChange(layout);
+  const layouts = value as LayoutChange[];
+  if (
+    new Set(layouts.map((layout) => layout.layout_id)).size !== layouts.length
+  )
+    invalid();
+}
+function assertViewTransitions(value: unknown): void {
+  if (!Array.isArray(value) || value.length > transitionLimits.maxTransitions)
+    invalid();
+  for (const transition of value) assertTransitionEffect(transition);
+  const transitions = value as TransitionEffect[];
+  if (
+    new Set(transitions.map((transition) => transition.transition_id)).size !==
+    transitions.length
+  )
+    invalid();
 }
 function assertViewGraphics(value: unknown): void {
   if (!Array.isArray(value) || value.length > graphicLimits.maxGraphics)
@@ -847,6 +1178,16 @@ export function assertProjectView(
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.hasOwn(value, "graphics");
+  const hasTransitions =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "transitions");
+  const hasLayouts =
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.hasOwn(value, "layouts");
   exact(value, [
     ...keys,
     ...(hasSources ? ["sources"] : []),
@@ -854,9 +1195,12 @@ export function assertProjectView(
     ...(hasTranscriptEdits ? ["transcriptEdits"] : []),
     ...(hasZooms ? ["zooms"] : []),
     ...(hasGraphics ? ["graphics"] : []),
+    ...(hasTransitions ? ["transitions"] : []),
+    ...(hasLayouts ? ["layouts"] : []),
   ]);
   id(value.id);
   id(value.revisionId);
+  // Earlier names (from file names) may have surrounding spaces.
   if (
     typeof value.name !== "string" ||
     !value.name.length ||
@@ -891,6 +1235,8 @@ export function assertProjectView(
     ...(hasTranscriptEdits ? { transcriptEdits: value.transcriptEdits } : {}),
     ...(hasZooms ? { zooms: value.zooms } : {}),
     ...(hasGraphics ? { graphics: value.graphics } : {}),
+    ...(hasTransitions ? { transitions: value.transitions } : {}),
+    ...(hasLayouts ? { layouts: value.layouts } : {}),
   };
   assertProjectDraftView(draftView);
   if (hasTranscriptEdits)

@@ -16,6 +16,8 @@ import {
   DesktopClaude,
   claudeEditorTools,
   claudeEditorServer,
+  freshRoughCutSelection,
+  freshSelection,
 } from "../../apps/desktop/src/claude.ts";
 import {
   billingForMethod,
@@ -30,9 +32,11 @@ import {
 } from "../../packages/claude-bridge/src/cli.ts";
 import {
   ClaudeTurnProjection,
+  claudeBuiltInTools,
   claudeTurnArguments,
 } from "../../packages/claude-bridge/src/turn.ts";
 import {
+  assertClaudeFullEditRequest,
   assertClaudeThreadView,
   assertClaudeView,
   claudeIssues,
@@ -45,7 +49,7 @@ const fake = resolve("tests/media/support/fake-claude-code.ts");
 const fakeRuntime: ClaudeRuntime = {
   executable: process.execPath,
   prefix: [fake],
-  version: "2.1.285",
+  version: "2.1.302",
 };
 
 test("auth status parsing follows the documented JSON and exit code", () => {
@@ -216,11 +220,88 @@ test("turn arguments disable built-in tools, settings and prompts", () => {
   assert.equal(value("--session-id"), "11111111-2222-4333-8444-555555555555");
   assert.equal(value("--effort"), "high");
   assert.ok(!args.includes("--resume"));
-  assert.equal(claudeEditorTools.length, 12);
-  for (const name of ["zoom_set", "zoom_remove", "speed_set"])
+  assert.equal(claudeEditorTools.length, 33);
+  for (const name of [
+    "zoom_set",
+    "zoom_remove",
+    "speed_set",
+    "transition_set",
+    "transition_remove",
+    "composition_check",
+    "sound_list",
+    "sound_set",
+    "sound_remove",
+    "shorts_propose",
+    "zoom_targets",
+    "graphics_component",
+    "layout_set",
+    "layout_remove",
+    "layout_plan",
+  ])
     assert.ok(claudeEditorTools.includes(`mcp__ai_video_editor__${name}`));
   for (const name of claudeEditorTools)
     assert.match(name, /^mcp__ai_video_editor__[a-z_]+$/u);
+});
+
+test("harness turns confine Claude Code's own tools to the workspace", () => {
+  const args = claudeTurnArguments({
+    mcpConfigPath: "/private/mcp.json",
+    serverName: claudeEditorServer,
+    allowedTools: claudeEditorTools,
+    builtInTools: claudeBuiltInTools,
+    agents: {
+      "join-reviewer": {
+        description: "Checks joins",
+        prompt: "Review the joins.",
+        tools: ["Read"],
+      },
+    },
+    model: "default",
+    effort: null,
+    systemPrompt: "prompt",
+    sessionId: "11111111-2222-4333-8444-555555555555",
+    resume: false,
+    maxTurns: 24,
+  });
+  const value = (name: string) => args[args.indexOf(name) + 1];
+  assert.ok(args.includes("--restricted"));
+  assert.equal(value("--tools"), "Read,Write,Edit,Glob,Grep,Task");
+  // Nothing that runs commands or code, and no web access.
+  for (const name of ["Bash", "PowerShell", "WebFetch", "WebSearch"])
+    assert.ok(!value("--tools")!.split(",").includes(name), name);
+  assert.equal(args.filter((arg) => arg === "--tools").length, 1);
+  assert.ok(args.includes("--disable-slash-commands"));
+  assert.equal(value("--setting-sources"), "");
+  assert.equal(value("--permission-mode"), "dontAsk");
+  assert.equal(
+    value("--allowedTools"),
+    [...claudeEditorTools, ...claudeBuiltInTools].join(","),
+  );
+  assert.deepEqual(Object.keys(JSON.parse(value("--agents")!)), [
+    "join-reviewer",
+  ]);
+  assert.ok(!args.includes("--effort"));
+  // The init check expects exactly those tools; a stray one stops the turn.
+  const harness = new ClaudeTurnProjection({
+    allowedTools: [...claudeEditorTools, ...claudeBuiltInTools],
+    serverName: claudeEditorServer,
+    sessionId: "11111111-2222-4333-8444-555555555555",
+  });
+  assert.equal(
+    harness.handle({
+      ...init([...claudeEditorTools, ...claudeBuiltInTools]),
+    }),
+    true,
+  );
+  const strict = new ClaudeTurnProjection({
+    allowedTools: [...claudeEditorTools, ...claudeBuiltInTools],
+    serverName: claudeEditorServer,
+    sessionId: "11111111-2222-4333-8444-555555555555",
+  });
+  assert.equal(
+    strict.handle(init([...claudeEditorTools, ...claudeBuiltInTools, "Bash"])),
+    false,
+  );
 });
 
 const session = "11111111-2222-4333-8444-555555555555";
@@ -421,8 +502,13 @@ async function waitFor<T>(
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function harness(root: string, missing = false) {
+async function harness(
+  root: string,
+  missing = false,
+  history?: ConstructorParameters<typeof DesktopClaude>[1]["history"],
+) {
   return new DesktopClaude(root, {
+    ...(history ? { history } : {}),
     platform: process.platform,
     env: {
       ...process.env,
@@ -485,7 +571,7 @@ test("desktop Claude signs in through the CLI flow and runs guarded turns", asyn
     let claude = await harness(root);
     let view: ClaudeView = await claude.check();
     assert.equal(view.status, "signed_out");
-    assert.equal(view.version, "2.1.285");
+    assert.equal(view.version, "2.1.302");
     assert.deepEqual(view.models, []);
     view = await claude.signIn();
     assert.equal(view.status, "signing_in");
@@ -496,7 +582,9 @@ test("desktop Claude signs in through the CLI flow and runs guarded turns", asyn
     );
     assertClaudeView(view);
     assert.deepEqual(view.account, { billing: "subscription", plan: "max" });
-    assert.deepEqual(view.selection, { model: "default", effort: null });
+    // Production defaults to Sonnet, the rough cut to Haiku.
+    assert.deepEqual(view.selection, { model: "sonnet", effort: null });
+    assert.deepEqual(view.roughCutSelection, { model: "haiku", effort: null });
     assert.deepEqual(
       view.models.map((model) => model.value),
       ["default", "sonnet", "haiku"],
@@ -506,11 +594,18 @@ test("desktop Claude signs in through the CLI flow and runs guarded turns", asyn
     assert.equal(view.message, claudeIssues.selection);
     view = await claude.select({ model: "sonnet", effort: "high" });
     assert.deepEqual(view.selection, { model: "sonnet", effort: "high" });
+    view = await claude.selectRoughCut({ model: "opus", effort: null });
+    assert.equal(view.message, claudeIssues.selection);
+    assert.deepEqual(view.roughCutSelection, { model: "haiku", effort: null });
+    view = await claude.selectRoughCut({ model: "sonnet", effort: null });
+    assert.deepEqual(view.roughCutSelection, { model: "sonnet", effort: null });
+    assert.equal(view.message, null);
 
-    // A new main process restores the remembered model choice.
+    // A new main process restores both remembered model choices.
     claude = await harness(root);
     view = await claude.check();
     assert.deepEqual(view.selection, { model: "sonnet", effort: "high" });
+    assert.deepEqual(view.roughCutSelection, { model: "sonnet", effort: null });
 
     const project = "project-001";
     let thread: ClaudeThreadView = await claude.openThread(project);
@@ -702,6 +797,7 @@ test("account text names the plan once", () => {
     account: { billing: "subscription", plan },
     models: [{ value: "default", label: "Default", detail: "", efforts: [] }],
     selection: { model: "default", effort: null },
+    roughCutSelection: null,
     message: null,
   });
   assert.equal(claudeAccountText(view("max")), "Claude · Max");
@@ -712,10 +808,11 @@ test("account text names the plan once", () => {
 test("domain assertions reject leaked or inconsistent Claude state", () => {
   const signedOut: ClaudeView = {
     status: "signed_out",
-    version: "2.1.285",
+    version: "2.1.302",
     account: null,
     models: [],
     selection: null,
+    roughCutSelection: null,
     message: null,
   };
   assertClaudeView(signedOut);
@@ -724,6 +821,7 @@ test("domain assertions reject leaked or inconsistent Claude state", () => {
     // The removed fallback page must not reappear as an unchecked field.
     { ...signedOut, signInPageAvailable: false },
     { ...signedOut, selection: { model: "default", effort: null } },
+    { ...signedOut, roughCutSelection: { model: "haiku", effort: null } },
     { ...signedOut, message: "Not logged in · Please run /login" },
     { ...signedOut, status: "signed_in" },
     { ...signedOut, version: null },
@@ -737,6 +835,7 @@ test("domain assertions reject leaked or inconsistent Claude state", () => {
     streaming: null,
     billing: null,
     message: null,
+    fullEdit: null,
   };
   assertClaudeThreadView(closed);
   for (const bad of [
@@ -746,4 +845,231 @@ test("domain assertions reject leaked or inconsistent Claude state", () => {
     { ...closed, sessionId: "11111111-2222-4333-8444-555555555555" },
   ])
     assert.throws(() => assertClaudeThreadView(bad), JSON.stringify(bad));
+});
+
+test("a full edit runs with the playbook, records its edits and undoes them together", async () => {
+  const root = await mkdtemp(join(tmpdir(), "claude-full-edit-"));
+  const config = join(root, "claude", "claude-code");
+  // The draft history: newest applied transaction last.
+  const applied: string[] = ["manual-before"];
+  const undone: string[] = [];
+  const history = {
+    newest: async () => applied.at(-1) ?? null,
+    undo: async (_project: string, id: string) => {
+      assert.equal(applied.at(-1), id);
+      applied.pop();
+      undone.push(id);
+    },
+  };
+  try {
+    const claude = await harness(root, false, history);
+    await claude.check();
+    await claude.signIn();
+    await waitFor(
+      () => claude.get(),
+      (v) => v.status === "signed_in",
+      "sign-in",
+    );
+    const project = "project-full-001";
+    await claude.openThread(project);
+    await writeFile(
+      join(config, "fake-scenario.json"),
+      JSON.stringify({ kind: "slow_reply" }),
+    );
+    const brief = {
+      goal: "Weekly update",
+      audience: "",
+      style: "Calm",
+      level: "polished" as const,
+    };
+    let view = await claude.startFullEdit(project, brief);
+    assertClaudeThreadView(view);
+    assert.equal(view.status, "running");
+    assert.deepEqual(view.fullEdit, {
+      status: "running",
+      changes: 0,
+      undoable: false,
+    });
+    assert.equal(
+      view.messages.at(-1)?.text,
+      "Edit with Claude · Polished · Weekly update",
+    );
+    // Main reports what the run's tools applied, by the run's token.
+    const first = claude.fullEditRun(project);
+    assert.ok(first);
+    for (const id of ["claude-tx-1", "claude-tx-2", "claude-tx-1", "../bad"]) {
+      claude.recordCommit(project, id, first);
+      if (id.startsWith("claude") && !applied.includes(id)) applied.push(id);
+    }
+    claude.recordCommit(project, "claude-other", "another-run");
+    view = await waitFor(
+      () => claude.getThreadWithHistory(project),
+      (v) => v.status === "ready",
+      "full edit",
+    );
+    assert.deepEqual(view.fullEdit, {
+      status: "finished",
+      changes: 2,
+      undoable: true,
+    });
+    assert.equal(claude.fullEditRun(project), null);
+    const args = (await readFile(join(config, "fake-log.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { args: string[] })
+      .filter((entry) => entry.args.includes("--max-turns"))
+      .at(-1)!.args;
+    assert.equal(args[args.indexOf("--max-turns") + 1], "150");
+    assert.match(
+      args[args.indexOf("--system-prompt") + 1]!,
+      /Full edit playbook/u,
+    );
+    // The record is on disk, not only in memory (written just after).
+    const stored = await waitFor(
+      async () =>
+        JSON.parse(
+          await readFile(
+            join(root, "claude", "threads", `${project}.json`),
+            "utf8",
+          ),
+        ) as { fullEdit: { transactionIds: string[] } },
+      (value) => value.fullEdit.transactionIds.length === 2,
+      "the stored full edit",
+    );
+    assert.deepEqual(stored.fullEdit.transactionIds, [
+      "claude-tx-1",
+      "claude-tx-2",
+    ]);
+    // Outside a full edit nothing is recorded.
+    claude.recordCommit(project, "claude-tx-later", null);
+    assert.equal(
+      (await claude.getThreadWithHistory(project)).fullEdit?.changes,
+      2,
+    );
+
+    // A polish run adds to the earlier run; an edit Claude undid itself is
+    // forgotten, and a commit that lands after the run still counts.
+    view = await claude.startFullEdit(project, { ...brief, level: "tidy" });
+    assert.equal(
+      view.messages.at(-1)?.text,
+      "Polish with Claude · Tidy · Weekly update",
+    );
+    const polish = claude.fullEditRun(project);
+    assert.ok(polish && polish !== first);
+    claude.recordCommit(project, "claude-tx-3", polish);
+    claude.recordUndo(project, "claude-tx-3", polish);
+    claude.recordCommit(project, "claude-tx-4", polish);
+    applied.push("claude-tx-4");
+    view = await waitFor(
+      () => claude.getThreadWithHistory(project),
+      (v) => v.status === "ready",
+      "polish",
+    );
+    claude.recordCommit(project, "claude-tx-5", polish);
+    applied.push("claude-tx-5");
+    view = await claude.getThreadWithHistory(project);
+    assert.deepEqual(view.fullEdit, {
+      status: "finished",
+      changes: 4,
+      undoable: true,
+    });
+    assert.ok(claude.fullEditIncludes(project, "claude-tx-2"));
+    assert.ok(!claude.fullEditIncludes(project, "manual-before"));
+
+    // A later manual edit on top blocks Undo all until it is undone.
+    applied.push("manual-after");
+    view = await claude.getThreadWithHistory(project);
+    assert.equal(view.fullEdit?.undoable, false);
+    view = await claude.undoFullEdit(project);
+    assert.equal(view.message, claudeThreadIssues.undoLater);
+    assert.deepEqual(undone, []);
+    applied.pop();
+    view = await claude.undoFullEdit(project);
+    assert.deepEqual(undone, [
+      "claude-tx-5",
+      "claude-tx-4",
+      "claude-tx-2",
+      "claude-tx-1",
+    ]);
+    assert.deepEqual(applied, ["manual-before"]);
+    // Everything is undone: the next run is a fresh full edit again.
+    assert.equal(view.fullEdit, null);
+    assert.equal(view.message, null);
+    view = await claude.startFullEdit(project, brief);
+    assert.equal(
+      view.messages.at(-1)?.text,
+      "Edit with Claude · Polished · Weekly update",
+    );
+    await waitFor(
+      () => claude.getThreadWithHistory(project),
+      (v) => v.status === "ready",
+      "fresh run",
+    );
+    await claude.closeThread(project);
+    const reopened = await (
+      await harness(root, false, history)
+    ).openThread(project);
+    assert.equal(reopened.fullEdit?.status, "finished");
+    assert.equal(reopened.fullEdit?.changes, 0);
+    await claude.close();
+  } finally {
+    await rm(root, {
+      recursive: true,
+      force: true,
+      maxRetries: 20,
+      retryDelay: 100,
+    });
+  }
+});
+
+test("a full edit request rejects an oversized or unknown brief", () => {
+  const request = {
+    schema_version: "1.0",
+    project_id: "project-001",
+    brief: { goal: "", audience: "", style: "", level: "polished" },
+  };
+  assertClaudeFullEditRequest(request);
+  for (const bad of [
+    { ...request, brief: { ...request.brief, level: "wild" } },
+    { ...request, brief: { ...request.brief, goal: "x".repeat(301) } },
+    { ...request, brief: { ...request.brief, extra: "" } },
+    { ...request, project_id: "../p" },
+  ])
+    assert.throws(() => assertClaudeFullEditRequest(bad));
+});
+
+test("fresh model choices: Sonnet produces and Haiku cuts when offered", () => {
+  const model = (value: string, label: string) => ({
+    value,
+    label,
+    detail: "",
+    efforts: [],
+  });
+  const full = {
+    plan: "max",
+    models: [
+      model("default", "Default (recommended)"),
+      model("claude-opus-5-5", "Opus 5.5"),
+      model("sonnet", "Sonnet 5.5"),
+      model("haiku", "Haiku 5.5"),
+    ],
+  };
+  // Opus is offered (and the default may be Opus), but Sonnet is chosen.
+  assert.deepEqual(freshSelection(full), { model: "sonnet", effort: null });
+  assert.deepEqual(freshRoughCutSelection(full, freshSelection(full)), {
+    model: "haiku",
+    effort: null,
+  });
+  // Neither family offered: the account default, and the rough cut follows it.
+  const plain = { plan: null, models: [model("default", "Default")] };
+  assert.deepEqual(freshSelection(plain), { model: "default", effort: null });
+  assert.deepEqual(freshRoughCutSelection(plain, freshSelection(plain)), {
+    model: "default",
+    effort: null,
+  });
+  // "Sonnetina" is not Sonnet.
+  assert.deepEqual(
+    freshSelection({ plan: null, models: [model("sonnetina", "Sonnetina")] }),
+    { model: "sonnetina", effort: null },
+  );
 });

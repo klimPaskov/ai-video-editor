@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
 import type { Page } from "playwright/test";
 import { assertTwoSourceInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
@@ -91,6 +92,7 @@ async function seek(page: Page, timeUs: number): Promise<void> {
 }
 try {
   let page = await electron.firstWindow();
+  await openDisclosures(page);
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   assert.equal(page.url(), "ai-video-editor://app/index.html");
   await electron.evaluate(({ dialog }, paths) => {
@@ -412,6 +414,7 @@ try {
     timeout: 30_000,
   });
   page = await electron.firstWindow();
+  await openDisclosures(page);
   await page.locator(`#projects [data-project-id="${combined.id}"]`).click();
   await expect(page.locator("#duration")).toHaveText(" / 0:02.000", {
     timeout: 30_000,

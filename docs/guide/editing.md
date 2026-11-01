@@ -5,13 +5,13 @@ All edits go into one draft. Your original footage is never changed, and every e
 ## Auto Edit
 
 - **Transcribe locally** creates a word-timed transcript on your computer.
-- **Magic Edit** proposes a first cut from the transcript and the audio: long pauses, filler words and repeated takes. Choose **Gentle**, **Balanced** or **Tight**. The cut is applied as one step you can undo.
+- **Magic Edit** proposes a first cut from the transcript and the audio: long pauses, filler words and repeated takes. Choose **Natural**, **Balanced** or **Tight** pacing. Long pauses are shortened and fillers removed as one step you can undo, then Claude makes the story edit.
 - **Captions**: turn captions on, then choose a style (Plain, Highlight words or Minimal), a size, and top or bottom placement. Captions follow every cut. They are shown in the preview and exported as an .srt file, or burned into the video if you choose **Burn into export**.
 - **Audio**: **Even out volume** normalises loudness to −16 LUFS; **Reduce background noise** removes steady noise. Both apply to exports; the source is unchanged.
 
 ## Edit
 
-The timeline strip under the player shows each part of the edit, zooms (yellow) and sped-up parts (hatched, with their speed). Click the strip to move the playhead.
+The timeline strip under the player shows small pictures of the edit with a time ruler above them, a hairline at each cut and the parts of the edit, zooms (yellow) and sped-up parts (hatched, with their speed). Click the strip to move the playhead.
 
 | Tool | What it does | Key |
 | --- | --- | --- |
@@ -21,7 +21,13 @@ The timeline strip under the player shows each part of the edit, zooms (yellow) 
 | Cut range | Removes the marked range | |
 | Zoom | Zooms into the marked range (or two seconds from the playhead). Click the picture where it should point | Z |
 | Speed | Plays the marked range, or the part under the playhead, at 2×, 3×, 4× or 8× | |
+| Add transition | Hides the cut nearest the playhead behind a dip to black or white, a wipe or an iris (0.3, 0.6 or 1 s). It changes if you pick another style, and Remove transition takes it off | |
+| Camera | Add the video of your camera (a recording made with a camera brings its own). Then choose a layout from the playhead: **Camera in a corner** (pick the corner, size and shape), **Camera only** or **Screen only**. Changes glide and dissolve; **Remove layout change** takes the one in effect off. The ±0.1 s buttons move the camera against the screen if they are not quite in step | |
 | Restore source range | Brings back a removed part of the original footage | |
+
+Layouts show as green bars on the strip and play in the preview and the export. When you record, choose a camera in the recording window: the camera is saved as its own video next to the screen, so you can place it anywhere, or full screen, afterwards.
+
+A transition needs a cut, so it is off until you have cut or split something that left a jump; it shows as a small hatched marker on the strip and plays in the preview and the export. Audio is not changed.
 
 While the playhead is inside a zoom, you can change its strength, move its target or remove it. Sped-up parts keep the voice's pitch.
 
