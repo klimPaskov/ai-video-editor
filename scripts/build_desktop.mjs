@@ -231,6 +231,10 @@ for (const file of [
     join(staging, "renderer", file),
   );
 await copyFile(join(root, "LICENSE"), join(staging, "LICENSE"));
+await copyFile(
+  join(root, "apps/desktop/assets/icon-256.png"),
+  join(staging, "icon-256.png"),
+);
 // The Windows app needs the Windows builds of the native packages, which
 // `npm ci` on Linux does not install; they come from a pinned staging tree.
 const dependencyRoot = windows ? join(output, "windows-dependencies") : root;
@@ -344,6 +348,8 @@ const packages = await packager({
   out: join(output, "packaged"),
   name: "ai-video-editor",
   executableName: "ai-video-editor",
+  // The Windows exe gets the icon (resedit); other platforms ignore it.
+  icon: join(root, "apps/desktop/assets/icon"),
   platform,
   arch: "x64",
   electronVersion: "44.2.0",
@@ -380,6 +386,7 @@ if (windows) {
     productName: "AI Video Editor",
     version: "0.0.1",
     licenseFile: join(root, "LICENSE"),
+    iconFile: join(root, "apps/desktop/assets/icon.ico"),
     makensis: process.env.MAKENSIS ?? "makensis",
     nsisDirectory: process.env.NSISDIR,
     fast: process.argv.includes("--fast-installer"),

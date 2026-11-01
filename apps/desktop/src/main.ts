@@ -3886,6 +3886,7 @@ async function start(): Promise<void> {
     show: false,
     title: appIdentity.displayName,
     backgroundColor: "#11131a",
+    icon: path.join(app.getAppPath(), "icon-256.png"),
     webPreferences: {
       preload: path.join(app.getAppPath(), "preload.cjs"),
       nodeIntegration: false,

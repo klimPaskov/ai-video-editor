@@ -81,6 +81,10 @@ VIAddVersionKey "LegalCopyright" "MIT licence; see the licence page"
 !endif
 
 !define MUI_ABORTWARNING
+!ifdef ICON_FILE
+  !define MUI_ICON "${ICON_FILE}"
+  !define MUI_UNICON "${ICON_FILE}"
+!endif
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE_NAME}"
 !define MUI_FINISHPAGE_RUN_TEXT "Open ${PRODUCT_NAME}"
 !insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"

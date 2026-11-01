@@ -77,6 +77,8 @@ export interface InstallerOptions {
   productName: string;
   version: string;
   licenseFile: string;
+  /** A .ico for the installer and uninstaller windows. */
+  iconFile?: string;
   /** Path to makensis, or "makensis" from PATH. */
   makensis: string;
   /** Directory holding NSIS's Stubs/Include/Contrib when relocated. */
@@ -129,6 +131,7 @@ export async function buildInstaller(
     `-DOUT_FILE=${installer}`,
     `-DUNINSTALL_LIST=${list}`,
     `-DLICENSE_FILE=${options.licenseFile}`,
+    ...(options.iconFile ? [`-DICON_FILE=${options.iconFile}`] : []),
     ...(options.fast ? ["-DFAST"] : []),
     ...(options.signCommand ? [`-DSIGN_COMMAND=${options.signCommand}`] : []),
     join(import.meta.dirname, "installer.nsi"),
