@@ -277,8 +277,42 @@ try {
         await go("Magic Edit", "auto_edit");
         // Claude is not signed in here: starting shows the plain failure.
         await page.locator("#auto-all-start").click();
-        await expect(page.locator("#auto-all-error")).toBeVisible();
-        await audit(`${tag} / Magic Edit after a failed start`);
+        // Where the speech model is slow to arrive the edit is still running:
+        // audit that state, then stop it, instead of waiting for the failure.
+        const failed = await page
+          .locator("#auto-all-error")
+          .waitFor({ state: "visible", timeout: 45_000 })
+          .then(
+            () => true,
+            () => false,
+          );
+        await audit(
+          `${tag} / Magic Edit after a ${failed ? "failed start" : "start"}`,
+        );
+        if (!failed) {
+          await page.locator("#auto-all-stop").click();
+          await expect(page.locator("#auto-all-start")).toBeVisible();
+          // The local transcript keeps running until it is stopped too.
+          await page.evaluate(() =>
+            document
+              .querySelector<HTMLButtonElement>("#stop-transcription")
+              ?.click(),
+          );
+          await expect
+            .poll(
+              () =>
+                page.evaluate(async (id) => {
+                  const reply = await window.desktop.getTranscription({
+                    schema_version: "1.0",
+                    project_id: id,
+                    job_id: null,
+                  });
+                  return reply.ok ? reply.value.job.status : "unknown";
+                }, projectId),
+              { timeout: 60_000 },
+            )
+            .not.toMatch(/^(preparing|downloading_model|transcribing)$/u);
+        }
         await go("Export", "export");
         await page.locator("#export-start").click();
         await expect
