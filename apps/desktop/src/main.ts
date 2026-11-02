@@ -404,6 +404,11 @@ function register(
     try {
       return { ok: true, value: await work(request) };
     } catch (error) {
+      // The person sees a plain message; the cause goes to the log only.
+      if (!(
+        error instanceof UserFacingError || error instanceof ClaudeUserError
+      ))
+        console.error(`[${channel}]`, error);
       return {
         ok: false,
         message:

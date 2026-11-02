@@ -53,7 +53,7 @@ def audit_blob(path: str, data: bytes, mode: str):
     ) and parsed.suffix in ('.png', '.ico')
     if b'\x00' in data and not (
         (
-            policy_path.startswith(('docs/references/screenshots/', 'docs/images/', 'docs/brand/imagegen/'))
+            policy_path.startswith(('docs/references/screenshots/', 'docs/images/', 'docs/brand/imagegen/', 'docs/design/ui-previews/'))
             and parsed.suffix == '.png'
         )
         or brand_art
