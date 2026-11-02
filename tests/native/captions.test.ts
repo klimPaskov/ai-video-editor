@@ -16,6 +16,7 @@ import {
   openFullEditor,
   openRefineTool,
   openStep,
+  exportFinished,
 } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
@@ -264,7 +265,7 @@ try {
   await page.locator("#audio-normalize").check();
   await openStep(page, "Export");
   await page.locator("#export-start").click();
-  await expect(page.locator("#export-done")).toBeVisible({ timeout: 300_000 });
+  await exportFinished(page, 300_000);
   await expect(page.locator("#export-result")).toContainText(
     "captions in Talk master.srt",
   );

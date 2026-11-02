@@ -339,6 +339,16 @@ function composition(
   };
 }
 
+/** The folder's own name for the Done screen, never its path. */
+export function folderLabel(file: string): string {
+  const directory = path.dirname(file);
+  return (
+    path.basename(directory) ||
+    path.parse(directory).root.replace(/[\\/]+$/u, "") ||
+    "this computer"
+  );
+}
+
 /**
  * Main-owned export: one job at a time, destination chosen through the
  * system save dialog, verified render before the file appears.
@@ -648,6 +658,7 @@ export class DesktopExports {
       fraction: null,
       result: {
         fileName: path.basename(job.outputPath),
+        folderName: folderLabel(job.outputPath),
         profile: job.profile,
         durationUs: evidence.durationUs,
         frameCount: evidence.frameCount,

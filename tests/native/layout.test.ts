@@ -278,14 +278,20 @@ try {
           .poll(
             async () =>
               (await page.locator("#export-running").isVisible()) ||
-              (await page.locator("#export-done").isVisible()),
+              (await page.locator("#done-actions").isVisible()),
           )
           .toBe(true);
         if (await page.locator("#export-running").isVisible())
           await audit(`${tag} / Export running`);
-        await expect(page.locator("#export-done")).toBeVisible({
+        await expect(page.locator("#done-actions")).toBeVisible({
           timeout: 300_000,
         });
+        await audit(`${tag} / Done`);
+        await shot(
+          join(evidence, `${themeId}-${size.replace("@", "x")}-done.png`),
+        );
+        await page.locator("#done-keep").click();
+        await expect(page.locator("#export-done")).toBeVisible();
         await audit(`${tag} / Export done`);
         await page.locator("#export-again").click();
         // The project card's options dialog and the recording dialog, from Home.

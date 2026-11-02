@@ -188,7 +188,9 @@ Implemented (2026-10-07): the Export step shows two stacked, selectable quality 
 
 ## S12: Done (after a finished export; ADR 0031)
 
-A check mark, "Your video is ready", then a card with the final thumbnail, file name, length, size and folder; **Show in folder** (primary) and **Play**; the cards Make short clips (when Clips was skipped), Edit another video and Back to Home; and Keep editing, which returns to Export. The step bar reads every step as finished. Path and technical verification are not shown. The detailed layout is in the Done section below.
+A check mark, "Your video is ready", then a card with the final thumbnail, file name, length, size and folder; **Show in folder** (primary) and **Play**; the cards Make short clips (when Clips was skipped), Edit another video and Back to Home; and Keep editing, which returns to Export. The step bar reads every step as finished. Path and technical verification are not shown.
+
+Implemented (2026-11-02): a finished and verified export moves the project to the `done` stage by itself (only a running export that completes does this; reopening a project in Done with no result in memory shows Export). The card reads the file name, then "0:48 · 214 MB · saved to Videos" from the export result (`folderName` is the folder's own name, never a path). **Show in folder** and **Play** use the same main handlers as before (`export:reveal`, `export:open`). Make short clips goes to Clips and is hidden once a clip exists; Edit another video goes Home and opens the import dialog; Back to Home goes Home; Keep editing returns to Export, where the verified details (profile, captions, audio) are still listed. The Done screen has no assistant button and no action bar.
 
 Earlier text (2026-10-07), kept for the detail it records:
 

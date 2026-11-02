@@ -26,7 +26,12 @@ import { createReadStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures, openFullEditor, openStep } from "./disclosures.ts";
+import {
+  openDisclosures,
+  openFullEditor,
+  openStep,
+  exportFinished,
+} from "./disclosures.ts";
 import type { ElectronApplication, Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { appIdentity } from "../../packages/domain/src/app-identity.ts";
@@ -460,7 +465,7 @@ try {
       await page.screenshot({ path: join(evidence, "export-failed.png") });
       throw new Error(`The export did not complete: ${exported.status}`);
     }
-    await expect(page.locator("#export-done")).toBeVisible();
+    await exportFinished(page, 120_000);
     const done = await page.evaluate(
       (id) =>
         window.desktop.getExport({ schema_version: "1.0", project_id: id }),

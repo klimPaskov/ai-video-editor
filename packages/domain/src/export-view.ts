@@ -48,6 +48,8 @@ const messageSet = new Set<string>([
 
 export interface ExportResultView {
   fileName: string;
+  /** The name of the folder it was saved in, such as "Videos"; never a path. */
+  folderName: string;
   profile: ExportProfileChoice;
   durationUs: number;
   frameCount: number;
@@ -207,6 +209,7 @@ export function assertExportView(value: unknown): asserts value is ExportView {
   if (view.result !== null) {
     const result = exact(view.result, [
       "fileName",
+      "folderName",
       "profile",
       "durationUs",
       "frameCount",
@@ -230,6 +233,13 @@ export function assertExportView(value: unknown): asserts value is ExportView {
     )
       invalid();
     fileName(result.fileName);
+    if (
+      typeof result.folderName !== "string" ||
+      result.folderName.length < 1 ||
+      result.folderName.length > 255 ||
+      /[\\/\u0000-\u001f\u007f]/u.test(result.folderName)
+    )
+      invalid();
     profile(result.profile);
     nonNegative(result.durationUs);
     nonNegative(result.frameCount);

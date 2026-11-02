@@ -30,7 +30,10 @@ export interface ExportPanel {
 }
 
 /** Export step: one quality choice, a save dialog in main, verified result. */
-export function setupExportPanel(): ExportPanel {
+export function setupExportPanel(options: {
+  /** An export that was running has finished and is verified. */
+  completed(): void;
+}): ExportPanel {
   const element = <T extends HTMLElement = HTMLElement>(id: string) =>
     document.getElementById(id)! as T;
   const panel = element("export-actions");
@@ -59,6 +62,17 @@ export function setupExportPanel(): ExportPanel {
     schema_version: "1.0" as const,
     project_id: project!.id,
   });
+
+  /** Takes a new view; a running export that completes moves on to Done. */
+  function setView(next: ExportView): void {
+    const was = view?.status;
+    view = next;
+    if (
+      (was === "running" || was === "cancelling") &&
+      next.status === "completed"
+    )
+      options.completed();
+  }
 
   function paint(): void {
     panel.hidden = !visible;
@@ -115,7 +129,7 @@ export function setupExportPanel(): ExportPanel {
     const id = project.id;
     const reply = await window.desktop.getExport(request());
     if (project?.id !== id) return;
-    if (reply.ok) view = reply.value;
+    if (reply.ok) setView(reply.value);
     paint();
     schedule();
   }
@@ -132,7 +146,7 @@ export function setupExportPanel(): ExportPanel {
       if (!reply.ok)
         localError = reply.message ?? "The export could not start.";
       else if (reply.value && typeof reply.value === "object")
-        view = reply.value as ExportView;
+        setView(reply.value as ExportView);
     } finally {
       pending = false;
       paint();

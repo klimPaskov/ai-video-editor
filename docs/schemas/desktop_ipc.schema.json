@@ -5147,6 +5147,7 @@
               "additionalProperties": false,
               "required": [
                 "fileName",
+                "folderName",
                 "profile",
                 "durationUs",
                 "frameCount",
@@ -5163,6 +5164,13 @@
                   "minLength": 1,
                   "maxLength": 255,
                   "pattern": "^[^\\\\/:\\u0000-\\u001f\\u007f]+\\.(mkv|mp4|MKV|MP4)$"
+                },
+                "folderName": {
+                  "description": "The name of the folder the video was saved in, never a path.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[^\\\\/\\u0000-\\u001f\\u007f]+$"
                 },
                 "profile": {
                   "enum": [

@@ -46,3 +46,18 @@ export async function openRefineTool(
   if (!(await pop.isVisible())) await page.locator(`#rt-${tool}`).click();
   await expect(pop).toBeVisible();
 }
+
+/**
+ * An export finished: the app moves to the Done screen (ADR 0031). This goes
+ * back to Export with Keep editing, where the verified result and its
+ * details are listed.
+ */
+export async function exportFinished(
+  page: Page,
+  timeout: number,
+): Promise<void> {
+  await expect(page.locator("#done-actions")).toBeVisible({ timeout });
+  await expect(page.locator("#done-name")).not.toHaveText("");
+  await page.locator("#done-keep").click();
+  await expect(page.locator("#export-done")).toBeVisible();
+}

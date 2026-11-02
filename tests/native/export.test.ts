@@ -26,7 +26,7 @@ import {
   fadeClipEdges,
   joinFadeFrames,
 } from "../../packages/media-engine/src/join-fade.ts";
-import { openFullEditor, openStep } from "./disclosures.ts";
+import { openFullEditor, openStep, exportFinished } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
@@ -245,7 +245,15 @@ try {
   const master = join(outputs, "Talk master.mkv");
   await savePath(electron, master);
   await page.locator("#export-start").click();
-  await expect(page.locator("#export-done")).toBeVisible({ timeout: 300_000 });
+  await expect(page.locator("#done-actions")).toBeVisible({
+    timeout: 300_000,
+  });
+  await expect(page.locator("#done-name")).toHaveText("Talk master.mkv");
+  await expect(page.locator("#done-meta")).toContainText("saved to");
+  await page.screenshot({ path: join(evidence, "done-screen.png") });
+  // Keep editing returns to Export, where the verified result is listed.
+  await page.locator("#done-keep").click();
+  await expect(page.locator("#export-done")).toBeVisible();
   await expect(page.locator("#export-result")).toContainText("Talk master.mkv");
   await expect(page.locator("#export-result")).toContainText(
     "verified lossless",
@@ -330,7 +338,7 @@ try {
   const share = join(outputs, "Talk share.mp4");
   await savePath(electron, share);
   await page.locator("#export-start").click();
-  await expect(page.locator("#export-done")).toBeVisible({ timeout: 300_000 });
+  await exportFinished(page, 300_000);
   await expect(page.locator("#export-result")).not.toContainText(
     "verified lossless",
   );

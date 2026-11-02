@@ -10,7 +10,12 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures, openFullEditor, openStep } from "./disclosures.ts";
+import {
+  openDisclosures,
+  openFullEditor,
+  openStep,
+  exportFinished,
+} from "./disclosures.ts";
 import type { Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -187,7 +192,7 @@ try {
   await expect(page.locator("#export-actions")).toBeVisible();
   await expect(page.locator("#export-profile")).toHaveValue("lossless_master");
   await page.locator("#export-start").click();
-  await expect(page.locator("#export-done")).toBeVisible({ timeout: 300_000 });
+  await exportFinished(page, 300_000);
   await expect(page.locator("#export-result")).toContainText(
     "verified lossless",
   );

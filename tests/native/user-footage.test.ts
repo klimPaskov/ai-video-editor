@@ -25,6 +25,7 @@ import {
   openFullEditor,
   openStep,
   openRefineTool,
+  exportFinished,
 } from "./disclosures.ts";
 import type { ElectronApplication, Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
@@ -360,9 +361,7 @@ try {
       "lossless_master",
     );
     await page.locator("#export-start").click();
-    await expect(page.locator("#export-done")).toBeVisible({
-      timeout: 8 * 3_600_000,
-    });
+    await exportFinished(page, 8 * 3_600_000);
     await expect(page.locator("#export-result")).toContainText(
       "verified lossless",
     );
@@ -407,9 +406,7 @@ try {
     await page.locator("#export-again").click();
     await page.locator('[data-profile="smaller_mp4"]').click();
     await page.locator("#export-start").click();
-    await expect(page.locator("#export-done")).toBeVisible({
-      timeout: 8 * 3_600_000,
-    });
+    await exportFinished(page, 8 * 3_600_000);
     const shared = await probe(share);
     const sharedVideo = shared.streams.find(
       (stream) => stream.codec_type === "video",

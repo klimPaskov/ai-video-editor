@@ -18,7 +18,7 @@ import {
   type GraphicComponentKind,
   type GraphicComponentParams,
 } from "../../packages/domain/src/graphic-components.ts";
-import { openFullEditor, openStep } from "./disclosures.ts";
+import { openFullEditor, openStep, exportFinished } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 const expect = baseExpect.configure({ timeout: 30_000 });
@@ -192,7 +192,7 @@ try {
   await openStep(page, "Export");
   await expect(page.locator("#export-actions")).toBeVisible();
   await page.locator("#export-start").click();
-  await expect(page.locator("#export-done")).toBeVisible({ timeout: 900_000 });
+  await exportFinished(page, 900_000);
   await expect(page.locator("#export-result")).toContainText(
     "verified lossless",
   );

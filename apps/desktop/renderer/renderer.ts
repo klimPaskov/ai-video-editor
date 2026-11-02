@@ -19,6 +19,7 @@ import {
   type ZoomInterval,
 } from "../../../packages/domain/src/zoom.ts";
 import { setupExportPanel } from "./export-panel.ts";
+import { setupDonePanel } from "./done-panel.ts";
 import { setupPlayback } from "./playback.ts";
 import { setupMagicPanel } from "./magic-panel.ts";
 import { setupAutoPanel } from "./auto-panel.ts";
@@ -420,7 +421,18 @@ function populateRestoreSources(project: ProjectView): void {
   }
   restoreSourceProjectId = project.id;
 }
-const exportPanel = setupExportPanel();
+const exportPanel = setupExportPanel({
+  completed: () => void navigate("done"),
+});
+const donePanel = setupDonePanel({
+  thumbnail: (mediaId, name) => thumbnail(mediaId, name),
+  goTo: (stage) => void navigate(stage),
+  home: () => back.click(),
+  importAnother: () => {
+    back.click();
+    importButton.click();
+  },
+});
 /** End of a short clip being previewed; playback stops there. */
 let previewEndUs: number | undefined;
 const shortsPanel = setupShortsPanel({
@@ -439,6 +451,7 @@ function renderStagePanels(): void {
   // Export, Clips and the Done screen stay fully usable beside the assistant
   // and the source details: they have their own room (ADR 0031).
   exportPanel.render(activeProject, activeProject?.stage === "export");
+  donePanel.render(activeProject, activeProject?.stage === "done");
   shortsPanel.render(activeProject, activeProject?.stage === "clips");
 }
 function transcriptionRunning(

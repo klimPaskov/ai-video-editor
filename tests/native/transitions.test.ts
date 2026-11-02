@@ -16,7 +16,7 @@ import type { Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 import { rawFrameBytes } from "../../packages/media-engine/src/render.ts";
-import { openFullEditor, openStep } from "./disclosures.ts";
+import { openFullEditor, openStep, exportFinished } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
@@ -321,7 +321,7 @@ try {
   await openStep(page, "Export");
   await expect(page.locator("#export-actions")).toBeVisible();
   await page.locator("#export-start").click();
-  await expect(page.locator("#export-done")).toBeVisible({ timeout: 300_000 });
+  await exportFinished(page, 300_000);
   await expect(page.locator("#export-result")).toContainText(
     "verified lossless",
   );
