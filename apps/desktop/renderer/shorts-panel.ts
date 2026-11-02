@@ -85,8 +85,20 @@ export function setupShortsPanel(options: {
         chosen.add(candidate.id);
       }
     const count = shown.filter((candidate) => chosen.has(candidate.id)).length;
-    exportAll.textContent = `Make ${count === 1 ? "1 clip" : `${count} clips`}`;
-    exportAll.disabled = pending || running || picking || count === 0;
+    // The step's one button always has something to do: find clips first, then
+    // make the chosen ones.
+    exportAll.textContent =
+      shown.length === 0
+        ? "Find clips"
+        : count === 0
+          ? "Choose a clip"
+          : `Make ${count === 1 ? "1 clip" : `${count} clips`}`;
+    exportAll.disabled =
+      pending ||
+      running ||
+      picking ||
+      (shown.length > 0 && count === 0) ||
+      !projectId;
     options.saved(view?.library.length ?? 0);
     note.textContent = !view
       ? ""
@@ -343,7 +355,10 @@ export function setupShortsPanel(options: {
 
   find.addEventListener("click", () => void act("find"));
   pick.addEventListener("click", () => void act("pick"));
-  exportAll.addEventListener("click", () => void act("exportAll"));
+  exportAll.addEventListener(
+    "click",
+    () => void act(view?.status === "ready" ? "exportAll" : "find"),
+  );
   framing.addEventListener("change", draw);
 
   return {

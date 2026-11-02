@@ -47,7 +47,7 @@ The short-clips panel moves out of Export into its own step 4 with **Skip**. Cho
 
 ### Layout
 
-The assistant drawer is docked beside the page: the page makes room and scrolls on its own, and Export and every step stay fully visible with the assistant open (the old rule that hid the step's panel while a drawer was open is gone). Below 1100 px the drawer becomes a slide-over with a close button that ends above the action bar, so it never covers the primary action. One set of spacing, radius, type and button rules (docs/33) applies to every screen and theme; the header mark is an inline vector that takes the theme's colours.
+The assistant drawer is docked beside the page: the page makes room and scrolls on its own, and Export and every step stay fully visible with the assistant open (the old rule that hid the step's panel while a drawer was open is gone). The page is a column (header, step bar, the scrolling page, then the action bar as a normal item that never overlaps the page). The drawer stays docked, a little narrower below 1100 px, down to 760 CSS px; below that it is a slide-over with a close button that ends above the action bar, and the page behind it waits, so nothing is drawn under it and the primary action is never covered (the real-window layout audit found controls drawn under an overlaying slide-over). One set of spacing, radius, type and button rules (docs/33) applies to every screen and theme; the header mark is an inline vector that takes the theme's colours.
 
 ## Consequences
 

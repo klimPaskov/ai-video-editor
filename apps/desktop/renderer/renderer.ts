@@ -524,6 +524,7 @@ function renderStagePanels(): void {
   exportPanel.render(activeProject, activeProject?.stage === "export");
   donePanel.render(activeProject, activeProject?.stage === "done");
   shortsPanel.render(activeProject, activeProject?.stage === "clips");
+  element("clips-actions").hidden = activeProject?.stage !== "clips";
 }
 function transcriptionRunning(
   view: TranscriptionProjectView | undefined,

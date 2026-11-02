@@ -70,7 +70,7 @@
 
 ## S11 Export
 
-- The step and its Export button stay fully visible with the assistant open (docked beside the page, a slide-over below 1100 px that never covers the action bar).
+- The step and its Export button stay fully visible with the assistant open (docked beside the page, narrower below 1100 px, a slide-over at 760 px and below that never covers the action bar).
 - The draft check runs by itself; nothing is shown unless it fails.
 
 - Common options fit without scrolling at normal window size.

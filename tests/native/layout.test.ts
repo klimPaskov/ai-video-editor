@@ -152,7 +152,10 @@ try {
       // A page taller than the window also gets a picture of its end.
       const scrolls = await page.evaluate(() => {
         // The content area, not the document, is what scrolls.
-        const main = document.querySelector("main")!;
+        const visiblePage = document.querySelector<HTMLElement>(
+          "#viewer:not([hidden]) .project-page",
+        );
+        const main = visiblePage ?? document.querySelector("main")!;
         if (main.scrollHeight <= main.clientHeight + 2) return false;
         main.scrollTo(0, main.scrollHeight);
         return true;
@@ -161,7 +164,11 @@ try {
         await page.waitForTimeout(250);
         await shot(join(evidence, `look-${name}-end.png`));
         await page.evaluate(() =>
-          document.querySelector("main")!.scrollTo(0, 0),
+          (
+            document.querySelector<HTMLElement>(
+              "#viewer:not([hidden]) .project-page",
+            ) ?? document.querySelector("main")!
+          ).scrollTo(0, 0),
         );
       }
     }

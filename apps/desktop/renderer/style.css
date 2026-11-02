@@ -2725,9 +2725,19 @@ main:has(#viewer:not([hidden])) {
   padding: 0;
   gap: 0;
 }
+/* The page is a column: the scrolling page, then the action bar as a normal
+   item below it, so the bar never covers what scrolls. */
+.project-column {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 .project-page {
   flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -2738,8 +2748,7 @@ main:has(#viewer:not([hidden])) {
   container-type: inline-size;
 }
 .project-page > #project-navigation,
-.project-page > .stage-card,
-.project-page > .action-bar {
+.project-page > .stage-card {
   width: 100%;
   max-width: 1180px;
   margin-inline: auto;
@@ -3278,15 +3287,17 @@ button.rtool.unavailable:hover {
 
 /* The action bar: the step's one way forward, always in view. */
 .action-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-top: auto;
-  padding: var(--space-3) 0 var(--space-4);
-  background: linear-gradient(to top, var(--bg) 72%, transparent);
+  padding: var(--space-3) var(--space-6) var(--space-4);
+  padding-inline: max(
+    var(--space-6),
+    calc((100% - 1180px) / 2 + var(--space-6))
+  );
+  background: var(--bg);
+  border-top: 1px solid var(--border);
 }
 .action-spacer {
   flex: 1 1 auto;
@@ -3493,9 +3504,10 @@ dialog {
     padding: 0;
     gap: 0;
   }
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) .project-page,
   html[data-layout="cinematic"]
     #viewer:not([data-editor="full"])
-    .project-page {
+    .project-column {
     display: contents;
   }
   html[data-layout="cinematic"]
@@ -3667,6 +3679,7 @@ dialog {
     margin: 0;
     padding: 0;
     background: none;
+    border: 0;
     pointer-events: none;
   }
   html[data-layout="cinematic"]
@@ -3783,24 +3796,37 @@ body:has(#home:not([hidden])) #source-details {
   }
 }
 
-/* Narrow windows: the panel slides over the page from the right. It ends above
-   the action bar, so the step's way forward is never covered, and it has its
-   own close button. */
+/* Narrower windows: the panel gets narrower and the page still makes room. */
 @media (max-width: 1099px) {
+  #codex-drawer {
+    width: 340px;
+  }
+  #inspector {
+    width: 300px;
+  }
+}
+
+/* Very narrow windows (and large interface sizes): the panel slides over the
+   whole page from the right, ends above the action bar so the step's way
+   forward is never covered, and has its own close button. The page behind it
+   waits, so nothing is drawn under the panel. */
+@media (max-width: 760px) {
   #inspector,
   #codex-drawer {
     position: fixed;
     top: var(--header-height, 72px);
     right: 0;
     bottom: var(--action-bar-space, 0px);
+    left: 0;
     z-index: 20;
-    width: min(380px, calc(100vw - 56px));
+    width: auto;
     margin: 0;
-    border-radius: var(--radius-card) 0 0 var(--radius-card);
+    border-radius: 0;
     box-shadow: var(--shadow-lg);
   }
-  #inspector {
-    width: min(320px, calc(100vw - 56px));
+  #viewer:has(#codex-drawer:not([hidden]), #inspector:not([hidden]))
+    .project-page {
+    visibility: hidden;
   }
 }
 
@@ -4349,4 +4375,58 @@ button.short-preview:hover:not(:disabled) {
 }
 .mark-ink {
   fill: var(--mark-ink);
+}
+
+/* Details found in the real window. */
+.project-page {
+  padding-bottom: var(--space-4);
+}
+.did-list:empty {
+  display: none;
+}
+.did-history {
+  margin-top: auto;
+}
+.action-bar > #export-start {
+  flex: none;
+  min-height: 48px;
+  margin-left: auto;
+  font-size: var(--text-body);
+}
+#viewer[data-stage="auto_edit"] .workspace,
+#viewer[data-stage="record_import"] .workspace {
+  max-height: 46vh;
+}
+
+/* Short windows give the picture more of the height. */
+@media (max-height: 720px) {
+  .action-bar {
+    padding-block: var(--space-2);
+  }
+  .action-bar button.large {
+    min-height: 44px;
+  }
+  .workspace {
+    min-height: 160px;
+  }
+  #viewer[data-stage="edit"][data-editor="simple"] .workspace {
+    min-height: 160px;
+  }
+  #viewer[data-editor="simple"] .timeline-ruler {
+    display: none;
+  }
+}
+
+/* Cinematic: the floating action bar leaves room for an open side panel. */
+@media (min-width: 821px) and (min-height: 561px) {
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"]):has(#codex-drawer:not([hidden]))
+    .action-bar {
+    right: 420px;
+  }
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"]):has(#inspector:not([hidden]))
+    .action-bar {
+    right: 360px;
+  }
 }
