@@ -18,7 +18,7 @@ import { join, resolve } from "node:path";
 import { _electron, expect as baseExpect } from "playwright/test";
 import type { Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
-import { openDisclosures } from "./disclosures.ts";
+import { openDisclosures, openFullEditor, openStep } from "./disclosures.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 
 await assertNativeTestEnvironment();
@@ -129,7 +129,7 @@ try {
   step = "import";
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
   const project = await head(page);
 
@@ -271,7 +271,7 @@ try {
   );
 
   step = "export";
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await openStep(page, "Export");
   await expect(page.locator("#export-actions")).toBeVisible();
   await page.locator("#export-start").click();
   await expect(page.locator("#export-done")).toBeVisible({ timeout: 600_000 });
@@ -337,7 +337,7 @@ try {
   result.frames = { corner: inCircle, full };
 
   step = "undo";
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toHaveAttribute(
     "aria-busy",
     "false",

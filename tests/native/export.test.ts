@@ -26,6 +26,7 @@ import {
   fadeClipEdges,
   joinFadeFrames,
 } from "../../packages/media-engine/src/join-fade.ts";
+import { openFullEditor, openStep } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
@@ -201,7 +202,7 @@ try {
   const project = listed.value[0]!;
 
   step = "cut";
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
   // Remove 1.0 s .. 2.5 s of output time (not frame-aligned at the end).
   const cut = await page.evaluate(
@@ -225,7 +226,7 @@ try {
   assert.equal(clips.length, 2);
 
   step = "export-step";
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await openStep(page, "Export");
   await expect(page.locator("#export-actions")).toBeVisible();
   await expect(page.locator("#export-profile")).toHaveValue("lossless_master");
   await expect(page.locator("#export-profile-note")).toContainText("FFV1");

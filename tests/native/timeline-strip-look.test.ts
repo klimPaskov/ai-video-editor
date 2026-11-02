@@ -12,6 +12,7 @@ import { mkdir, mkdtemp } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
+import { openFullEditor } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 const [executablePath, configRoot] = process.argv.slice(2);
@@ -34,7 +35,7 @@ try {
   )[0]!;
   await page.locator(`#projects [data-project-id="${project.id}"]`).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 600_000 });
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 300_000 });
   await expect(page.locator("#preview-message")).toBeHidden({
     timeout: 120_000,

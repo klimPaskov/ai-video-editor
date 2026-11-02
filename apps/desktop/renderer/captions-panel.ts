@@ -21,13 +21,19 @@ function element<T extends HTMLElement>(id: string): T {
  * are derived from the transcript, its text corrections and the current
  * clip map, so they follow every edit; only the style is stored.
  */
-export function setupCaptions(options: { preview: HTMLElement }): {
+export function setupCaptions(options: {
+  preview: HTMLElement;
+  /** Where the captions begin changed (they were turned on or off). */
+  changed?: () => void;
+}): {
   render(
     project: ProjectView | undefined,
     transcription: TranscriptionProjectView | undefined,
     positionUs: number,
   ): void;
   position(positionUs: number): void;
+  /** Where the captions begin, when they are on and there are any. */
+  startUs(): number | undefined;
 } {
   const overlay = document.createElement("div");
   overlay.id = "caption-overlay";
@@ -163,8 +169,15 @@ export function setupCaptions(options: { preview: HTMLElement }): {
     };
   }
 
+  let announced: number | undefined;
   function position(positionUs: number): void {
     lastPosition = positionUs;
+    const start =
+      settings.enabled && cues.length > 0 ? cues[0]!.startUs : undefined;
+    if (start !== announced) {
+      announced = start;
+      options.changed?.();
+    }
     const cue = settings.enabled ? cueAt(cues, positionUs) : undefined;
     overlay.hidden = !cue;
     if (!cue) return;
@@ -204,6 +217,8 @@ export function setupCaptions(options: { preview: HTMLElement }): {
   }
 
   return {
+    startUs: () =>
+      settings.enabled && cues.length > 0 ? cues[0]!.startUs : undefined,
     render(project, transcription, positionUs) {
       if (project?.id !== projectId) {
         projectId = project?.id;

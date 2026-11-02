@@ -19,7 +19,7 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect as baseExpect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import { openDisclosures, openFullEditor, openStep } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 
@@ -163,7 +163,7 @@ try {
   );
 
   step = "transcribe";
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openStep(page, "Magic Edit");
   await openDisclosures(page);
   await page.locator("#transcribe-local").click();
   await expect(page.locator("#transcript-results")).toBeVisible({
@@ -171,7 +171,7 @@ try {
   });
 
   step = "camera";
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await openDisclosures(page);
   await electron.evaluate(({ dialog }, file) => {
     const state = globalThis as unknown as { __next?: string };

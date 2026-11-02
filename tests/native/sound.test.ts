@@ -11,7 +11,12 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import {
+  openDisclosures,
+  openFullEditor,
+  openRefineTool,
+  openStep,
+} from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -122,14 +127,9 @@ try {
   assert.ok(listed.ok);
   const projectId = listed.value[0]!.id;
   // The step bar answers once a pending edit has settled: click until it does.
-  const toMagicEdit = () =>
+  const toMusic = () =>
     expect(async () => {
-      await page
-        .getByRole("button", { name: "Magic Edit", exact: true })
-        .click();
-      await expect(page.locator("#auto-edit-actions")).toBeVisible({
-        timeout: 3_000,
-      });
+      await openRefineTool(page, "music");
     }).toPass({ timeout: 30_000 });
   const sounds = async () => {
     const reply = await page.evaluate(
@@ -140,7 +140,7 @@ try {
     assert.ok(reply.ok);
     return reply.value.layers;
   };
-  await toMagicEdit();
+  await toMusic();
   await expect(page.locator("#sound-card")).toBeVisible();
   assert.deepEqual(await sounds(), []);
 
@@ -166,7 +166,7 @@ try {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await expect.poll(async () => (await sounds())[0]!.gain_db).toBe(-12);
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await page.locator("#undo-edit").click();
   await expect.poll(async () => (await sounds())[0]!.gain_db).toBe(-18);
   await page.locator("#undo-edit").click();
@@ -175,8 +175,8 @@ try {
   await page.locator("#redo-edit").click();
   await page.locator("#redo-edit").click();
   await expect.poll(async () => (await sounds())[0]?.gain_db).toBe(-12);
-  await toMagicEdit();
-  // Changing step closes the disclosures again.
+  await toMusic();
+  // The music pop-over closed with the step.
   await openDisclosures(page);
   await expect(page.locator(".sound-row")).toHaveCount(1);
   // Back to the default level for the audio check below.
@@ -204,7 +204,7 @@ try {
   });
 
   step = "export";
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await openStep(page, "Export");
   await page.locator("#export-start").click();
   await expect(page.locator("#export-done")).toBeVisible({ timeout: 300_000 });
   await expect(page.locator("#export-result")).toContainText(
@@ -249,7 +249,7 @@ try {
   result.effectDb = middle;
 
   step = "remove";
-  await toMagicEdit();
+  await toMusic();
   await openDisclosures(page);
   await page.getByRole("button", { name: /^Remove Hit$/u }).click();
   await expect(page.locator(".sound-row")).toHaveCount(1);

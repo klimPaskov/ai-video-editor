@@ -11,7 +11,12 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import {
+  openDisclosures,
+  openFullEditor,
+  openRefineTool,
+  openStep,
+} from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -143,7 +148,7 @@ try {
   const project = listed.value[0]!;
 
   step = "transcribe";
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openRefineTool(page, "captions");
   await expect(page.locator("#captions-enabled")).toBeDisabled();
   await expect(page.locator("#captions-note")).toHaveText(
     "Captions use the transcript. Transcribe first.",
@@ -155,6 +160,7 @@ try {
     "Transcript complete",
     { timeout: 15 * 60_000 },
   );
+  await openRefineTool(page, "captions");
   await expect(page.locator("#captions-enabled")).toBeEnabled();
 
   step = "enable";
@@ -223,22 +229,22 @@ try {
     return reply.ok ? reply.value[0]!.draft.sequence : -1;
   };
   await expect.poll(sequence).toBe(3);
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await page.locator("#undo-edit").click();
   await expect.poll(sequence).toBe(4);
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openRefineTool(page, "captions");
   await expect(page.locator("#captions-position")).toHaveValue("bottom");
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await page.locator("#redo-edit").click();
   await expect.poll(sequence).toBe(5);
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openRefineTool(page, "captions");
   await expect(page.locator("#captions-position")).toHaveValue("top");
   result.captionChoiceUndoRedo = true;
 
   step = "cut";
   const beforeCut = await sequence();
   // Cut the target word's whole span; its caption text must disappear.
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await seekTo(target.start_us);
   await page.locator("#mark-in").click();
   await seekTo(target.end_us);
@@ -252,10 +258,11 @@ try {
   assert.ok(afterCut.includes(before.replace(/[,.]$/u, "")), afterCut);
 
   step = "export";
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openRefineTool(page, "captions");
   await page.locator("#captions-burn-in").check();
+  await openRefineTool(page, "volume");
   await page.locator("#audio-normalize").check();
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await openStep(page, "Export");
   await page.locator("#export-start").click();
   await expect(page.locator("#export-done")).toBeVisible({ timeout: 300_000 });
   await expect(page.locator("#export-result")).toContainText(

@@ -16,7 +16,7 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import { openDisclosures, openStep } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -157,7 +157,7 @@ try {
   );
 
   step = "auto-edit-is-minimal";
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openStep(page, "Magic Edit");
   await expect(page.locator("#auto-all-start")).toBeVisible();
   // Only the one action shows; everything else is under More options.
   for (const id of [

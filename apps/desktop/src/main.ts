@@ -41,6 +41,7 @@ import { ProjectStore } from "../../../packages/project-store/src/store.ts";
 import {
   DraftTransactionError,
   DraftTransactionStore,
+  type DraftReadResult,
 } from "../../../packages/project-store/src/transactions.ts";
 import {
   CodexMcpBroker,
@@ -134,6 +135,11 @@ import {
   exportIssues,
 } from "../../../packages/domain/src/export-view.ts";
 import { DesktopExports, planDraft } from "./export.ts";
+import { EditSummary, EditSummaryError } from "./edit-summary.ts";
+import {
+  assertEditSummaryProjectRequest,
+  assertEditSummaryUndoRequest,
+} from "../../../packages/domain/src/edit-summary.ts";
 import { DesktopMagicWand } from "./magic-wand.ts";
 import {
   StoryPassEditor,
@@ -2639,6 +2645,54 @@ async function start(): Promise<void> {
         "Draft integrity could not be checked. Reopen the project and try again.",
       );
     }
+  });
+  // "What Magic Edit did" in Refine: rows from the draft's own records, and
+  // an undo of a whole kind as ordinary history (ADR 0031).
+  const editSummary = new EditSummary(drafts);
+  const activeSummaryProject = (projectId: string) => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before editing it.");
+  };
+  const summaryEdit = async (
+    projectId: string,
+    work: () => Promise<DraftReadResult>,
+  ) => {
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "timeline.undo",
+        projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work,
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof EditSummaryError)
+        throw new UserFacingError(error.message);
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError("The edit changed. Try again.");
+      throw error;
+    }
+  };
+  register(channels.editSummaryGet, async (request) => {
+    assertEditSummaryProjectRequest(request);
+    activeSummaryProject(request.project_id);
+    return editSummary.view(request.project_id);
+  });
+  register(channels.editSummaryUndo, async (request) => {
+    assertEditSummaryUndoRequest(request);
+    activeSummaryProject(request.project_id);
+    return summaryEdit(request.project_id, () =>
+      editSummary.undoKind(request.project_id, request.kind),
+    );
+  });
+  register(channels.editSummaryPutBack, async (request) => {
+    assertEditSummaryProjectRequest(request);
+    activeSummaryProject(request.project_id);
+    return summaryEdit(request.project_id, () =>
+      editSummary.putBack(request.project_id),
+    );
   });
   const activeCodexProject = async (projectId: string) => {
     if (activeProjectId !== projectId) throw new Error("Inactive project");

@@ -26,7 +26,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import { openDisclosures, openFullEditor, openStep } from "./disclosures.ts";
 import type { ElectronApplication, Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { appIdentity } from "../../packages/domain/src/app-identity.ts";
@@ -215,7 +215,7 @@ try {
     result.imported = { sources: 2, inOrder: true };
 
     mark("magic-edit");
-    await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+    await openStep(page, "Magic Edit");
     await page.locator("#magic-start").click();
     await expect(page.locator("#magic-stop")).toBeVisible({ timeout: 60_000 });
     // Claude's rough cut ends when Rough cut only comes back.
@@ -288,7 +288,7 @@ try {
 
   if (!skipEdit) {
     mark("claude-full-edit");
-    await page.getByRole("button", { name: "Refine", exact: true }).click();
+    await openFullEditor(page);
     await expect(page.locator("#edit-actions")).toBeVisible({
       timeout: 300_000,
     });
@@ -423,7 +423,7 @@ try {
       exportMp4 ? "Claude edit.mp4" : "Claude edit master.mkv",
     );
     await dialogs(electron, master);
-    await page.getByRole("button", { name: "Export", exact: true }).click();
+    await openStep(page, "Export");
     if (exportMp4) await page.locator('[data-profile="smaller_mp4"]').click();
     await expect(page.locator("#export-profile")).toHaveValue(
       exportMp4 ? "smaller_mp4" : "lossless_master",

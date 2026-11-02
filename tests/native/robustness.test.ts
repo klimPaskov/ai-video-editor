@@ -22,6 +22,7 @@ import { _electron, expect as baseExpect } from "playwright/test";
 import type { Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
+import { openStep } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 // The guest shares a busy machine: allow slow starts, saves and navigation.
@@ -142,7 +143,7 @@ try {
   const project = listed.value[0]!;
 
   step = "export-to-an-unwritable-place";
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await openStep(page, "Export");
   await page.locator("#export-start").click();
   // The folder does not exist (as a full or removed disk would fail): a plain
   // message, the Export button back, no hang.
@@ -219,7 +220,7 @@ try {
   page = await electron.firstWindow();
   watch(page);
   await openProject(page, project.id);
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openStep(page, "Magic Edit");
   await page.locator("#auto-edit-more > summary").click();
   await page.getByRole("button", { name: "Transcribe locally" }).click();
   await expect(page.locator("#transcription-error")).toBeVisible({

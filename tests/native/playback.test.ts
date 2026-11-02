@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import { openDisclosures, openFullEditor } from "./disclosures.ts";
 import type { Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -153,7 +153,7 @@ try {
   assert.ok(project);
 
   step = "cut-green";
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
   await seekTo(page, 1_000_000);
   await page.locator("#mark-in").click();

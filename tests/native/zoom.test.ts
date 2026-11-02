@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import { openDisclosures, openFullEditor, openStep } from "./disclosures.ts";
 import type { Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -115,7 +115,7 @@ try {
   step = "import";
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
 
   step = "mark-range";
@@ -201,7 +201,7 @@ try {
     .toBe(3);
 
   step = "export";
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await openStep(page, "Export");
   await expect(page.locator("#export-actions")).toBeVisible();
   await expect(page.locator("#export-profile")).toHaveValue("lossless_master");
   await page.locator("#export-start").click();
@@ -247,7 +247,7 @@ try {
   };
 
   step = "remove";
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
   await seekTo(page, 1_800_000);
   await expect(page.locator("#zoom-controls")).toBeVisible();

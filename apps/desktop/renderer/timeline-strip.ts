@@ -31,6 +31,8 @@ export function setupTimelineStrip(options: {
     zooms?: readonly ZoomInterval[],
     graphics?: readonly GraphicInterval[],
     layouts?: readonly LayoutInterval[],
+    /** Where the captions begin, when they are on. */
+    captionStartUs?: number,
   ): void;
   playhead(us: number): void;
 } {
@@ -42,6 +44,7 @@ export function setupTimelineStrip(options: {
   const thumbs = host.querySelector<HTMLElement>(".timeline-thumbs")!;
   const ruler = host.querySelector<HTMLElement>(".timeline-ruler")!;
   const graphicLayer = host.querySelector<HTMLElement>(".timeline-graphics")!;
+  const pinLayer = host.querySelector<HTMLElement>(".timeline-pins")!;
   const head = host.querySelector<HTMLElement>(".timeline-playhead")!;
   const summary = host.querySelector<HTMLElement>(".timeline-summary")!;
   let durationUs = 0;
@@ -83,6 +86,54 @@ export function setupTimelineStrip(options: {
           mark.classList.add("last");
         mark.textContent = tick.label;
         return mark;
+      }),
+    );
+  }
+
+  /**
+   * Refine's small markers: where a zoom, a graphic or the captions begin,
+   * labelled while there is room to read the label.
+   */
+  function drawPins(
+    zooms: readonly ZoomInterval[],
+    graphics: readonly GraphicInterval[],
+    captionStartUs: number | undefined,
+  ): void {
+    const pins = [
+      ...zooms.map((zoom) => ({
+        us: zoom.startUs,
+        kind: "zoom",
+        label: "Zoom",
+      })),
+      ...graphics
+        .filter((graphic) => !graphic.graphicId.startsWith("transition-"))
+        .map((graphic) => ({
+          us: graphic.startUs,
+          kind: "graphic",
+          label: "Graphic",
+        })),
+      ...(captionStartUs === undefined
+        ? []
+        : [{ us: captionStartUs, kind: "caption", label: "Captions" }]),
+    ].sort((a, b) => a.us - b.us);
+    const width = Math.max(1, pinLayer.getBoundingClientRect().width - 8);
+    let lastLabelled = Number.NEGATIVE_INFINITY;
+    pinLayer.replaceChildren(
+      ...pins.map((pin) => {
+        const x = (pin.us / Math.max(1, durationUs)) * width;
+        const node = document.createElement("span");
+        node.className = "timeline-pin";
+        node.dataset.kind = pin.kind;
+        node.style.left = `calc(4px + (100% - 8px) * ${pin.us / Math.max(1, durationUs)})`;
+        const label = document.createElement("span");
+        label.className = "timeline-pin-label";
+        // A label shows only where it will not sit on the one before it.
+        if (x - lastLabelled >= 76) {
+          label.textContent = pin.label;
+          lastLabelled = x;
+        } else node.classList.add("bare");
+        node.append(label);
+        return node;
       }),
     );
   }
@@ -179,6 +230,7 @@ export function setupTimelineStrip(options: {
     zooms: readonly ZoomInterval[] = [],
     graphics: readonly GraphicInterval[] = [],
     layouts: readonly LayoutInterval[] = [],
+    captionStartUs?: number,
   ): void {
     current = project;
     host.hidden = !project?.clips;
@@ -282,6 +334,7 @@ export function setupTimelineStrip(options: {
         return [bar];
       }),
     );
+    drawPins(zooms, graphics, captionStartUs);
     zoomLayer.replaceChildren(
       ...zooms.map((zoom) => {
         const bar = document.createElement("div");

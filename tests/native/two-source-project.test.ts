@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import { openDisclosures, openFullEditor } from "./disclosures.ts";
 import type { Page } from "playwright/test";
 import { assertTwoSourceInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
@@ -168,7 +168,7 @@ try {
   await expect(page.locator("#source-properties")).toContainText("Part 1");
   await expect(page.locator("#source-properties")).toContainText("Part 2");
   await page.screenshot({ path: join(evidence, "two-source-join.png") });
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
   await expect(page.locator("#trim-start")).toBeDisabled();
   await expect(page.locator("#trim-end")).toBeDisabled();

@@ -1781,6 +1781,27 @@ export class DraftTransactionStore {
     });
   }
 
+  /**
+   * The current draft with the transactions that lead to it (applied, oldest
+   * first), read together. Summaries of what an AI edit did are built from it.
+   */
+  appliedSnapshot(
+    projectId: string,
+  ): Promise<DraftReadResult & { applied: DraftTransactionRecord[] }> {
+    return this.serialize(projectId, async () => {
+      const loaded = await this.load(projectId);
+      return {
+        draft: cloneDraftState(loaded.state),
+        undo_transaction_id: loaded.applied.at(-1)?.transaction_id ?? null,
+        redo_transaction_id: loaded.undone.at(-1)?.transaction_id ?? null,
+        current_pass_checkpoint: loaded.currentCheckpoint
+          ? structuredClone(loaded.currentCheckpoint)
+          : null,
+        applied: structuredClone(loaded.applied),
+      };
+    });
+  }
+
   /** One root-queue read keeps project navigation and the active draft coherent. */
   snapshotWithProject(projectId: string): Promise<DraftProjectReadResult> {
     return this.serialize(projectId, async () => {

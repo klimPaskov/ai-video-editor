@@ -32,6 +32,7 @@ import { _electron, expect } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { appIdentity } from "../../packages/domain/src/app-identity.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
+import { openFullEditor } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
@@ -146,7 +147,7 @@ try {
   step = "import";
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
   const listed = await page.evaluate(() => window.desktop.listProjects());
   assert.ok(listed.ok);

@@ -64,6 +64,11 @@ import type {
   ExportView,
 } from "../../../packages/domain/src/export-view.ts";
 import type {
+  EditSummaryProjectRequest,
+  EditSummaryUndoRequest,
+  EditSummaryView,
+} from "../../../packages/domain/src/edit-summary.ts";
+import type {
   ProjectDraftView,
   ProjectDraftIntegrityView,
   ProjectFrameRequest,
@@ -298,6 +303,15 @@ export interface DesktopBridge {
   verifyDraftIntegrity(
     request: ProjectRequest,
   ): Promise<Reply<ProjectDraftIntegrityView>>;
+  getEditSummary(
+    request: EditSummaryProjectRequest,
+  ): Promise<Reply<EditSummaryView>>;
+  undoEditSummary(
+    request: EditSummaryUndoRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  putBackEditSummary(
+    request: EditSummaryProjectRequest,
+  ): Promise<Reply<ProjectDraftView>>;
   readProjectFrame(
     request: ProjectFrameRequest,
   ): Promise<Reply<ProjectFrameResult>>;
@@ -435,6 +449,9 @@ export const channels = Object.freeze({
   projectRename: "projects:rename",
   projectDelete: "projects:delete",
   projectIntegrityCheck: "projects:verify-draft-integrity",
+  editSummaryGet: "edit-summary:get",
+  editSummaryUndo: "edit-summary:undo",
+  editSummaryPutBack: "edit-summary:put-back",
   projectFrame: "projects:frame",
   projectStrip: "projects:strip",
   projectManualTrim: "projects:manual-trim",

@@ -560,7 +560,42 @@ class DesktopIpcContractTests(unittest.TestCase):
             bad['payload'][key] = value
             self.invalid(bad)
 
-    def test_review_integrity_channel_returns_only_a_path_free_draft_head(self):
+    def test_edit_summary_channels_carry_plain_rows_and_no_paths(self):
+        summary = json.loads(
+            (ROOT / 'docs/examples/desktop_ipc_edit_summary.example.json').read_text(encoding='utf-8')
+        )
+        self.valid(summary)
+        for kind in ['everything', 'Zooms', None]:
+            bad = deepcopy(summary)
+            bad['response']['value']['rows'][0]['kind'] = kind
+            self.invalid(bad)
+        leaked = deepcopy(summary)
+        leaked['response']['value']['rows'][0]['path'] = 'C:/private/source.mkv'
+        self.invalid(leaked)
+        bad_payload = deepcopy(summary)
+        bad_payload['payload']['path'] = 'C:/private/source.mkv'
+        self.invalid(bad_payload)
+        put_back = deepcopy(summary)
+        put_back['response']['value']['putBack'] = {'kind': 'zooms', 'label': '5 zooms removed'}
+        self.valid(put_back)
+        undo = {
+            'channel': 'edit-summary:undo',
+            'payload': {'schema_version': '1.0', 'project_id': summary['payload']['project_id'], 'kind': 'zooms'},
+            'response': {'ok': False, 'message': 'That change is already gone.'},
+        }
+        self.valid(undo)
+        undo['payload']['kind'] = 'all'
+        self.invalid(undo)
+        put = {
+            'channel': 'edit-summary:put-back',
+            'payload': {'schema_version': '1.0', 'project_id': summary['payload']['project_id']},
+            'response': {'ok': False, 'message': 'The edit changed. Try again.'},
+        }
+        self.valid(put)
+        put['payload']['kind'] = 'zooms'
+        self.invalid(put)
+
+    def test_draft_integrity_channel_returns_only_a_path_free_draft_head(self):
         integrity = json.loads(
             (ROOT / 'docs/examples/desktop_ipc_integrity_check.example.json').read_text(encoding='utf-8')
         )

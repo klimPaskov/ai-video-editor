@@ -37,6 +37,7 @@ import {
   sha256,
 } from "../../packages/media-engine/src/lossless.ts";
 import type { DraftTransactionRecord } from "../../packages/domain/src/draft-transaction.ts";
+import { openFullEditor } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
@@ -319,7 +320,7 @@ try {
   const baselineBytes = await readFile(join(projectFolder, "baseline.json"));
 
   step = "default-drawer";
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Claude", exact: true }).click();
   await expect(

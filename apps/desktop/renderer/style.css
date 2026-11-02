@@ -2726,37 +2726,85 @@ header nav .icon-button:hover:not(:disabled) {
   background: var(--accent);
 }
 
-/* The project page: steps, one card for the picture, the step's action below */
+/* The project page (ADR 0031): one scale, one card style, one action bar.
+   The page scrolls on its own beside the docked assistant. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --radius-control: 12px;
+  --radius-card: 20px;
+  --text-title: 28px;
+  --text-body: 15px;
+  --text-small: 13px;
+  --action-bar-space: 0px;
+}
+main:has(#viewer:not([hidden])) {
+  overflow: hidden;
+}
 #viewer {
-  flex: 1 0 auto;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+.project-page {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0 var(--space-6);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  container-name: page;
+  container-type: inline-size;
+}
+.project-page > #project-navigation,
+.project-page > .stage-card,
+.project-page > .action-bar {
   width: 100%;
   max-width: 1180px;
-  margin: 0 auto;
-  padding: 0 40px 40px;
-  gap: 28px;
+  margin-inline: auto;
+  flex: none;
 }
+.project-page > .stage-card {
+  flex: 1 0 auto;
+}
+.stage-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Steps: a circle and its name, joined by a line. */
 #project-navigation {
-  width: 100%;
-  max-width: 780px;
-  margin: 0 auto;
+  padding-top: var(--space-1);
 }
 .stepper {
   display: flex;
-  width: 100%;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 0;
 }
 .stepper button,
 .stepper button:hover:not(:disabled) {
   position: relative;
-  flex: 1 1 0;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
+  flex: 0 1 auto;
+  flex-direction: row;
+  gap: var(--space-2);
   min-height: 0;
   padding: 0;
   color: var(--text-3);
-  font-size: 16px;
+  font-size: var(--text-body);
   font-weight: 400;
   background: transparent;
   border: 0;
@@ -2767,18 +2815,19 @@ header nav .icon-button:hover:not(:disabled) {
 }
 .stepper button:not(:last-child)::after {
   content: "";
-  position: absolute;
-  top: 20px;
-  left: calc(50% + 30px);
-  right: calc(-50% + 30px);
+  width: clamp(24px, 6vw, 88px);
   height: 1.5px;
+  margin: 0 var(--space-3);
   background: var(--border-strong);
 }
 .stepper .step-number {
-  width: 40px;
-  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
   color: var(--text-2);
-  font-size: 16px;
+  font-size: var(--text-body);
+  line-height: 1;
   background: var(--surface);
   border: 1.5px solid var(--border-strong);
   border-radius: 50%;
@@ -2788,13 +2837,12 @@ header nav .icon-button:hover:not(:disabled) {
 }
 .stepper button.done .step-number {
   color: var(--accent-text);
-  background: var(--surface);
   border-color: var(--accent);
 }
 .stepper [aria-current="step"],
 .stepper [aria-current="step"]:hover:not(:disabled) {
   color: var(--text);
-  font-weight: 700;
+  font-weight: 600;
   background: transparent;
 }
 .stepper [aria-current="step"] .step-number {
@@ -2802,45 +2850,52 @@ header nav .icon-button:hover:not(:disabled) {
   background: var(--accent);
   border-color: var(--accent);
 }
-.stage-card {
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-}
+
+/* The card holding the picture, its controls and (in Refine) the tools. */
 .stage-media {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-4);
   background: var(--surface);
-  border-radius: 24px;
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow);
 }
 .workspace {
   flex: none;
-  height: clamp(200px, 44vh, 600px);
-  min-height: 0;
-  gap: 16px;
+  width: 100%;
+  height: auto;
+  aspect-ratio: var(--video-aspect, 1.7778);
+  min-height: 200px;
+  max-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  container-type: size;
+  gap: 0;
 }
 .preview {
+  flex: none;
+  width: min(100cqw, 100cqh * var(--video-aspect, 1.7778));
+  aspect-ratio: var(--video-aspect, 1.7778);
   background: #000;
   border: 0;
   border-radius: 16px;
   box-shadow: none;
 }
-#inspector,
-#codex-drawer {
-  box-shadow: none;
-  background: var(--surface-2);
-  border: 0;
-  border-radius: 16px;
+.preview:fullscreen {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
 }
 #frame-controls {
   max-height: none;
-  gap: 12px;
+  gap: var(--space-2);
 }
 .player-bar {
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -2858,18 +2913,40 @@ header nav .icon-button:hover:not(:disabled) {
   height: 56px;
   background: var(--surface-2);
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-control);
   box-shadow: none;
 }
 .timeline-clips {
   inset: 6px;
-  border-radius: 10px;
+  border-radius: 8px;
+}
+/* The playhead is easy to find on any picture: an accent line with a ring. */
+.timeline-playhead {
+  width: 3px;
+  margin-left: -1.5px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1.5px #fff;
+  border-radius: 2px;
+  z-index: 2;
+}
+.timeline-playhead::before {
+  top: -2px;
+  left: -5px;
+  width: 13px;
+  height: 13px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--accent);
+  box-sizing: border-box;
+}
+.timeline-pins {
+  display: none;
 }
 .source-row {
   display: none;
   align-items: center;
-  gap: 12px;
-  padding-top: 4px;
+  gap: var(--space-3);
+  padding-top: var(--space-1);
 }
 #viewer[data-stage="record_import"] .source-row {
   display: flex;
@@ -2882,17 +2959,17 @@ header nav .icon-button:hover:not(:disabled) {
   place-items: center;
   color: var(--accent);
   background: var(--accent-soft);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
 }
 #source-name {
   max-width: 50%;
-  font-size: 16px;
+  font-size: var(--text-body);
   font-weight: 500;
 }
 .chip {
-  padding: 4px 12px;
+  padding: var(--space-1) var(--space-3);
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
   background: var(--surface-3);
   border-radius: 999px;
 }
@@ -2904,12 +2981,17 @@ header nav .icon-button:hover:not(:disabled) {
 }
 button.outline {
   min-height: 44px;
-  padding: 0 20px;
+  padding: 0 var(--space-5);
   font-weight: 500;
-  background: var(--surface);
+  background: transparent;
   border: 1.5px solid var(--border-strong);
   border-radius: 999px;
 }
+button.outline:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+
+/* The step's panels. */
 .stage-panel {
   align-items: center;
   overflow: visible;
@@ -2926,41 +3008,40 @@ button.outline {
   box-shadow: none;
 }
 .transcript-edit-panel,
-.export-actions {
+.export-actions,
+.clips-actions {
   border: 0;
-  border-radius: 20px;
+  border-radius: var(--radius-card);
 }
-.next-step,
 .auto-all {
   align-items: center;
   justify-content: center;
 }
-#auto-all-start,
-#next-step-button {
+#auto-all-start {
   min-width: 280px;
 }
 .edit-actions {
   width: auto;
   max-width: 100%;
-  padding: 10px 18px;
+  padding: var(--space-2) var(--space-4);
   align-self: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--space-1);
   background: var(--surface);
   border: 0;
-  border-radius: 24px;
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow);
 }
 .edit-actions > .tool {
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
   min-width: 88px;
   min-height: 72px;
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--text-body);
   background: transparent;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-control);
 }
 .edit-actions > .tool:hover:not(:disabled) {
   background: var(--surface-3);
@@ -2969,11 +3050,356 @@ button.outline {
   width: 24px;
   height: 24px;
 }
+
+/* Refine: one big picture, the list of what the AI did, six simple tools. */
+#viewer[data-stage="edit"][data-editor="simple"] .stage-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-rows: auto;
+  gap: var(--space-4);
+  align-items: stretch;
+}
+#viewer[data-stage="edit"][data-editor="simple"] .workspace {
+  flex: 1 1 auto;
+  aspect-ratio: auto;
+  min-height: 220px;
+  max-height: none;
+}
+#viewer[data-stage="edit"][data-editor="simple"] .stage-panel {
+  align-items: stretch;
+}
+#viewer[data-editor="simple"] .edit-actions,
+#viewer[data-editor="simple"] .transcript-edit-panel {
+  display: none;
+}
+#viewer[data-editor="simple"] .timeline-pins {
+  position: relative;
+  display: block;
+  height: 26px;
+}
+#viewer[data-editor="simple"] .timeline-zooms,
+#viewer[data-editor="simple"] .timeline-graphics {
+  display: none;
+}
+.timeline-pin {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  display: block;
+  height: 26px;
+  pointer-events: none;
+  --pin: var(--accent);
+}
+.timeline-pin[data-kind="graphic"] {
+  --pin: #0e9aa7;
+}
+.timeline-pin[data-kind="caption"] {
+  --pin: #7c3aed;
+}
+.timeline-pin::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 7px;
+  width: 9px;
+  height: 9px;
+  background: var(--pin);
+  border-radius: 50%;
+}
+.timeline-pin::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 16px;
+  width: 2px;
+  height: 72px;
+  background: var(--pin);
+  opacity: 0.85;
+}
+.timeline-pin-label {
+  position: absolute;
+  left: 8px;
+  top: 0;
+  padding: 1px var(--space-2);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  background: var(--surface);
+  border-radius: var(--space-2);
+  box-shadow: var(--shadow);
+}
+.timeline-pin-label:empty {
+  display: none;
+}
+
+.refine-tools {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: var(--space-1);
+  padding-top: var(--space-2);
+}
+.rtool-slot {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  justify-content: center;
+}
+.rtool-slot + .rtool-slot::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 1px;
+  background: var(--border);
+}
+button.rtool {
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  padding: var(--space-2);
+  color: var(--text);
+  font-size: var(--text-small);
+  font-weight: 500;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+}
+button.rtool .icon {
+  width: 24px;
+  height: 24px;
+}
+button.rtool:hover:not(:disabled),
+button.rtool[aria-expanded="true"] {
+  background: var(--surface-3);
+}
+/* A tool that cannot act now stays readable and explains itself on hover. */
+button.rtool.unavailable {
+  color: var(--text-3);
+  cursor: help;
+}
+button.rtool.unavailable:hover {
+  background: transparent;
+}
+.tool-pop {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 50%;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: max-content;
+  min-width: 220px;
+  max-width: min(360px, 90vw);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-50%);
+}
+.rtool-slot:first-child .tool-pop {
+  left: 0;
+  transform: none;
+}
+.rtool-slot:last-child .tool-pop {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+.tool-pop .captions-card {
+  padding: 0;
+  border: 0;
+}
+.tool-pop .captions-controls {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+.tool-pop .captions-controls select {
+  width: 100%;
+}
+.tool-pop > button {
+  justify-content: flex-start;
+  background: transparent;
+  border-color: transparent;
+}
+.tool-pop > button:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+
+.did-card {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-5);
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+.did-card > h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+.did-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.did-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+.did-row + .did-row {
+  border-top: 1px solid var(--border);
+}
+.did-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-radius: var(--radius-control);
+}
+.did-icon .icon {
+  width: 22px;
+  height: 22px;
+}
+.did-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-body);
+}
+.did-undone .did-label {
+  color: var(--text-2);
+}
+.did-action {
+  flex: none;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+.did-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.did-history .ghost {
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  font-size: var(--text-small);
+}
+
+/* The action bar: the step's one way forward, always in view. */
+.action-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: auto;
+  padding: var(--space-3) 0 var(--space-4);
+  background: linear-gradient(to top, var(--bg) 72%, transparent);
+}
+.action-spacer {
+  flex: 1 1 auto;
+}
+.next-step {
+  display: flex;
+  justify-content: flex-end;
+}
+#next-step-button {
+  min-width: 200px;
+}
+#next-step-button::after {
+  content: "\2192";
+  font-size: 1.15em;
+  line-height: 1;
+}
+#next-step-button:empty::after {
+  content: none;
+}
+
+/* The complete editor: the whole window, with Done to go back to Refine. */
+.full-editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 0;
+}
+.full-editor-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+#viewer[data-editor="full"] {
+  position: fixed;
+  inset: var(--header-height, 72px) 0 0;
+  z-index: 12;
+  background: var(--bg);
+}
+#viewer[data-editor="full"] .project-page {
+  padding: 0 var(--space-5) var(--space-4);
+  overflow: hidden;
+}
+#viewer[data-editor="full"] .full-editor-bar,
+#viewer[data-editor="full"] .stage-card {
+  width: 100%;
+  max-width: none;
+}
+#viewer[data-editor="full"] .stage-card {
+  flex: 1 1 0;
+  min-height: 0;
+  gap: var(--space-3);
+}
+#viewer[data-editor="full"] .stage-media {
+  flex: 1 1 0;
+  padding: var(--space-3);
+}
+#viewer[data-editor="full"] .workspace {
+  flex: 1 1 0;
+  aspect-ratio: auto;
+  min-height: 120px;
+  max-height: none;
+}
+#viewer[data-editor="full"] .stage-panel {
+  flex: none;
+  max-height: 42%;
+  overflow-y: auto;
+}
+#viewer[data-editor="full"] .stage-panel > * {
+  max-width: none;
+}
+#viewer[data-editor="full"] .edit-actions {
+  width: 100%;
+  align-self: stretch;
+  justify-content: flex-start;
+}
+
+/* Export: the card on the left and the step's choices beside it. */
 #viewer[data-stage="export"] .stage-card {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
   align-items: start;
-  gap: 24px;
+  gap: var(--space-5);
 }
 #viewer[data-stage="export"] .stage-panel {
   align-items: stretch;
@@ -3083,118 +3509,230 @@ dialog {
 
 @media (min-width: 821px) and (min-height: 561px) {
   /* The Cinematic layout: the video fills the window and the controls float
-   over it as frosted glass. A custom theme can use it with any colours. */
+     over it as frosted glass. A custom theme can use it with any colours.
+     The complete editor (data-editor="full") keeps the classic layout. */
   html[data-layout="cinematic"] header {
     position: fixed;
     inset: 0 0 auto;
     z-index: 8;
   }
-  html[data-layout="cinematic"] main:has(#viewer:not([hidden])) {
-    overflow: hidden;
-  }
-  html[data-layout="cinematic"] #viewer {
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) {
     position: fixed;
     inset: 0;
     z-index: 1;
-    max-width: none;
+    display: block;
     padding: 0;
     gap: 0;
   }
-  html[data-layout="cinematic"] #project-navigation {
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .project-page {
+    display: contents;
+  }
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    #project-navigation {
     position: absolute;
     top: 72px;
     left: 50%;
     z-index: 7;
-    width: min(640px, calc(100% - 32px));
-    padding: 12px 16px 10px;
+    width: min(720px, calc(100% - 32px));
+    max-width: none;
+    margin: 0;
+    padding: var(--space-3) var(--space-4) 10px;
     transform: translateX(-50%);
     background: var(--glass);
     backdrop-filter: blur(18px);
     border: 1px solid var(--border);
     border-radius: 24px;
   }
-  /* The controls float over the video, below the step bar. A tall step (the
-     timeline and every tool in a short window) scrolls inside this area instead
-     of growing upward over the step bar, which would cover it. */
-  html[data-layout="cinematic"] .stage-card {
+  /* The controls float over the video, below the step bar. A tall step
+     scrolls inside this area instead of growing upward over the step bar. */
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) .stage-card {
     position: absolute;
     inset: 184px 0 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 0 0 20px;
+    gap: var(--space-2);
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0 0 96px;
     overflow-y: auto;
     overscroll-behavior: contain;
     pointer-events: none;
   }
-  html[data-layout="cinematic"] .stage-card::before {
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .stage-card::before {
     content: "";
     flex: 1 1 0;
     min-height: 0;
   }
-  html[data-layout="cinematic"] .stage-card > *,
-  html[data-layout="cinematic"] .stage-media > * {
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .stage-card
+    > *,
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .stage-media
+    > * {
     flex-shrink: 0;
   }
-  html[data-layout="cinematic"] #frame-controls {
-    flex: none;
-    max-height: none;
-  }
-  html[data-layout="cinematic"] .stage-media {
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) .stage-media {
     display: contents;
   }
-  html[data-layout="cinematic"] #viewer .workspace,
-  html[data-layout="cinematic"] .workspace {
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) .workspace {
     position: fixed;
     inset: 0;
-    height: auto;
-    gap: 0;
+    width: auto;
+    max-height: none;
+    aspect-ratio: auto;
     pointer-events: auto;
   }
-  html[data-layout="cinematic"] .preview {
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) .preview {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
     border-radius: 0;
   }
-  html[data-layout="cinematic"] #inspector,
-  html[data-layout="cinematic"] #codex-drawer {
-    position: relative;
-    z-index: 6;
-    margin: 184px 16px 20px 0;
-    background: var(--glass);
-    backdrop-filter: blur(18px);
-  }
-  html[data-layout="cinematic"] #frame-controls,
-  html[data-layout="cinematic"] .stage-panel,
-  html[data-layout="cinematic"] .source-row {
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    #frame-controls,
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) .stage-panel,
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) .source-row,
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .refine-tools {
     position: relative;
     z-index: 7;
+    flex: none;
     width: min(940px, calc(100% - 40px));
+    max-height: none;
     margin: 0 auto;
-    padding: 12px;
+    padding: var(--space-3);
     pointer-events: auto;
     background: var(--glass);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border);
-    border-radius: 20px;
+    border-radius: var(--radius-card);
     box-shadow: var(--shadow-lg);
   }
-  html[data-layout="cinematic"] .stage-panel {
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) .stage-panel {
     max-height: 45vh;
     overflow-y: auto;
   }
-  html[data-layout="cinematic"] .stage-panel:not(:has(> :not([hidden]))) {
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .stage-panel:not(:has(> :not([hidden]))) {
     display: none;
   }
-  html[data-layout="cinematic"] .edit-actions,
-  html[data-layout="cinematic"] .export-actions,
-  html[data-layout="cinematic"] .transcript-edit-panel {
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .export-actions,
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .clips-actions,
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .transcript-edit-panel {
+    padding: 0;
     background: transparent;
+    border: 0;
     box-shadow: none;
   }
-  html[data-layout="cinematic"] .transcript-edit-panel {
-    padding: 0;
-    border: 0;
+  /* Refine: the player, the timeline and the tools are one glass panel. */
+  html[data-layout="cinematic"]
+    #viewer[data-stage="edit"]:not([data-editor="full"])
+    #frame-controls {
+    border-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    box-shadow: none;
   }
-  /* The floating controls leave room for an open side panel. */
+  html[data-layout="cinematic"]
+    #viewer[data-stage="edit"]:not([data-editor="full"])
+    .refine-tools {
+    margin-top: -8px;
+    padding-top: 0;
+    border-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+  html[data-layout="cinematic"]
+    #viewer[data-stage="edit"]:not([data-editor="full"])
+    .stage-panel {
+    position: static;
+    width: auto;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    background: none;
+    border: 0;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  html[data-layout="cinematic"]
+    #viewer[data-stage="edit"]:not([data-editor="full"])
+    .did-card {
+    position: fixed;
+    top: 184px;
+    right: var(--space-4);
+    z-index: 7;
+    width: 340px;
+    max-height: calc(100vh - 184px - 140px);
+    pointer-events: auto;
+    background: var(--glass);
+    backdrop-filter: blur(18px);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+  }
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) .action-bar {
+    position: fixed;
+    right: 40px;
+    bottom: var(--space-4);
+    left: 40px;
+    z-index: 8;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    background: none;
+    pointer-events: none;
+  }
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .action-bar
+    > * {
+    pointer-events: auto;
+  }
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .action-bar
+    .outline {
+    background: var(--glass);
+    backdrop-filter: blur(12px);
+  }
+  /* The drawers float too, and the controls leave room for an open one. */
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) #inspector,
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    #codex-drawer {
+    position: fixed;
+    top: 184px;
+    right: var(--space-4);
+    bottom: var(--space-5);
+    z-index: 9;
+    width: 380px;
+    margin: 0;
+    background: var(--glass);
+    backdrop-filter: blur(18px);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+  }
+  html[data-layout="cinematic"] #viewer:not([data-editor="full"]) #inspector {
+    width: 320px;
+  }
   html[data-layout="cinematic"]
     #viewer:has(#codex-drawer:not([hidden]))
     .stage-card {
@@ -3203,9 +3741,11 @@ dialog {
   html[data-layout="cinematic"]
     #viewer:has(#inspector:not([hidden]))
     .stage-card {
-    padding-right: 320px;
+    padding-right: 360px;
   }
-  html[data-layout="cinematic"] #viewer[data-stage="export"] .stage-card {
+  html[data-layout="cinematic"]
+    #viewer[data-stage="export"]:not([data-editor="full"])
+    .stage-card {
     display: flex;
   }
   /* The viewer covers the window, so messages that normally sit in the page
@@ -3223,36 +3763,14 @@ dialog {
   }
 }
 
+/* Details shared by the steps */
 .theme-name {
   font-size: 11.5px;
   line-height: 1.2;
   white-space: normal;
 }
-
-/* Reference details */
-.stepper .step-number {
-  display: inline-grid;
-  place-items: center;
-  line-height: 1;
-}
 body:has(#home:not([hidden])) #source-details {
   display: none;
-}
-#viewer[data-stage="record_import"] #timeline-strip,
-#viewer[data-stage="auto_edit"] #timeline-strip {
-  display: none;
-}
-#viewer[data-stage="edit"] .workspace {
-  height: clamp(180px, 36vh, 560px);
-}
-#viewer {
-  gap: 20px;
-}
-.stage-card {
-  gap: 20px;
-}
-#viewer[data-stage="edit"] .workspace {
-  height: clamp(170px, 32vh, 520px);
 }
 .auto-edit-actions > details.more > summary {
   justify-content: center;
@@ -3263,109 +3781,61 @@ body:has(#home:not([hidden])) #source-details {
 }
 @media (max-width: 760px) {
   header {
-    padding: 0 16px;
+    padding: 0 var(--space-4);
   }
   .brand-name {
     display: none;
   }
 }
 
-/* The assistant and the source details: a tall side panel, the page makes room */
-html:not([data-layout="cinematic"]) #codex-drawer,
-html:not([data-layout="cinematic"]) #inspector {
-  position: fixed;
-  top: calc(var(--header-height, 72px) + 12px);
-  right: 20px;
-  bottom: 20px;
-  z-index: 20;
+/* The assistant and the source details dock beside the page: the page makes
+   room and scrolls on its own, so every step stays fully visible. */
+#inspector,
+#codex-drawer {
+  flex: none;
+  align-self: stretch;
   width: 380px;
   min-width: 0;
-  margin: 0;
+  margin: 0 var(--space-4) var(--space-4) 0;
   background: var(--surface);
-  border-radius: 20px;
-  box-shadow: var(--shadow-lg);
+  border: 0;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
 }
-html:not([data-layout="cinematic"]) #inspector {
+#inspector {
   width: 320px;
 }
-html:not([data-layout="cinematic"]) #viewer:has(#codex-drawer:not([hidden])) {
-  padding-right: 440px;
-}
-html:not([data-layout="cinematic"]) #viewer:has(#inspector:not([hidden])) {
-  padding-right: 380px;
-}
-@media (max-width: 900px) {
-  html:not([data-layout="cinematic"]) #codex-drawer,
-  html:not([data-layout="cinematic"]) #inspector {
-    left: 16px;
-    width: auto;
-  }
-  html:not([data-layout="cinematic"])
-    #viewer:has(#codex-drawer:not([hidden]), #inspector:not([hidden]))
-    > :not(aside):not(.stage-card),
-  html:not([data-layout="cinematic"])
-    #viewer:has(#codex-drawer:not([hidden]), #inspector:not([hidden]))
-    .stage-card {
-    visibility: hidden;
-  }
-  html:not([data-layout="cinematic"])
-    #viewer:has(#codex-drawer:not([hidden]), #inspector:not([hidden])) {
-    padding-right: 40px;
-  }
-}
 
-/* The Export step's two columns stack once there is not room for both. */
-@media (max-width: 900px) {
+/* Beside the page there is not room for two columns of cards. */
+@container page (max-width: 860px) {
+  #viewer[data-stage="edit"][data-editor="simple"] .stage-card,
   #viewer[data-stage="export"] .stage-card {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-/* Cinematic below its own minimum window size uses the classic side panels. */
-@media (max-width: 820px), (max-height: 560px) {
-  html[data-layout="cinematic"] #codex-drawer,
-  html[data-layout="cinematic"] #inspector {
+/* Narrow windows: the panel slides over the page from the right. It ends above
+   the action bar, so the step's way forward is never covered, and it has its
+   own close button. */
+@media (max-width: 1099px) {
+  #inspector,
+  #codex-drawer {
     position: fixed;
-    top: calc(var(--header-height, 72px) + 12px);
-    right: 20px;
-    bottom: 20px;
+    top: var(--header-height, 72px);
+    right: 0;
+    bottom: var(--action-bar-space, 0px);
     z-index: 20;
-    width: 380px;
-    min-width: 0;
+    width: min(380px, calc(100vw - 56px));
     margin: 0;
-    background: var(--surface);
-    border-radius: 20px;
+    border-radius: var(--radius-card) 0 0 var(--radius-card);
     box-shadow: var(--shadow-lg);
   }
-  html[data-layout="cinematic"] #inspector {
-    width: 320px;
-  }
-  html[data-layout="cinematic"] #viewer:has(#codex-drawer:not([hidden])) {
-    padding-right: 440px;
-  }
-  html[data-layout="cinematic"] #viewer:has(#inspector:not([hidden])) {
-    padding-right: 380px;
+  #inspector {
+    width: min(320px, calc(100vw - 56px));
   }
 }
-@media (max-width: 820px) {
-  html[data-layout="cinematic"] #codex-drawer,
-  html[data-layout="cinematic"] #inspector {
-    left: 16px;
-    width: auto;
-  }
-  html[data-layout="cinematic"]
-    #viewer:has(#codex-drawer:not([hidden]), #inspector:not([hidden]))
-    > :not(aside):not(.stage-card),
-  html[data-layout="cinematic"]
-    #viewer:has(#codex-drawer:not([hidden]), #inspector:not([hidden]))
-    .stage-card {
-    visibility: hidden;
-  }
-  html[data-layout="cinematic"]
-    #viewer:has(#codex-drawer:not([hidden]), #inspector:not([hidden])) {
-    padding-right: 40px;
-  }
-}
+
+/* Cinematic below its own minimum window size uses the classic layout. */
 
 /* Refinements (2026-11-01): one set of sizes, radii and alignments. */
 
@@ -3547,4 +4017,49 @@ img.mark {
 }
 img.mark::after {
   display: none;
+}
+
+/* Refine is tight on height: the picture gets what the controls leave. */
+#viewer[data-stage="edit"][data-editor="simple"] .stage-media {
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-2);
+}
+#viewer[data-stage="edit"][data-editor="simple"] .timeline-track {
+  height: 44px;
+}
+#viewer[data-stage="edit"][data-editor="simple"] .timeline-pins {
+  height: 24px;
+}
+#viewer[data-stage="edit"][data-editor="simple"] .timeline-pin::after {
+  height: 62px;
+}
+#viewer[data-stage="edit"][data-editor="simple"] .timeline-summary {
+  display: none;
+}
+#viewer[data-stage="edit"][data-editor="simple"] button.rtool {
+  min-height: 56px;
+  padding: var(--space-1);
+}
+#viewer[data-stage="edit"][data-editor="simple"] .refine-tools {
+  padding-top: 0;
+}
+.stepper button:not(:last-child)::after {
+  width: clamp(12px, 4cqw, 72px);
+}
+.action-bar .outline {
+  background: var(--surface);
+}
+#viewer[data-stage="record_import"] #timeline-strip,
+#viewer[data-stage="auto_edit"] #timeline-strip {
+  display: none;
+}
+@container page (max-width: 760px) {
+  .stepper button:not([aria-current="step"]) .step-text {
+    display: none;
+  }
+}
+@container page (max-width: 860px) {
+  #viewer[data-stage="edit"][data-editor="simple"] .stage-card {
+    grid-template-rows: minmax(320px, 1fr) auto;
+  }
 }

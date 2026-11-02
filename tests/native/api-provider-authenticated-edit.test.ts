@@ -19,6 +19,7 @@ import {
   sha256,
 } from "../../packages/media-engine/src/lossless.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
+import { openFullEditor } from "./disclosures.ts";
 
 assert.equal(process.platform, "linux");
 assert.equal(process.getuid?.(), 1000);
@@ -507,7 +508,7 @@ try {
   assert.ok(!conversation.includes(key));
 
   step = "shared-manual-undo";
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#undo-edit")).toBeVisible();
   await page.locator("#undo-edit").click();
   await expect

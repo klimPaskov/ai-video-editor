@@ -28,6 +28,11 @@ import {
   assertTranscriptionProjectView,
   assertTranscriptionStopRequest,
 } from "../../../packages/domain/src/transcription.ts";
+import {
+  assertEditSummaryProjectRequest,
+  assertEditSummaryUndoRequest,
+  assertEditSummaryView,
+} from "../../../packages/domain/src/edit-summary.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import {
   assertMagicWandProjectRequest,
@@ -587,6 +592,18 @@ const bridge: DesktopBridge = {
       request,
       assertProjectDraftIntegrityView,
     );
+  },
+  getEditSummary: (request) => {
+    assertEditSummaryProjectRequest(request);
+    return invoke(channels.editSummaryGet, request, assertEditSummaryView);
+  },
+  undoEditSummary: (request) => {
+    assertEditSummaryUndoRequest(request);
+    return invoke(channels.editSummaryUndo, request, assertProjectDraftView);
+  },
+  putBackEditSummary: (request) => {
+    assertEditSummaryProjectRequest(request);
+    return invoke(channels.editSummaryPutBack, request, assertProjectDraftView);
   },
   readProjectFrame: (request) => {
     assertProjectFrameRequest(request);

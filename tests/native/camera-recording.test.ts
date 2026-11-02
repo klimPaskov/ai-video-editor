@@ -13,7 +13,7 @@ import { mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
-import { openDisclosures } from "./disclosures.ts";
+import { openDisclosures, openFullEditor } from "./disclosures.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
 
 await assertNativeTestEnvironment();
@@ -127,7 +127,7 @@ try {
   result.frames = counts[0];
 
   step = "tools";
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await openDisclosures(page);
   await expect(page.locator("#camera-status")).toHaveText("Camera in sync");
   await expect(page.locator("#camera-add")).toBeHidden();

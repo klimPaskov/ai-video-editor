@@ -1,0 +1,22 @@
+{
+  "channel": "edit-summary:get",
+  "payload": {
+    "schema_version": "1.0",
+    "project_id": "ec68bd7a-79eb-4a96-9475-4db15df75d3a"
+  },
+  "response": {
+    "ok": true,
+    "value": {
+      "projectId": "ec68bd7a-79eb-4a96-9475-4db15df75d3a",
+      "draftSequence": 9,
+      "rows": [
+        { "kind": "cuts", "label": "Cut 14 parts", "count": 14 },
+        { "kind": "zooms", "label": "5 zooms", "count": 5 },
+        { "kind": "graphics", "label": "3 graphics", "count": 3 },
+        { "kind": "captions", "label": "Captions on", "count": 1 },
+        { "kind": "music", "label": "Music added", "count": 1 }
+      ],
+      "putBack": null
+    }
+  }
+}

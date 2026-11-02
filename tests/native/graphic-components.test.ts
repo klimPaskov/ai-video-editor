@@ -18,6 +18,7 @@ import {
   type GraphicComponentKind,
   type GraphicComponentParams,
 } from "../../packages/domain/src/graphic-components.ts";
+import { openFullEditor, openStep } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 const expect = baseExpect.configure({ timeout: 30_000 });
@@ -156,7 +157,7 @@ try {
   step = "import";
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
 
   step = "add";
@@ -188,7 +189,7 @@ try {
   await expect(page.locator(".timeline-graphic")).toHaveCount(items.length);
 
   step = "export";
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await openStep(page, "Export");
   await expect(page.locator("#export-actions")).toBeVisible();
   await page.locator("#export-start").click();
   await expect(page.locator("#export-done")).toBeVisible({ timeout: 900_000 });

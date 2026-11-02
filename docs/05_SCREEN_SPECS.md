@@ -114,6 +114,16 @@ Magic Edit step (2026-10-18, ADR 0020): a preset menu (Natural, Balanced, Tight)
 
 ## S08: editor (Refine stage)
 
+### Refine (ADR 0031, 2026-11-02)
+
+Refine is one simple screen. The video uses the available width in the video's own shape (no small box with black bars). Under it: the play bar (play, position, time, full screen) and a slim timeline strip with a clearly visible playhead (an accent line with a ring) and small pins for where a zoom, a graphic or the captions begin; a pin carries its label only where there is room to read it. A row of six simple tools follows: **Trim** (a small menu: cut everything before here, cut everything after here), **Split**, **Delete part** (the whole part under the playhead, as a range cut), **Captions**, **Music** and **Volume** (pop-overs holding the caption choices, the music and sound-effect controls and the loudness and noise choices). A tool that cannot act now (for example Split with the playhead on a cut) stays readable and explains why in a tooltip and a short notice when pressed. The tool row is never cut off at 800 px window height: the picture gives way first, and the page scrolls only below its smallest size.
+
+Beside the picture, **What Magic Edit did** lists plain one-line rows built from the draft's own transaction records (origin Claude, Codex, an API provider or Magic Edit; manual edits are never listed and only what is still in the draft is counted): Cut 14 parts, 5 zooms, 3 graphics, Captions on, Music added, sound effects, parts sped up, transitions, camera changes, Sound cleaned up. Each row has **Undo**. Draft transactions can be undone only newest first and an effect transaction holds one operation, so a single older item cannot be undone safely; Undo therefore removes the whole kind: main commits one ordinary manual transaction per item (restore the cut source part, remove the zoom, graphic, transition, camera change or sound, turn captions off, back to normal speed, put the sound settings back) in one pass group. They are normal journal entries; the shared Undo and Redo still work, and the row is replaced by "5 zooms removed" with **Put back**, which undoes exactly those entries while they are the newest change. Under the list, **Undo last change** and **Redo** use the shared history. IPC: `edit-summary:get`, `edit-summary:undo` (a kind), `edit-summary:put-back`.
+
+The action bar at the bottom of the page holds **Open full editor** (left) and **Continue** (right). The full editor is the complete editor described below (every tool, the transcript tools, Undo and Redo, restore) over the whole window with a **Done** button back to Refine; the step bar is hidden meanwhile.
+
+The audio, sound and caption cards that Magic Edit's More options used to hold are now Refine's Volume, Music and Captions tools.
+
 Visible:
 
 - large preview

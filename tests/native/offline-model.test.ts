@@ -18,6 +18,7 @@ import { join, resolve } from "node:path";
 import { _electron, expect as baseExpect } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
+import { openStep } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 const expect = baseExpect.configure({ timeout: 30_000 });
@@ -99,7 +100,7 @@ try {
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 120_000 });
   step = "transcribe-offline";
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openStep(page, "Magic Edit");
   await page.locator("#auto-edit-more > summary").click();
   await page.getByRole("button", { name: "Transcribe locally" }).click();
   await expect(page.locator("#transcription-error")).toBeVisible({

@@ -23,7 +23,7 @@ import {
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import { openDisclosures, openStep } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -200,7 +200,7 @@ try {
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
 
   step = "transcribe";
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openStep(page, "Magic Edit");
   await page
     .getByRole("button", { name: "Transcribe locally", exact: true })
     .click();
@@ -210,7 +210,7 @@ try {
   );
 
   step = "find";
-  await page.getByRole("button", { name: "Clips", exact: true }).click();
+  await openStep(page, "Clips");
   await expect(page.locator("#shorts-find")).toBeEnabled();
   await page.locator("#shorts-find").click();
   const items = page.locator("#shorts-list .short-item");

@@ -17,7 +17,7 @@ import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { chmod } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import { openDisclosures, openFullEditor, openStep } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -199,7 +199,7 @@ try {
     .toBe("signed_in");
 
   step = "magic-edit";
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openStep(page, "Magic Edit");
   await expect(page.locator("#magic-start")).toBeVisible();
   await expect(page.locator("#magic-preset")).toHaveValue("balanced");
   await page.locator("#magic-start").click();
@@ -323,7 +323,7 @@ try {
   };
 
   step = "undo";
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   const applied = magic.length + tightening.length;
   for (let index = 0; index < applied; index++) {
     await page.locator("#undo-edit").click();

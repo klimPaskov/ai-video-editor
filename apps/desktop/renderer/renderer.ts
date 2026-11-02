@@ -1,6 +1,7 @@
 import { setupCodexSettings } from "./codex-settings.ts";
 import { iconElement, setupIcons } from "./icons.ts";
 import { setupTimelineStrip } from "./timeline-strip.ts";
+import { setupDidList, setupToolPopovers } from "./refine.ts";
 import { setupCaptions } from "./captions-panel.ts";
 import { setupShortsPanel } from "./shorts-panel.ts";
 import { setupAudioPanel } from "./audio-panel.ts";
@@ -220,6 +221,8 @@ let loadingHome = 0;
 let navigating = false;
 let addingFootage = false;
 let manualEditPending = false;
+/** Refine's simple screen is showing, or the complete editor over it. */
+let fullEditor = false;
 let markHead: string | undefined;
 let markInUs: number | undefined;
 let markOutUs: number | undefined;
@@ -269,6 +272,23 @@ const stageLabels: Record<Exclude<ProjectStage, "done">, string> = {
 };
 type StepStage = keyof typeof stageLabels;
 const nextStepButton = element<HTMLButtonElement>("next-step-button");
+const actionBar = element("action-bar"),
+  actionSecondary = element<HTMLButtonElement>("action-secondary"),
+  fullEditorBar = element("full-editor-bar"),
+  fullEditorDone = element<HTMLButtonElement>("full-editor-done"),
+  refineTools = element("refine-tools"),
+  rtTrim = element<HTMLButtonElement>("rt-trim"),
+  rtTrimStart = element<HTMLButtonElement>("rt-trim-start"),
+  rtTrimEnd = element<HTMLButtonElement>("rt-trim-end"),
+  rtSplit = element<HTMLButtonElement>("rt-split"),
+  rtDelete = element<HTMLButtonElement>("rt-delete"),
+  rtCaptions = element<HTMLButtonElement>("rt-captions"),
+  rtMusic = element<HTMLButtonElement>("rt-music"),
+  rtVolume = element<HTMLButtonElement>("rt-volume"),
+  refineUndo = element<HTMLButtonElement>("refine-undo"),
+  refineRedo = element<HTMLButtonElement>("refine-redo");
+/** What the secondary button of the action bar does for the current step. */
+let secondaryAction: (() => void) | undefined;
 let nextStepTarget: ProjectStage | undefined;
 nextStepButton.addEventListener("click", () => {
   if (nextStepTarget) void navigate(nextStepTarget);
@@ -303,8 +323,12 @@ stageSelect.addEventListener("change", () => {
   void navigate(value);
 });
 function renderStage(): void {
+  if (activeProject?.stage !== "edit") fullEditor = false;
   viewer.dataset.stage = activeProject?.stage ?? "";
-  element("project-navigation").hidden = !activeProject;
+  viewer.dataset.editor =
+    activeProject?.stage === "edit" ? (fullEditor ? "full" : "simple") : "";
+  fullEditorBar.hidden = !fullEditor;
+  element("project-navigation").hidden = !activeProject || fullEditor;
   addFootageButton.hidden =
     !activeProject ||
     activeProject.stage !== "record_import" ||
@@ -339,11 +363,31 @@ function renderStage(): void {
   nextStepButton.textContent = forward?.[1] ?? "";
   nextStepButton.disabled = navigating;
   nextStepTarget = forward?.[0];
+  secondaryAction =
+    activeProject?.stage === "edit" && !fullEditor ? openFullEditor : undefined;
+  actionSecondary.hidden = !secondaryAction;
+  actionSecondary.textContent = secondaryAction ? "Open full editor" : "";
+  actionSecondary.disabled = navigating;
+  actionBar.hidden = fullEditor || !(forward || secondaryAction);
   renderEditTools();
   renderStagePanels();
   renderTranscriptionActions();
   renderTranscriptEditor();
 }
+function openFullEditor(): void {
+  if (activeProject?.stage !== "edit" || navigating) return;
+  popovers.closeAll();
+  fullEditor = true;
+  renderStage();
+  fullEditorDone.focus();
+}
+function closeFullEditor(): void {
+  fullEditor = false;
+  renderStage();
+  actionSecondary.focus();
+}
+actionSecondary.addEventListener("click", () => secondaryAction?.());
+fullEditorDone.addEventListener("click", closeFullEditor);
 function currentClip(): NonNullable<ProjectView["clips"]>[number] | undefined {
   if (!activeProject?.clips) return undefined;
   const position = Number(seek.value);
@@ -891,10 +935,7 @@ function transcriptCutRange(
 
 function renderTranscriptEditor(): void {
   const project = activeProject;
-  const visible =
-    project?.stage === "edit" &&
-    element("inspector").hidden &&
-    element("codex-drawer").hidden;
+  const visible = project?.stage === "edit" && fullEditor;
   transcriptEditPanel.hidden = !visible;
   const currentView =
     project && transcriptionView?.project_id === project.id
@@ -1305,7 +1346,10 @@ const timelineStrip = setupTimelineStrip({
   },
   time,
 });
-const captions = setupCaptions({ preview: canvas.parentElement! });
+const captions = setupCaptions({
+  preview: canvas.parentElement!,
+  changed: () => renderTimeline(),
+});
 const zoomPreview = setupZoomPreview(canvas.parentElement!);
 const graphicsPreview = setupGraphicsPreview(canvas.parentElement!);
 const cameraPreview = setupCameraPreview(canvas.parentElement!);
@@ -1345,6 +1389,7 @@ function renderTimeline(): void {
     zoomPreview.intervals(),
     graphicsPreview.intervals(),
     cameraPreview.intervals(),
+    captions.startUs(),
   );
   timelineStrip.playhead(Number(seek.value));
 }
@@ -1360,13 +1405,17 @@ function renderEditTools(): void {
   }
   if (!project || project.stage !== "edit" || !project.clips) {
     editActions.hidden = true;
+    refineTools.hidden = true;
+    didList.render(undefined, false);
+    popovers.closeAll();
     restoreRangeOpen = false;
     restoreHead = undefined;
     setZoomPicking(undefined);
     return;
   }
   populateRestoreSources(project);
-  editActions.hidden = false;
+  editActions.hidden = !fullEditor;
+  refineTools.hidden = fullEditor;
   editActions.setAttribute("aria-busy", String(manualEditPending));
   const clip = currentClip(),
     position = Number(seek.value),
@@ -1414,6 +1463,8 @@ function renderEditTools(): void {
   ]
     .filter(Boolean)
     .join(" · ");
+  renderRefineTools(project, clip, interior);
+  didList.render(project, !fullEditor);
   renderZoomTools(project, inUs, outUs);
   renderSpeedTools(project, inUs, outUs);
   transitionTools.render(project);
@@ -1479,6 +1530,81 @@ function renderEditTools(): void {
   restoreError.textContent = restoreRangeIssue ?? validationIssue ?? "";
   restoreError.hidden = !restoreRangeOpen || !restoreError.textContent;
 }
+/** A simple tool that cannot act now says why in plain words. */
+function setRefineTool(button: HTMLButtonElement, reason: string | null): void {
+  button.setAttribute("aria-disabled", String(reason !== null));
+  button.classList.toggle("unavailable", reason !== null);
+  if (reason !== null) button.title = reason;
+  else button.removeAttribute("title");
+}
+function renderRefineTools(
+  project: ProjectView,
+  clip: ReturnType<typeof currentClip>,
+  interior: boolean,
+): void {
+  const saving =
+    manualEditPending || navigating ? "Saving the last change." : null;
+  const place = "Move the playhead inside a part first.";
+  const trim = saving ?? (interior ? null : place);
+  setRefineTool(rtTrim, trim);
+  setRefineTool(rtSplit, saving ?? (interior ? null : place));
+  setRefineTool(
+    rtDelete,
+    saving ??
+      (!clip
+        ? "Move the playhead onto the part you want to delete."
+        : project.clips!.length < 2
+          ? "Split the video first, then delete the part you do not want."
+          : null),
+  );
+  rtTrimStart.disabled = trim !== null;
+  rtTrimEnd.disabled = trim !== null;
+  for (const button of [rtCaptions, rtMusic, rtVolume])
+    setRefineTool(button, navigating ? "Saving the last change." : null);
+  refineUndo.disabled =
+    !project.draft.undoTransactionId || manualEditPending || navigating;
+  refineRedo.disabled =
+    !project.draft.redoTransactionId || manualEditPending || navigating;
+}
+/** Runs a simple tool, or says why it cannot run now. */
+function refineTool(button: HTMLButtonElement, run: () => void): void {
+  button.addEventListener("click", () => {
+    if (button.getAttribute("aria-disabled") === "true") {
+      showToast(button.title);
+      return;
+    }
+    run();
+  });
+}
+const popovers = setupToolPopovers();
+refineTool(rtSplit, () => void submitManualSplit());
+refineTool(rtDelete, () => void submitDeletePart());
+rtTrimStart.addEventListener("click", () => {
+  popovers.closeAll();
+  void submitManualTrim("start");
+});
+rtTrimEnd.addEventListener("click", () => {
+  popovers.closeAll();
+  void submitManualTrim("end");
+});
+// A tool that is not available keeps its pop-over closed and says why.
+for (const tool of [rtTrim, rtCaptions, rtMusic, rtVolume])
+  tool.addEventListener(
+    "click",
+    (event) => {
+      if (tool.getAttribute("aria-disabled") !== "true") return;
+      event.stopImmediatePropagation();
+      showToast(tool.title);
+    },
+    true,
+  );
+refineUndo.addEventListener("click", () => void submitManualUndo());
+refineRedo.addEventListener("click", () => void submitManualRedo());
+const didList = setupDidList({
+  apply: (reply) => applyProjectDraft(reply),
+  busy: () => manualEditPending || navigating,
+  fail: (message) => showError(message),
+});
 async function navigate(stage: ProjectStage): Promise<void> {
   playback.stop();
   if (
@@ -1564,6 +1690,7 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
   transcriptCutMessage = null;
   transcriptCutPending = false;
   activeProject = project;
+  fullEditor = false;
   restoreSourceProjectId = undefined;
   restoreHead = undefined;
   restoreRangeOpen = false;
@@ -1948,6 +2075,11 @@ function select(media: MediaSummary): void {
   back.hidden = false;
   element("source-name").textContent = media.name;
   element("source-duration").textContent = shortClock(media.durationUs);
+  if (media.width > 0 && media.height > 0)
+    document.documentElement.style.setProperty(
+      "--video-aspect",
+      String(Number((media.width / media.height).toFixed(4))),
+    );
   element("preview-label").textContent = activeProject
     ? "Project preview"
     : "Frame preview";
@@ -2278,6 +2410,14 @@ if (applicationBar)
       `${applicationBar.offsetHeight}px`,
     ),
   ).observe(applicationBar);
+// A slide-over assistant stops above the action bar, so the step's way
+// forward is never covered.
+new ResizeObserver(() =>
+  document.documentElement.style.setProperty(
+    "--action-bar-space",
+    `${actionBar.hidden ? 0 : actionBar.offsetHeight}px`,
+  ),
+).observe(actionBar);
 element("fullscreen").addEventListener("click", () => {
   // The picture alone fills the screen; Esc leaves it.
   const picture = document.querySelector<HTMLElement>(".preview");
@@ -2476,6 +2616,27 @@ function markBoundary(edge: "in" | "out"): void {
   if (edge === "in") markInUs = position;
   else markOutUs = position;
   renderEditTools();
+}
+/** Refine's Delete part: the whole part under the playhead, as a range cut. */
+async function submitDeletePart(): Promise<void> {
+  const clip = currentClip();
+  if (!clip || !activeProject?.clips || activeProject.clips.length < 2) return;
+  const { timelineStartUs: startUs, timelineEndUs: endUs } = clip;
+  await runManualEdit(
+    (project) =>
+      window.desktop.applyManualRangeCut({
+        schema_version: "1.0",
+        projectId: project.id,
+        draftId: project.draft.id,
+        baseRevisionId: project.draft.baseRevisionId,
+        expectedSequence: project.draft.sequence,
+        expectedTimelineSha256: project.draft.timelineSha256,
+        startUs,
+        endUs,
+      }),
+    "The part could not be deleted. Try again.",
+    startUs,
+  );
 }
 async function submitManualRangeCut(): Promise<void> {
   const project = activeProject,
@@ -3921,8 +4082,9 @@ function editShortcut(event: KeyboardEvent): boolean {
           } as const
         )[key];
   if (!button) return false;
+  if (!fullEditor && !command && key !== "s") return false;
   event.preventDefault();
-  if (!button.disabled && !editActions.hidden) button.click();
+  if (!button.disabled && activeProject.clips) button.click();
   return true;
 }
 document.addEventListener("keydown", (event) => {

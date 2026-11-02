@@ -20,7 +20,12 @@ import { createReadStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
-import { openDisclosures } from "./disclosures.ts";
+import {
+  openDisclosures,
+  openFullEditor,
+  openStep,
+  openRefineTool,
+} from "./disclosures.ts";
 import type { ElectronApplication, Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { appIdentity } from "../../packages/domain/src/app-identity.ts";
@@ -205,7 +210,7 @@ try {
       { timeout: 120_000 },
     )
     .toBe("signed_in");
-  await page.getByRole("button", { name: "Magic Edit", exact: true }).click();
+  await openStep(page, "Magic Edit");
   await expect(page.locator("#magic-start")).toBeVisible();
   await expect(page.locator("#magic-preset")).toHaveValue("balanced");
   await page.locator("#magic-start").click();
@@ -252,6 +257,7 @@ try {
       .poll(sequence, { timeout: 300_000, intervals: [500, 1000, 2000] })
       .toBeGreaterThan(before);
   let captions = false;
+  await openRefineTool(page, "captions");
   if (await page.locator("#captions-enabled").isEnabled()) {
     let before = await sequence();
     await page.locator("#captions-enabled").check();
@@ -262,13 +268,14 @@ try {
     captions = true;
   }
   const beforeAudio = await sequence();
+  await openRefineTool(page, "volume");
   await page.locator("#audio-normalize").check();
   await saved(beforeAudio);
   current = await project(page);
   result.presentation = { captions, loudness: true };
 
   mark("manual-refinement");
-  await page.getByRole("button", { name: "Refine", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 300_000 });
   const beforeManual = (await project(page)).draft.sequence;
   // Split at the join between the recordings, then check shared Undo/Redo.
@@ -348,7 +355,7 @@ try {
     mark("export-master");
     const master = join(outputs, "User footage master.mkv");
     await dialogs(electron, master);
-    await page.getByRole("button", { name: "Export", exact: true }).click();
+    await openStep(page, "Export");
     await expect(page.locator("#export-profile")).toHaveValue(
       "lossless_master",
     );
