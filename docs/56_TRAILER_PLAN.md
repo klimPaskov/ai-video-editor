@@ -56,9 +56,8 @@ Problems found while using the app for the trailer are listed here and fixed in 
 | A video with irregular frame timing imported but could not become a project (vague error) | Import | Fixed: a difference under one frame is accepted (`92bab32`) |
 | Silent or oddly timed audio made Magic Edit fail | Magic Edit | Fixed (`e9a4b51`) |
 
-## Open for the owner
+## Decisions (owner, 2026-11-02)
 
-1. Approve the song once the shortlist is ready.
-2. Length: 85 seconds, or a 30-second cut as well for social media?
-3. Tagline preference.
-4. Anything else that must be in it (features to show, or to leave out).
+- **Everything is included:** recording (screen, microphone, camera), Import, Magic Edit, zooms and speed, graphics and captions, transitions, sound and music, camera layouts, the assistant chat that does things in the app, Refine with the simple tools and the full editor, Clips, Export (lossless master and smaller file), the Done screen, the five themes, and the choice of Claude, Codex or an API provider. The 85-second cut shows them in the story order above; nothing is dropped, some are shown briefly.
+- **A social media cut as well, made with the app:** a 30-second vertical (9:16) version produced by the app's own Clips step from the finished trailer, so the feature is shown by being used. A 30-second 16:9 version is cut the same way if wanted.
+- The music approval, the tagline and the cut are still the owner's to approve.
