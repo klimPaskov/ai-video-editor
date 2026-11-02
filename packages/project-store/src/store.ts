@@ -12,7 +12,10 @@ import {
 } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { mediaIdPattern } from "../../domain/src/library.ts";
-import { assertProjectName } from "../../domain/src/project-view.ts";
+import {
+  assertProjectName,
+  migrateProjectStage,
+} from "../../domain/src/project-view.ts";
 import {
   assertInitialProjectSnapshot,
   assertTwoSourceInitialProjectSnapshot,
@@ -173,6 +176,11 @@ export class ProjectStore {
     )
       invalid();
     const project = await json(join(folder, "project.json"));
+    // A project saved in the retired Review step opens in Refine (ADR 0031).
+    if (project && typeof project === "object" && !Array.isArray(project)) {
+      const saved = project as Record<string, unknown>;
+      saved.workflow_step = migrateProjectStage(saved.workflow_step);
+    }
     const combined: unknown = { ...baseline, project };
     assertBaseline(combined);
     // Only the stage, the name and the update time change after creation.

@@ -297,10 +297,12 @@ try {
   );
   await page.locator(`[data-project-id="${projectId}"]`).click();
   // At a large interface size the steps are a list, otherwise buttons.
-  const stepButton = page.getByRole("button", { name: "Review", exact: true });
+  const stepButton = page
+    .locator("#stage-buttons")
+    .getByRole("button", { name: "Export", exact: true });
   if (await stepButton.isVisible()) await stepButton.click();
-  else await page.locator("#stage-select").selectOption("review");
-  await expect(page.locator("#stage-select")).toHaveValue("review");
+  else await page.locator("#stage-select").selectOption("export");
+  await expect(page.locator("#stage-select")).toHaveValue("export");
   const committedMetadata = await readFile(
     join(created.project.storage.project_root, "project.json"),
   );
@@ -368,7 +370,7 @@ try {
     1.5,
   );
   await page.locator(`[data-project-id="${projectId}"]`).click();
-  await expect(page.locator("#stage-select")).toHaveValue("review");
+  await expect(page.locator("#stage-select")).toHaveValue("export");
   assert.deepEqual(await readFile(baselinePath), baseline);
   assert.deepEqual(await readFile(preferencePath), preferences);
   assert.deepEqual(await readFile(managedPath), sourceBytes);
@@ -437,7 +439,7 @@ try {
         ),
       { timeout: 30_000 },
     )
-    .toBe("review");
+    .toBe("export");
   assert.deepEqual(await readFile(baselinePath), baseline);
   assert.deepEqual(await readFile(preferencePath), preferences);
   assert.deepEqual(await readFile(managedPath), sourceBytes);

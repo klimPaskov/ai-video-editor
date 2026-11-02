@@ -175,7 +175,7 @@ try {
   await expect(page.locator("#auto-all-status")).toContainText("Step 1 of 2");
   let shots = 0;
   let last = "";
-  const finished = page.locator("#auto-all-review");
+  const finished = page.locator("#auto-all-refine");
   for (;;) {
     if (await finished.isVisible()) break;
     if (await page.locator("#auto-all-error").isVisible())
@@ -225,10 +225,10 @@ try {
   result.claudeOperations = [...claudeKinds].sort();
   result.changes = thread.value.fullEdit?.changes ?? 0;
 
-  step = "review";
-  await page.locator("#auto-all-review").click();
+  step = "refine";
+  await page.locator("#auto-all-refine").click();
   await expect(
-    page.locator('#stage-buttons [aria-label="Review"]'),
+    page.locator('#stage-buttons [aria-label="Refine"]'),
   ).toHaveAttribute("aria-current", "step");
   await openDisclosures(page);
   result.step = "complete";

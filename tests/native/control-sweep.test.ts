@@ -135,7 +135,7 @@ try {
       return false;
     }, key);
 
-  for (const name of ["Import", "Magic Edit", "Refine", "Review", "Export"]) {
+  for (const name of ["Import", "Magic Edit", "Refine", "Clips", "Export"]) {
     step = name;
     await page.getByRole("button", { name, exact: true }).click();
     await page.waitForTimeout(1500);

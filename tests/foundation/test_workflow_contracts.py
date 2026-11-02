@@ -7,7 +7,7 @@ from jsonschema import Draft202012Validator
 
 
 ROOT = Path(__file__).resolve().parents[2]
-STAGES = ["record_import", "auto_edit", "edit", "review", "export"]
+STAGES = ["record_import", "auto_edit", "edit", "clips", "export", "done"]
 
 
 def read_json(path):
@@ -40,8 +40,10 @@ class WorkflowContractsTests(unittest.TestCase):
             Draft202012Validator(screen_schema).validate(manifest)
             screens = {screen["screen_id"]: screen for screen in manifest["screens"]}
             self.assertEqual(screens["S08"]["step"], "edit")
-            self.assertEqual(screens["S09"]["step"], "review")
-            self.assertEqual(screens["S10"]["step"], "review")
+            self.assertEqual(screens["S09"]["step"], "edit")
+            self.assertEqual(screens["S10"]["step"], "edit")
+            self.assertEqual(screens["S12"]["step"], "done")
+            self.assertEqual(screens["S14"]["step"], "clips")
         state = read_json("docs/examples/ui_state.example.json")
         self.assertEqual((state["screen"], state["step"]), ("editor", "edit"))
         Draft202012Validator(ui_schema).validate(state)

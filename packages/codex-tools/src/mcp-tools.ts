@@ -405,7 +405,7 @@ export const codexVideoEditMcpTools = [
   {
     name: codexVideoEditToolNames[14],
     description:
-      "Set the draft's caption choices (the same as the Auto Edit captions card) as one undoable transaction. Captions are always derived from the transcript; this only turns them on or off and chooses style (plain, highlight or minimal), size (small, medium or large), position (bottom or top) and whether export burns them into the picture (burn_in) as well as writing an .srt. Pass every field; the timeline summary's captions shows the current choice (null: the project's earlier choice or the default applies).",
+      "Set the draft's caption choices (the same as the Magic Edit captions card) as one undoable transaction. Captions are always derived from the transcript; this only turns them on or off and chooses style (plain, highlight or minimal), size (small, medium or large), position (bottom or top) and whether export burns them into the picture (burn_in) as well as writing an .srt. Pass every field; the timeline summary's captions shows the current choice (null: the project's earlier choice or the default applies).",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -438,7 +438,7 @@ export const codexVideoEditMcpTools = [
   {
     name: codexVideoEditToolNames[15],
     description:
-      "Set the draft's export audio treatment (the same as the Auto Edit audio card) as one undoable transaction: normalize evens loudness to -16 LUFS; denoise reduces steady background noise. Sources are never changed. Pass both fields.",
+      "Set the draft's export audio treatment (the same as the Magic Edit audio card) as one undoable transaction: normalize evens loudness to -16 LUFS; denoise reduces steady background noise. Sources are never changed. Pass both fields.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -542,7 +542,7 @@ export const codexVideoEditMcpTools = [
   {
     name: codexVideoEditToolNames[19],
     description:
-      "Start Magic Edit, the same as the Magic Edit button in Auto Edit: the app transcribes the recording locally, tightens long pauses and fillers as one undoable transaction, then the assistant makes a story edit (repeated ideas, retakes, false starts, tangents) with the guarded cutting tools. preset is how far to go: gentle, balanced or tight. It uses the connection chosen in this conversation. If this reply is still being written the run starts as soon as it ends. Progress and the result show in Auto Edit; every cut can be undone. Tell the user plainly that it has started (or what blocked it); do not claim it finished.",
+      "Start Magic Edit, the same as the Magic Edit step's button: the app transcribes the recording locally, tightens long pauses and fillers as one undoable transaction, then the assistant makes a story edit (repeated ideas, retakes, false starts, tangents) with the guarded cutting tools. preset is how far to go: gentle, balanced or tight. It uses the connection chosen in this conversation. If this reply is still being written the run starts as soon as it ends. Progress and the result show in Magic Edit; every cut can be undone. Tell the user plainly that it has started (or what blocked it); do not claim it finished.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -583,7 +583,7 @@ export const codexVideoEditMcpTools = [
   {
     name: codexVideoEditToolNames[21],
     description:
-      "Move the app to a workflow step, the same as choosing it in the step bar: record_import, auto_edit, edit, review or export. This only shows the step; it never exports. Exporting and cleaning up stay actions the user takes with the buttons themselves.",
+      "Move the app to a workflow step, the same as choosing it in the step bar: record_import (Import), auto_edit (Magic Edit), edit (Refine), clips (short clips) or export. This only shows the step; it never exports. Exporting and cleaning up stay actions the user takes with the buttons themselves.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -593,7 +593,7 @@ export const codexVideoEditMcpTools = [
         project_id: id,
         step: {
           type: "string",
-          enum: ["record_import", "auto_edit", "edit", "review", "export"],
+          enum: ["record_import", "auto_edit", "edit", "clips", "export"],
         },
       },
     },
@@ -907,7 +907,7 @@ export const claudeOnlyMcpTools = [
   {
     name: claudeOnlyToolNames[10],
     description:
-      'Start the full "Edit my video", the same as the Edit my video button in Auto Edit: first the rough cut (Magic Edit: local transcript, tightened pauses and fillers, then a story edit), then the full production edit with motion graphics, captions and sound. level is tidy, polished or bold. It starts as soon as this reply is finished and runs to the end on its own; progress shows in Auto Edit, every step can be undone, and the user can stop it. Tell the user plainly that it has started; do not claim it finished.',
+      'Start the full "Edit my video", the same as the Edit my video button in the Magic Edit step: first the rough cut (Magic Edit: local transcript, tightened pauses and fillers, then a story edit), then the full production edit with motion graphics, captions and sound. level is tidy, polished or bold. It starts as soon as this reply is finished and runs to the end on its own; progress shows in Magic Edit, every step can be undone, and the user can stop it. Tell the user plainly that it has started; do not claim it finished.',
     inputSchema: {
       type: "object",
       additionalProperties: false,

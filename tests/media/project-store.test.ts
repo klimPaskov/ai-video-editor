@@ -144,13 +144,34 @@ test("real initial project reopens and navigates all five stages without changin
     assert.deepEqual(changed.revision, created.revision);
     assert.deepEqual(await readFile(baselinePath), baseline);
   }
-  assert.equal((await store.list())[0]?.project.workflow_step, "export");
+  assert.equal((await store.list())[0]?.project.workflow_step, "done");
   assert.deepEqual(await readFile(source), original);
   assert.deepEqual(await readFile(verified.managedPath), original);
   const next = store.navigate(id, "edit"),
-    last = new ProjectStore(projects, library).navigate(id, "review");
+    last = new ProjectStore(projects, library).navigate(id, "clips");
   await Promise.all([next, last]);
-  assert.equal((await store.open(id)).project.workflow_step, "review");
+  assert.equal((await store.open(id)).project.workflow_step, "clips");
+});
+test("a project saved in the retired Review step opens in Refine and keeps everything else", async () => {
+  const { store, projects, media } = await fixture();
+  const created = await store.createFromMedia(media.id);
+  const id = created.project.project_id;
+  const path = join(projects, id, "project.json");
+  const saved = JSON.parse(await readFile(path, "utf8")) as Record<
+    string,
+    unknown
+  >;
+  await writeFile(
+    path,
+    `${JSON.stringify({ ...saved, workflow_step: "review", name: "Kept" })}\n`,
+  );
+  const opened = await store.open(id);
+  assert.equal(opened.project.workflow_step, "edit");
+  assert.equal(opened.project.name, "Kept");
+  assert.equal((await store.list())[0]?.project.workflow_step, "edit");
+  const moved = await store.navigate(id, "clips");
+  assert.equal(moved.project.workflow_step, "clips");
+  assert.equal(JSON.parse(await readFile(path, "utf8")).workflow_step, "clips");
 });
 test("corrupt metadata, stale identity and invalid stages fail without changing committed files", async () => {
   const { store, projects, media } = await fixture();
@@ -179,7 +200,7 @@ test("corrupt metadata, stale identity and invalid stages fail without changing 
     }),
   );
   await assert.rejects(store.open(id));
-  await assert.rejects(store.navigate(id, "review"));
+  await assert.rejects(store.navigate(id, "clips"));
   assert.deepEqual(await readFile(path), before);
 });
 test("unsafe identities, linked roots and hardlinked project files are rejected", async () => {
@@ -263,7 +284,7 @@ test("rename changes only the project name and keeps the baseline", async () => 
   );
   // Navigation keeps the new name.
   assert.equal(
-    (await store.navigate(id, "review")).project.name,
+    (await store.navigate(id, "clips")).project.name,
     "Weekly update",
   );
   for (const name of ["", " padded", "a/b", "a\b", "x\ny", "x".repeat(161)])

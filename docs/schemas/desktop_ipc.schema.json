@@ -4962,6 +4962,7 @@
             "Export cancelled. No file was saved.",
             "The export finished but its record could not be saved. The file is in place.",
             "FFmpeg is needed to export. Install FFmpeg and try again.",
+            "The edit could not be checked, so nothing was exported. Reopen the project and try again.",
             "This video's pixel format cannot be exported losslessly yet.",
             "This video's dimensions cannot be exported.",
             "Non-square pixels cannot be exported yet.",
@@ -5263,8 +5264,9 @@
             "record_import",
             "auto_edit",
             "edit",
-            "review",
-            "export"
+            "clips",
+            "export",
+            "done"
           ]
         }
       }
@@ -5524,8 +5526,9 @@
             "record_import",
             "auto_edit",
             "edit",
-            "review",
-            "export"
+            "clips",
+            "export",
+            "done"
           ]
         },
         "revisionId": {

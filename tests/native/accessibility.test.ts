@@ -168,7 +168,7 @@ try {
   await activate(page.getByRole("button", { name: "Next frame", exact: true }));
   await expect(page.locator("#time")).toHaveText("0:00.500");
   await assertPixels(page, 1);
-  for (const name of ["Magic Edit", "Refine", "Review", "Export", "Import"]) {
+  for (const name of ["Magic Edit", "Refine", "Clips", "Export", "Import"]) {
     const stage = page
       .locator("#stage-buttons")
       .getByRole("button", { name, exact: true });

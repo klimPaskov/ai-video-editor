@@ -47,8 +47,9 @@
 - Live changes appear in the draft and history.
 - Stop and Undo remain visible.
 
-## S08 Review editor
+## S08 Refine and the full editor
 
+- Refine: the video uses the available width (no small box with black bars), the six tools are never cut off at 800 px window height, and Open full editor opens every existing tool with a Done button back.
 - Preview is visually dominant.
 - The timeline shows only tracks that contain content.
 - One tool or inspector is open.
@@ -61,11 +62,10 @@
 - The user can keep current, restore prior, or return to editing.
 - Restoring creates a new draft and does not rewrite history.
 
-## S10 QA
+## S10 What Magic Edit did
 
-- The top state is Ready, Warnings, or Blocked.
-- Each finding can jump to its range.
-- Blocking failures prevent export.
+- Review is not a step (ADR 0031). The list in Refine shows plain one-line rows built from the draft's own transaction records.
+- The draft check runs by itself when exporting and speaks only on a problem; a failed check stops the export with one plain message.
 - Technical evidence is optional.
 
 ## S11 Export
@@ -75,10 +75,10 @@
 - Export requires a user action.
 - Progress can be cancelled safely.
 
-## S12 Complete
+## S12 Done
 
-- Success appears only after full decode and output hash verification.
-- Open Video, Open Folder, and Return to Project work.
+- Success appears only after full decode and output hash verification, then the app moves to the Done screen.
+- Show in folder, Play, Make short clips, Edit another video, Back to Home and Keep editing each work on real state.
 
 ## S13 Settings
 

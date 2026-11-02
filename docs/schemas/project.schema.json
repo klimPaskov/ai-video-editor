@@ -43,9 +43,9 @@
         "record_import",
         "auto_edit",
         "edit",
-        "review",
+        "clips",
         "export",
-        "complete"
+        "done"
       ]
     },
     "current_revision_id": {

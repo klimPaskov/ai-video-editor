@@ -11,7 +11,7 @@ function project(): ProjectView {
   return {
     id: "11111111-1111-4111-8111-111111111111",
     name: "Fixture",
-    stage: "review",
+    stage: "edit",
     revisionId: "22222222-2222-4222-8222-222222222222",
     draft: {
       id: "draft-22222222-2222-4222-8222-222222222222",
@@ -58,7 +58,7 @@ test("renderer reconciliation applies only a newer matching committed head", () 
     result = reconcileProjectDraft(current, changed(3));
   assert.equal(result.status, "applied");
   if (result.status !== "applied") throw new Error("Expected update");
-  assert.equal(result.value.stage, "review");
+  assert.equal(result.value.stage, "edit");
   assert.equal(result.value.source, current.source);
   assert.equal(result.value.timeline.durationUs, 500_000);
   assert.equal(result.value.draft.sequence, 3);

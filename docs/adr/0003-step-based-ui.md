@@ -22,3 +22,7 @@ The current user instruction supersedes the historical four-stage starting decis
 ## Update (2026-11-01): visible step names
 
 The stage ids (`record_import`, `auto_edit`, `edit`, `review`, `export`) and their order are unchanged. The visible names are now Import, Magic Edit, Refine, Review and Export, because "Auto Edit" and "Edit" read as the same thing. Magic Edit is the AI step: its main action is Edit my video (cuts, zooms, transitions, graphics, captions and sound), with the rough cut alone offered as Rough cut only under More options. Refine holds the manual tools. The forward actions read Continue to Magic Edit and Continue to Export.
+
+## Update (2026-11-02): ADR 0031
+
+Review is removed. The stages are now `record_import`, `auto_edit`, `edit`, `clips`, `export` and `done` (a screen shown after a finished export); a project saved in `review` opens in `edit`. The step bar shows Import, Magic Edit, Refine, Clips and Export. The forward actions read Continue, Skip (Clips) and Export. See ADR 0031.

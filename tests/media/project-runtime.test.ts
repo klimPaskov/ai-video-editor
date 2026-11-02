@@ -125,7 +125,7 @@ function rangeCutRequest(
   };
 }
 
-test("Review draft integrity check returns only a validated committed head", async () => {
+test("the draft integrity check export runs returns only a validated committed head", async () => {
   const { source, projects, baseline, drafts, runtime } = await fixture();
   const baselinePath = join(
       baseline.project.storage.project_root,
@@ -135,7 +135,7 @@ test("Review draft integrity check returns only a validated committed head", asy
     baselineBytes = await readFile(baselinePath),
     managedBytes = await readFile(baseline.source.managed_path),
     originalBytes = await readFile(source);
-  await projects.navigate(baseline.project.project_id, "review");
+  await projects.navigate(baseline.project.project_id, "export");
   const initial = await drafts.snapshotWithProject(baseline.project.project_id),
     initialCheck = await runtime.verifyDraftIntegrity(
       baseline.project.project_id,
@@ -152,7 +152,7 @@ test("Review draft integrity check returns only a validated committed head", asy
       1_000_000,
     ),
   );
-  await projects.navigate(baseline.project.project_id, "review");
+  await projects.navigate(baseline.project.project_id, "export");
   const projectBytes = await readFile(projectPath),
     before = await drafts.snapshotWithProject(baseline.project.project_id),
     checked = await runtime.verifyDraftIntegrity(baseline.project.project_id);
@@ -175,10 +175,11 @@ test("Review draft integrity check returns only a validated committed head", asy
   assert.deepEqual(await readFile(baseline.source.managed_path), managedBytes);
   assert.deepEqual(await readFile(source), originalBytes);
 
+  // The check no longer depends on the step; export runs it from any of them.
   await projects.navigate(baseline.project.project_id, "edit");
-  await assert.rejects(
-    runtime.verifyDraftIntegrity(baseline.project.project_id),
-  );
+  const again = await runtime.verifyDraftIntegrity(baseline.project.project_id);
+  assert.deepEqual(again.draft, checked.draft);
+  await assert.rejects(runtime.verifyDraftIntegrity("not-a-project"));
 });
 
 test("committed project views and frames follow trim and undo state without changing source or baseline", async () => {

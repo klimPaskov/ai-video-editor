@@ -328,12 +328,12 @@
                   </button>
                   <button id="auto-all-stop" type="button" hidden>Stop</button>
                   <button
-                    id="auto-all-review"
+                    id="auto-all-refine"
                     class="primary large"
                     type="button"
                     hidden
                   >
-                    Review
+                    Refine
                   </button>
                 </div>
                 <progress
@@ -795,14 +795,6 @@
                 </div>
               </details>
             </div>
-            <div id="review-actions" class="review-actions" hidden>
-              <div id="review-summary" class="review-summary"></div>
-              <button id="check-draft-integrity" data-icon="shield">
-                Verify draft
-              </button>
-              <p id="draft-integrity-result" role="status" hidden></p>
-              <p id="draft-integrity-error" role="alert" hidden></p>
-            </div>
             <section id="export-actions" class="export-actions" hidden>
               <div id="export-setup" class="export-setup">
                 <div
@@ -872,8 +864,13 @@
                 <button id="export-again" type="button">Export again</button>
               </div>
               <p id="export-error" role="alert" hidden></p>
-              <details id="shorts-more" class="more">
-                <summary>Short clips</summary>
+            </section>
+            <section id="clips-actions" class="clips-actions" hidden>
+              <div class="clips-head">
+                <h2 id="clips-title">Short clips from your best moments</h2>
+                <p class="muted">Vertical clips for social video. Optional.</p>
+              </div>
+              <div id="shorts-more">
                 <div id="shorts" class="shorts">
                   <div class="shorts-header">
                     <button id="shorts-find" type="button" data-icon="sparkle">
@@ -947,7 +944,7 @@
                     ></ul>
                   </div>
                 </div>
-              </details>
+              </div>
             </section>
           </div>
         </div>

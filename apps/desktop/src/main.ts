@@ -131,6 +131,7 @@ import {
   assertExportProjectRequest,
   assertExportStartRequest,
   assertExportView,
+  exportIssues,
 } from "../../../packages/domain/src/export-view.ts";
 import { DesktopExports, planDraft } from "./export.ts";
 import { DesktopMagicWand } from "./magic-wand.ts";
@@ -1523,6 +1524,14 @@ async function start(): Promise<void> {
   register(channels.exportStart, async (request) => {
     assertExportStartRequest(request);
     activeExportProject(request.project_id);
+    // The draft is checked by itself before every export and says nothing
+    // unless something is wrong (ADR 0031).
+    if (!exports!.busy(request.project_id))
+      try {
+        await projectRuntime.verifyDraftIntegrity(request.project_id);
+      } catch {
+        throw new UserFacingError(exportIssues.integrity);
+      }
     try {
       const value = await exports!.start(request.project_id, request.profile);
       assertExportView(value);
@@ -1780,11 +1789,11 @@ async function start(): Promise<void> {
       throw new UserFacingError("Open this project first.");
     if (stage !== "auto_edit" && transcription!.isRunning(projectId))
       throw new UserFacingError(
-        "Stop local transcription before leaving Auto Edit.",
+        "Stop local transcription before leaving Magic Edit.",
       );
     if (stage !== "auto_edit" && stage !== "edit" && magicWand.busy(projectId))
       throw new UserFacingError(
-        "Magic Edit is running. Stop it before leaving Auto Edit.",
+        "Magic Edit is running. Stop it before leaving Magic Edit.",
       );
     if ((await stepOf(projectId)) === stage) return;
     await projects.navigate(projectId, stage);
@@ -2616,9 +2625,7 @@ async function start(): Promise<void> {
   register(channels.projectIntegrityCheck, async (request) => {
     assertProjectRequest(request);
     if (activeProjectId !== request.id)
-      throw new UserFacingError(
-        "Open the active project in Review to check draft integrity.",
-      );
+      throw new UserFacingError("Open this project to check its edit.");
     try {
       const value = await projectRuntime.verifyDraftIntegrity(request.id);
       if (activeProjectId !== request.id)

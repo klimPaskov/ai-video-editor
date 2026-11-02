@@ -318,8 +318,9 @@ export async function auditLayout(page: Page): Promise<LayoutFinding[]> {
 /** The control a person presses to move a step forward, most important first. */
 const primaryActions: Record<string, string[]> = {
   record_import: ["#next-step-button"],
-  auto_edit: ["#auto-all-review", "#auto-all-start"],
-  review: ["#next-step-button"],
+  auto_edit: ["#auto-all-refine", "#auto-all-start"],
+  edit: ["#next-step-button"],
+  clips: ["#next-step-button"],
   export: ["#export-open", "#export-start"],
 };
 

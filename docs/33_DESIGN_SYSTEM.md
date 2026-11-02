@@ -18,7 +18,7 @@ The normal project window has four areas:
 
 1. Compact top bar with project name, compact current step, undo, redo, and the relevant next action.
 2. Main canvas or task content.
-3. Bottom timeline only during Review.
+3. A compact timeline strip in Refine and the full editor (ADR 0031 removed Review).
 4. One context panel or a collapsed Codex drawer.
 
 Do not show a permanent multi-section sidebar. The Home screen and Settings may use a compact navigation list. Project screens use a step header and Back action.

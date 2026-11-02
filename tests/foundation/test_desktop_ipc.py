@@ -333,14 +333,14 @@ class DesktopIpcContractTests(unittest.TestCase):
                 result['payload']['stage'] = view['stage']
         return result
 
-    def test_project_channels_success_errors_and_five_stages(self):
+    def test_project_channels_success_errors_and_six_stages(self):
         for channel in ['list', 'create', 'open', 'navigate']:
             exchange = self.project_exchange(channel)
             self.valid(exchange)
             exchange['response'] = {'ok': False, 'message': 'Project could not be opened.'}
             self.valid(exchange)
         self.valid({'channel': 'projects:list', 'response': {'ok': True, 'value': []}})
-        for stage in ['record_import', 'auto_edit', 'edit', 'review', 'export']:
+        for stage in ['record_import', 'auto_edit', 'edit', 'clips', 'export', 'done']:
             view = self.project_view()
             view['stage'] = stage
             self.valid(self.project_exchange('navigate', view))
@@ -362,7 +362,7 @@ class DesktopIpcContractTests(unittest.TestCase):
             exchange = self.project_exchange('list')
             exchange['payload'] = payload
             self.invalid(exchange)
-        for stage in ['home', 'qa', 'complete', 'delete', None, 0]:
+        for stage in ['home', 'qa', 'complete', 'review', 'delete', None, 0]:
             exchange = self.project_exchange('navigate')
             exchange['payload']['stage'] = stage
             self.invalid(exchange)

@@ -106,12 +106,15 @@ export const appActionToolNames: ReadonlySet<string> = new Set([
 ]);
 export const appActionPresets = ["gentle", "balanced", "tight"] as const;
 export const appActionLevels = ["tidy", "polished", "bold"] as const;
-/** The workflow steps, in order (the same as the project's stages). */
+/**
+ * The workflow steps an assistant can show, in order. These are the project's
+ * stages without the Done screen, which only a finished export reaches.
+ */
 export const appActionSteps = [
   "record_import",
   "auto_edit",
   "edit",
-  "review",
+  "clips",
   "export",
 ] as const;
 export type AppActionPreset = (typeof appActionPresets)[number];

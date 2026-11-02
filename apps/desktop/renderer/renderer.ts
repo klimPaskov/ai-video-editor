@@ -17,7 +17,6 @@ import {
   zoomWindow,
   type ZoomInterval,
 } from "../../../packages/domain/src/zoom.ts";
-import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { setupExportPanel } from "./export-panel.ts";
 import { setupPlayback } from "./playback.ts";
 import { setupMagicPanel } from "./magic-panel.ts";
@@ -43,6 +42,7 @@ import type {
   MediaFrame,
   MediaSummary,
 } from "../../../packages/domain/src/library.ts";
+import { projectStages } from "../../../packages/domain/src/project-view.ts";
 import type {
   ProjectDraftView,
   ProjectStage,
@@ -170,12 +170,6 @@ const cameraTools = setupCameraTools({
   fail: (message) => showError(message),
   run: (work, failure, seekUs) => runManualEdit(work, failure, seekUs),
 });
-const reviewActions = element("review-actions"),
-  checkDraftIntegrityButton = element<HTMLButtonElement>(
-    "check-draft-integrity",
-  ),
-  draftIntegrityResult = element("draft-integrity-result"),
-  draftIntegrityError = element("draft-integrity-error");
 const autoEditActions = element("auto-edit-actions"),
   transcribeLocalButton = element<HTMLButtonElement>("transcribe-local"),
   stopTranscriptionButton = element<HTMLButtonElement>("stop-transcription"),
@@ -226,10 +220,6 @@ let loadingHome = 0;
 let navigating = false;
 let addingFootage = false;
 let manualEditPending = false;
-let draftIntegrityPending = false;
-let draftIntegrityHeadKey: string | undefined;
-let draftIntegrityMessage: string | null = null;
-let draftIntegrityIssue: string | null = null;
 let markHead: string | undefined;
 let markInUs: number | undefined;
 let markOutUs: number | undefined;
@@ -266,21 +256,26 @@ let transcriptCorrectionPending = false;
 let transcriptCutIssue: string | null = null;
 let transcriptCutMessage: string | null = null;
 let transcriptCutPending = false;
-const stageLabels: Record<ProjectStage, string> = {
+/**
+ * The steps shown in the step bar. Done is a screen, not a step: it follows
+ * Export and every step then reads as finished.
+ */
+const stageLabels: Record<Exclude<ProjectStage, "done">, string> = {
   record_import: "Import",
   auto_edit: "Magic Edit",
   edit: "Refine",
-  review: "Review",
+  clips: "Clips",
   export: "Export",
 };
+type StepStage = keyof typeof stageLabels;
 const nextStepButton = element<HTMLButtonElement>("next-step-button");
 let nextStepTarget: ProjectStage | undefined;
 nextStepButton.addEventListener("click", () => {
   if (nextStepTarget) void navigate(nextStepTarget);
 });
 const stageSelect = element<HTMLSelectElement>("stage-select");
-const stageButtons = new Map<ProjectStage, HTMLButtonElement>();
-for (const stage of Object.keys(stageLabels) as ProjectStage[]) {
+const stageButtons = new Map<StepStage, HTMLButtonElement>();
+for (const stage of Object.keys(stageLabels) as StepStage[]) {
   const button = document.createElement("button");
   // The name stays the stage's own; the number is decoration.
   button.setAttribute("aria-label", stageLabels[stage]);
@@ -317,8 +312,9 @@ function renderStage(): void {
     activeProject.draft.sequence !== 0;
   addFootageButton.disabled = addingFootage || navigating;
   stageSelect.disabled = navigating;
-  if (activeProject) stageSelect.value = activeProject.stage;
-  const order = Object.keys(stageLabels);
+  if (activeProject && activeProject.stage !== "done")
+    stageSelect.value = activeProject.stage;
+  const order = [...projectStages];
   const current = activeProject ? order.indexOf(activeProject.stage) : -1;
   for (const [stage, button] of stageButtons) {
     button.disabled = navigating;
@@ -333,16 +329,18 @@ function renderStage(): void {
   // One clear way forward from the steps that have nothing else to do.
   const forward =
     activeProject?.stage === "record_import"
-      ? (["auto_edit", "Continue to Magic Edit"] as const)
-      : activeProject?.stage === "review"
-        ? (["export", "Continue to Export"] as const)
-        : null;
+      ? (["auto_edit", "Continue"] as const)
+      : activeProject?.stage === "edit"
+        ? (["clips", "Continue"] as const)
+        : activeProject?.stage === "clips"
+          ? (["export", "Skip"] as const)
+          : null;
   element("next-step").hidden = !forward;
   nextStepButton.textContent = forward?.[1] ?? "";
   nextStepButton.disabled = navigating;
   nextStepTarget = forward?.[0];
   renderEditTools();
-  renderDraftIntegrityAction();
+  renderStagePanels();
   renderTranscriptionActions();
   renderTranscriptEditor();
 }
@@ -378,11 +376,6 @@ function populateRestoreSources(project: ProjectView): void {
   }
   restoreSourceProjectId = project.id;
 }
-function clearDraftIntegrityResult(): void {
-  draftIntegrityHeadKey = undefined;
-  draftIntegrityMessage = null;
-  draftIntegrityIssue = null;
-}
 const exportPanel = setupExportPanel();
 /** End of a short clip being previewed; playback stops there. */
 let previewEndUs: number | undefined;
@@ -397,78 +390,12 @@ const shortsPanel = setupShortsPanel({
     }, 50);
   },
 });
-function renderDraftIntegrityAction(): void {
-  const exportVisible =
-    activeProject?.stage === "export" &&
-    element("inspector").hidden === true &&
-    element("codex-drawer").hidden === true;
-  exportPanel.render(activeProject, exportVisible);
-  shortsPanel.render(activeProject, exportVisible);
-  const project = activeProject,
-    visible =
-      project?.stage === "review" &&
-      element("inspector").hidden &&
-      element("codex-drawer").hidden;
-  if (
-    !visible ||
-    (draftIntegrityHeadKey &&
-      project &&
-      draftIntegrityHeadKey !== currentHeadKey(project))
-  )
-    clearDraftIntegrityResult();
-  reviewActions.hidden = !visible;
-  renderReviewSummary(visible ? project : undefined);
-  reviewActions.setAttribute("aria-busy", String(draftIntegrityPending));
-  checkDraftIntegrityButton.disabled =
-    !visible || navigating || draftIntegrityPending;
-  checkDraftIntegrityButton.textContent = draftIntegrityPending
-    ? "Checking…"
-    : "Verify draft";
-  draftIntegrityResult.textContent = draftIntegrityMessage ?? "";
-  draftIntegrityResult.hidden = !visible || !draftIntegrityMessage;
-  draftIntegrityError.textContent = draftIntegrityIssue ?? "";
-  draftIntegrityError.hidden = !visible || !draftIntegrityIssue;
-}
-function renderReviewSummary(project: ProjectView | undefined): void {
-  const summary = element("review-summary");
-  if (!project?.clips) {
-    summary.replaceChildren();
-    return;
-  }
-  const originalUs = restoreSources(project).reduce(
-    (sum, source) => sum + source.durationUs,
-    0,
-  );
-  const editedUs = project.timeline.durationUs;
-  const stat = (label: string, value: string, name = "stat") => {
-    const item = document.createElement("div");
-    item.className = name;
-    const term = document.createElement("span");
-    term.textContent = label;
-    const amount = document.createElement("strong");
-    amount.textContent = value;
-    item.append(term, amount);
-    return item;
-  };
-  // Tenths keep Original - Edited consistent with Removed.
-  const tenths = (us: number) => {
-    const total = Math.round(us / 100_000);
-    return `${Math.floor(total / 600)}:${String(Math.floor((total % 600) / 10)).padStart(2, "0")}.${total % 10}`;
-  };
-  const items = [
-    stat("Original", tenths(originalUs)),
-    stat("Edited", tenths(editedUs)),
-    stat("Clips", String(project.clips.length)),
-  ];
-  if (originalUs > editedUs)
-    items.push(
-      stat(
-        "Removed",
-        `${((originalUs - editedUs) / 1_000_000).toFixed(1)} s`,
-        "stat saved",
-      ),
-    );
-  summary.replaceChildren(...items);
+/** The panels of the steps that are not Magic Edit or Refine. */
+function renderStagePanels(): void {
+  // Export, Clips and the Done screen stay fully usable beside the assistant
+  // and the source details: they have their own room (ADR 0031).
+  exportPanel.render(activeProject, activeProject?.stage === "export");
+  shortsPanel.render(activeProject, activeProject?.stage === "clips");
 }
 function transcriptionRunning(
   view: TranscriptionProjectView | undefined,
@@ -1090,7 +1017,7 @@ const magicPanel = setupMagicPanel(
 );
 const autoPanel = setupAutoPanel({
   onFinished: () => void loadTranscription(),
-  review: () => void navigate("review"),
+  refine: () => void navigate("edit"),
   presetValue: () =>
     element<HTMLSelectElement>("magic-preset").value as
       "gentle" | "balanced" | "tight",
@@ -1637,7 +1564,6 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
   transcriptCutMessage = null;
   transcriptCutPending = false;
   activeProject = project;
-  clearDraftIntegrityResult();
   restoreSourceProjectId = undefined;
   restoreHead = undefined;
   restoreRangeOpen = false;
@@ -1924,7 +1850,7 @@ async function loadLibrary(): Promise<void> {
       detail.textContent = [
         cardTime(project.timeline.durationUs),
         project.sources ? `${project.sources.length} sources` : undefined,
-        stageLabels[project.stage],
+        project.stage === "done" ? "Done" : stageLabels[project.stage],
       ]
         .filter(Boolean)
         .join(" · ");
@@ -2405,7 +2331,7 @@ function applyProjectDraft(
   clearError();
   requestFrame(position);
   renderEditTools();
-  renderDraftIntegrityAction();
+  renderStagePanels();
   renderTranscriptionActions();
   renderTranscriptEditor();
 }
@@ -2454,64 +2380,6 @@ saveTranscriptCorrectionButton.addEventListener("click", () => {
 });
 transcriptCutButton.addEventListener("click", () => {
   void cutSelectedTranscriptWords();
-});
-checkDraftIntegrityButton.addEventListener("click", async () => {
-  const project = activeProject;
-  if (!project || project.stage !== "review" || draftIntegrityPending) return;
-  const generation = routeGeneration,
-    requestedHead = currentHeadKey(project);
-  draftIntegrityPending = true;
-  draftIntegrityHeadKey = requestedHead;
-  draftIntegrityMessage = null;
-  draftIntegrityIssue = null;
-  renderDraftIntegrityAction();
-  try {
-    const reply = await window.desktop.verifyDraftIntegrity({ id: project.id });
-    if (
-      generation !== routeGeneration ||
-      activeProject?.id !== project.id ||
-      activeProject.stage !== "review"
-    )
-      return;
-    if (!reply.ok) {
-      draftIntegrityIssue = reply.message;
-      return;
-    }
-    const checkedHead = `${reply.value.draft.projectId}:${reply.value.draft.draft.id}:${reply.value.draft.draft.sequence}:${reply.value.draft.draft.timelineSha256}`;
-    const freshness = draftIntegrityFreshness(
-      requestedHead,
-      currentHeadKey(activeProject),
-      checkedHead,
-    );
-    if (freshness === "active-head-changed") {
-      draftIntegrityHeadKey = currentHeadKey(activeProject);
-      draftIntegrityIssue =
-        "Draft changed while the check was running. Run it again.";
-      return;
-    }
-    applyProjectDraft({ ok: true, value: reply.value.draft });
-    if (
-      generation !== routeGeneration ||
-      activeProject?.id !== project.id ||
-      activeProject.stage !== "review"
-    )
-      return;
-    draftIntegrityHeadKey = currentHeadKey(activeProject);
-    if (freshness !== "current" || checkedHead !== draftIntegrityHeadKey) {
-      draftIntegrityIssue = "Draft changed during the check. Run it again.";
-      return;
-    }
-    draftIntegrityMessage = reply.value.structuralCheckpointRecorded
-      ? "Structure and managed sources verified. Manual checkpoint recorded; meaning and A/V not reviewed."
-      : "Structure and managed sources verified. No manual checkpoint; meaning and A/V not reviewed.";
-  } catch {
-    if (generation === routeGeneration && activeProject?.id === project.id)
-      draftIntegrityIssue =
-        "Draft integrity could not be checked. Reopen the project and try again.";
-  } finally {
-    draftIntegrityPending = false;
-    renderDraftIntegrityAction();
-  }
 });
 async function submitManualTrim(edge: "start" | "end"): Promise<void> {
   const project = activeProject,
@@ -3303,7 +3171,7 @@ function setInspector(open: boolean): void {
       list.append(term, definition);
     }
   }
-  renderDraftIntegrityAction();
+  renderStagePanels();
   renderTranscriptEditor();
 }
 
@@ -3627,7 +3495,7 @@ function setCodexDrawer(open: boolean): void {
   } else {
     codexPollGeneration++;
   }
-  renderDraftIntegrityAction();
+  renderStagePanels();
   renderTranscriptEditor();
 }
 async function pollCodex(generation: number): Promise<void> {

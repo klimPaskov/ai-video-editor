@@ -2,15 +2,15 @@
 
 ## Navigation model
 
-The app uses a top stepper with five project stages:
+The app uses a top stepper with five project steps (ADR 0031):
 
 1. Import
 2. Magic Edit
-3. Edit
-4. Review
+3. Refine
+4. Clips
 5. Export
 
-Only the current stage is expanded. Completed stages can be revisited. Future stages remain compact and show their blocking condition.
+After a finished export the app shows a Done screen (not a step). Only the current step is expanded. Completed steps can be revisited. The AI does the bulk of the editing; Refine is for a quick check and small changes.
 
 ## Home
 
@@ -38,7 +38,11 @@ The planned Magic Wand remains the main editorial action. It will offer a small 
 
 Optional OpenAI API, DeepSeek and Gemini API assistance under ADRs 0014 and 0015 uses a separately connected key and provider-validated model. A paid generation turn starts only when the user explicitly selects it. Local deterministic work does not silently incur API usage.
 
-## Edit
+## Refine
+
+Refine is one big screen: the video, a play bar, a slim timeline, a "What Magic Edit did" list with Undo per kind of change, and six simple tools (Trim, Split, Delete part, Captions, Music, Volume). Open full editor opens the complete editor below over the whole window; its Done button returns here.
+
+## Full editor
 
 The default layout contains:
 
@@ -53,13 +57,17 @@ The user can click an AI change in the history to see its reason and undo it. Ed
 
 The Edit transcript controls can correct one locally transcribed word or cut a selected word range. Correction uses a text-only override; the original transcript and recorded audio stay unchanged. A cut uses the immutable source/transcript word IDs and the current draft head, commits through the shared journal, and can be undone or redone. Transcript text restoration and speech-aware cut approval are not provided here.
 
-## Review
+## Clips
 
-Watch the whole draft, compare revisions, and inspect actionable quality findings. QA is an internal screen within Review. Jump back to Refine to correct an issue with shared undo history preserved; continue to Export when ready. Review does not require approval of every ordinary reversible edit.
+Optional. Short vertical clips cut from the best moments, chosen by the user, with Skip. It has its own step after Refine.
 
 ## Export
 
-The final screen shows a preview summary, required warnings, a small set of export presets, and one Export button. Advanced codec settings are hidden.
+The export step shows the video, two quality choices (Lossless master, Smaller file), the destination and one Export button. The draft check runs by itself before an export starts and speaks only when something is wrong. Advanced codec settings are hidden.
+
+## Done
+
+After a finished export: a check mark, "Your video is ready", the file's thumbnail, name, length, size and folder, Show in folder, Play, and Make short clips, Edit another video, Back to Home and Keep editing.
 
 ## Returning users
 

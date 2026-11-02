@@ -9,7 +9,7 @@ The interface should feel like a focused creator tool. It should not look like a
 - One primary action per screen.
 - One inspector panel open at a time.
 - No permanent left navigation listing every feature.
-- Use the five-stage stepper: Import, Magic Edit, Refine, Review, Export inside projects.
+- Use the five-step stepper: Import, Magic Edit, Refine, Clips, Export inside projects, then a Done screen after exporting (ADR 0031).
 - Keep the AI drawer collapsed until invoked or active.
 - Use ordinary language such as “Preparing captions” instead of process names.
 - Put technical logs under Help > Diagnostics.

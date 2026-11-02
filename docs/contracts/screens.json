@@ -107,7 +107,7 @@
     {
       "screen_id": "S09",
       "name": "Revision compare",
-      "step": "review",
+      "step": "edit",
       "primary_action": "Keep current",
       "panel_policy": "one_context_panel",
       "spec": "docs/05_SCREEN_SPECS.md",
@@ -118,9 +118,9 @@
     },
     {
       "screen_id": "S10",
-      "name": "Review and quality summary",
-      "step": "review",
-      "primary_action": "Continue to Export",
+      "name": "What Magic Edit did",
+      "step": "edit",
+      "primary_action": "Continue",
       "panel_policy": "one_context_panel",
       "spec": "docs/05_SCREEN_SPECS.md",
       "task_phases": [
@@ -142,9 +142,9 @@
     },
     {
       "screen_id": "S12",
-      "name": "Export complete",
-      "step": "complete",
-      "primary_action": "Open video",
+      "name": "Done",
+      "step": "done",
+      "primary_action": "Show in folder",
       "panel_policy": "none",
       "spec": "docs/05_SCREEN_SPECS.md",
       "task_phases": [
@@ -163,6 +163,18 @@
         "P1",
         "P2",
         "P4",
+        "P9"
+      ],
+      "reference_required": false
+    },
+    {
+      "screen_id": "S14",
+      "name": "Short clips",
+      "step": "clips",
+      "primary_action": "Make clips",
+      "panel_policy": "one_context_panel",
+      "spec": "docs/05_SCREEN_SPECS.md",
+      "task_phases": [
         "P9"
       ],
       "reference_required": false

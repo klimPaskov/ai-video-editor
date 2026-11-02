@@ -30,14 +30,24 @@ import type { MediaFrame, MediaSummary } from "./library.ts";
 import { assertTranscriptTextOverrides } from "./transcription.ts";
 import type { TranscriptTextOverride } from "./transcription.ts";
 
+/**
+ * The project's steps in order (ADR 0031): Import, Magic Edit, Refine, Clips
+ * and Export, then the Done screen shown after a video is exported. The old
+ * Review step is gone; a project saved there opens in Refine.
+ */
 export const projectStages = [
   "record_import",
   "auto_edit",
   "edit",
-  "review",
+  "clips",
   "export",
+  "done",
 ] as const;
 export type ProjectStage = (typeof projectStages)[number];
+/** A stage name from an older project file, as the current stage it became. */
+export function migrateProjectStage(value: unknown): unknown {
+  return value === "review" ? "edit" : value;
+}
 export interface ProjectRequest {
   id: string;
 }

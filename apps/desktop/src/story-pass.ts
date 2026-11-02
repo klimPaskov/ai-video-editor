@@ -1,4 +1,5 @@
 import type { MagicWandPreset } from "../../../packages/domain/src/magic-wand.ts";
+import type { ProjectStage } from "../../../packages/domain/src/project-view.ts";
 import type {
   MagicWandBlock,
   MagicWandProvider,
@@ -396,10 +397,10 @@ export class DeferredActions {
 }
 
 const stepNames: Record<AppActionStep, string> = {
-  record_import: "Record or import",
-  auto_edit: "Auto Edit",
-  edit: "Edit",
-  review: "Review",
+  record_import: "Import",
+  auto_edit: "Magic Edit",
+  edit: "Refine",
+  clips: "Clips",
   export: "Export",
 };
 
@@ -420,7 +421,7 @@ export interface AppActionDeps {
   /** True when the chat connection is not in the middle of a turn. */
   chatIdle(projectId: string): boolean | Promise<boolean>;
   /** The step the project is on now. */
-  currentStep(projectId: string): Promise<AppActionStep>;
+  currentStep(projectId: string): Promise<ProjectStage>;
   /** Moves the app to a step, as the step bar does. Throws a plain message. */
   navigate(projectId: string, step: AppActionStep): Promise<void>;
   /** Claude only: starts the full production edit; throws a plain message. */
@@ -442,7 +443,7 @@ function plain(error: unknown): string {
  */
 export function createAppActions(deps: AppActionDeps): AppActions {
   const { provider, magic, deferred } = deps;
-  /** The story edit reads the transcript, which needs Auto Edit or Edit. */
+  /** The story edit reads the transcript, which needs Magic Edit or Edit. */
   const readyStep = async (projectId: string) => {
     const step = await deps.currentStep(projectId);
     if (step !== "auto_edit" && step !== "edit")
@@ -475,7 +476,7 @@ export function createAppActions(deps: AppActionDeps): AppActions {
       return {
         status: "queued",
         message:
-          "Magic Edit will start as soon as this reply is finished: the app tightens long pauses and fillers first, then the story edit runs. Progress shows in Auto Edit and every cut can be undone.",
+          "Magic Edit will start as soon as this reply is finished: the app tightens long pauses and fillers first, then the story edit runs. Progress shows in Magic Edit and every cut can be undone.",
       };
     },
     async stopEdit(projectId) {
@@ -541,7 +542,7 @@ export function createAppActions(deps: AppActionDeps): AppActions {
       return {
         status: "queued",
         message:
-          "Edit my video will start as soon as this reply is finished: first the rough cut, then graphics, captions and sound. Progress shows in Auto Edit, every step can be undone, and Stop ends it.",
+          "Edit my video will start as soon as this reply is finished: first the rough cut, then graphics, captions and sound. Progress shows in Magic Edit, every step can be undone, and Stop ends it.",
       };
     };
   }

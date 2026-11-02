@@ -1436,8 +1436,8 @@ dd {
 .auto-edit-actions,
 .transcript-edit-panel,
 .edit-actions,
-.review-actions,
-.export-actions {
+.export-actions,
+.clips-actions {
   padding: 14px 16px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1814,48 +1814,6 @@ dd {
 }
 #restore-error {
   flex-basis: 100%;
-}
-
-/* Review */
-.review-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px 24px;
-}
-.review-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 28px;
-  margin-right: auto;
-}
-.review-summary:empty {
-  display: none;
-}
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.stat span {
-  color: var(--text-3);
-  font-size: 12px;
-}
-.stat strong {
-  font-size: 18px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.stat.saved strong {
-  color: var(--success);
-}
-#draft-integrity-result,
-#draft-integrity-error {
-  flex-basis: 100%;
-  font-size: 13px;
-}
-#draft-integrity-result {
-  color: var(--text-2);
 }
 
 /* Export */
@@ -2556,8 +2514,8 @@ button.large {
 .auto-edit-actions,
 .transcript-edit-panel,
 .edit-actions,
-.review-actions,
 .export-actions,
+.clips-actions,
 #inspector,
 #codex-drawer,
 .card-grid li {
@@ -2959,8 +2917,7 @@ button.outline {
 .stage-panel > * {
   width: 100%;
 }
-.auto-edit-actions,
-.review-actions {
+.auto-edit-actions {
   max-width: 720px;
   padding: 0;
   background: transparent;
@@ -2981,16 +2938,6 @@ button.outline {
 #auto-all-start,
 #next-step-button {
   min-width: 280px;
-}
-.review-actions {
-  display: flex;
-  flex-flow: row wrap;
-  align-items: center;
-  gap: 16px;
-  max-width: none;
-}
-.review-actions .review-summary {
-  flex: 1 1 auto;
 }
 .edit-actions {
   width: auto;
@@ -3295,28 +3242,8 @@ body:has(#home:not([hidden])) #source-details {
 #viewer[data-stage="auto_edit"] #timeline-strip {
   display: none;
 }
-#viewer[data-stage="edit"] .workspace,
-#viewer[data-stage="review"] .workspace {
+#viewer[data-stage="edit"] .workspace {
   height: clamp(180px, 36vh, 560px);
-}
-#viewer[data-stage="review"] .stage-panel {
-  flex-flow: row wrap;
-  justify-content: space-between;
-  gap: 16px;
-}
-#viewer[data-stage="review"] .stage-panel > * {
-  width: auto;
-}
-#viewer[data-stage="review"] .review-actions {
-  flex: 1 1 420px;
-  order: 1;
-}
-#viewer[data-stage="review"] .next-step {
-  flex: 0 0 auto;
-  order: 2;
-}
-#viewer[data-stage="review"] #next-step-button {
-  min-width: 240px;
 }
 #viewer {
   gap: 20px;
@@ -3324,8 +3251,7 @@ body:has(#home:not([hidden])) #source-details {
 .stage-card {
   gap: 20px;
 }
-#viewer[data-stage="edit"] .workspace,
-#viewer[data-stage="review"] .workspace {
+#viewer[data-stage="edit"] .workspace {
   height: clamp(170px, 32vh, 520px);
 }
 .auto-edit-actions > details.more > summary {

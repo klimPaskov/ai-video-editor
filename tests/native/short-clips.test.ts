@@ -210,7 +210,7 @@ try {
   );
 
   step = "find";
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await page.getByRole("button", { name: "Clips", exact: true }).click();
   await expect(page.locator("#shorts-find")).toBeEnabled();
   await page.locator("#shorts-find").click();
   const items = page.locator("#shorts-list .short-item");

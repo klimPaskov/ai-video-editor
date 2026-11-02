@@ -13,6 +13,8 @@ export const exportIssues = Object.freeze({
   storage:
     "The export finished but its record could not be saved. The file is in place.",
   tools: "FFmpeg is needed to export. Install FFmpeg and try again.",
+  integrity:
+    "The edit could not be checked, so nothing was exported. Reopen the project and try again.",
 } as const);
 
 /** Fixed explanations for drafts the verified exporter refuses to convert. */

@@ -154,7 +154,7 @@ try {
       "the settings were saved",
     );
   };
-  const stages = ["Import", "Magic Edit", "Refine", "Review", "Export"];
+  const stages = ["Import", "Magic Edit", "Refine", "Clips", "Export"];
   const tour = async (id: string) => {
     for (const name of stages) {
       await page.getByRole("button", { name, exact: true }).click();

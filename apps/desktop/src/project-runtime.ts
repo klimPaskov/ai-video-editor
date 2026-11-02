@@ -211,20 +211,13 @@ export class DesktopProjectRuntime {
   async verifyDraftIntegrity(
     projectId: string,
   ): Promise<ProjectDraftIntegrityView> {
+    // Export runs this check by itself before it starts (ADR 0031).
     const current = await this.drafts.snapshotWithProject(projectId);
-    if (
-      current.project.project.project_id !== projectId ||
-      current.project.project.workflow_step !== "review"
-    )
-      invalid();
+    if (current.project.project.project_id !== projectId) invalid();
     const checkpoint =
         await this.drafts.recordLatestManualStructureCheckpoint(projectId),
       latest = await this.drafts.snapshotWithProject(projectId);
-    if (
-      latest.project.project.project_id !== projectId ||
-      latest.project.project.workflow_step !== "review"
-    )
-      invalid();
+    if (latest.project.project.project_id !== projectId) invalid();
     const draft = committedDraftView(latest),
       value: ProjectDraftIntegrityView = {
         draft,

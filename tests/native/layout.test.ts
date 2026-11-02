@@ -242,7 +242,7 @@ try {
         ["Import", "record_import"],
         ["Magic Edit", "auto_edit"],
         ["Refine", "edit"],
-        ["Review", "review"],
+        ["Clips", "clips"],
         ["Export", "export"],
       ];
       for (const [name, id] of stages) {
@@ -272,10 +272,6 @@ try {
         await page.locator("#auto-all-start").click();
         await expect(page.locator("#auto-all-error")).toBeVisible();
         await audit(`${tag} / Magic Edit after a failed start`);
-        await go("Review", "review");
-        await page.locator("#check-draft-integrity").click();
-        await expect(page.locator("#draft-integrity-result")).toBeVisible();
-        await audit(`${tag} / Review with the integrity result`);
         await go("Export", "export");
         await page.locator("#export-start").click();
         await expect

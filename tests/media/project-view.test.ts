@@ -55,7 +55,7 @@ function view(): ProjectView {
     },
   };
 }
-test("project IPC runtime accepts path-free views and exact requests for all five navigation stages", () => {
+test("project IPC runtime accepts path-free views and exact requests for all six navigation stages", () => {
   const value = view();
   assertProjectRequest({ id: value.id });
   assertProjectRequest({ id: value.source.id });
@@ -110,6 +110,8 @@ test("project requests reject paths, malformed IDs, unknown stages and excess fi
     { id: view().id },
     { id: view().id, stage: "complete" },
     { id: view().id, stage: "qa" },
+    // Review was retired in ADR 0031; only saved files migrate it.
+    { id: view().id, stage: "review" },
     { id: view().id, stage: "edit", path: "/private" },
     { id: "../private", stage: "edit" },
   ]) {

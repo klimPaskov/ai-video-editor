@@ -131,9 +131,9 @@ The current P2 conversation slice implements the compact Codex drawer beside the
 
 The project preview shows current and total output time. Its frame and seek bounds come from the current committed draft head. A committed trim, split, cut or restore refreshes the ordered fragment map, remaps output time through retained immutable sources, and discards stale decoded pixels; split preserves total duration while cut and restore change it according to their interval. The Refine stage offers compact Trim start, Trim end, Split, Mark in, Mark out, Cut range, Restore source range, Clear, Undo and Redo actions around the preview. Trim and Split require an interior playhead position and are disabled at boundaries or during a pending save. Marks are output-time microseconds bound to the exact draft head; a changed head invalidates them so a later cut cannot use stale positions. Cut range needs a valid nonempty, non-whole-draft `[in, out)` interval and may cross a fragment or source join. It ripples remaining fragments while keeping all imported sources available in Source details. Restore source range accepts one exact missing half-open interval in a selected immutable source; main rejects visible overlap and reflows the remaining map. It does not infer missing content. Save failure stays actionable, and shared-history Undo may reverse a manual or assistant edit; Redo reapplies the latest undone transaction through the journal. Source library inspection remains clearly labelled as source position. Tagged 8-bit H.264/BT.709 imports can show converted display frames at native dimensions, with source seek positions resolved against presentation PTS instead of average frame rate. The two-source path crosses its join, but remains still-frame inspection without audio playback or master rendering.
 
-Project shell (2026-10-07), shared by all five steps: a top bar with the project name, the step selector as one segmented control (a menu below 820 px), the assistant toggle and an icon button for source details. Under the preview sits one player bar (previous frame, play, next frame, position slider, time) and a compact timeline strip: one continuous bar coloured by recording with a hairline at each cut and no part labels (an automatic edit can leave a hundred parts), the current part slightly lighter, In/Out marks or the marked range, the playhead, and, when the edit is shorter than the recordings, one quiet "edited of original" length such as "16:38 of 21:28". Clicking the strip seeks; the slider remains the keyboard control. The current step's tools sit in one panel below; the preview yields space to it and the panel scrolls only when the window is too short. While a new frame decodes the previous frame stays on screen and a small "Reading frame…" notice appears only if decoding is slow. Edit's tools are one icon toolbar (trim, split | undo, redo | mark in/out, cut range, clear, zoom | restore). Zoom uses the marked range or two seconds from the playhead, then asks the user to click the picture where it should point (a hint over the preview; Esc cancels). While the playhead is inside a zoom, a small group shows its strength menu, Move target and Remove zoom; zoom blocks sit on the timeline strip with their strength. The preview shows zooms exactly as export renders them. A Speed menu (Normal, 2×, 3×, 4×, 8×) sets the speed of the marked range or of the part under the playhead; sped-up parts are hatched with a badge on the timeline strip (docs/12). Edit shortcuts: I/O marks, S split, Z zoom, Ctrl+Z undo, Ctrl+Shift+Z redo, Left/Right frame step (docs/22). Review shows Original, Edited, Clips and Removed (tenths of a second) next to **Verify draft**.
+Project shell (2026-10-07), shared by all five steps: a top bar with the project name, the step selector as one segmented control (a menu below 820 px), the assistant toggle and an icon button for source details. Under the preview sits one player bar (previous frame, play, next frame, position slider, time) and a compact timeline strip: one continuous bar coloured by recording with a hairline at each cut and no part labels (an automatic edit can leave a hundred parts), the current part slightly lighter, In/Out marks or the marked range, the playhead, and, when the edit is shorter than the recordings, one quiet "edited of original" length such as "16:38 of 21:28". Clicking the strip seeks; the slider remains the keyboard control. The current step's tools sit in one panel below; the preview yields space to it and the panel scrolls only when the window is too short. While a new frame decodes the previous frame stays on screen and a small "Reading frame…" notice appears only if decoding is slow. Edit's tools are one icon toolbar (trim, split | undo, redo | mark in/out, cut range, clear, zoom | restore). Zoom uses the marked range or two seconds from the playhead, then asks the user to click the picture where it should point (a hint over the preview; Esc cancels). While the playhead is inside a zoom, a small group shows its strength menu, Move target and Remove zoom; zoom blocks sit on the timeline strip with their strength. The preview shows zooms exactly as export renders them. A Speed menu (Normal, 2×, 3×, 4×, 8×) sets the speed of the marked range or of the part under the playhead; sped-up parts are hatched with a badge on the timeline strip (docs/12). Edit shortcuts: I/O marks, S split, Z zoom, Ctrl+Z undo, Ctrl+Shift+Z redo, Left/Right frame step (docs/22). These are the **full editor**, opened from Refine's **Open full editor** over the whole window (ADR 0031); Refine itself is the simple screen described in the next section.
 
-## S09: revision compare (Review stage)
+## S09: revision compare (opened from the full editor)
 
 Visible:
 
@@ -144,9 +144,9 @@ Visible:
 - Restore prior as a new draft
 - Continue editing
 
-## S10: review and quality summary (Review stage; internal screen `qa`)
+## S10: What Magic Edit did (Refine; internal screen `qa`)
 
-The current Review shell shows original and edited duration, clip count and removed time, and offers one **Verify draft** action. Main re-reads the committed project, draft journal and managed-source measurements, then returns the validated draft head. If the current head ends in a main-owned manual edit group, the same explicit action may record a structural-only checkpoint with evidence derived from the validated reads. AI-origin groups cannot use that checkpoint path. The success message is limited to structure and managed-source integrity; it does not assess spoken meaning, rendered joins, playback, or whole-result review. A changed draft invalidates the displayed result. This check does not create an editorial pass checkpoint or enable export. The action and result hide while the Source inspector or Codex drawer is open, preserving the single-panel rule.
+ADR 0031 removed the Review step. Its draft check, **Verify draft**, now runs by itself before every export: main re-reads the committed project, draft journal and managed-source measurements and returns the validated draft head. If the current head ends in a main-owned manual edit group it may record a structural-only checkpoint with evidence derived from the validated reads; AI-origin groups cannot use that path. The check says nothing when it passes; when it fails the export does not start and one plain message is shown. It does not assess spoken meaning, rendered joins or playback, create an editorial pass checkpoint, or enable export. The summary of what the automatic edit did is Refine's "What Magic Edit did" list (S08).
 
 The full editorial report exposes measured changes, unresolved cues and selective graphics suggestions at final-cut times. Each suggestion contains its complete prompt and remains distinct from an imported asset; viewing it never triggers generation or export. Keep this in the selected review surface or Codex drawer, respecting the single-panel rule. A pass checkpoint does not certify whole-result review.
 
@@ -176,9 +176,11 @@ Advanced codec settings are collapsed.
 
 Implemented (2026-10-07): the Export step shows two stacked, selectable quality options with radio dots (Lossless master by default, Smaller file), a one-line note about the choice and Export…; the file name and destination come from the system save dialog. While exporting it shows only progress, Rendering/Verifying and Cancel. Caption sidecars are not available yet.
 
-## S12: export complete
+## S12: Done (after a finished export; ADR 0031)
 
-Visible:
+A check mark, "Your video is ready", then a card with the final thumbnail, file name, length, size and folder; **Show in folder** (primary) and **Play**; the cards Make short clips (when Clips was skipped), Edit another video and Back to Home; and Keep editing, which returns to Export. The step bar reads every step as finished. Path and technical verification are not shown. The detailed layout is in the Done section below.
+
+Earlier text (2026-10-07), kept for the detail it records:
 
 - final thumbnail
 - filename and Open folder action, with path and technical verification under Details
@@ -187,6 +189,10 @@ Visible:
 Implemented (2026-10-07): file name, duration, size and "verified lossless" for a master, with Open video, Show in folder and Export again. The final thumbnail and Details are not shown yet.
 - Open folder
 - Return to project
+
+## S14: short clips (Clips step; ADR 0031)
+
+Its own step between Refine and Export, with **Skip**. The step finds or lets Claude pick self-contained moments, shows them as cards the user selects, and makes the selected clips with the existing short-clip export (docs/49). Skipping never blocks Export.
 
 ## S13: settings
 

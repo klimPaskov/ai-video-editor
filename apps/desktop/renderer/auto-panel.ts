@@ -26,8 +26,8 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function setupAutoPanel(options: {
   /** The rough cut finished: reload the transcript and draft. */
   onFinished(): void;
-  /** Open the Review step. */
-  review(): void;
+  /** Open Refine, where the result is checked. */
+  refine(): void;
   /** The rough-cut preset chosen under More options. */
   presetValue(): "gentle" | "balanced" | "tight";
   /** The connection chosen in the assistant drawer. */
@@ -39,7 +39,7 @@ export function setupAutoPanel(options: {
     document.getElementById(id)! as T;
   const start = element<HTMLButtonElement>("auto-all-start");
   const stop = element<HTMLButtonElement>("auto-all-stop");
-  const review = element<HTMLButtonElement>("auto-all-review");
+  const refine = element<HTMLButtonElement>("auto-all-refine");
   const progress = element<HTMLProgressElement>("auto-all-progress");
   const status = element("auto-all-status");
   const errorText = element("auto-all-error");
@@ -68,16 +68,16 @@ export function setupAutoPanel(options: {
         : "Edit my video";
     stop.hidden = !running();
     stop.disabled = stopRequested;
-    review.hidden = phase !== "done" && phase !== "partial";
+    refine.hidden = phase !== "done" && phase !== "partial";
     progress.hidden = !running();
     const text = running()
-      ? `${phase === "rough" ? "Step 1 of 2: rough cut" : "Step 2 of 2: graphics, captions and sound"}${detail ? ` · ${detail}` : ""}`
+      ? `${phase === "rough" ? "Step 1 of 2: cuts" : "Step 2 of 2: graphics, captions and sound"}${detail ? ` · ${detail}` : ""}`
       : phase === "done"
-        ? "Done. Review it, or undo steps in Refine."
+        ? "Done. Check it in Refine; every change can be undone."
         : phase === "partial"
-          ? "The rough cut is done. Review it, or undo steps in Refine."
+          ? "The cuts are done. Check them in Refine; every change can be undone."
           : phase === "stopped"
-            ? "Stopped. What was already done stays in the edit and can be undone."
+            ? "Stopped. What was already done stays and can be undone in Refine."
             : "";
     status.textContent = text;
     status.hidden = !text;
@@ -210,7 +210,7 @@ export function setupAutoPanel(options: {
         phase = "partial";
         message = [
           roughNote,
-          `Step 2 (graphics, captions and sound) needs Claude and was not run. ${blocked}`,
+          `Graphics, captions and sound need Claude and were not added. ${blocked}`,
         ]
           .filter(Boolean)
           .join(" ");
@@ -228,7 +228,7 @@ export function setupAutoPanel(options: {
   }
 
   start.addEventListener("click", () => void run());
-  review.addEventListener("click", () => options.review());
+  refine.addEventListener("click", () => options.refine());
   stop.addEventListener("click", () => {
     const id = runProject;
     if (!id || !running()) return;

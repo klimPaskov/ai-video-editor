@@ -119,11 +119,11 @@ test("app actions reach the same code as the buttons and answer in plain words",
     message: "Plain words for the user.",
   });
   await tools.invoke("app.stop_edit", head);
-  await tools.invoke("app.go_to_step", { ...head, step: "review" });
+  await tools.invoke("app.go_to_step", { ...head, step: "clips" });
   assert.deepEqual(calls, [
     ["magic", project, "tight"],
     ["stop", project],
-    ["step", project, "review"],
+    ["step", project, "clips"],
   ]);
 });
 
@@ -136,6 +136,9 @@ test("app action input is validated and scoped to the active project", async () 
     ["app.start_magic_edit", { ...head, preset: "tight", provider: "claude" }],
     ["app.go_to_step", { ...head, step: "cleanup" }],
     ["app.go_to_step", { ...head, step: "delete" }],
+    // The Review step is gone, and Done is reached only by exporting.
+    ["app.go_to_step", { ...head, step: "review" }],
+    ["app.go_to_step", { ...head, step: "done" }],
     ["app.stop_edit", { ...head, extra: true }],
     ["app.stop_edit", { schema_version: "2.0", project_id: project }],
   ] as const)
@@ -241,8 +244,8 @@ test("tool inventories: three shared actions, one Claude-only, no export or clea
   );
   for (const name of appActionToolNames)
     assert.doesNotMatch(name, /export|delete|clean|remove/u, name);
-  // The steps are the project's own stages, in order.
-  assert.deepEqual([...appActionSteps], [...projectStages]);
+  // The steps are the project's stages without the Done screen (only an export reaches it), in order.
+  assert.deepEqual([...appActionSteps], projectStages.slice(0, 5));
   // The story edit can never start other actions.
   for (const name of roughCutTools)
     assert.equal(appActionToolNames.has(name), false, name);
@@ -636,7 +639,7 @@ function appFixture(
   const log: string[] = [];
   let idle = false;
   let busy = options.busy ?? false;
-  let step = options.step ?? "review";
+  let step = options.step ?? "clips";
   let view = { ...idleMagicWandView() };
   const deferred = new DeferredActions(2);
   const provider = options.provider ?? "codex";
@@ -668,7 +671,7 @@ function appFixture(
     currentStep: async () => step,
     navigate: async (_id, next) => {
       if (next === "export" && step === "edit")
-        throw new Error("Stop local transcription before leaving Auto Edit.");
+        throw new Error("Stop local transcription before leaving Magic Edit.");
       log.push(`navigate:${next}`);
       step = next;
     },
@@ -696,8 +699,8 @@ function appFixture(
   };
 }
 
-test("Magic Edit from a chat starts only after the reply, in Auto Edit, with that chat's connection", async () => {
-  const fixture = appFixture({ provider: "openai", step: "review" });
+test("Magic Edit from a chat starts only after the reply, in Magic Edit, with that chat's connection", async () => {
+  const fixture = appFixture({ provider: "openai", step: "clips" });
   const answer = await fixture.actions.startMagicEdit(project, "gentle");
   assert.equal(answer.status, "queued");
   assert.match(answer.message, /as soon as this reply is finished/u);
@@ -705,7 +708,7 @@ test("Magic Edit from a chat starts only after the reply, in Auto Edit, with tha
   assert.deepEqual(fixture.log, [], "nothing runs while the reply is written");
   fixture.reply();
   await until(() => fixture.log.includes("magic:gentle:openai"), "Magic Edit");
-  // The transcript needs Auto Edit or Edit, so the app moves there first.
+  // The transcript needs Magic Edit or Edit, so the app moves there first.
   assert.deepEqual(fixture.log, ["navigate:auto_edit", "magic:gentle:openai"]);
 });
 
@@ -737,9 +740,9 @@ test("a second start while one is running or waiting says so; Stop ends either",
 
 test("moving to a step reports what happened, including a refusal in plain words", async () => {
   const fixture = appFixture({ step: "auto_edit" });
-  const moved = await fixture.actions.goToStep(project, "review");
+  const moved = await fixture.actions.goToStep(project, "clips");
   assert.equal(moved.status, "moved");
-  assert.match(moved.message, /Review/u);
+  assert.match(moved.message, /Clips/u);
   const exportStep = await fixture.actions.goToStep(project, "export");
   assert.equal(exportStep.status, "moved");
   assert.match(exportStep.message, /Nothing is exported until/u);
