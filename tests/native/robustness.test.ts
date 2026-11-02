@@ -187,15 +187,27 @@ try {
     const left = await statfs(full);
     assert.ok(left.bavail * left.bsize < 4096, "the volume is full");
     await electron.evaluate(({ dialog }, path) => {
-      dialog.showSaveDialog = async () => ({
-        canceled: false,
-        filePath: path,
-      });
+      const counted = globalThis as unknown as { saveCalls: number };
+      counted.saveCalls = 0;
+      dialog.showSaveDialog = async () => {
+        counted.saveCalls += 1;
+        return { canceled: false, filePath: path };
+      };
     }, target);
     await page.locator("#export-start").click();
-    // The earlier failure is still showing: wait for this export to begin
-    // before waiting for how it ends.
-    await expect(page.locator("#export-running")).toBeVisible();
+    // The earlier failure is still showing, and a full disk can fail faster
+    // than the running state can be observed: wait for this export to ask
+    // where to save, give it a moment, then wait for how it ends.
+    await expect
+      .poll(
+        () =>
+          electron.evaluate(
+            () => (globalThis as unknown as { saveCalls: number }).saveCalls,
+          ),
+        { timeout: 30_000 },
+      )
+      .toBe(1);
+    await page.waitForTimeout(3_000);
     await expect(page.locator("#export-running")).toBeHidden({
       timeout: 120_000,
     });

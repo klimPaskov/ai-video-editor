@@ -58,6 +58,10 @@ export async function exportFinished(
 ): Promise<void> {
   await expect(page.locator("#done-actions")).toBeVisible({ timeout });
   await expect(page.locator("#done-name")).not.toHaveText("");
-  await page.locator("#done-keep").click();
-  await expect(page.locator("#export-done")).toBeVisible();
+  // A click while the move to Done is still being saved is ignored, so try
+  // again until the move back happens.
+  await expect(async () => {
+    await page.locator("#done-keep").click({ timeout: 2_000 });
+    await expect(page.locator("#export-done")).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
 }

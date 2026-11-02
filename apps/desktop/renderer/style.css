@@ -154,7 +154,7 @@
   --text-3: color-mix(in srgb, var(--c-text) 62%, var(--c-bg));
   --accent: var(--c-accent);
   --accent-hover: color-mix(in srgb, var(--c-accent) 86%, black);
-  --accent-text: color-mix(in srgb, var(--c-accent) 70%, var(--c-text));
+  --accent-text: color-mix(in srgb, var(--c-accent) 58%, var(--c-text));
   --accent-soft: color-mix(in srgb, var(--c-accent) 16%, transparent);
   --clip: var(--c-accent);
   --clip-current: color-mix(in srgb, var(--c-accent) 86%, black);

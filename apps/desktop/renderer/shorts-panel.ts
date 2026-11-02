@@ -75,8 +75,10 @@ export function setupShortsPanel(options: {
     find.disabled = pending || !projectId || picking;
     pick.disabled = pending || !projectId || picking;
     pick.textContent = picking ? "Claude is choosing…" : "Pick with Claude";
-    find.textContent =
-      view?.status === "none" || !view ? "Find clips" : "Find again";
+    // Until clips exist the step's one button finds them; this one only
+    // appears to look again.
+    find.hidden = view?.status !== "ready" || view.candidates.length === 0;
+    find.textContent = "Find again";
     const running = view?.job.status === "running";
     const shown = view?.status === "ready" ? view.candidates : [];
     for (const candidate of shown)

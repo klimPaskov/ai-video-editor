@@ -211,8 +211,11 @@ try {
 
   step = "find";
   await openStep(page, "Clips");
-  await expect(page.locator("#shorts-find")).toBeEnabled();
-  await page.locator("#shorts-find").click();
+  // Before any clips exist the step's one button finds them.
+  await expect(page.locator("#shorts-export-all")).toHaveText("Find clips");
+  await expect(page.locator("#shorts-find")).toBeHidden();
+  await expect(page.locator("#shorts-export-all")).toBeEnabled();
+  await page.locator("#shorts-export-all").click();
   const items = page.locator("#shorts-list .short-item");
   await expect(items.first()).toBeVisible({ timeout: 30_000 });
   const found = await items.count();
