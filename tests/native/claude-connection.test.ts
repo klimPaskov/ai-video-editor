@@ -427,19 +427,23 @@ try {
     await page
       .locator("#codex-thread-input")
       .fill(
-        "Without editing anything, read the project summary and the timeline summary one call at a time, six times each, then reply with the clip count.",
+        "Without editing anything, read the project summary and the timeline summary one call at a time, twenty-five times each, then reply with the clip count.",
       );
     await page.locator("#send-codex-thread").click();
     await expect
       .poll(async () => (await thread()).status, { timeout: 60_000 })
       .toBe("running");
     await expect(page.locator("#interrupt-codex-thread")).toBeEnabled();
-    await page.locator("#interrupt-codex-thread").click();
-    await expect
-      .poll(async () => (await thread()).message, { timeout: 60_000 })
-      .toBe(
+    // The interface learns of the running turn by polling: click Stop until
+    // the turn has ended with its fixed message.
+    await expect(async () => {
+      const stop = page.locator("#interrupt-codex-thread");
+      if (await stop.isEnabled()) await stop.click();
+      assert.equal(
+        (await thread()).message,
         "This turn stopped. Review the current draft before sending again.",
       );
+    }).toPass({ timeout: 90_000, intervals: [3_000] });
     assert.equal((await records()).length, 2, "Stop must not change the draft");
     const messagesBefore = (await thread()).messages.length;
 
