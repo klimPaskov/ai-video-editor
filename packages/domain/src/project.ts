@@ -324,10 +324,15 @@ export function createInitialProject(
       (BigInt(count) * BigInt(rate.denominator) * 1_000_000n) /
         BigInt(rate.numerator),
     );
-    // Matroska duration metadata can be quantized to milliseconds. No inferred frame count is stored.
+    // Matroska duration metadata can be quantized to milliseconds, and files
+    // cut without re-encoding can differ from their frame count by under one
+    // frame. No inferred frame count is stored.
+    const oneFrameUs = Math.ceil(
+      (1_000_000 * rate.denominator) / rate.numerator,
+    );
     if (
       !Number.isSafeInteger(frameDuration) ||
-      Math.abs(frameDuration - durationUs) > 1000
+      Math.abs(frameDuration - durationUs) > Math.max(1000, oneFrameUs)
     )
       invalid(
         "Frame count, measured rate and duration require an explicit timing adapter.",
