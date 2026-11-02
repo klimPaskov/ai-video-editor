@@ -4,7 +4,7 @@ User requirement (2026-10-07): once a video is done, the app also makes short-fo
 
 ## What BridgeClip does, in brief
 
-BridgeClip turns long videos into captioned short clips. It transcribes the whole source, asks a planning model for moments with explicit setup and payoff, then has a separate judge check each candidate for a clear opening, a complete ending, self-contained clarity and sponsorship, with fixed thresholds and no minimum clip count. It reframes to 9:16 by following faces and fitting screen content into panels, burns in captions in several styles, offers 1× to 2× speed with pitch kept, and keeps every export in a library. Its documents were read as research only; no code was copied.
+BridgeClip turns long videos into captioned short clips. It transcribes the whole source, asks a planning model for moments with explicit setup and payoff, then has a separate judge check each candidate for a clear opening, a complete ending, self-contained clarity and sponsorship, with fixed thresholds and no minimum clip count. It reframes to 9:16 by following faces and fitting screen content into panels, burns in captions in several styles, offers 1× to 2× speed with pitch kept, and keeps every export in a library. Its documents were read as research only; no code was copied. It was studied again on 2026-11-02 for the engine described in [57](57_CLIPS_ENGINE_PLAN.md); still no code, text or tests were copied.
 
 ## What this app does now
 
@@ -17,10 +17,14 @@ Short clips live in the Export step, after the main export, because they are mad
 ## Differences from BridgeClip, and why
 
 - No AI planner or judge yet. The app's AI connections (Claude by default, Codex, API providers) act only through guarded editor tools; a clip-proposal tool that lets them suggest or rank candidates with cited transcript lines is the next step, so that suggestions stay checkable and the local rules remain the fallback.
-- No face tracking. This app's main input is screen recordings, where fitting the whole screen is safer than cropping to a face. Face and webcam-aware framing come later with camera layouts (P8-02).
+- Face following (2026-11-02, Rust engine, [57](57_CLIPS_ENGINE_PLAN.md)). **Fill the frame** follows the speaker's face when the engine is present and the pinned face model could be fetched: faces are detected on two frames per second, a webcam bubble in a corner is ignored, and a calm camera path (dead zone, speed limit, held through short gaps) moves the crop. With no usable face the crop stays at the chosen position, as before. **Fit** is unchanged, because the whole screen is safer for screen recordings. Webcam-aware layouts come later with camera layouts (P8-02).
 - No speed change, title cards, chapters or posting yet.
 - Exports are files the user saves; there is no separate clip library yet.
 
 ## Evidence
 
 `tests/media/short-clips.test.ts` (sentence splitting, dependent openings avoided, ranges and scores, no clips from a short draft, window mapping through cuts, reframing filters), `tests/media/export-render.test.ts` (a vertical short with blurred fill and burned captions at 1080×1920), `tests/foundation/test_desktop_ipc.py` (path-free `shorts:*` contract) and packaged `tests/native/short-clips.test.ts` (a public 60 s talk excerpt transcribed locally, clips found, preview, a vertical MP4 exported with captions and checked for size, duration and fill, a discard).
+
+## Engine (2026-11-02)
+
+Clips are rendered by the Rust engine (`engine/`, [58](58_RUST_ENGINE_PLAN.md)) when it is packaged, in one FFmpeg pass with an exact-frame check of the result, one retry on a safer path (software encoder, fixed crop) and cleanup of partial files. The TypeScript pipeline above stays as the fallback for audio cleanup, a missing or failing engine, and as the parity reference (`tests/media/short-engine.test.ts`). `reframeFilter` now crops before scaling for **Fill** and blurs the **Fit** backdrop at a quarter of the size, which speeds both paths.

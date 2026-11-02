@@ -126,6 +126,8 @@ import {
   defaultAudioSettings,
 } from "../../../packages/domain/src/audio-settings.ts";
 import { DesktopShortClips, ShortClipError } from "./short-clips.ts";
+import { resolveEngine } from "../../../packages/media-engine/src/engine-client.ts";
+import { ensureFaceModel } from "../../../packages/media-engine/src/face-model.ts";
 import {
   assertShortClipRequest,
   assertShortClipsView,
@@ -537,8 +539,17 @@ async function start(): Promise<void> {
     );
     return cues.length ? { cues, settings } : null;
   };
+  // The Rust engine is optional until it is proven in the packaged app; a
+  // missing or damaged one leaves the TypeScript pipeline in charge.
+  const clipsEngine = await resolveEngine(
+    process.resourcesPath,
+    app.isPackaged ? undefined : process.env.URUSHI_ENGINE,
+  ).catch(() => null);
   shortClips = new DesktopShortClips({
     root: path.join(userData, "short-clips"),
+    engine: clipsEngine,
+    faceModel: (signal) =>
+      ensureFaceModel(path.join(userData, "models"), signal),
     renderGraphics: (request) =>
       renderGraphicsTrack(request, `${origin}/stage.html`),
     drafts,

@@ -30,6 +30,11 @@ import {
   type ShortJobView,
 } from "../../../packages/domain/src/short-clips-view.ts";
 import { exportDraft } from "../../../packages/media-engine/src/render.ts";
+import { EngineError } from "../../../packages/media-engine/src/engine-client.ts";
+import {
+  engineLimit,
+  renderShortWithEngine,
+} from "../../../packages/media-engine/src/short-engine.ts";
 import { planDraft } from "./export.ts";
 import type { GraphicsRenderRequest, GraphicsTrack } from "./graphics-track.ts";
 import { zoomFilter } from "../../../packages/domain/src/zoom.ts";
@@ -56,6 +61,14 @@ export interface ShortClipsOptions {
   chooseDestination(defaultPath: string): Promise<string | null>;
   ffmpeg?: string;
   ffprobe?: string;
+  /**
+   * The Rust engine (docs/58) makes clips in one pass with a face-following
+   * crop. Without it, or when it fails, the verified TypeScript pipeline
+   * below makes the clip.
+   */
+  engine?: string | null;
+  /** Makes sure the pinned face model is present; its path, or null. */
+  faceModel?: (signal: AbortSignal) => Promise<string | null>;
   /** Renders motion graphics into a lossless track (see export). */
   renderGraphics?: (
     request: GraphicsRenderRequest,
@@ -88,6 +101,15 @@ function safeName(title: string): string {
       .slice(0, 80)
       .trim() || "Clip"
   );
+}
+
+/** Plain message for a failed clip; technical detail stays in the engine. */
+function issueFor(error: unknown): ShortClipsView["message"] {
+  if (error instanceof EngineError) {
+    if (error.code === "DISK_FULL") return shortIssues.diskFull;
+    if (error.code === "TIMEOUT") return shortIssues.timedOut;
+  }
+  return shortIssues.failed;
 }
 
 /**
@@ -280,59 +302,110 @@ export class DesktopShortClips {
             signal: controller.signal,
           });
         }
-        await exportDraft({
-          plan,
-          profile: "smaller_mp4",
-          outputPath,
-          // The save dialog asked before replacing an existing file.
-          replace: true,
-          signal: controller.signal,
-          audioCleanup,
-          compose: {
-            // Zooms apply to the full frame first, then graphics are drawn,
-            // then the frame is reframed.
-            filter:
-              zoomFilter(
-                zooms,
-                plan.format.video.width,
-                plan.format.video.height,
-              ) ?? "",
-            ...(track ? { graphics: track } : {}),
-            after: reframeFilter(
-              request.format,
-              request.framing,
-              request.position,
-            ),
-            ...(ass !== undefined ? { ass } : {}),
-            width,
-            height,
-            pixelFormat: "yuv420p",
-            color: {
-              range: "tv",
-              space: "bt709",
-              primaries: "bt709",
-              transfer: "bt709",
+        const zoom =
+          zoomFilter(
+            zooms,
+            plan.format.video.width,
+            plan.format.video.height,
+          ) ?? "";
+        const after = reframeFilter(
+          request.format,
+          request.framing,
+          request.position,
+        );
+        let made = false;
+        if (
+          this.options.engine &&
+          !engineLimit({
+            audioCleanup: audioCleanup.normalize || audioCleanup.denoise,
+          })
+        ) {
+          try {
+            const fill =
+              request.framing === "fill" && request.format !== "landscape";
+            const faceModel = fill
+              ? await this.options
+                  .faceModel?.(controller.signal)
+                  .catch(() => null)
+              : null;
+            await renderShortWithEngine({
+              engine: this.options.engine,
+              plan,
+              outputPath,
+              width,
+              height,
+              zoomFilter: zoom,
+              graphics: track?.segments ?? [],
+              reframeFilter: after,
+              fill,
+              position: request.position,
+              ...(ass !== undefined ? { ass } : {}),
+              faceModel: faceModel ?? null,
+              ffmpeg: this.options.ffmpeg ?? "ffmpeg",
+              ffprobe: this.options.ffprobe ?? "ffprobe",
+              signal: controller.signal,
+              onProgress: (fraction) => {
+                if (this.job === job)
+                  job.fraction = Math.round(fraction * 1000) / 1000;
+              },
+            });
+            made = true;
+          } catch (error) {
+            // Cancellation, a full disk and a stuck job end the clip; any
+            // other engine failure falls back to the verified pipeline.
+            if (
+              controller.signal.aborted ||
+              (error instanceof EngineError &&
+                (error.code === "DISK_FULL" || error.code === "TIMEOUT"))
+            )
+              throw error;
+          }
+        }
+        if (!made)
+          await exportDraft({
+            plan,
+            profile: "smaller_mp4",
+            outputPath,
+            // The save dialog asked before replacing an existing file.
+            replace: true,
+            signal: controller.signal,
+            audioCleanup,
+            compose: {
+              // Zooms apply to the full frame first, then graphics are drawn,
+              // then the frame is reframed.
+              filter: zoom,
+              ...(track ? { graphics: track } : {}),
+              after,
+              ...(ass !== undefined ? { ass } : {}),
+              width,
+              height,
+              pixelFormat: "yuv420p",
+              color: {
+                range: "tv",
+                space: "bt709",
+                primaries: "bt709",
+                transfer: "bt709",
+              },
             },
-          },
-          executables: {
-            ffmpeg: this.options.ffmpeg ?? "ffmpeg",
-            ffprobe: this.options.ffprobe ?? "ffprobe",
-          },
-          onProgress: (progress) => {
-            if (this.job === job)
-              job.fraction = Math.round(progress.fraction * 1000) / 1000;
-          },
-        });
+            executables: {
+              ffmpeg: this.options.ffmpeg ?? "ffmpeg",
+              ffprobe: this.options.ffprobe ?? "ffprobe",
+            },
+            onProgress: (progress) => {
+              if (this.job === job)
+                job.fraction = Math.round(progress.fraction * 1000) / 1000;
+            },
+          });
         if (this.job === job)
           this.job = { ...job, status: "completed", fraction: null };
-      } catch {
+      } catch (error) {
         if (this.job === job)
           this.job = {
             ...job,
             status: "failed",
             fraction: null,
             fileName: null,
-            message: controller.signal.aborted ? null : shortIssues.failed,
+            message: controller.signal.aborted ? null : issueFor(error),
           };
       } finally {
         if (scratch) await rm(scratch, { recursive: true, force: true });

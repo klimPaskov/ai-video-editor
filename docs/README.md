@@ -47,6 +47,8 @@ The numbered documents are the product and engineering specifications. Many end 
 - [Local B-roll matching](38_BROLL_MATCHING.md)
 - [Editorial first-cut requirements](47_EDITORIAL_FIRST_CUT.md)
 - [Short clips](49_SHORT_CLIPS.md)
+- [Clips engine plan](57_CLIPS_ENGINE_PLAN.md)
+- [Rust engine plan](58_RUST_ENGINE_PLAN.md)
 - [Full AI edit](50_FULL_AI_EDIT.md)
 
 ### AI assistants and tools

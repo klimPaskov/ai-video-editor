@@ -281,6 +281,11 @@ export function shortSize(format: ShortFormat): {
  * whole frame over a blurred, darkened fill of itself (good for screen
  * recordings); "fill" crops to the format at `position` (0 left/top, 1
  * right/bottom). The result is 4:2:0 at the short's size.
+ *
+ * Both cut or blur at reduced size and scale once: cropping before scaling
+ * keeps "fill" from scaling the whole frame up first, and the blurred
+ * backdrop is made at a quarter of the size, which looks the same and is
+ * several times cheaper.
  */
 export function reframeFilter(
   format: ShortFormat,
@@ -291,14 +296,18 @@ export function reframeFilter(
   const at = Math.min(1, Math.max(0, position)).toFixed(4);
   if (framing === "fill")
     return [
-      `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos`,
-      `crop=${width}:${height}:(iw-ow)*${at}:(ih-oh)*${at}`,
+      `crop='trunc(min(iw,ih*${width}/${height})/2)*2':'trunc(min(ih,iw*${height}/${width})/2)*2':'(iw-ow)*${at}':'(ih-oh)*${at}'`,
+      `scale=${width}:${height}:flags=bicubic`,
       "setsar=1",
     ].join(",");
+  const small = {
+    width: Math.round(width / 8) * 2,
+    height: Math.round(height / 8) * 2,
+  };
   return [
     "split=2[base][front]",
-    `[base]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=bilinear,crop=${width}:${height},gblur=sigma=28,eq=brightness=-0.12[back]`,
-    `[front]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos[fore]`,
+    `[base]scale=${small.width}:${small.height}:force_original_aspect_ratio=increase:flags=fast_bilinear,crop=${small.width}:${small.height},gblur=sigma=7,eq=brightness=-0.12,scale=${width}:${height}:flags=fast_bilinear[back]`,
+    `[front]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=bicubic[fore]`,
     "[back][fore]overlay=(W-w)/2:(H-h)/2,setsar=1",
   ].join(";");
 }

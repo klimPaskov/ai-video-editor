@@ -55,3 +55,7 @@ CLAUDE.local.md
 .claude/worktrees/
 .claude/cache/
 .claude/tasks/
+
+# Rust engine build output
+engine/target/
+**/target/

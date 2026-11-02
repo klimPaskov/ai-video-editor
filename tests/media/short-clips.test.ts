@@ -116,7 +116,7 @@ test("a window maps through cuts to source ranges and shifts words", () => {
 test("reframing filters target the short's size", () => {
   assert.match(
     reframeFilter("vertical", "fill", 0.25),
-    /scale=1080:1920.*crop=1080:1920:\(iw-ow\)\*0\.2500/u,
+    /crop=.*\(iw-ow\)\*0\.2500.*scale=1080:1920/u,
   );
   assert.match(
     reframeFilter("square", "fit"),

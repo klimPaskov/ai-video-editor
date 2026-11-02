@@ -2173,7 +2173,7 @@
         "captions": { "type": "boolean" }
       }
     },
-    "shortMessage": { "anyOf": [{ "type": "null" }, { "enum": ["Short clips use the transcript. Transcribe the video first.", "No self-contained moments of 15 to 60 seconds were found in this draft.", "A clip is already exporting.", "The clip could not be exported. Try again.", "The draft changed since these clips were found. Find clips again.", "That clip is no longer available. Find clips again."] }] },
+    "shortMessage": { "anyOf": [{ "type": "null" }, { "enum": ["Short clips use the transcript. Transcribe the video first.", "No self-contained moments of 15 to 60 seconds were found in this draft.", "A clip is already exporting.", "The clip could not be exported. Try again.", "There is not enough free space to save the clip. Free some space and try again.", "The clip took too long to make. Try a shorter clip.", "The draft changed since these clips were found. Find clips again.", "That clip is no longer available. Find clips again."] }] },
     "shortClipsView": {
       "description": "Short clips found locally in the draft transcript. Output paths stay in main; only the exported file name is shown.",
       "type": "object",
