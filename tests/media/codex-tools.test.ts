@@ -1071,6 +1071,24 @@ test("transcript.get_range returns bounded path-free source words and stable pag
     service.invoke("transcript.get_range", { ...request, limit: 251 }),
     expectCode("invalid_request"),
   );
+  // A range past the transcript's end reads up to that end.
+  const duration = active.source.duration_us;
+  const tail = (await service.invoke("transcript.get_range", {
+    ...request,
+    source_start_us: 0,
+    source_end_us: duration + 40_000,
+    limit: 10,
+  })) as { requested_source_range: { end_us: number }; words: unknown[] };
+  assert.equal(tail.requested_source_range.end_us, duration);
+  assert.equal(tail.words.length, 4);
+  await assert.rejects(
+    service.invoke("transcript.get_range", {
+      ...request,
+      source_start_us: duration,
+      source_end_us: duration + 40_000,
+    }),
+    expectCode("transcript_unavailable"),
+  );
 });
 
 test("Claude-origin split and undo are attributed in the shared journal", async () => {
@@ -1546,4 +1564,1032 @@ test("zoom.set refuses a range that spans footage from two recordings", async ()
     expectCode("service_unavailable"),
   );
   assert.equal(applied, 1);
+});
+
+type GraphicSummary = {
+  graphic_id: string;
+  name: string;
+  layer: number;
+  duration_us: number;
+  source_id: string;
+  source_us: number;
+  timeline_range: { start_us: number; end_us: number } | null;
+  html_bytes: number;
+  css_bytes: number;
+};
+
+function graphicInput(snapshot: Snapshot, requestId: string) {
+  return {
+    ...head(snapshot, requestId),
+    pass_group_id: "assistant-graphics-001",
+    start_us: 200_000,
+    duration_us: 500_000,
+    name: "Title card",
+    layer: 1,
+    html: '<div class="title">Hello</div>',
+    css: ".title { color: white; animation: in 400ms ease-out both; } @keyframes in { from { opacity: 0 } }",
+  };
+}
+
+test("graphics.set places a HyperFrames composition from the workspace", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const sha = "c".repeat(64);
+  const imported: string[] = [];
+  const claude = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    undefined,
+    async (_project, path) => {
+      imported.push(path);
+      if (path.includes("broken")) {
+        const error = new Error(
+          'Compositions cannot load "https://example.com/a.js" from the network.',
+        );
+        error.name = "CompositionError";
+        throw error;
+      }
+      return { sha256: sha };
+    },
+  );
+  // A composition graphic has no HTML or CSS of its own.
+  const base: Record<string, unknown> = graphicInput(
+    await drafts.snapshot(projectId),
+    "composition-1",
+  );
+  delete base.html;
+  delete base.css;
+  const result = (await claude.invoke("graphics.set", {
+    ...base,
+    composition_path: "compositions/intro/index.html",
+  })) as { status: string };
+  assert.equal(result.status, "committed");
+  const graphic = (await drafts.snapshot(projectId)).draft.timeline
+    .graphics![0]!;
+  assert.equal(graphic.composition_sha256, sha);
+  assert.equal(graphic.html, "");
+  assert.equal(graphic.css, "");
+  // The importer's own reason goes back to Claude.
+  await assert.rejects(
+    claude.invoke("graphics.set", {
+      ...graphicInput(await drafts.snapshot(projectId), "composition-2"),
+      html: undefined,
+      css: undefined,
+      composition_path: "compositions/broken/index.html",
+    }),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "composition_rejected" &&
+      /from the network/u.test(error.message),
+  );
+  // Both forms at once, or neither, is refused.
+  await assert.rejects(
+    claude.invoke("graphics.set", {
+      ...graphicInput(await drafts.snapshot(projectId), "composition-3"),
+      composition_path: "compositions/intro/index.html",
+    }),
+    expectCode("invalid_request"),
+  );
+  await assert.rejects(
+    claude.invoke("graphics.set", {
+      ...base,
+      ...head(await drafts.snapshot(projectId), "composition-4"),
+    }),
+    expectCode("invalid_request"),
+  );
+  // Routes without a workspace cannot place compositions.
+  await assert.rejects(
+    new CodexVideoEditToolService(projectId, drafts, "codex").invoke(
+      "graphics.set",
+      {
+        ...base,
+        ...head(await drafts.snapshot(projectId), "composition-5"),
+        composition_path: "compositions/intro/index.html",
+      },
+    ),
+    expectCode("tool_not_available"),
+  );
+  assert.deepEqual(imported, [
+    "compositions/intro/index.html",
+    "compositions/broken/index.html",
+  ]);
+});
+
+test("graphics.set anchors a validated graphic, explains unsafe content, and shares Undo", async () => {
+  const { root, source, active, drafts, service } = await fixture();
+  const projectId = active.project.project_id;
+  const sourceBefore = await readFile(source);
+  const claude = new CodexVideoEditToolService(projectId, drafts, "claude");
+  for (const [html, reason] of [
+    ["<script>alert(1)</script>", "Scripts are not allowed in graphics."],
+    ['<img src="https://example.com/a.png">', "Graphics cannot load anything"],
+    ["<div onclick=x>hi</div>", "Event handler attributes are not allowed"],
+  ] as const)
+    await assert.rejects(
+      claude.invoke("graphics.set", {
+        ...graphicInput(await drafts.snapshot(projectId), "graphic-bad-001"),
+        html,
+      }),
+      (error: Error) =>
+        (error as CodexVideoEditToolError).code === "graphic_rejected" &&
+        error.message.includes(reason),
+    );
+  for (const invalid of [
+    { duration_us: 99_999 },
+    { layer: 100 },
+    { name: "" },
+    { start_us: 5_000_000 },
+    { css: "x".repeat(24_577) },
+    { origin: "manual" },
+  ])
+    await assert.rejects(
+      claude.invoke("graphics.set", {
+        ...graphicInput(await drafts.snapshot(projectId), "graphic-bad-002"),
+        ...invalid,
+      }),
+      expectCode("invalid_request"),
+    );
+  const added = (await claude.invoke(
+    "graphics.set",
+    graphicInput(await drafts.snapshot(projectId), "graphic-set-001"),
+  )) as ToolCommit;
+  const graphics = (added.draft as unknown as { graphics: GraphicSummary[] })
+    .graphics;
+  assert.equal(graphics.length, 1);
+  const graphic = graphics[0]!;
+  assert.deepEqual(
+    { ...graphic, graphic_id: "" },
+    {
+      graphic_id: "",
+      name: "Title card",
+      layer: 1,
+      duration_us: 500_000,
+      source_id: active.source.source_id,
+      source_us: 200_000,
+      timeline_range: { start_us: 200_000, end_us: 700_000 },
+      html_bytes: Buffer.byteLength(
+        graphicInput(await drafts.snapshot(projectId), "x").html,
+      ),
+      css_bytes: Buffer.byteLength(
+        graphicInput(await drafts.snapshot(projectId), "x").css,
+      ),
+    },
+  );
+  // A stale head is refused before anything is written.
+  await assert.rejects(
+    claude.invoke(
+      "graphics.set",
+      graphicInput(
+        {
+          draft: {
+            ...(await drafts.snapshot(projectId)).draft,
+            draft_sequence: 0,
+          },
+        } as Snapshot,
+        "graphic-stale-001",
+      ),
+    ),
+    expectCode("stale_draft"),
+  );
+  await assert.rejects(
+    claude.invoke("graphics.set", {
+      ...graphicInput(await drafts.snapshot(projectId), "graphic-missing-001"),
+      graphic_id: "graphic-does-not-exist",
+    }),
+    expectCode("edit_conflict"),
+  );
+  const replaced = (await claude.invoke("graphics.set", {
+    ...graphicInput(await drafts.snapshot(projectId), "graphic-replace-001"),
+    graphic_id: graphic.graphic_id,
+    name: "Lower third",
+    start_us: 0,
+  })) as ToolCommit;
+  const after = (replaced.draft as unknown as { graphics: GraphicSummary[] })
+    .graphics;
+  assert.deepEqual(
+    after.map((item) => [item.graphic_id, item.name, item.source_us]),
+    [[graphic.graphic_id, "Lower third", 0]],
+  );
+  // The summary lists it through timeline.get_summary as well.
+  const summary = (await claude.invoke("timeline.get_summary", {
+    schema_version: "1.0",
+    project_id: projectId,
+  })) as { graphics: GraphicSummary[] };
+  assert.equal(summary.graphics[0]?.name, "Lower third");
+  const removed = (await claude.invoke("graphics.remove", {
+    ...head(await drafts.snapshot(projectId), "graphic-remove-001"),
+    pass_group_id: "assistant-graphics-002",
+    graphic_id: graphic.graphic_id,
+  })) as ToolCommit;
+  assert.deepEqual(
+    (removed.draft as unknown as { graphics: GraphicSummary[] }).graphics,
+    [],
+  );
+  const restored = (await service.invoke("timeline.undo", {
+    ...head(await drafts.snapshot(projectId), "graphic-undo-001"),
+    target_transaction_id: removed.transaction_id,
+  })) as ToolCommit;
+  assert.equal(
+    (restored.draft as unknown as { graphics: GraphicSummary[] }).graphics[0]
+      ?.name,
+    "Lower third",
+  );
+  assert.deepEqual(
+    (await journalRecords(root, projectId)).map(journalSummary),
+    [
+      ["claude", "apply", "graphics", "graphic"],
+      ["claude", "apply", "graphics", "graphic"],
+      ["claude", "apply", "graphics", "graphic"],
+      ["codex", "undo", null, null],
+    ],
+  );
+  assert.deepEqual(await readFile(source), sourceBefore);
+});
+
+test("captions.configure and audio.configure set undoable draft choices", async () => {
+  const { root, active, drafts, service } = await fixture();
+  const projectId = active.project.project_id;
+  const claude = new CodexVideoEditToolService(projectId, drafts, "claude");
+  const summary = async () =>
+    (await claude.invoke("timeline.get_summary", {
+      schema_version: "1.0",
+      project_id: projectId,
+    })) as { captions: unknown; audio: unknown };
+  assert.deepEqual(await summary(), {
+    ...(await summary()),
+    captions: null,
+    audio: null,
+  });
+  const captions = {
+    pass_group_id: "assistant-captions-001",
+    enabled: true,
+    style: "highlight",
+    size: "large",
+    position: "bottom",
+    burn_in: true,
+  };
+  for (const invalid of [
+    { style: "neon" },
+    { burn_in: "yes" },
+    { burnIn: true },
+    { enabled: undefined },
+  ])
+    await assert.rejects(
+      claude.invoke("captions.configure", {
+        ...head(await drafts.snapshot(projectId), "captions-bad-001"),
+        ...captions,
+        ...invalid,
+      }),
+      expectCode("invalid_request"),
+    );
+  const set = (await claude.invoke("captions.configure", {
+    ...head(await drafts.snapshot(projectId), "captions-set-001"),
+    ...captions,
+  })) as ToolCommit & { draft: { captions: unknown } };
+  assert.deepEqual(set.draft.captions, {
+    enabled: true,
+    style: "highlight",
+    size: "large",
+    position: "bottom",
+    burn_in: true,
+  });
+  const again = (await claude.invoke("captions.configure", {
+    ...head(await drafts.snapshot(projectId), "captions-set-002"),
+    ...captions,
+  })) as { status: string };
+  assert.equal(again.status, "unchanged");
+  const audio = (await claude.invoke("audio.configure", {
+    ...head(await drafts.snapshot(projectId), "audio-set-001"),
+    pass_group_id: "assistant-audio-001",
+    normalize: true,
+    denoise: true,
+  })) as ToolCommit & { draft: { audio: unknown } };
+  assert.deepEqual(audio.draft.audio, { normalize: true, denoise: true });
+  const undone = (await service.invoke("timeline.undo", {
+    ...head(await drafts.snapshot(projectId), "audio-undo-001"),
+    target_transaction_id: audio.transaction_id,
+  })) as ToolCommit & { draft: { audio: unknown } };
+  assert.equal(undone.draft.audio, null);
+  assert.deepEqual(
+    (await journalRecords(root, projectId)).map(journalSummary),
+    [
+      ["claude", "apply", "captions", "captions"],
+      ["claude", "apply", "audio", "audio"],
+      ["codex", "undo", null, null],
+    ],
+  );
+});
+
+test("media.get_frames validates times and returns the renderer's pictures", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const requests: Array<[string, number[], number]> = [];
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64");
+  const renderer = async (id: string, times: number[], width: number) => {
+    requests.push([id, times, width]);
+    return times.map((time) => ({
+      timeUs: time,
+      width,
+      height: Math.round((width * 9) / 16),
+      mimeType: "image/jpeg" as const,
+      dataBase64: jpeg,
+    }));
+  };
+  const claude = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    renderer,
+  );
+  const input = { schema_version: "1.0", project_id: projectId };
+  for (const invalid of [
+    { times_us: [] },
+    { times_us: [0, 1, 2, 3] },
+    { times_us: [0.5] },
+    { times_us: [-1] },
+    { times_us: [1_000_000] },
+    { times_us: [0], max_width: 100 },
+    { times_us: [0], max_width: 4000 },
+    { times_us: [0], path: "frame.png" },
+  ])
+    await assert.rejects(
+      claude.invoke("media.get_frames", { ...input, ...invalid }),
+      expectCode("invalid_request"),
+    );
+  assert.deepEqual(requests, []);
+  const result = (await claude.invoke("media.get_frames", {
+    ...input,
+    times_us: [0, 500_000],
+    max_width: 640,
+  })) as { draft_sequence: number; frames: Array<Record<string, unknown>> };
+  assert.deepEqual(requests, [[projectId, [0, 500_000], 640]]);
+  assert.equal(result.draft_sequence, 0);
+  assert.deepEqual(result.frames[1], {
+    time_us: 500_000,
+    width: 640,
+    height: 360,
+    mime_type: "image/jpeg",
+    data_base64: jpeg,
+  });
+  // A contact sheet takes 2–16 times and cells up to 480 pixels.
+  const sheet = (await claude.invoke("media.get_frames", {
+    ...input,
+    times_us: [0, 100_000, 200_000, 300_000],
+    layout: "sheet",
+  })) as { frames: unknown[] };
+  assert.equal(sheet.frames.length, 4);
+  assert.deepEqual(requests.at(-1), [
+    projectId,
+    [0, 100_000, 200_000, 300_000],
+    320,
+  ]);
+  for (const invalid of [
+    { times_us: [0], layout: "sheet" },
+    {
+      times_us: Array.from({ length: 17 }, (_, index) => index * 1000),
+      layout: "sheet",
+    },
+    { times_us: [0, 1000], layout: "sheet", max_width: 640 },
+    { times_us: [0, 1000], layout: "grid" },
+    { times_us: [0, 1000, 2000, 3000] },
+  ])
+    await assert.rejects(
+      claude.invoke("media.get_frames", { ...input, ...invalid }),
+      expectCode("invalid_request"),
+    );
+  await assert.rejects(
+    new CodexVideoEditToolService(projectId, drafts, "claude").invoke(
+      "media.get_frames",
+      { ...input, times_us: [0] },
+    ),
+    expectCode("tool_not_available"),
+  );
+  await assert.rejects(
+    new CodexVideoEditToolService(
+      projectId,
+      drafts,
+      "claude",
+      undefined,
+      async () => {
+        throw new Error("private ffmpeg detail");
+      },
+    ).invoke("media.get_frames", { ...input, times_us: [0] }),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "frame_unavailable" &&
+      !error.message.includes("ffmpeg"),
+  );
+  // An edit that lands while the pictures render makes them stale.
+  await assert.rejects(
+    new CodexVideoEditToolService(
+      projectId,
+      drafts,
+      "claude",
+      undefined,
+      async (id, times, width) => {
+        const snapshot = await drafts.snapshot(projectId);
+        await claude.invoke("cut.split", splitInput(snapshot.draft));
+        return renderer(id, times, width);
+      },
+    ).invoke("media.get_frames", { ...input, times_us: [0] }),
+    expectCode("stale_draft"),
+  );
+});
+
+test("composition.check reports the stage's audit and its picture, Claude only", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const calls: { path: string; times: number[] | null; cell: number }[] = [];
+  const claude = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    undefined,
+    undefined,
+    async (_project, path, times, cell) => {
+      calls.push({ path, times, cell });
+      if (path.includes("broken")) {
+        const error = new Error("Compositions cannot load scripts from x.");
+        error.name = "CompositionError";
+        throw error;
+      }
+      return {
+        report: { ok: false, findings: [{ code: "text_cut_off" }] },
+        sheet: {
+          width: 1300,
+          height: 380,
+          mimeType: "image/jpeg",
+          dataBase64: "AAAA",
+        },
+      };
+    },
+  );
+  const request = {
+    schema_version: "1.0",
+    project_id: projectId,
+    composition_path: "compositions/intro/index.html",
+  };
+  const result = (await claude.invoke("composition.check", request)) as {
+    ok: boolean;
+    findings: unknown[];
+    frames: { mime_type: string; data_base64: string }[];
+  };
+  assert.equal(result.ok, false);
+  assert.equal(result.findings.length, 1);
+  assert.deepEqual(result.frames[0], {
+    width: 1300,
+    height: 380,
+    mime_type: "image/jpeg",
+    data_base64: "AAAA",
+  });
+  assert.deepEqual(calls[0], {
+    path: "compositions/intro/index.html",
+    times: null,
+    cell: 320,
+  });
+  await claude.invoke("composition.check", {
+    ...request,
+    times_us: [0, 500_000, 1_000_000],
+    max_width: 480,
+  });
+  assert.deepEqual(calls[1]!.times, [0, 500_000, 1_000_000]);
+  assert.equal(calls[1]!.cell, 480);
+  // Times must increase, and stay within the sheet's limits.
+  for (const bad of [
+    { times_us: [0] },
+    { times_us: [500_000, 0] },
+    { times_us: Array.from({ length: 17 }, (_, index) => index) },
+    { max_width: 481 },
+    { composition_path: "" },
+    { extra: true },
+  ])
+    await assert.rejects(
+      claude.invoke("composition.check", { ...request, ...bad }),
+      expectCode("invalid_request"),
+    );
+  await assert.rejects(
+    claude.invoke("composition.check", {
+      ...request,
+      composition_path: "compositions/broken/index.html",
+    }),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "composition_rejected" &&
+      /cannot load scripts/u.test(error.message),
+  );
+  // The other routes have no workspace, so no checker.
+  await assert.rejects(
+    new CodexVideoEditToolService(projectId, drafts, "codex").invoke(
+      "composition.check",
+      request,
+    ),
+    expectCode("tool_not_available"),
+  );
+});
+
+test("sound.list, sound.set and sound.remove manage music and effects for Claude only", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const music = {
+    asset_id: "asset-music-001",
+    name: "Theme",
+    sha256: "a".repeat(64),
+    duration_us: 400_000,
+    sample_rate: 44_100,
+    channels: 2,
+    size_bytes: 1000,
+  };
+  const claude = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { list: async () => [music] },
+  );
+  const listed = (await claude.invoke("sound.list", {
+    schema_version: "1.0",
+    project_id: projectId,
+  })) as { assets: Record<string, unknown>[] };
+  assert.deepEqual(listed.assets, [
+    {
+      asset_id: "asset-music-001",
+      name: "Theme",
+      duration_us: 400_000,
+      sample_rate: 44_100,
+      channels: 2,
+    },
+  ]);
+  const summary = async () =>
+    (await claude.invoke("timeline.get_summary", {
+      schema_version: "1.0",
+      project_id: projectId,
+    })) as { sounds: Record<string, unknown>[] };
+  assert.deepEqual((await summary()).sounds, []);
+
+  const sound = (snapshot: Snapshot, requestId: string, more = {}) => ({
+    ...head(snapshot, requestId),
+    pass_group_id: "assistant-sound-001",
+    name: "Theme",
+    kind: "music",
+    asset_id: "asset-music-001",
+    start_us: 0,
+    ...more,
+  });
+  // A music bed with its defaults: repeats over the edit, -18 dB, ducks.
+  const bed = (await claude.invoke(
+    "sound.set",
+    sound(await drafts.snapshot(projectId), "sound-music-001"),
+  )) as { status: string };
+  assert.equal(bed.status, "committed");
+  const stored = (await drafts.snapshot(projectId)).draft.timeline.sounds![0]!;
+  assert.deepEqual(
+    {
+      kind: stored.kind,
+      start: stored.start,
+      gain: stored.gain_db,
+      duck: stored.duck_db,
+      loop: stored.loop,
+      asset: stored.asset_sha256,
+    },
+    {
+      kind: "music",
+      start: { type: "output", start_us: 0 },
+      gain: -18,
+      duck: 12,
+      loop: true,
+      asset: "a".repeat(64),
+    },
+  );
+  assert.equal(
+    stored.duration_us,
+    (await drafts.snapshot(projectId)).draft.timeline.duration_us,
+  );
+  // An effect follows cuts (anchored to a source moment) and plays once.
+  const whoosh = (await claude.invoke(
+    "sound.set",
+    sound(await drafts.snapshot(projectId), "sound-effect-001", {
+      kind: "effect",
+      name: "Whoosh",
+      start_us: 300_000,
+      gain_db: -3,
+    }),
+  )) as { status: string };
+  assert.equal(whoosh.status, "committed");
+  const effect = (await drafts.snapshot(projectId)).draft.timeline.sounds!.find(
+    (item) => item.kind === "effect",
+  )!;
+  assert.equal(effect.start.type, "source");
+  assert.equal(effect.loop, false);
+  assert.equal(effect.gain_db, -3);
+  assert.equal(effect.duration_us, 400_000);
+  assert.equal(effect.duck_db, 0);
+  const shown = (await summary()).sounds;
+  assert.equal(shown.length, 2);
+  assert.deepEqual(
+    shown
+      .map((item) => [item.kind, item.follows_cuts])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    [
+      ["effect", true],
+      ["music", false],
+    ],
+  );
+  assert.ok(shown.every((item) => item.timeline_range !== null));
+  // Replacing by id changes the layer; removing by id removes it.
+  const quieter = (await claude.invoke(
+    "sound.set",
+    sound(await drafts.snapshot(projectId), "sound-music-002", {
+      sound_id: stored.sound_id,
+      gain_db: -24,
+      fade_in_us: 10_000_000,
+    }),
+  )) as { status: string };
+  assert.equal(quieter.status, "committed");
+  const replaced = (
+    await drafts.snapshot(projectId)
+  ).draft.timeline.sounds!.find((item) => item.sound_id === stored.sound_id)!;
+  assert.equal(replaced.gain_db, -24);
+  // A fade longer than the layer is shortened, not refused.
+  assert.ok(replaced.fade_in_us + replaced.fade_out_us <= replaced.duration_us);
+  const removed = (await claude.invoke("sound.remove", {
+    ...head(await drafts.snapshot(projectId), "sound-remove-001"),
+    pass_group_id: "assistant-sound-001",
+    sound_id: effect.sound_id,
+  })) as { status: string };
+  assert.equal(removed.status, "committed");
+  assert.equal((await summary()).sounds.length, 1);
+
+  // Refusals: an unknown file, impossible values, a start outside the edit,
+  // an unknown layer to replace, a stale head, and extra fields.
+  const refusals: [Record<string, unknown>, string][] = [
+    [{ asset_id: "asset-other-001" }, "sound_rejected"],
+    [{ gain_db: 40 }, "sound_rejected"],
+    [{ duck_db: 99 }, "sound_rejected"],
+    [{ duration_us: 10 }, "sound_rejected"],
+    [{ asset_start_us: 99_000_000 }, "sound_rejected"],
+    [{ start_us: 99_000_000 }, "sound_rejected"],
+    [{ name: " " }, "sound_rejected"],
+    [{ sound_id: "sound-unknown-001" }, "edit_conflict"],
+    [{ kind: "ambience" }, "invalid_request"],
+    [{ gain_db: 1.5 }, "invalid_request"],
+    [{ extra: true }, "invalid_request"],
+  ];
+  let attempt = 0;
+  for (const [patch, code] of refusals)
+    await assert.rejects(
+      claude.invoke(
+        "sound.set",
+        sound(
+          await drafts.snapshot(projectId),
+          `sound-bad-${++attempt}`,
+          patch,
+        ),
+      ),
+      expectCode(code as never),
+      JSON.stringify(patch),
+    );
+  const stale = await drafts.snapshot(projectId);
+  await claude.invoke("sound.remove", {
+    ...head(stale, "sound-remove-002"),
+    pass_group_id: "assistant-sound-001",
+    sound_id: stored.sound_id,
+  });
+  await assert.rejects(
+    claude.invoke("sound.set", sound(stale, "sound-stale-001")),
+    expectCode("stale_draft"),
+  );
+  await assert.rejects(
+    claude.invoke("sound.remove", {
+      ...head(await drafts.snapshot(projectId), "sound-remove-003"),
+      pass_group_id: "assistant-sound-001",
+      sound_id: "sound-unknown-001",
+    }),
+  );
+
+  // Other routes have no audio files to offer, so no sound tools.
+  for (const origin of ["codex", "api_provider"] as const)
+    await assert.rejects(
+      new CodexVideoEditToolService(projectId, drafts, origin).invoke(
+        "sound.list",
+        { schema_version: "1.0", project_id: projectId },
+      ),
+      expectCode("tool_not_available"),
+    );
+});
+
+test("shorts.propose hands validated proposals to the app and is Claude's alone", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const seen: unknown[] = [];
+  const claude = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      propose: async (id, proposals) => {
+        seen.push([id, proposals]);
+        return {
+          accepted: 1,
+          rejected: ["Clip 2: it overlaps a clip already chosen."],
+        };
+      },
+    },
+  );
+  const clip = {
+    start_us: 1_000_000,
+    end_us: 31_000_000,
+    title: "Why demos feel slow",
+    reasons: ["Opens with a question"],
+  };
+  const answer = (await claude.invoke("shorts.propose", {
+    schema_version: "1.0",
+    project_id: projectId,
+    clips: [clip, { ...clip, start_us: 20_000_000 }],
+  })) as { accepted: number; rejected: string[]; summary: string };
+  assert.equal(answer.accepted, 1);
+  assert.deepEqual(answer.rejected, [
+    "Clip 2: it overlaps a clip already chosen.",
+  ]);
+  assert.match(answer.summary, /1 clip added/u);
+  assert.equal((seen[0] as [string, unknown[]])[0], projectId);
+  assert.equal((seen[0] as [string, unknown[]])[1].length, 2);
+  for (const clips of [
+    [],
+    Array.from({ length: 7 }, () => clip),
+    [{ ...clip, title: "" }],
+    [{ ...clip, title: "x".repeat(121) }],
+    [{ ...clip, reasons: ["a", "b", "c", "d", "e"] }],
+    [{ ...clip, start_us: -1 }],
+    [{ ...clip, end_us: 1.5 }],
+    [{ ...clip, path: "/tmp/x" }],
+  ])
+    await assert.rejects(() =>
+      claude.invoke("shorts.propose", {
+        schema_version: "1.0",
+        project_id: projectId,
+        clips,
+      }),
+    );
+  await assert.rejects(() =>
+    claude.invoke("shorts.propose", {
+      schema_version: "1.0",
+      project_id: "other-project",
+      clips: [clip],
+    }),
+  );
+  // Without a proposer (Codex, API providers, tests) the tool is not offered.
+  for (const origin of ["codex", "api_provider"] as const)
+    await assert.rejects(
+      () =>
+        new CodexVideoEditToolService(projectId, drafts, origin).invoke(
+          "shorts.propose",
+          { schema_version: "1.0", project_id: projectId, clips: [clip] },
+        ),
+      (error: unknown) =>
+        (error as { code?: string }).code === "tool_not_available",
+    );
+});
+
+test("graphics.component renders a designed layout, explains bad content and shares Undo", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const claude = new CodexVideoEditToolService(projectId, drafts, "claude");
+  const input = async (requestId: string) => {
+    const rest: Record<string, unknown> = {
+      ...graphicInput(await drafts.snapshot(projectId), requestId),
+    };
+    for (const key of ["html", "css", "name", "layer"]) delete rest[key];
+    return {
+      ...rest,
+      duration_us: 2_000_000,
+      kind: "lower_third",
+      title: "Ada Lovelace",
+      subtitle: "Mathematician",
+      accent: "#ff8a3d",
+    };
+  };
+  for (const bad of [
+    { title: "" },
+    { accent: "orange" },
+    { duration_us: 1_000_000 },
+    { kind: "carousel" },
+    { subtitle: "x".repeat(91) },
+  ])
+    await assert.rejects(
+      claude.invoke("graphics.component", {
+        ...(await input("component-bad")),
+        ...bad,
+      }),
+      (error: Error) =>
+        ["invalid_request", "component_rejected"].includes(
+          (error as CodexVideoEditToolError).code,
+        ),
+    );
+  // A highlight box needs its area.
+  await assert.rejects(
+    claude.invoke("graphics.component", {
+      ...(await input("component-box")),
+      kind: "highlight_box",
+    }),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "component_rejected" &&
+      /fraction/u.test(error.message),
+  );
+  const added = (await claude.invoke(
+    "graphics.component",
+    await input("component-ok"),
+  )) as ToolCommit;
+  assert.equal(typeof added.transaction_id, "string");
+  const graphic = (await drafts.snapshot(projectId)).draft.timeline
+    .graphics![0]!;
+  assert.match(graphic.name, /^Lower third: Ada Lovelace/u);
+  assert.match(graphic.html, /Ada Lovelace/u);
+  assert.match(graphic.css, /#ff8a3d/u);
+  assert.equal(graphic.duration_us, 2_000_000);
+  // Text is escaped, never trusted as markup.
+  const escaped = (await claude.invoke("graphics.component", {
+    ...(await input("component-escape")),
+    kind: "keyword",
+    title: "<b>Hi</b>",
+  })) as ToolCommit;
+  assert.equal(typeof escaped.transaction_id, "string");
+  const latest = (await drafts.snapshot(projectId)).draft.timeline.graphics!;
+  assert.ok(latest.some((item) => item.html.includes("&lt;b&gt;Hi&lt;/b&gt;")));
+  assert.ok(!latest.some((item) => item.html.includes("<b>")));
+});
+
+test("layout.set and layout.remove change the camera arrangement, follow cuts and share Undo", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const withCamera = new CodexVideoEditToolService(
+    projectId,
+    drafts,
+    "claude",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    { has: async () => true },
+  );
+  const without = new CodexVideoEditToolService(projectId, drafts, "claude");
+  const input = async (requestId: string, extra: Record<string, unknown>) => {
+    const rest: Record<string, unknown> = {
+      ...graphicInput(await drafts.snapshot(projectId), requestId),
+    };
+    for (const key of [
+      "html",
+      "css",
+      "name",
+      "layer",
+      "start_us",
+      "duration_us",
+    ])
+      delete rest[key];
+    return {
+      ...rest,
+      pass_group_id: "assistant-layout-001",
+      at_us: 500_000,
+      ...extra,
+    };
+  };
+  // Without a camera only the screen layout exists.
+  await assert.rejects(
+    without.invoke(
+      "layout.set",
+      await input("layout-no-camera", { kind: "pip" }),
+    ),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "layout_rejected" &&
+      /no camera recording/u.test(error.message),
+  );
+  for (const bad of [
+    { kind: "carousel" },
+    { kind: "camera", corner: "top_left" },
+    { kind: "pip", size: 0.9 },
+    { kind: "pip", focus_x: 0.5 },
+    { kind: "pip", at_us: 99_000_000 },
+  ])
+    await assert.rejects(
+      withCamera.invoke("layout.set", await input("layout-bad", bad)),
+      expectCode("invalid_request"),
+    );
+  const added = (await withCamera.invoke(
+    "layout.set",
+    await input("layout-ok", {
+      kind: "pip",
+      corner: "top_left",
+      size: 0.25,
+      shape: "circle",
+    }),
+  )) as ToolCommit;
+  assert.equal(typeof added.transaction_id, "string");
+  const layouts = (await drafts.snapshot(projectId)).draft.timeline.layouts!;
+  assert.equal(layouts.length, 1);
+  assert.deepEqual(
+    { ...layouts[0]!, layout_id: "", source_us: 0, source_id: "" },
+    {
+      layout_id: "",
+      source_id: "",
+      source_us: 0,
+      kind: "pip",
+      corner: "top_left",
+      size: 0.25,
+      shape: "circle",
+    },
+  );
+  assert.equal(layouts[0]!.source_us, 500_000);
+  // A second change at the same moment replaces the first.
+  await withCamera.invoke(
+    "layout.set",
+    await input("layout-replace", { kind: "camera", move_us: 0 }),
+  );
+  const replaced = (await drafts.snapshot(projectId)).draft.timeline.layouts!;
+  assert.equal(replaced.length, 1);
+  assert.equal(replaced[0]!.kind, "camera");
+  const removeHead: Record<string, unknown> = {
+    ...(await input("layout-remove", {})),
+    layout_id: replaced[0]!.layout_id,
+  };
+  delete removeHead.at_us;
+  const removed = (await withCamera.invoke(
+    "layout.remove",
+    removeHead,
+  )) as ToolCommit;
+  assert.equal(typeof removed.transaction_id, "string");
+  assert.equal(
+    (await drafts.snapshot(projectId)).draft.timeline.layouts,
+    undefined,
+  );
+});
+
+test("layout.plan proposes arrangements without changing the draft, and needs a camera", async () => {
+  const { active, drafts } = await fixture();
+  const projectId = active.project.project_id;
+  const planner = {
+    plan: async () => ({
+      changes: [
+        { at_us: 0, kind: "camera" as const, reason: "The speaker opens." },
+        {
+          at_us: 6_000_000,
+          kind: "pip" as const,
+          corner: "bottom_right",
+          size: 0.24,
+          shape: "rounded",
+          reason: "Shown on screen.",
+        },
+      ],
+      activity_places: 3,
+    }),
+  };
+  const build = (has: boolean) =>
+    new CodexVideoEditToolService(
+      projectId,
+      drafts,
+      "claude",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { has: async () => has },
+      planner,
+    );
+  const request = {
+    schema_version: "1.0",
+    project_id: projectId,
+  };
+  await assert.rejects(
+    build(false).invoke("layout.plan", request),
+    (error: Error) =>
+      (error as CodexVideoEditToolError).code === "layout_rejected" &&
+      /no camera recording/u.test(error.message),
+  );
+  const before = (await drafts.snapshot(projectId)).draft.timeline_sha256;
+  const result = (await build(true).invoke("layout.plan", request)) as {
+    changes: { at_us: number }[];
+    summary: string;
+  };
+  assert.deepEqual(
+    result.changes.map((item) => item.at_us),
+    [0, 6_000_000],
+  );
+  assert.match(result.summary, /2 layout changes proposed from 3 places/u);
+  assert.equal(
+    (await drafts.snapshot(projectId)).draft.timeline_sha256,
+    before,
+  );
 });

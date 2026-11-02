@@ -12,10 +12,20 @@ export type MediaErrorCode =
 
 export class MediaError extends Error {
   readonly code: MediaErrorCode;
-  constructor(code: MediaErrorCode, message: string) {
-    super(message);
+  /**
+   * Technical detail for private diagnostics (for example the end of a
+   * failed executable's error output); never shown to users.
+   */
+  readonly detail: string | undefined;
+  constructor(
+    code: MediaErrorCode,
+    message: string,
+    options: { detail?: string; cause?: unknown } = {},
+  ) {
+    super(message, options.cause === undefined ? {} : { cause: options.cause });
     this.name = "MediaError";
     this.code = code;
+    this.detail = options.detail;
   }
 }
 

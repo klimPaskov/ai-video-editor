@@ -6,9 +6,9 @@ import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
 
 const profileNotes: Record<ExportProfileChoice, string> = {
   lossless_master:
-    "Matroska with FFV1 video and PCM audio. Every edited frame and audio sample is kept exactly; files are large.",
+    "Matroska, FFV1 video and PCM audio. Nothing is lost; files are large.",
   smaller_mp4:
-    "Compressed H.264/AAC copy for sharing. Some detail is lost; the lossless master is not affected.",
+    "Compressed H.264/AAC copy for sharing. Your lossless master is untouched.",
 };
 
 function size(bytes: number): string {
@@ -30,12 +30,18 @@ export interface ExportPanel {
 }
 
 /** Export step: one quality choice, a save dialog in main, verified result. */
-export function setupExportPanel(): ExportPanel {
+export function setupExportPanel(options: {
+  /** An export that was running has finished and is verified. */
+  completed(): void;
+}): ExportPanel {
   const element = <T extends HTMLElement = HTMLElement>(id: string) =>
     document.getElementById(id)! as T;
   const panel = element("export-actions");
   const profileSelect = element<HTMLSelectElement>("export-profile");
   const note = element("export-profile-note");
+  const cards = [
+    ...document.querySelectorAll<HTMLButtonElement>(".quality-card"),
+  ];
   const startButton = element<HTMLButtonElement>("export-start");
   const running = element("export-running");
   const progress = element<HTMLProgressElement>("export-progress");
@@ -57,6 +63,17 @@ export function setupExportPanel(): ExportPanel {
     project_id: project!.id,
   });
 
+  /** Takes a new view; a running export that completes moves on to Done. */
+  function setView(next: ExportView): void {
+    const was = view?.status;
+    view = next;
+    if (
+      (was === "running" || was === "cancelling") &&
+      next.status === "completed"
+    )
+      options.completed();
+  }
+
   function paint(): void {
     panel.hidden = !visible;
     if (!visible || !project) return;
@@ -66,8 +83,17 @@ export function setupExportPanel(): ExportPanel {
     running.hidden = !active;
     done.hidden = state !== "completed";
     note.textContent = profileNotes[profileSelect.value as ExportProfileChoice];
+    // The button lives in the action bar; it shows while there is a choice to act on.
+    startButton.hidden = active || state === "completed";
     startButton.disabled = pending;
     profileSelect.disabled = pending;
+    for (const card of cards) {
+      card.setAttribute(
+        "aria-checked",
+        String(card.dataset.profile === profileSelect.value),
+      );
+      card.disabled = pending;
+    }
     if (active && view?.fraction !== null && view?.fraction !== undefined)
       progress.value = Math.round(view.fraction * 1000);
     phase.textContent =
@@ -105,7 +131,7 @@ export function setupExportPanel(): ExportPanel {
     const id = project.id;
     const reply = await window.desktop.getExport(request());
     if (project?.id !== id) return;
-    if (reply.ok) view = reply.value;
+    if (reply.ok) setView(reply.value);
     paint();
     schedule();
   }
@@ -122,7 +148,7 @@ export function setupExportPanel(): ExportPanel {
       if (!reply.ok)
         localError = reply.message ?? "The export could not start.";
       else if (reply.value && typeof reply.value === "object")
-        view = reply.value as ExportView;
+        setView(reply.value as ExportView);
     } finally {
       pending = false;
       paint();
@@ -131,6 +157,11 @@ export function setupExportPanel(): ExportPanel {
   }
 
   profileSelect.addEventListener("change", paint);
+  for (const card of cards)
+    card.addEventListener("click", () => {
+      profileSelect.value = card.dataset.profile!;
+      paint();
+    });
   startButton.addEventListener(
     "click",
     () =>

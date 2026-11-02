@@ -35,7 +35,8 @@ function recorder(
     root: join(root, "recordings"),
     platform,
     env,
-    importFile: (file) => library.importFile(file),
+    importFile: (file, adopt) =>
+      library.importFile(file, undefined, adopt ? { adopt } : {}),
     displays: () => [
       {
         id: "display-1",
@@ -59,19 +60,25 @@ test("devices hide FFmpeg names and report unavailable sessions", async () => {
   );
   try {
     const x11 = await recorder(root, { DISPLAY: ":0" }).devices();
-    assert.deepEqual(x11, {
-      displays: [
-        {
-          id: "display-1",
-          label: "Built-in display",
-          width: 2560,
-          height: 1600,
-          primary: true,
-        },
-      ],
-      microphones: [{ id: "pulse-1", label: "usb Mic" }],
-      message: null,
-    });
+    // Cameras are whatever this machine offers; their names stay in main.
+    assert.ok(Array.isArray(x11.cameras));
+    assert.deepEqual(
+      { ...x11, cameras: [] },
+      {
+        displays: [
+          {
+            id: "display-1",
+            label: "Built-in display",
+            width: 2560,
+            height: 1600,
+            primary: true,
+          },
+        ],
+        microphones: [{ id: "pulse-1", label: "usb Mic" }],
+        cameras: [],
+        message: null,
+      },
+    );
     const wayland = await recorder(root, {
       DISPLAY: ":0",
       XDG_SESSION_TYPE: "wayland",
@@ -311,6 +318,61 @@ test(
         { takes: [] },
       );
       await assert.rejects(readdir(other));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "a take with a camera imports both recordings and hands their ids on",
+  { timeout: 120_000 },
+  async () => {
+    const root = await realpath(
+      await mkdtemp(join(tmpdir(), "recording-camera-")),
+    );
+    try {
+      const library = new MediaLibrary(join(root, "library"));
+      const linked: Array<[string, string]> = [];
+      const service = new DesktopRecorder({
+        root: join(root, "recordings"),
+        platform: "linux",
+        env: { AI_VIDEO_EDITOR_TEST_CAPTURE: "1" },
+        importFile: (file) => library.importFile(file),
+        onCamera: async (screen, camera) => {
+          linked.push([screen, camera]);
+        },
+        displays: () => [],
+      });
+      const devices = await service.devices();
+      assert.deepEqual(devices.cameras, [
+        { id: "test-pattern-camera", label: "Test pattern (not a camera)" },
+      ]);
+      await assert.rejects(
+        service.start({
+          schema_version: "1.0",
+          display_id: devices.displays[0]!.id,
+          microphone_id: null,
+          camera_id: "no-such-camera",
+        }),
+        { message: recordingIssues.device },
+      );
+      await service.start({
+        schema_version: "1.0",
+        display_id: devices.displays[0]!.id,
+        microphone_id: devices.microphones[0]!.id,
+        camera_id: devices.cameras[0]!.id,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const finished = await service.stop();
+      assert.equal(finished.status, "finished");
+      assert.equal(linked.length, 1);
+      assert.equal(linked[0]![0], finished.media!.id);
+      const listed = await library.list();
+      assert.equal(listed.length, 2);
+      const camera = listed.find((item) => item.id === linked[0]![1])!;
+      assert.match(camera.name, /camera\.mkv$/u);
+      assert.equal(camera.width, 1280);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

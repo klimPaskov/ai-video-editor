@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
 import {
   assertNativeTestEnvironment,
   insideGuestWorkspace,
@@ -209,6 +210,7 @@ try {
     timeout: 30000,
   });
   const page = await electron.firstWindow();
+  await openDisclosures(page);
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   assert.equal(page.url(), "ai-video-editor://app/index.html");
   await electron.evaluate(({ dialog }, path) => {
@@ -267,11 +269,11 @@ try {
 
   await page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true })
+    .getByRole("button", { name: "Magic Edit", exact: true })
     .click();
   const autoEdit = page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true });
+    .getByRole("button", { name: "Magic Edit", exact: true });
   await expect(autoEdit).toHaveAttribute("aria-current", "step");
   const transcriptDetails = page.locator("#transcript-results");
   await expect(transcriptDetails).toBeVisible({ timeout: 30000 });

@@ -14,6 +14,7 @@ import { createReadStream } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { _electron, expect, type Page } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
 import { assertTwoSourceInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import type { TranscriptionProjectView } from "../../packages/domain/src/transcription.ts";
 import { sha256 } from "../../packages/media-engine/src/lossless.ts";
@@ -140,6 +141,7 @@ try {
 
   electron = await launch();
   page = await electron.firstWindow();
+  await openDisclosures(page);
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   assert.equal(page.url(), "ai-video-editor://app/index.html");
   assert.ok(
@@ -235,7 +237,7 @@ try {
   mark("start-local-transcription");
   await page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true })
+    .getByRole("button", { name: "Magic Edit", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Transcribe locally", exact: true })
@@ -322,7 +324,7 @@ try {
   await page.locator("#assistant-provider").selectOption("codex");
   await expect(page.locator("#codex-context-notice")).toBeVisible();
   await expect(page.locator("#codex-context-notice")).toContainText(
-    "included in later turns",
+    "Your video and audio stay on this device",
   );
   await page
     .getByRole("button", { name: "Open conversation", exact: true })
@@ -391,6 +393,7 @@ try {
   await electron.close();
   electron = await launch();
   page = await electron.firstWindow();
+  await openDisclosures(page);
   const reopenedCard = page.locator(
     `#projects [data-project-id="${project.id}"]`,
   );
@@ -399,7 +402,7 @@ try {
   await expect(page.locator("#frame")).toBeVisible({ timeout: 120_000 });
   await page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true })
+    .getByRole("button", { name: "Magic Edit", exact: true })
     .click();
   const reopenedTranscript = await transcriptionView(page, project.id);
   assert.equal(reopenedTranscript.job.status, "completed");

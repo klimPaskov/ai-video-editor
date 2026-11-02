@@ -17,17 +17,23 @@ function element<T extends HTMLElement>(id: string): T {
 }
 
 /**
- * Captions card (Auto Edit) and the caption overlay on the preview. Cues
+ * Captions card (Magic Edit step) and the caption overlay on the preview. Cues
  * are derived from the transcript, its text corrections and the current
  * clip map, so they follow every edit; only the style is stored.
  */
-export function setupCaptions(options: { preview: HTMLElement }): {
+export function setupCaptions(options: {
+  preview: HTMLElement;
+  /** Where the captions begin changed (they were turned on or off). */
+  changed?: () => void;
+}): {
   render(
     project: ProjectView | undefined,
     transcription: TranscriptionProjectView | undefined,
     positionUs: number,
   ): void;
   position(positionUs: number): void;
+  /** Where the captions begin, when they are on and there are any. */
+  startUs(): number | undefined;
 } {
   const overlay = document.createElement("div");
   overlay.id = "caption-overlay";
@@ -42,6 +48,7 @@ export function setupCaptions(options: { preview: HTMLElement }): {
   const burnIn = element<HTMLInputElement>("captions-burn-in");
   const note = element("captions-note");
   let projectId: string | undefined;
+  let draftSequence: number | undefined;
   let settings: CaptionSettings = { ...defaultCaptionSettings };
   let cues: CaptionCue[] = [];
   let key = "";
@@ -78,6 +85,18 @@ export function setupCaptions(options: { preview: HTMLElement }): {
     if (stored?.ok) settings = stored.value;
     if (transcript?.ok) fetched = transcript.value;
     key = "";
+    controls();
+    position(lastPosition);
+  }
+
+  /** Re-reads the draft's caption choices after the draft head changes. */
+  async function refreshSettings(id: string): Promise<void> {
+    const attempt = saving;
+    const stored = await window.desktop
+      .getCaptionSettings({ schema_version: "1.0", project_id: id })
+      .catch(() => null);
+    if (projectId !== id || attempt !== saving || !stored?.ok) return;
+    settings = stored.value;
     controls();
     position(lastPosition);
   }
@@ -123,8 +142,9 @@ export function setupCaptions(options: { preview: HTMLElement }): {
   } {
     const box = options.preview.getBoundingClientRect();
     const visible =
-      options.preview.querySelector<HTMLVideoElement>("video:not([hidden])") ??
-      options.preview.querySelector<HTMLCanvasElement>("canvas");
+      options.preview.querySelector<HTMLVideoElement>(
+        "video.preview-video:not([hidden])",
+      ) ?? options.preview.querySelector<HTMLCanvasElement>("canvas");
     const intrinsicWidth =
       visible instanceof HTMLVideoElement
         ? visible.videoWidth
@@ -149,8 +169,15 @@ export function setupCaptions(options: { preview: HTMLElement }): {
     };
   }
 
+  let announced: number | undefined;
   function position(positionUs: number): void {
     lastPosition = positionUs;
+    const start =
+      settings.enabled && cues.length > 0 ? cues[0]!.startUs : undefined;
+    if (start !== announced) {
+      announced = start;
+      options.changed?.();
+    }
     const cue = settings.enabled ? cueAt(cues, positionUs) : undefined;
     overlay.hidden = !cue;
     if (!cue) return;
@@ -190,9 +217,12 @@ export function setupCaptions(options: { preview: HTMLElement }): {
   }
 
   return {
+    startUs: () =>
+      settings.enabled && cues.length > 0 ? cues[0]!.startUs : undefined,
     render(project, transcription, positionUs) {
       if (project?.id !== projectId) {
         projectId = project?.id;
+        draftSequence = project?.draft.sequence;
         fetched = undefined;
         cues = [];
         key = "";
@@ -200,6 +230,10 @@ export function setupCaptions(options: { preview: HTMLElement }): {
         if (projectId) void load(projectId);
       }
       if (!project) return;
+      if (project.draft.sequence !== draftSequence) {
+        draftSequence = project.draft.sequence;
+        void refreshSettings(project.id);
+      }
       const view =
         transcription && transcription.project_id === project.id
           ? transcription

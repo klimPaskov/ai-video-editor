@@ -1,19 +1,33 @@
 /**
  * Packaged native short clips: a public 60 s talk excerpt is transcribed
  * locally, Export finds self-contained moments in it, one is previewed, one
- * is exported as a vertical MP4 with burned-in captions, and one is
- * discarded.
+ * is exported as a vertical MP4 with burned-in captions and listed among the
+ * saved clips (shown in its folder on request), the same clip is exported
+ * with a title and at 2x speed, every clip is exported to a folder at once,
+ * an entry is removed from the list, one clip is discarded, and a scripted
+ * Claude chooses clips through the guarded tool (refused when it tries an
+ * edit instead).
  *
  * node tests/native/short-clips.test.ts <packaged-executable>
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures, openStep } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
+import { appIdentity } from "../../packages/domain/src/app-identity.ts";
 
 await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
@@ -111,33 +125,82 @@ const configRoot = join(evidence, "config");
 const outputs = join(evidence, "outputs");
 await mkdir(outputs, { recursive: true });
 const clipPath = join(outputs, "Vertical clip.mp4");
+const titledPath = join(outputs, "Titled clip.mp4");
+const fastPath = join(outputs, "Fast clip.mp4");
+const allFolder = join(evidence, "all-clips");
+await mkdir(allFolder, { recursive: true });
+// The scripted CLI starts signed in, so no account is involved.
+const claudeConfig = join(
+  configRoot,
+  appIdentity.slug,
+  "claude",
+  "claude-code",
+);
+await mkdir(claudeConfig, { recursive: true, mode: 0o700 });
+await writeFile(
+  join(claudeConfig, "fake-state.json"),
+  JSON.stringify({ loggedIn: true, method: "claude.ai" }),
+);
+await writeFile(
+  join(claudeConfig, "fake-scenario.json"),
+  JSON.stringify({ kind: "scripted_shorts_pick" }),
+);
+const bin = join(evidence, "bin");
+await mkdir(bin, { mode: 0o700 });
+await writeFile(
+  join(bin, "claude"),
+  `#!/bin/sh\nexec "${process.execPath}" "${resolve("tests/media/support/fake-claude-code.ts")}" "$@"\n`,
+);
+await chmod(join(bin, "claude"), 0o700);
 const electron = await _electron.launch({
   executablePath,
-  env: { ...process.env, XDG_CONFIG_HOME: configRoot },
+  env: {
+    ...process.env,
+    XDG_CONFIG_HOME: configRoot,
+    PATH: `${bin}:${process.env.PATH ?? "/usr/bin:/bin"}`,
+  },
   chromiumSandbox: true,
   timeout: 30_000,
 });
 try {
+  // The dialogs answer from values the test changes between steps; the
+  // reveal call is recorded instead of opening a file manager.
   await electron.evaluate(
-    ({ dialog }, files) => {
-      dialog.showOpenDialog = async () => ({
-        canceled: false,
-        filePaths: [files.source],
-      });
+    ({ dialog, shell }, files) => {
+      const state = globalThis as unknown as {
+        __clip: string;
+        __revealed: string[];
+      };
+      state.__clip = files.clip;
+      state.__revealed = [];
+      dialog.showOpenDialog = (async (...args: unknown[]) => {
+        const options = args.at(-1) as { properties?: string[] } | undefined;
+        return options?.properties?.includes("openDirectory")
+          ? { canceled: false, filePaths: [files.folder] }
+          : { canceled: false, filePaths: [files.source] };
+      }) as typeof dialog.showOpenDialog;
       dialog.showSaveDialog = async () => ({
         canceled: false,
-        filePath: files.clip,
+        filePath: state.__clip,
       });
+      shell.showItemInFolder = (path: string) => {
+        state.__revealed.push(path);
+      };
     },
-    { source: sourcePath, clip: clipPath },
+    { source: sourcePath, clip: clipPath, folder: allFolder },
   );
+  const saveAs = (file: string) =>
+    electron.evaluate((_electron, value) => {
+      (globalThis as unknown as { __clip: string }).__clip = value;
+    }, file);
   const page = await electron.firstWindow();
+  await openDisclosures(page);
   step = "import";
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
 
   step = "transcribe";
-  await page.getByRole("button", { name: "Auto Edit", exact: true }).click();
+  await openStep(page, "Magic Edit");
   await page
     .getByRole("button", { name: "Transcribe locally", exact: true })
     .click();
@@ -147,17 +210,17 @@ try {
   );
 
   step = "find";
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await openStep(page, "Clips");
   await expect(page.locator("#shorts-find")).toBeEnabled();
   await page.locator("#shorts-find").click();
   const items = page.locator("#shorts-list .short-item");
   await expect(items.first()).toBeVisible({ timeout: 30_000 });
   const found = await items.count();
   const titles = await page
-    .locator("#shorts-list .short-head strong")
+    .locator("#shorts-list .short-foot strong")
     .allTextContents();
   const times = await page
-    .locator("#shorts-list .short-time")
+    .locator("#shorts-list .short-preview")
     .allTextContents();
   result.found = found;
   result.titles = titles;
@@ -166,7 +229,7 @@ try {
 
   step = "preview";
   const first = items.first();
-  const firstTime = (await first.locator(".short-time").textContent())!;
+  const firstTime = (await first.locator(".short-preview").textContent())!;
   const [startText] = firstTime.split("–");
   const [minutes, seconds] = startText!.split(":").map(Number);
   await first.getByRole("button", { name: /^Preview / }).click();
@@ -271,18 +334,201 @@ try {
   });
   result.clipSeconds = duration;
 
+  step = "library";
+  // The saved clip is listed by name; Show in folder hands its path to the
+  // system (recorded here), and the list never shows the path.
+  const saved = page.locator("#shorts-library li");
+  await expect(saved).toHaveCount(1);
+  await expect(saved.first()).toContainText("Vertical clip.mp4");
+  await expect(saved.first()).not.toContainText(outputs);
+  await saved
+    .first()
+    .getByRole("button", { name: /^Show / })
+    .click();
+  await expect
+    .poll(() =>
+      electron.evaluate(
+        () => (globalThis as unknown as { __revealed: string[] }).__revealed,
+      ),
+    )
+    .toEqual([clipPath]);
+
+  const frameAt = async (file: string, seconds: number) =>
+    (
+      await runProcess({
+        executable: "ffmpeg",
+        args: [
+          "-v",
+          "error",
+          "-ss",
+          String(seconds),
+          "-i",
+          file,
+          "-frames:v",
+          "1",
+          "-pix_fmt",
+          "rgb24",
+          "-f",
+          "rawvideo",
+          "pipe:1",
+        ],
+        maxOutputBytes: 1080 * 1920 * 3 + 1024,
+      })
+    ).stdout;
+  const meanDifference = (a: Buffer, b: Buffer, from: number, to: number) => {
+    let total = 0;
+    for (let at = from * 1080 * 3; at < to * 1080 * 3; at++)
+      total += Math.abs(a[at]! - b[at]!);
+    return total / ((to - from) * 1080 * 3);
+  };
+
+  step = "title";
+  await saveAs(titledPath);
+  await page.locator("#shorts-title").check();
+  await first.getByRole("button", { name: /^Export / }).click();
+  await expect(first.locator(".short-status")).toHaveText(
+    "Saved Titled clip.mp4",
+    { timeout: 300_000 },
+  );
+  await page.locator("#shorts-title").uncheck();
+  const plain = await frameAt(clipPath, 1);
+  const titled = await frameAt(titledPath, 1);
+  // The title sits near the top of the picture; the bottom band is untouched.
+  const nearTitle = meanDifference(plain, titled, 640, 800);
+  const bottom = meanDifference(plain, titled, 1700, 1900);
+  assert.ok(nearTitle > 4, `the title changes the picture: ${nearTitle}`);
+  assert.ok(bottom < 1.5, `the rest is unchanged: ${bottom}`);
+  result.title = { nearTitle, bottom };
+
+  step = "speed";
+  await saveAs(fastPath);
+  await page.locator("#shorts-speed").selectOption("2");
+  await first.getByRole("button", { name: /^Export / }).click();
+  await expect(first.locator(".short-status")).toHaveText(
+    "Saved Fast clip.mp4",
+    { timeout: 300_000 },
+  );
+  await page.locator("#shorts-speed").selectOption("1");
+  const fastDuration = Number(
+    (
+      await runProcess({
+        executable: "ffprobe",
+        args: [
+          "-v",
+          "error",
+          "-show_entries",
+          "format=duration",
+          "-of",
+          "default=nw=1:nk=1",
+          fastPath,
+        ],
+      })
+    ).stdout
+      .toString()
+      .trim(),
+  );
+  assert.ok(
+    Math.abs(fastDuration - expectedSeconds / 2) <= 1.5,
+    `2x clip lasts ${fastDuration}s, expected about ${expectedSeconds / 2}s`,
+  );
+  await expect(saved).toHaveCount(3);
+  await expect(saved.first()).toContainText("2×");
+  result.fastSeconds = fastDuration;
+
+  step = "export-all";
+  await page.locator("#shorts-export-all").click();
+  await expect(page.locator("#shorts-batch")).toContainText(
+    `Saved ${found} ${found === 1 ? "clip" : "clips"}.`,
+    { timeout: 20 * 60_000 },
+  );
+  const written = (await readdir(allFolder)).filter((name) =>
+    name.endsWith(".mp4"),
+  );
+  assert.equal(written.length, found, `files: ${written.join(", ")}`);
+  assert.equal(new Set(written).size, found);
+  for (const name of written) {
+    const size = JSON.parse(
+      (
+        await runProcess({
+          executable: "ffprobe",
+          args: [
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "json",
+            join(allFolder, name),
+          ],
+        })
+      ).stdout.toString(),
+    ) as { streams: { width: number; height: number }[] };
+    assert.deepEqual(
+      [size.streams[0]!.width, size.streams[0]!.height],
+      [1080, 1920],
+      name,
+    );
+  }
+  await expect(saved).toHaveCount(3 + found);
+  result.exportAll = written;
+
+  step = "remove-from-list";
+  await saved
+    .last()
+    .getByRole("button", { name: /^Remove / })
+    .click();
+  await expect(saved).toHaveCount(2 + found);
+  // Only the entry goes: every file is still where it was saved.
+  for (const file of [clipPath, titledPath, fastPath])
+    assert.ok((await stat(file)).size > 10_000, file);
+  assert.equal(
+    (await readdir(allFolder)).filter((name) => name.endsWith(".mp4")).length,
+    found,
+  );
+
   step = "discard";
   if (found > 1) {
     const last = items.last();
-    const title = await last.locator(".short-head strong").textContent();
+    const title = await last.locator(".short-foot strong").textContent();
     await last.getByRole("button", { name: /^Discard / }).click();
     await expect(items).toHaveCount(found - 1);
     assert.ok(
       !(
-        await page.locator("#shorts-list .short-head strong").allTextContents()
+        await page.locator("#shorts-list .short-foot strong").allTextContents()
       ).includes(title!),
     );
   }
+
+  step = "claude-pick";
+  // A scripted Claude reads the edit, is refused an edit, and proposes two
+  // clips, one overlapping the other: the app keeps one and says why.
+  await page.locator("#shorts-pick").click();
+  await expect(page.locator("#shorts-list .short-origin")).toHaveText(
+    "Claude's pick",
+    { timeout: 120_000 },
+  );
+  await expect(page.locator("#shorts-list .short-item")).toHaveCount(1);
+  await expect(page.locator("#shorts-note")).toContainText("chosen by Claude");
+  await expect(page.locator("#shorts-pick")).toBeEnabled();
+  const log = (await readFile(join(claudeConfig, "fake-log.jsonl"), "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
+  const scripted = log.find((line) => line.scriptedShorts)?.scriptedShorts as
+    | {
+        refusedEdit: boolean;
+        answer: { accepted: number; rejected: string[] };
+      }
+    | undefined;
+  assert.ok(scripted, "the scripted pick ran");
+  assert.equal(scripted.refusedEdit, true, "an edit is refused while picking");
+  assert.equal(scripted.answer.accepted, 1);
+  assert.match(scripted.answer.rejected[0]!, /^Clip 2: .*overlaps/u);
+  await page.screenshot({ path: join(evidence, "shorts-claude-pick.png") });
+  result.claudePick = scripted;
+
   result.step = "complete";
   await writeFile(
     join(evidence, "result.json"),

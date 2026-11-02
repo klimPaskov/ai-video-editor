@@ -106,7 +106,7 @@ overlap/ambiguity rejection, stale freshness, reopen, undo/redo and immutable in
 
 The native manual Edit form sends the same strict source interval without source paths,
 transaction IDs, pass groups or origins. Main injects manual authority and the shared
-journal IDs, validates the active Edit stage and returns only the committed path-free
+journal IDs, validates the active Refine stage and returns only the committed path-free
 draft. Parse displayed decimal seconds to exact integer microseconds; never pass a
 rounded floating-point time into the reducer.
 

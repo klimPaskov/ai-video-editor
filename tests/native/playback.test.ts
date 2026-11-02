@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures, openFullEditor } from "./disclosures.ts";
 import type { Page } from "playwright/test";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { runProcess } from "../../packages/media-engine/src/process.ts";
@@ -141,6 +142,7 @@ try {
     });
   }, sourcePath);
   const page = await electron.firstWindow();
+  await openDisclosures(page);
   step = "import";
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 60_000 });
@@ -151,7 +153,7 @@ try {
   assert.ok(project);
 
   step = "cut-green";
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
   await seekTo(page, 1_000_000);
   await page.locator("#mark-in").click();

@@ -43,11 +43,20 @@ def audit_blob(path: str, data: bytes, mode: str):
         raise ValueError('Large file requires separate review: ' + path)
     if any(pattern.search(data) for pattern in SECRET_PATTERNS):
         raise ValueError('Potential credential in staged content: ' + path)
-    # Reviewed PNGs only: UI references, and documentation screenshots that
-    # scripts/capture_screenshots.ts renders from synthetic media.
+    # Reviewed images only: UI references, documentation screenshots that
+    # scripts/capture_screenshots.ts renders from synthetic media, and the
+    # project's own brand artwork (the Urushi icon, its renders and the
+    # image-model drafts it was traced from).
+    brand_art = (
+        policy_path == 'apps/desktop/renderer/logo.png'
+        or policy_path.startswith('apps/desktop/assets/')
+    ) and parsed.suffix in ('.png', '.ico')
     if b'\x00' in data and not (
-        policy_path.startswith(('docs/references/screenshots/', 'docs/images/'))
-        and parsed.suffix == '.png'
+        (
+            policy_path.startswith(('docs/references/screenshots/', 'docs/images/', 'docs/brand/imagegen/', 'docs/design/ui-previews/'))
+            and parsed.suffix == '.png'
+        )
+        or brand_art
     ):
         raise ValueError('Unreviewed binary: ' + path)
 

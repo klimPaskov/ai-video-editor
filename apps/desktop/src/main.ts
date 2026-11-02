@@ -1,6 +1,12 @@
 import { DesktopCodex } from "./codex.ts";
+import {
+  MediaToolsError,
+  pathWithMediaTools,
+  resolveMediaTools,
+} from "./media-tools.ts";
 import { ClaudeUserError, DesktopClaude } from "./claude.ts";
 import {
+  assertClaudeFullEditRequest,
   assertClaudeThreadProjectRequest,
   assertClaudeThreadSendRequest,
   assertClaudeThreadView,
@@ -28,12 +34,14 @@ import {
   assertDeviceLoginDetails,
   CODEX_DEVICE_VERIFICATION_URL,
 } from "../../../packages/domain/src/codex-device-login.ts";
+import type { DraftEditIntent } from "../../../packages/domain/src/draft-transaction.ts";
 import { PreferencesStore } from "./preferences.ts";
 import { DesktopTranscriptionManager } from "./transcription.ts";
 import { ProjectStore } from "../../../packages/project-store/src/store.ts";
 import {
   DraftTransactionError,
   DraftTransactionStore,
+  type DraftReadResult,
 } from "../../../packages/project-store/src/transactions.ts";
 import {
   CodexMcpBroker,
@@ -42,7 +50,11 @@ import {
 import {
   CodexVideoEditToolError,
   CodexVideoEditToolService,
+  type CameraCatalog,
+  type LayoutPlanner,
+  appActionToolNames,
   type CodexVideoEditToolName,
+  type ZoomTargeter,
 } from "../../../packages/codex-tools/src/service.ts";
 import {
   nativeChildReadOnlyToolNames,
@@ -50,8 +62,10 @@ import {
 } from "../../../packages/codex-bridge/src/dynamic-tools.ts";
 import {
   assertProjectFrameRequest,
+  assertProjectStripRequest,
   assertProjectRequest,
   assertProjectNavigation,
+  assertProjectRename,
   assertProjectList,
   assertTwoSourceProjectRequest,
   assertManualTrimRequest,
@@ -62,11 +76,16 @@ import {
   assertManualSpeedRequest,
   assertManualGraphicRequest,
   assertManualGraphicRemoveRequest,
+  assertManualLayoutRemoveRequest,
+  assertManualLayoutRequest,
+  assertManualTransitionRequest,
+  assertManualTransitionRemoveRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualTranscriptCutRequest,
   assertManualUndoRequest,
   assertManualRedoRequest,
+  type ProjectStage,
   type ProjectView,
 } from "../../../packages/domain/src/project-view.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
@@ -80,6 +99,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  net,
   protocol,
   safeStorage,
   screen,
@@ -112,13 +132,77 @@ import {
   assertExportProjectRequest,
   assertExportStartRequest,
   assertExportView,
+  exportIssues,
 } from "../../../packages/domain/src/export-view.ts";
-import { DesktopExports } from "./export.ts";
+import { DesktopExports, planDraft } from "./export.ts";
+import { EditSummary, EditSummaryError } from "./edit-summary.ts";
+import {
+  assertEditSummaryProjectRequest,
+  assertEditSummaryUndoRequest,
+} from "../../../packages/domain/src/edit-summary.ts";
 import { DesktopMagicWand } from "./magic-wand.ts";
+import {
+  StoryPassEditor,
+  DeferredActions,
+  createAppActions,
+  type ApiStory,
+} from "./story-pass.ts";
 import { DesktopRecorder, RecordingError } from "./recording.ts";
 import { DesktopPlaybackProxies } from "./playback-proxies.ts";
 import { CaptionSettingsStore } from "./caption-settings.ts";
 import { ProjectSettingsStore } from "./project-settings.ts";
+import { removeProjectSideFiles } from "./project-removal.ts";
+import {
+  assertSoundAddRequest,
+  assertSoundRemoveRequest,
+  assertSoundUpdateRequest,
+  assertSoundsRequest,
+  assertSoundsView,
+  type SoundsView,
+} from "../../../packages/domain/src/sound-view.ts";
+import {
+  assertCameraOffsetRequest,
+  assertCameraRequest,
+  assertCameraView,
+  idleCameraView,
+  type CameraView,
+} from "../../../packages/domain/src/camera-view.ts";
+import {
+  buildSoundLayer,
+  SoundBuildError,
+  soundIntervals,
+} from "../../../packages/domain/src/sounds.ts";
+import {
+  SoundAssetError,
+  SoundAssetStore,
+} from "../../../packages/project-store/src/sounds.ts";
+import { CameraLinks } from "./camera-links.ts";
+import { planLayouts } from "../../../packages/domain/src/layout-plan.ts";
+import type { CameraSource } from "../../../packages/media-engine/src/camera-layer.ts";
+import { type LayoutChange } from "../../../packages/domain/src/layouts.ts";
+import { analyzeScreenActivity } from "../../../packages/media-engine/src/screen-activity.ts";
+import { zoomForTarget } from "../../../packages/domain/src/screen-activity.ts";
+import { sourceAt, timelineAt } from "../../../packages/domain/src/speed.ts";
+import type { ActivityTarget } from "../../../packages/domain/src/screen-activity.ts";
+import { decodeEnergyTrack } from "../../../packages/media-engine/src/audio-energy.ts";
+import { probeSoundFile } from "../../../packages/media-engine/src/sound-probe.ts";
+import { sweepPartialExports, sweepTemporaryFolders } from "./private-notes.ts";
+import { roughCutTools } from "./rough-cut-playbook.ts";
+import { shortsPickTools } from "./shorts-pick-playbook.ts";
+import {
+  writeClaudeWorkspace,
+  type WorkspaceTimeline,
+} from "./claude-workspace.ts";
+import { claudeGuides } from "./claude-guides.ts";
+import { effectiveAssetPolicy } from "../../../packages/domain/src/preferences.ts";
+import {
+  cachedPackageFile,
+  serveComposition,
+  storeComposition,
+} from "./composition-server.ts";
+import { importComposition, packageFile } from "./composition-import.ts";
+import { mirrorUserSkills, userSkillsDirectory } from "./claude-skills.ts";
+import type { LocalTranscript } from "../../../packages/domain/src/transcription.ts";
 import {
   assertAudioSettings,
   assertAudioSettingsRequest,
@@ -132,6 +216,9 @@ import {
   assertShortClipRequest,
   assertShortClipsView,
   assertShortExportRequest,
+  assertShortExportAllRequest,
+  assertShortLibraryRequest,
+  shortIssues,
   assertShortProjectRequest,
 } from "../../../packages/domain/src/short-clips-view.ts";
 import {
@@ -156,6 +243,7 @@ import {
   assertMagicWandProjectRequest,
   assertMagicWandStartRequest,
   assertMagicWandView,
+  type MagicWandProvider,
 } from "../../../packages/domain/src/magic-wand-view.ts";
 import {
   DesktopProjectRuntime,
@@ -166,9 +254,50 @@ import type { ProjectDraftNotice } from "./project-runtime.ts";
 import type { ClipSpeed } from "../../../packages/domain/src/speed.ts";
 import { zoomSourceRange } from "../../../packages/domain/src/zoom.ts";
 import { graphicAnchor } from "../../../packages/domain/src/graphics.ts";
+import { cutAt } from "../../../packages/domain/src/transitions.ts";
 import { renderGraphicsTrack } from "./graphics-render.ts";
+import { renderDraftFrames } from "./frame-render.ts";
+import { checkComposition } from "./composition-check.ts";
+import { toolCallTimeoutMs } from "../../../packages/codex-tools/src/frames.ts";
 
 const origin = `${appIdentity.urlScheme}://app`;
+/** The only page a sealed composition frame may load: a sealed page by hash. */
+const compositionFrameUrl = new RegExp(
+  `^${appIdentity.urlScheme}://composition/[a-f0-9]{64}[.]html$`,
+  "u",
+);
+
+/**
+ * Downloads one exact pinned jsDelivr file (a composition library or a
+ * Fontsource font); callers validate the URL and cache the bytes.
+ */
+async function fetchPinnedFile(address: string): Promise<Buffer> {
+  const limit = 8 * 1024 * 1024;
+  const response = await net.fetch(address, {
+    redirect: "error",
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (
+    !response.ok ||
+    !response.body ||
+    Number(response.headers.get("content-length") ?? 0) > limit
+  )
+    throw new Error("File unavailable");
+  // Read the body as it arrives and stop at the limit, whatever the headers
+  // claim.
+  const chunks: Buffer[] = [];
+  let received = 0;
+  for await (const chunk of response.body) {
+    received += chunk.length;
+    if (received > limit) throw new Error("File too large");
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+/** Sealed HyperFrames compositions, stored by hash (ADR 0021). */
+const compositionsRoot = () =>
+  path.join(app.getPath("userData"), "compositions");
 const page = `${origin}/index.html`;
 class UserFacingError extends Error {}
 let window: BrowserWindow | undefined;
@@ -187,6 +316,13 @@ let resolvePlaybackSource:
   | ((
       projectId: string,
       sourceId: string,
+    ) => Promise<{ path: string; mime: string } | null>)
+  | undefined;
+/** Resolves a project audio file for the preview; set once services start. */
+let resolveSoundPreview:
+  | ((
+      projectId: string,
+      assetId: string,
     ) => Promise<{ path: string; mime: string } | null>)
   | undefined;
 let servicesClosed = false;
@@ -237,6 +373,10 @@ const userDataPath = existsSync(legacyUserDataPath)
 mkdirSync(userDataPath, { recursive: true });
 app.setPath("userData", userDataPath);
 app.enableSandbox();
+// Compositions may draw with WebGL (three.js, shaders). A machine without a
+// usable GPU (or with a blocked driver) gets Chromium's software renderer
+// instead of no WebGL at all, so previews and exports still work.
+app.commandLine.appendSwitch("enable-unsafe-swiftshader");
 protocol.registerSchemesAsPrivileged([
   {
     scheme: appIdentity.urlScheme,
@@ -244,6 +384,10 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       supportFetchAPI: true,
+      // Sealed compositions (opaque-origin frames) load ES modules and fetch
+      // pinned package files from the composition host: cross-origin
+      // requests, which the host answers with CORS headers.
+      corsEnabled: true,
       // Range requests let the preview <video> seek inside a source.
       stream: true,
     },
@@ -269,6 +413,11 @@ function register(
     try {
       return { ok: true, value: await work(request) };
     } catch (error) {
+      // The person sees a plain message; the cause goes to the log only.
+      if (!(
+        error instanceof UserFacingError || error instanceof ClaudeUserError
+      ))
+        console.error(`[${channel}]`, error);
       return {
         ok: false,
         message:
@@ -288,11 +437,10 @@ async function servePlaybackSource(
   projectId: string,
   sourceId: string,
   request: Request,
+  resolve = resolvePlaybackSource,
 ): Promise<Response> {
   const notFound = () => new Response("Not found", { status: 404 });
-  const resolved = await resolvePlaybackSource?.(projectId, sourceId).catch(
-    () => null,
-  );
+  const resolved = await resolve?.(projectId, sourceId).catch(() => null);
   if (!resolved) return notFound();
   let size: number;
   try {
@@ -427,10 +575,19 @@ function pickArea(display: Electron.Display) {
 }
 
 async function start(): Promise<void> {
+  // The verified bundled FFmpeg/ffprobe (Windows installs) or the system pair.
+  const mediaTools = await resolveMediaTools(process.resourcesPath);
+  const toolsPath = pathWithMediaTools(mediaTools, process.env.PATH);
+  if (toolsPath !== undefined) process.env.PATH = toolsPath;
+  const mediaExecutables = {
+    ffmpeg: mediaTools.ffmpeg,
+    ffprobe: mediaTools.ffprobe,
+  };
   const files = new Map([
     ["/index.html", ["index.html", "text/html; charset=utf-8"]],
     ["/renderer.js", ["renderer.js", "text/javascript; charset=utf-8"]],
     ["/style.css", ["style.css", "text/css; charset=utf-8"]],
+    ["/logo.png", ["logo.png", "image/png"]],
     ["/region.html", ["region.html", "text/html; charset=utf-8"]],
     ["/region.js", ["region.js", "text/javascript; charset=utf-8"]],
     ["/region.css", ["region.css", "text/css; charset=utf-8"]],
@@ -438,24 +595,68 @@ async function start(): Promise<void> {
     ["/stage.css", ["stage.css", "text/css; charset=utf-8"]],
   ]);
   // Fail before opening a product window if any required packaged resource is absent.
-  const preload = await readFile(path.join(app.getAppPath(), "preload.cjs"));
-  if (!preload.length) throw new Error("Required preload is empty");
+  // The packaged editing service is verified (hashed) while everything else
+  // starts; it is awaited where the assistants need it.
+  const editingScript = resolveCodexMcpScript(process.resourcesPath);
+  editingScript.catch(() => undefined);
+  // The preload and renderer files are read together, not one after another.
+  const [preload, ...loaded] = await Promise.all([
+    readFile(path.join(app.getAppPath(), "preload.cjs")),
+    ...[...files.values()].map(([filename]) =>
+      readFile(path.join(app.getAppPath(), "renderer", filename!)),
+    ),
+  ]);
+  if (!preload!.length) throw new Error("Required preload is empty");
   const assets = new Map<string, { bytes: Buffer; mime: string }>();
-  for (const [route, [filename, mime]] of files) {
-    const bytes = await readFile(
-      path.join(app.getAppPath(), "renderer", filename!),
-    );
+  for (const [index, [route, [, mime]]] of [...files].entries()) {
+    const bytes = loaded[index]!;
     if (!bytes.length) throw new Error("Required renderer resource is empty");
     assets.set(route, { bytes, mime: mime! });
   }
+  // Sealed HyperFrames compositions and their pinned libraries (ADR 0021).
+  const compositionPackaged = {
+    runtime: await readFile(
+      path.join(
+        app.getAppPath(),
+        "renderer",
+        "vendor",
+        "hyperframes-runtime.js",
+      ),
+    ),
+    bridge: await readFile(
+      path.join(app.getAppPath(), "renderer", "stage-bridge.js"),
+    ),
+  };
   protocol.handle(appIdentity.urlScheme, async (request) => {
     const url = new URL(request.url);
+    if (url.host === "composition") {
+      if (request.method !== "GET" || url.search)
+        return new Response("Not found", { status: 404 });
+      return serveComposition(url.pathname, {
+        scheme: appIdentity.urlScheme,
+        compositions: compositionsRoot(),
+        libraryCache: path.join(app.getPath("userData"), "library-cache"),
+        packaged: compositionPackaged,
+        fetchLibrary: fetchPinnedFile,
+      });
+    }
     const media =
       /^\/media\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})$/u.exec(
         url.pathname,
       );
     if (media && url.host === "app" && !url.search && request.method === "GET")
       return servePlaybackSource(media[1]!, media[2]!, request);
+    const sound =
+      /^\/sounds\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})\/([A-Za-z0-9][A-Za-z0-9._-]{1,127})$/u.exec(
+        url.pathname,
+      );
+    if (sound && url.host === "app" && !url.search && request.method === "GET")
+      return servePlaybackSource(
+        sound[1]!,
+        sound[2]!,
+        request,
+        resolveSoundPreview,
+      );
     const asset = assets.get(url.pathname);
     if (request.method !== "GET" || url.host !== "app" || url.search || !asset)
       return new Response("Not found", { status: 404 });
@@ -465,17 +666,49 @@ async function start(): Promise<void> {
         "Content-Security-Policy":
           url.pathname === "/stage.html"
             ? // Graphics: their own inline styles and data: images; no
-              // scripts, network, frames, forms or navigation.
-              "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+              // scripts, network, forms or navigation. The only frames are
+              // sealed compositions, which run in their own opaque origin.
+              `default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:; font-src 'self'; frame-src ${appIdentity.urlScheme}://composition; base-uri 'none'; form-action 'none'`
             : "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'",
       },
     });
   });
+  // Only the player's full-screen button is allowed, and only for the app's
+  // own pages; every other permission stays denied.
+  const ownPage = (url: string | undefined) =>
+    !!url && url.startsWith(`${appIdentity.urlScheme}://`);
   session.defaultSession.setPermissionRequestHandler(
-    (_contents, _permission, callback) => callback(false),
+    (_contents, permission, callback, details) =>
+      callback(permission === "fullscreen" && ownPage(details.requestingUrl)),
   );
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionCheckHandler(
+    (_contents, permission, requestingOrigin) =>
+      permission === "fullscreen" && ownPage(requestingOrigin),
+  );
   session.defaultSession.on("will-download", (event) => event.preventDefault());
+  // The app's pages (and the sealed compositions in them) never reach the
+  // network: they load packaged content over the app scheme only. This
+  // default-deny filter sits under each page's Content Security Policy as a
+  // second layer, for channels a policy may not cover (preconnect, WebSocket,
+  // WebRTC signalling). The main process's own downloads of pinned package
+  // files (net.fetch) belong to no page and pass.
+  session.defaultSession.webRequest.onBeforeRequest(
+    {
+      urls: ["http://*/*", "https://*/*", "ws://*/*", "wss://*/*", "ftp://*/*"],
+    },
+    (details, callback) =>
+      callback({ cancel: details.webContentsId !== undefined }),
+  );
+  app.on("web-contents-created", (_event, contents) => {
+    // No WebRTC connection can be made, so no address can leak through ICE.
+    contents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
+    // Nothing in any window, the hidden export and check windows included,
+    // navigates a frame away from the app's own pages.
+    contents.on("will-frame-navigate", (event) => {
+      if (!event.url.startsWith(`${appIdentity.urlScheme}://`))
+        event.preventDefault();
+    });
+  });
   const preferences = new PreferencesStore(
     path.join(app.getPath("userData"), "preferences"),
   );
@@ -497,10 +730,20 @@ async function start(): Promise<void> {
     return value;
   });
   const userData = app.getPath("userData");
-  const library = new MediaLibrary(path.join(userData, "media-library"));
+  const cameraLinks = new CameraLinks(path.join(userData, "camera-links"));
+  const library = new MediaLibrary(
+    path.join(userData, "media-library"),
+    mediaExecutables,
+  );
   const projectRoot = path.join(userData, "project-store");
   const projects = new ProjectStore(projectRoot, library);
   const drafts = new DraftTransactionStore(projectRoot, projects);
+  // The project's music and sound effects: copied in, hashed, never changed.
+  const soundAssets = new SoundAssetStore(projectRoot, (file, signal) =>
+    probeSoundFile(file, {
+      ...(signal ? { signal } : {}),
+    }),
+  );
   const projectRuntime = new DesktopProjectRuntime(drafts, library);
   const captionSettings = new CaptionSettingsStore(
     path.join(userData, "caption-settings"),
@@ -510,19 +753,271 @@ async function start(): Promise<void> {
     assertAudioSettings,
     defaultAudioSettings,
   );
+  // Caption and audio choices are part of the draft, so they share Undo with
+  // every other edit. Projects whose draft has none yet keep the per-project
+  // choice saved by earlier versions (read only) until the first change.
+  const sameSettings = (a: object, b: object) =>
+    Object.keys(a).length === Object.keys(b).length &&
+    Object.entries(a).every(
+      ([key, value]) => (b as Record<string, unknown>)[key] === value,
+    );
+  const effectiveCaptions = async (projectId: string) =>
+    (await drafts.snapshot(projectId)).draft.timeline.captions ??
+    (await captionSettings.get(projectId));
+  const effectiveAudio = async (projectId: string) =>
+    (await drafts.snapshot(projectId)).draft.timeline.audio ??
+    (await audioSettings.get(projectId));
+  const setDraftPresentation = async <T extends object>(
+    projectId: string,
+    kind: "captions" | "audio",
+    settings: T,
+  ): Promise<T> => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { draft } = await drafts.snapshot(projectId);
+      const current =
+        kind === "captions"
+          ? await effectiveCaptions(projectId)
+          : await effectiveAudio(projectId);
+      if (sameSettings(current, settings)) return settings;
+      try {
+        await invokeWithProjectDraftRefresh({
+          toolName:
+            kind === "captions" ? "captions.configure" : "audio.configure",
+          projectId,
+          activeProjectId: () => activeProjectId,
+          drafts,
+          notify: publishDraftNotice,
+          work: () =>
+            drafts.applyManual({
+              schema_version: "1.0",
+              request_id: randomUUID(),
+              project_id: projectId,
+              draft_id: draft.draft_id,
+              base_revision_id: draft.base_revision_id,
+              expected_sequence: draft.draft_sequence,
+              expected_timeline_sha256: draft.timeline_sha256,
+              pass_group: { pass_group_id: randomUUID(), kind },
+              reason:
+                kind === "captions" ? "Change captions." : "Change audio.",
+              operations: [
+                kind === "captions"
+                  ? { type: "set_captions", captions: settings as never }
+                  : { type: "set_audio", audio: settings as never },
+              ],
+            }),
+        });
+        return settings;
+      } catch (error) {
+        if (error instanceof DraftTransactionError && error.code === "stale")
+          continue;
+        if (error instanceof DraftTransactionError)
+          throw new UserFacingError(error.message);
+        throw error;
+      }
+    }
+    throw new UserFacingError("The draft changed. Try again.");
+  };
   register(channels.audioGet, async (request) => {
     assertAudioSettingsRequest(request);
-    return audioSettings.get(request.project_id);
+    return effectiveAudio(request.project_id);
   });
   register(channels.audioSet, async (request) => {
     assertAudioSettingsUpdate(request);
     if (activeProjectId !== request.project_id)
       throw new UserFacingError("Open this project before changing audio.");
-    return audioSettings.set(request.project_id, request.settings);
+    return setDraftPresentation(request.project_id, "audio", request.settings);
+  });
+  /** The Sound card: the draft's layers, where they play and their files. */
+  const soundsView = async (projectId: string): Promise<SoundsView> => {
+    const { draft } = await drafts.snapshot(projectId);
+    const sounds = draft.timeline.sounds ?? [];
+    const assets = new Map(
+      (await soundAssets.list(projectId)).map((asset) => [
+        asset.asset_id,
+        asset,
+      ]),
+    );
+    const placed = soundIntervals(
+      sounds,
+      draft.timeline.clips.map((clip) => ({
+        sourceId: clip.source_id,
+        timelineStartUs: clip.timeline_start_us,
+        timelineEndUs: clip.timeline_end_us,
+        sourceStartUs: clip.source_start_us,
+        sourceEndUs: clip.source_end_us,
+        ...(clip.speed ? { speed: clip.speed } : {}),
+      })),
+      draft.timeline.duration_us,
+    );
+    const view: SoundsView = {
+      schema_version: "1.0",
+      project_id: projectId,
+      layers: sounds.map((sound) => {
+        const interval = placed.find((item) => item.soundId === sound.sound_id);
+        return {
+          sound_id: sound.sound_id,
+          name: sound.name,
+          kind: sound.kind,
+          file_name: assets.get(sound.asset_id)?.name ?? sound.name,
+          asset_id: sound.asset_id,
+          asset_start_us: sound.asset_start_us,
+          fade_in_us: interval?.fadeInUs ?? sound.fade_in_us,
+          fade_out_us: interval?.fadeOutUs ?? sound.fade_out_us,
+          gain_db: sound.gain_db,
+          duck_db: sound.duck_db,
+          loop: sound.loop,
+          timeline_range: interval
+            ? { start_us: interval.startUs, end_us: interval.endUs }
+            : null,
+        };
+      }),
+    };
+    assertSoundsView(view);
+    return view;
+  };
+  /** One undoable manual change to the draft's sound layers. */
+  const changeSounds = async (
+    projectId: string,
+    reason: string,
+    operation: (
+      draft: Awaited<ReturnType<typeof drafts.snapshot>>["draft"],
+    ) => DraftEditIntent | null,
+  ): Promise<void> => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before changing sound.");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { draft } = await drafts.snapshot(projectId);
+      const next = operation(draft);
+      if (!next) return;
+      try {
+        await invokeWithProjectDraftRefresh({
+          toolName: "sound.set",
+          projectId,
+          activeProjectId: () => activeProjectId,
+          drafts,
+          notify: publishDraftNotice,
+          work: () =>
+            drafts.applyManual({
+              schema_version: "1.0",
+              request_id: randomUUID(),
+              project_id: projectId,
+              draft_id: draft.draft_id,
+              base_revision_id: draft.base_revision_id,
+              expected_sequence: draft.draft_sequence,
+              expected_timeline_sha256: draft.timeline_sha256,
+              pass_group: { pass_group_id: randomUUID(), kind: "audio" },
+              reason,
+              operations: [next],
+            }),
+        });
+        return;
+      } catch (error) {
+        if (error instanceof DraftTransactionError && error.code === "stale")
+          continue;
+        if (error instanceof DraftTransactionError)
+          throw new UserFacingError(error.message);
+        throw error;
+      }
+    }
+    throw new UserFacingError("The draft changed. Try again.");
+  };
+  register(channels.soundsGet, async (request) => {
+    assertSoundsRequest(request);
+    return soundsView(request.project_id);
+  });
+  let addingSound = false;
+  register(channels.soundsAdd, async (request) => {
+    assertSoundAddRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before adding sound.");
+    if (addingSound || !window)
+      throw new UserFacingError("A sound is already being added.");
+    addingSound = true;
+    try {
+      const selected = await dialog.showOpenDialog(window, {
+        title: request.kind === "music" ? "Add music" : "Add sound effect",
+        properties: ["openFile"],
+        filters: [
+          {
+            name: "Audio",
+            extensions: ["mp3", "wav", "flac", "ogg", "m4a", "aac", "opus"],
+          },
+        ],
+      });
+      const file = selected.filePaths[0];
+      if (selected.canceled || !file) return soundsView(request.project_id);
+      let asset;
+      try {
+        asset = await soundAssets.import(request.project_id, file);
+      } catch (error) {
+        if (error instanceof SoundAssetError)
+          throw new UserFacingError(error.message);
+        throw error;
+      }
+      await changeSounds(request.project_id, "Add sound.", (draft) => {
+        try {
+          return {
+            type: "set_sound",
+            sound: buildSoundLayer(
+              {
+                name: asset.name,
+                kind: request.kind,
+                asset,
+                startUs: Math.min(
+                  request.start_us,
+                  Math.max(0, draft.timeline.duration_us - 1),
+                ),
+              },
+              draft.timeline,
+              () => `sound-${randomUUID().replaceAll("-", "")}`,
+            ),
+          };
+        } catch (error) {
+          if (error instanceof SoundBuildError)
+            throw new UserFacingError(error.message);
+          throw error;
+        }
+      });
+      return soundsView(request.project_id);
+    } finally {
+      addingSound = false;
+    }
+  });
+  register(channels.soundsUpdate, async (request) => {
+    assertSoundUpdateRequest(request);
+    await changeSounds(request.project_id, "Change sound.", (draft) => {
+      const current = draft.timeline.sounds?.find(
+        (item) => item.sound_id === request.sound_id,
+      );
+      if (!current) throw new UserFacingError("That sound was removed.");
+      if (
+        current.gain_db === request.gain_db &&
+        current.duck_db === request.duck_db
+      )
+        return null;
+      return {
+        type: "set_sound",
+        sound: {
+          ...current,
+          gain_db: request.gain_db,
+          duck_db: request.duck_db,
+        },
+      };
+    });
+    return soundsView(request.project_id);
+  });
+  register(channels.soundsRemove, async (request) => {
+    assertSoundRemoveRequest(request);
+    await changeSounds(request.project_id, "Remove sound.", (draft) =>
+      draft.timeline.sounds?.some((item) => item.sound_id === request.sound_id)
+        ? { type: "remove_sound", sound_id: request.sound_id }
+        : null,
+    );
+    return soundsView(request.project_id);
   });
   /** Captions for the current draft when they are on and a transcript exists. */
   const draftCaptions = async (projectId: string) => {
-    const settings = await captionSettings.get(projectId);
+    const settings = await effectiveCaptions(projectId);
     if (!settings.enabled) return null;
     const view = await transcription!.get({
       schema_version: "1.0",
@@ -546,6 +1041,7 @@ async function start(): Promise<void> {
     app.isPackaged ? undefined : process.env.URUSHI_ENGINE,
   ).catch(() => null);
   shortClips = new DesktopShortClips({
+    ...mediaExecutables,
     root: path.join(userData, "short-clips"),
     engine: clipsEngine,
     faceModel: (signal) =>
@@ -572,9 +1068,37 @@ async function start(): Promise<void> {
         timelineSha256: project.draft.timelineSha256,
       };
     },
-    captionSettings: (projectId) => captionSettings.get(projectId),
-    audioSettings: (projectId) => audioSettings.get(projectId),
+    captionSettings: effectiveCaptions,
+    audioSettings: effectiveAudio,
     defaultDirectory: () => app.getPath("videos"),
+    chooseFolder: async (defaultPath) => {
+      if (!window) return null;
+      const chosen = await dialog.showOpenDialog(window, {
+        title: "Export all clips to a folder",
+        defaultPath,
+        properties: ["openDirectory", "createDirectory"],
+      });
+      return chosen.canceled || !chosen.filePaths[0]
+        ? null
+        : chosen.filePaths[0];
+    },
+    reveal: (file) => shell.showItemInFolder(file),
+    pickRunning: (projectId) => claude?.runKind(projectId) === "shorts_pick",
+    startPick: async (projectId) => {
+      if (!claude || (await claude.settled()).status !== "signed_in")
+        throw new ShortClipError(shortIssues.pickSignIn);
+      if (claude.runKind(projectId))
+        throw new ShortClipError(shortIssues.pickBusy);
+      try {
+        await claude.startShortsPick(projectId);
+      } catch (error) {
+        throw new ShortClipError(
+          error instanceof ClaudeUserError
+            ? error.message
+            : shortIssues.pickFailed,
+        );
+      }
+    },
     chooseDestination: async (defaultPath) => {
       if (!window) return null;
       const chosen = await dialog.showSaveDialog(window, {
@@ -621,6 +1145,28 @@ async function start(): Promise<void> {
     assertShortExportRequest(request);
     return shorts(request.project_id, () => shortClips!.export(request));
   });
+  register(channels.shortsExportAll, async (request) => {
+    assertShortExportAllRequest(request);
+    return shorts(request.project_id, () => shortClips!.exportAll(request));
+  });
+  register(channels.shortsReveal, async (request) => {
+    assertShortLibraryRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.reveal(request.project_id, request.export_id),
+    );
+  });
+  register(channels.shortsForget, async (request) => {
+    assertShortLibraryRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.forget(request.project_id, request.export_id),
+    );
+  });
+  register(channels.shortsPick, async (request) => {
+    assertShortProjectRequest(request);
+    return shorts(request.project_id, () =>
+      shortClips!.pick(request.project_id),
+    );
+  });
   register(channels.shortsCancel, async (request) => {
     assertShortProjectRequest(request);
     return shorts(request.project_id, () =>
@@ -629,19 +1175,27 @@ async function start(): Promise<void> {
   });
   register(channels.captionsGet, async (request) => {
     assertCaptionSettingsRequest(request);
-    return captionSettings.get(request.project_id);
+    return effectiveCaptions(request.project_id);
   });
   register(channels.captionsSet, async (request) => {
     assertCaptionSettingsUpdate(request);
     if (activeProjectId !== request.project_id)
       throw new UserFacingError("Open this project before changing captions.");
-    return captionSettings.set(request.project_id, request.settings);
+    return setDraftPresentation(
+      request.project_id,
+      "captions",
+      request.settings,
+    );
   });
   recorder = new DesktopRecorder({
+    ...mediaExecutables,
     root: path.join(userData, "recordings"),
     platform: process.platform,
     env: process.env,
-    importFile: (file) => library.importFile(file),
+    importFile: (file, adopt) =>
+      library.importFile(file, undefined, adopt ? { adopt } : {}),
+    onCamera: (screenMediaId, cameraMediaId) =>
+      cameraLinks.rememberPending(screenMediaId, cameraMediaId),
     displays: () =>
       screen.getAllDisplays().map((display, index) => {
         // Capture uses physical pixels; Windows maps per-monitor DPI itself.
@@ -729,9 +1283,59 @@ async function start(): Promise<void> {
       window?.focus();
     }
   });
+  // During a take the window shrinks to a small bar in a corner and is kept
+  // out of the capture, so the controls are never in the middle of the
+  // recorded screen. Everything is put back when the take ends.
+  let beforeRecording: {
+    bounds: Electron.Rectangle;
+    maximized: boolean;
+    minimum: [number, number];
+  } | null = null;
+  const collapseForRecording = () => {
+    if (!window || beforeRecording) return;
+    beforeRecording = {
+      bounds: window.getNormalBounds(),
+      maximized: window.isMaximized(),
+      minimum: window.getMinimumSize() as [number, number],
+    };
+    if (window.isMaximized()) window.unmaximize();
+    const area = screen.getDisplayMatching(window.getBounds()).workArea;
+    const width = Math.round(380 * committedScale);
+    const height = Math.round(96 * committedScale);
+    window.setMinimumSize(1, 1);
+    window.setResizable(false);
+    window.setContentProtection(true);
+    window.setAlwaysOnTop(true, "screen-saver");
+    window.setBounds({
+      width,
+      height,
+      x: area.x + area.width - width - 16,
+      y: area.y + area.height - height - 16,
+    });
+  };
+  const restoreAfterRecording = () => {
+    const saved = beforeRecording;
+    beforeRecording = null;
+    if (!window || !saved) return;
+    window.setAlwaysOnTop(false);
+    window.setContentProtection(false);
+    window.setResizable(true);
+    window.setMinimumSize(...saved.minimum);
+    window.setBounds(saved.bounds);
+    if (saved.maximized) window.maximize();
+    window.focus();
+  };
   register(channels.recordingStart, async (request) => {
     assertRecordingStartRequest(request);
-    return recording(() => recorder!.start(request));
+    collapseForRecording();
+    // Let the bar settle on screen before the first frame is captured.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    try {
+      return await recording(() => recorder!.start(request));
+    } catch (error) {
+      restoreAfterRecording();
+      throw error;
+    }
   });
   register(channels.recordingPause, async (request) => {
     assertEmptyRequest(request);
@@ -743,17 +1347,34 @@ async function start(): Promise<void> {
   });
   register(channels.recordingStop, async (request) => {
     assertEmptyRequest(request);
-    return recording(() => recorder!.stop());
+    try {
+      return await recording(() => recorder!.stop());
+    } finally {
+      restoreAfterRecording();
+    }
   });
   register(channels.recordingCancel, async (request) => {
     assertEmptyRequest(request);
-    return recording(() => recorder!.cancel());
+    try {
+      return await recording(() => recorder!.cancel());
+    } finally {
+      restoreAfterRecording();
+    }
   });
+  // Leftovers of an export or picture render that was interrupted last time.
+  void sweepTemporaryFolders().catch(() => undefined);
+  void sweepPartialExports(path.join(userData, "exports")).catch(
+    () => undefined,
+  );
   exports = new DesktopExports({
+    ...mediaExecutables,
+    camera: (projectId, sourceId) => cameraSourceFor(projectId, sourceId),
     renderGraphics: (request) =>
       renderGraphicsTrack(request, `${origin}/stage.html`),
     captions: draftCaptions,
-    audio: (projectId) => audioSettings.get(projectId),
+    audio: effectiveAudio,
+    soundFile: async (projectId, assetId, sha256) =>
+      (await soundAssets.resolve(projectId, assetId, sha256)).path,
     drafts,
     recordRoot: path.join(userData, "exports"),
     defaultDirectory: () => app.getPath("videos"),
@@ -777,6 +1398,7 @@ async function start(): Promise<void> {
     },
   });
   playbackProxies = new DesktopPlaybackProxies({
+    ffmpeg: mediaExecutables.ffmpeg,
     root: path.join(userData, "playback-proxies"),
   });
   const playbackSources = async (projectId: string) => {
@@ -787,12 +1409,24 @@ async function start(): Promise<void> {
       project.schema_version === "1.1"
         ? project.source_probes
         : [project.source_probe];
-    return sources.map((source, index) => ({
+    const found = sources.map((source, index) => ({
       id: source.source_id,
       sha256: source.sha256,
       path: source.managed_path,
       probe: probes[index] as unknown,
     }));
+    // The camera of the project plays from its own copy like any source.
+    const link = await cameraLinks.forSource(projectId, sources[0]!.source_id);
+    if (link) {
+      const media = await library.verifiedSource(link.mediaId);
+      found.push({
+        id: "camera",
+        sha256: media.sha256,
+        path: media.managedPath,
+        probe: media.probe as unknown,
+      });
+    }
+    return found;
   };
   register(channels.playbackGet, async (request) => {
     assertPlaybackProjectRequest(request);
@@ -804,9 +1438,67 @@ async function start(): Promise<void> {
     assertPlaybackView(value);
     return value;
   });
+  const verifiedSoundPreviews = new Map<
+    string,
+    { path: string; size: number; mtimeMs: number }
+  >();
+  resolveSoundPreview = async (projectId, assetId) => {
+    if (activeProjectId !== projectId) return null;
+    // Hashing a long file for every byte-range request would stall playback:
+    // verify once, and again only when the file's size or time changes.
+    const key = `${projectId}/${assetId}`;
+    const known = verifiedSoundPreviews.get(key);
+    let file: { path: string };
+    const info = known ? await stat(known.path).catch(() => null) : null;
+    if (known && info?.size === known.size && info.mtimeMs === known.mtimeMs)
+      file = known;
+    else {
+      file = await soundAssets.resolve(projectId, assetId);
+      const after = await stat(file.path);
+      verifiedSoundPreviews.set(key, {
+        path: file.path,
+        size: after.size,
+        mtimeMs: after.mtimeMs,
+      });
+    }
+    const extension = path.extname(file.path).toLowerCase();
+    const mime =
+      {
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".flac": "audio/flac",
+        ".ogg": "audio/ogg",
+        ".opus": "audio/ogg",
+        ".m4a": "audio/mp4",
+        ".aac": "audio/aac",
+      }[extension] ?? "application/octet-stream";
+    return { path: file.path, mime };
+  };
   resolvePlaybackSource = async (projectId, sourceId) => {
     if (activeProjectId !== projectId) return null;
     const { project } = await drafts.snapshotWithProject(projectId);
+    if (sourceId === "camera") {
+      const first =
+        project.schema_version === "1.1" ? project.sources[0]! : project.source;
+      const link = await cameraLinks.forSource(projectId, first.source_id);
+      if (!link) return null;
+      const media = await library.verifiedSource(link.mediaId);
+      const format = (media.probe as { format?: { format_name?: unknown } })
+        .format?.format_name;
+      const name = typeof format === "string" ? format : "";
+      return playbackProxies!.resolve(
+        {
+          sha256: media.sha256,
+          path: media.managedPath,
+          probe: media.probe as unknown,
+        },
+        name.includes("mp4")
+          ? "video/mp4"
+          : name.includes("matroska")
+            ? "video/x-matroska"
+            : "application/octet-stream",
+      );
+    }
     const sources =
       project.schema_version === "1.1" ? project.sources : [project.source];
     const probes =
@@ -849,6 +1541,14 @@ async function start(): Promise<void> {
   register(channels.exportStart, async (request) => {
     assertExportStartRequest(request);
     activeExportProject(request.project_id);
+    // The draft is checked by itself before every export and says nothing
+    // unless something is wrong (ADR 0031).
+    if (!exports!.busy(request.project_id))
+      try {
+        await projectRuntime.verifyDraftIntegrity(request.project_id);
+      } catch {
+        throw new UserFacingError(exportIssues.integrity);
+      }
     try {
       const value = await exports!.start(request.project_id, request.profile);
       assertExportView(value);
@@ -894,7 +1594,7 @@ async function start(): Promise<void> {
     if (activeProjectId !== projectId)
       throw new UserFacingError("The active project changed. Try again.");
     if (project.stage !== "auto_edit")
-      throw new UserFacingError("Switch to Auto Edit to transcribe locally.");
+      throw new UserFacingError("Switch to Magic Edit to transcribe locally.");
   };
   const activeTranscriptProject = async (projectId: string): Promise<void> => {
     if (activeProjectId !== projectId)
@@ -906,7 +1606,7 @@ async function start(): Promise<void> {
       throw new UserFacingError("The active project changed. Try again.");
     if (project.stage !== "auto_edit" && project.stage !== "edit")
       throw new UserFacingError(
-        "Switch to Auto Edit or Edit to view the transcript.",
+        "Switch to Magic Edit or Refine to view the transcript.",
       );
   };
   const readTranscriptForTool = async (projectId: string) => {
@@ -926,6 +1626,36 @@ async function start(): Promise<void> {
     if (!window || window.isDestroyed()) return;
     window.webContents.send(channels.projectDraftChanged, notice);
   };
+  // Rendered pictures for media.get_frames, through the export compositor.
+  // One render at a time keeps offscreen graphics and FFmpeg work bounded.
+  let frameQueue: Promise<unknown> = Promise.resolve();
+  const renderFramesForTool = (
+    projectId: string,
+    timesUs: number[],
+    maxWidth: number,
+    layout: "frames" | "sheet" = "frames",
+  ) => {
+    // The assistant stops waiting after the tool-call limit; a render it
+    // gave up on stops too instead of holding up the next request.
+    const signal = AbortSignal.timeout(toolCallTimeoutMs);
+    const work = frameQueue.then(() =>
+      renderDraftFrames({
+        ...mediaExecutables,
+        drafts,
+        projectId,
+        timesUs,
+        maxWidth,
+        signal,
+        sheet: layout === "sheet",
+        captions: () => draftCaptions(projectId),
+        renderGraphics: (request) =>
+          renderGraphicsTrack(request, `${origin}/stage.html`),
+        camera: (project, source) => cameraSourceFor(project, source),
+      }),
+    );
+    frameQueue = work.catch(() => undefined);
+    return work;
+  };
   const invokeCodexTool = async (
     name: unknown,
     input: unknown,
@@ -939,6 +1669,13 @@ async function start(): Promise<void> {
       throw new CodexVideoEditToolError("tool_not_available");
     }
     const projectId = activeProjectId;
+    // Magic Edit's story pass only reads, cuts and looks; it never decorates
+    // and never starts other actions.
+    if (
+      storyEditor.restricted(projectId, "codex") &&
+      !roughCutTools.has(name as string)
+    )
+      throw new CodexVideoEditToolError("tool_not_available");
     return invokeWithProjectDraftRefresh({
       toolName: name,
       projectId,
@@ -949,6 +1686,15 @@ async function start(): Promise<void> {
           drafts,
           "codex",
           readTranscriptForTool,
+          renderFramesForTool,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          appActionsFor("codex"),
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
@@ -958,10 +1704,7 @@ async function start(): Promise<void> {
     path.join(userData, "mcp-runtime"),
     invokeCodexTool,
   );
-  const mcpRuntime = mcpBroker.runtime(
-    process.execPath,
-    await resolveCodexMcpScript(process.resourcesPath),
-  );
+  const mcpRuntime = mcpBroker.runtime(process.execPath, await editingScript);
   codex = new DesktopCodex(
     process.resourcesPath,
     userData,
@@ -970,8 +1713,15 @@ async function start(): Promise<void> {
   );
   // Claude reaches the same guarded tool service through its own broker, so
   // every Claude transaction is attributed to the Claude origin.
-  // Magic Edit commits through the same guarded tools as the assistants,
-  // attributed to its own origin so its cuts share Undo/Redo.
+  // Magic Edit's story pass runs with the connection the user chose (Claude
+  // gives the best results; Codex and the API providers use the same guarded
+  // cutting tools). Each transaction is attributed to that connection.
+  const apiStory: { current?: ApiStory } = {};
+  const storyEditor = new StoryPassEditor({
+    claude: () => claude,
+    codex: () => codex,
+    api: () => apiStory.current,
+  });
   const magicWand = new DesktopMagicWand(
     transcription!,
     async (projectId, name, input) => {
@@ -992,8 +1742,134 @@ async function start(): Promise<void> {
         notify: publishDraftNotice,
       });
     },
+    storyEditor,
+    {
+      tightener: {
+        async energy(projectId, sourceId) {
+          const { project } = await drafts.snapshotWithProject(projectId);
+          const sources =
+            project.schema_version === "1.1"
+              ? project.sources
+              : [project.source];
+          const source = sources.find((item) => item.source_id === sourceId);
+          if (!source) return null;
+          return decodeEnergyTrack({
+            ffmpeg: mediaExecutables.ffmpeg,
+            path: source.managed_path,
+          });
+        },
+        async applyRanges(projectId, draft, ranges) {
+          if (activeProjectId !== projectId)
+            throw new CodexVideoEditToolError("inactive_project");
+          await invokeWithProjectDraftRefresh({
+            toolName: "cut.delete_ranges",
+            projectId,
+            activeProjectId: () => activeProjectId,
+            drafts,
+            notify: publishDraftNotice,
+            work: () =>
+              drafts.applyMagicWand({
+                schema_version: "1.0",
+                request_id: randomUUID(),
+                project_id: projectId,
+                draft_id: draft.draft_id,
+                base_revision_id: draft.base_revision_id,
+                expected_sequence: draft.draft_sequence,
+                expected_timeline_sha256: draft.timeline_sha256,
+                pass_group: {
+                  pass_group_id: randomUUID(),
+                  kind: "spoken_cut",
+                },
+                reason: "Tighten pauses and fillers.",
+                operations: ranges.map((range) => ({
+                  type: "ripple_delete" as const,
+                  start_us: range.start_us,
+                  end_us: range.end_us,
+                })),
+              }),
+          });
+        },
+      },
+    },
   );
   magicWandBusy = (projectId) => magicWand.busy(projectId);
+  // What the assistant may do in the app from a chat: the same code the
+  // buttons run. Export and cleanup are not offered to any assistant.
+  const deferredActions = new DeferredActions();
+  const stepOf = async (projectId: string) =>
+    (await projectRuntime.view(projectId)).stage;
+  const navigateForChat = async (
+    projectId: string,
+    stage: ProjectStage,
+  ): Promise<void> => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project first.");
+    if (stage !== "auto_edit" && transcription!.isRunning(projectId))
+      throw new UserFacingError(
+        "Stop local transcription before leaving Magic Edit.",
+      );
+    if (stage !== "auto_edit" && stage !== "edit" && magicWand.busy(projectId))
+      throw new UserFacingError(
+        "Magic Edit is running. Stop it before leaving Magic Edit.",
+      );
+    if ((await stepOf(projectId)) === stage) return;
+    await projects.navigate(projectId, stage);
+    const view = await projectRuntime.view(projectId);
+    if (window && !window.isDestroyed())
+      window.webContents.send(channels.projectStageChanged, {
+        ok: true,
+        value: view,
+      });
+  };
+  const appActionsFor = (provider: MagicWandProvider) =>
+    createAppActions({
+      provider,
+      magic: magicWand,
+      deferred: deferredActions,
+      // The conversation cannot take a second turn until its reply is over.
+      chatIdle: async (projectId) => {
+        try {
+          const status =
+            provider === "claude"
+              ? claude?.getThread(projectId).status
+              : provider === "codex"
+                ? codex?.getThread(projectId).status
+                : (await apiStory.current?.threads.get(projectId, provider))
+                    ?.status;
+          return !(
+            status === "running" ||
+            status === "starting" ||
+            status === "interrupting"
+          );
+        } catch {
+          return true;
+        }
+      },
+      currentStep: stepOf,
+      navigate: navigateForChat,
+      ...(provider === "claude"
+        ? {
+            startFullEdit: async (
+              projectId: string,
+              level: "tidy" | "polished" | "bold",
+            ) => {
+              if (!claude)
+                throw new UserFacingError("Claude is not available.");
+              await claude.startFullEdit(projectId, {
+                goal: "",
+                audience: "",
+                style: "",
+                level,
+              });
+            },
+            stopFullEdit: async (projectId: string) => {
+              if (claude?.runKind(projectId) !== "full_edit") return false;
+              await claude.interruptThread(projectId);
+              return true;
+            },
+          }
+        : {}),
+    });
   register(channels.magicGet, async (request) => {
     assertMagicWandProjectRequest(request);
     if (activeProjectId !== request.project_id)
@@ -1006,7 +1882,11 @@ async function start(): Promise<void> {
     assertMagicWandStartRequest(request);
     if (activeProjectId !== request.project_id)
       throw new UserFacingError("Open this project before using Magic Edit.");
-    const value = magicWand.start(request.project_id, request.preset);
+    const value = magicWand.start(
+      request.project_id,
+      request.preset,
+      request.provider,
+    );
     assertMagicWandView(value);
     return value;
   });
@@ -1016,10 +1896,364 @@ async function start(): Promise<void> {
     assertMagicWandView(value);
     return value;
   });
+  // A HyperFrames composition from Claude's workspace, sealed and stored by
+  // hash so the stage can play it (ADR 0021).
+  const importCompositionForClaude = async (
+    projectId: string,
+    relativePath: string,
+  ) => {
+    if (!claude) throw new Error("Claude is unavailable");
+    const imported = await importComposition(
+      claude.workspaceFor(projectId),
+      relativePath,
+      {
+        // Pinned package files (fonts, stylesheets), cached with the libraries.
+        fetchPackage: (url) => {
+          const pinned = packageFile(url);
+          if (!pinned) throw new Error("Not a pinned package file");
+          return cachedPackageFile(
+            path.join(app.getPath("userData"), "library-cache"),
+            pinned,
+            fetchPinnedFile,
+          );
+        },
+      },
+    );
+    await storeComposition(compositionsRoot(), imported.sha256, imported.html);
+    return { sha256: imported.sha256 };
+  };
+  // composition.check: the sealed composition in the stage at the video's
+  // size, audited and pictured; it shares the picture queue.
+  const checkCompositionForClaude = async (
+    projectId: string,
+    relativePath: string,
+    timesUs: number[] | null,
+    cellWidth: number,
+  ) => {
+    const { sha256 } = await importCompositionForClaude(
+      projectId,
+      relativePath,
+    );
+    const signal = AbortSignal.timeout(toolCallTimeoutMs);
+    const work = frameQueue.then(async () => {
+      if (signal.aborted) throw new Error("Cancelled.");
+      const snapshot = await drafts.snapshot(projectId);
+      const frameUs = Math.ceil(
+        (snapshot.draft.timeline.frame_rate.denominator * 1_000_000) /
+          snapshot.draft.timeline.frame_rate.numerator,
+      );
+      const { plan } = await planDraft(
+        drafts,
+        mediaExecutables.ffprobe,
+        projectId,
+        {
+          startUs: 0,
+          endUs: Math.min(snapshot.draft.timeline.duration_us, frameUs),
+        },
+      );
+      return checkComposition({
+        stageUrl: `${origin}/stage.html`,
+        sha256,
+        width: plan.format.video.width,
+        height: plan.format.video.height,
+        timesUs,
+        cellWidth,
+        ffmpeg: mediaExecutables.ffmpeg,
+        signal,
+      });
+    });
+    frameQueue = work.catch(() => undefined);
+    return work;
+  };
+  // Where things happen on screen, per recording (by hash): the evidence for
+  // zooms. A recording is analysed once per app run.
+  const cameraSourceFor = async (
+    projectId: string,
+    sourceId: string,
+  ): Promise<CameraSource | null> => {
+    const link = await cameraLinks.forSource(projectId, sourceId);
+    if (!link) return null;
+    const media = await library.verifiedSource(link.mediaId);
+    const streams = media.probe.streams as Record<string, unknown>[];
+    const video = streams.find((stream) => stream.codec_type === "video");
+    if (!video) return null;
+    return {
+      path: media.managedPath,
+      width: Number(video.width),
+      height: Number(video.height),
+      offsetUs: link.offsetUs,
+    };
+  };
+  const layoutPlanner: LayoutPlanner = {
+    async plan(projectId) {
+      const service = new CodexVideoEditToolService(
+        projectId,
+        drafts,
+        "claude",
+      );
+      const summary = (await service.invoke("timeline.get_summary", {
+        schema_version: "1.0",
+        project_id: projectId,
+      })) as {
+        duration_us: number;
+        clips: {
+          source_id: string;
+          source_start_us: number;
+          source_end_us: number;
+          timeline_start_us: number;
+          timeline_end_us: number;
+          speed?: number;
+        }[];
+      };
+      const events = await zoomTargeter.targets(
+        projectId,
+        0,
+        Number.MAX_SAFE_INTEGER,
+        400,
+      );
+      // The speech, in edit time: where each sentence starts and the span.
+      const view = await transcription!
+        .get({ schema_version: "1.0", project_id: projectId, job_id: null })
+        .catch(() => null);
+      const sentenceStarts: number[] = [];
+      let first = Infinity;
+      let last = -Infinity;
+      for (const result of view?.results ?? [])
+        for (const segment of result.transcript.segments) {
+          for (const clip of summary.clips) {
+            if (clip.source_id !== result.source_id) continue;
+            const at = (us: number) =>
+              us >= clip.source_start_us && us < clip.source_end_us
+                ? timelineAt(clip, us)
+                : null;
+            const start = at(segment.start_us);
+            if (start !== null) sentenceStarts.push(start);
+            const spokenStart = at(segment.start_us);
+            const spokenEnd = at(
+              Math.max(segment.start_us, segment.end_us - 1),
+            );
+            if (spokenStart !== null) first = Math.min(first, spokenStart);
+            if (spokenEnd !== null) last = Math.max(last, spokenEnd);
+          }
+        }
+      sentenceStarts.sort((a, b) => a - b);
+      const sources = (await drafts.snapshotWithProject(projectId)).project;
+      const screen =
+        sources.schema_version === "1.1" ? sources.sources[0]! : sources.source;
+      const camera = await cameraSourceFor(projectId, screen.source_id);
+      const planned = planLayouts({
+        durationUs: summary.duration_us,
+        activity: events.map((item) => ({
+          startUs: item.start_us,
+          endUs: item.end_us,
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          score: item.score,
+        })),
+        sentenceStarts,
+        speech:
+          Number.isFinite(first) && last > first
+            ? { startUs: first, endUs: last }
+            : null,
+        geometry: {
+          canvasAspect:
+            Number((screen as { width?: number }).width ?? 16) /
+            Number((screen as { height?: number }).height ?? 9),
+          cameraAspect: camera ? camera.width / camera.height : 16 / 9,
+        },
+      });
+      return {
+        changes: planned.map((item) => ({
+          at_us: item.atUs,
+          kind: item.kind,
+          ...(item.corner ? { corner: item.corner } : {}),
+          ...(item.size ? { size: item.size } : {}),
+          ...(item.shape ? { shape: item.shape } : {}),
+          reason: item.reason,
+        })),
+        activity_places: events.length,
+      };
+    },
+  };
+  const cameraCatalog: CameraCatalog = {
+    has: async (projectId, sourceId) =>
+      (await cameraLinks.forSource(projectId, sourceId)) !== null,
+  };
+  const activityBySource = new Map<string, Promise<ActivityTarget[]>>();
+  const zoomTargeter: ZoomTargeter = {
+    async targets(projectId, startUs, endUs, limit = 40) {
+      const { project } = await drafts.snapshotWithProject(projectId);
+      const sources =
+        project.schema_version === "1.1" ? project.sources : [project.source];
+      const summary = (await new CodexVideoEditToolService(
+        projectId,
+        drafts,
+        "claude",
+      ).invoke("timeline.get_summary", {
+        schema_version: "1.0",
+        project_id: projectId,
+      })) as {
+        clips: {
+          source_id: string;
+          source_start_us: number;
+          source_end_us: number;
+          timeline_start_us: number;
+          timeline_end_us: number;
+          speed?: number;
+        }[];
+      };
+      const found: Awaited<ReturnType<ZoomTargeter["targets"]>> = [];
+      for (const source of sources) {
+        const clips = summary.clips.filter(
+          (clip) => clip.source_id === source.source_id,
+        );
+        if (clips.length === 0) continue;
+        let analysis = activityBySource.get(source.sha256);
+        if (!analysis) {
+          analysis = analyzeScreenActivity({
+            ffmpeg: mediaExecutables.ffmpeg,
+            path: source.managed_path,
+          });
+          activityBySource.set(source.sha256, analysis);
+          analysis.catch(() => activityBySource.delete(source.sha256));
+        }
+        for (const target of await analysis) {
+          const zoom = zoomForTarget(target);
+          for (const clip of clips) {
+            const from = Math.max(target.startUs, clip.source_start_us);
+            const to = Math.min(target.endUs, clip.source_end_us);
+            if (to <= from) continue;
+            const start = timelineAt(clip, from);
+            const end = Math.min(clip.timeline_end_us, timelineAt(clip, to));
+            if (end <= startUs || start >= endUs) continue;
+            found.push({
+              start_us: start,
+              end_us: end,
+              x: Math.round(target.x * 1000) / 1000,
+              y: Math.round(target.y * 1000) / 1000,
+              width: Math.round(target.width * 1000) / 1000,
+              height: Math.round(target.height * 1000) / 1000,
+              center_x: zoom.centerX,
+              center_y: zoom.centerY,
+              suggested_scale: zoom.scale,
+              score: target.score,
+            });
+          }
+        }
+      }
+      return found
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+        .sort((a, b) => a.start_us - b.start_us);
+    },
+  };
+  // The project workspace Claude works in (ADR 0021): the committed edit as
+  // files. Writes for one project run one at a time, newest last.
+  const workspaceWrites = new Map<string, Promise<void>>();
+  const writeWorkspace = async (projectId: string, directory: string) => {
+    const service = new CodexVideoEditToolService(projectId, drafts, "claude");
+    const request = { schema_version: "1.0" as const, project_id: projectId };
+    const timeline = (await service.invoke(
+      "timeline.get_summary",
+      request,
+    )) as WorkspaceTimeline;
+    const project = (await service.invoke("project.get_summary", request)) as {
+      sources: Array<{ source_id: string }>;
+    };
+    // The frame compositions play in: the exported video's size and rate.
+    let frame: { width: number; height: number; frame_rate: string } | null =
+      null;
+    try {
+      const rate = (await drafts.snapshot(projectId)).draft.timeline.frame_rate;
+      const { plan } = await planDraft(
+        drafts,
+        mediaExecutables.ffprobe,
+        projectId,
+        {
+          startUs: 0,
+          endUs: Math.min(
+            timeline.duration_us,
+            Math.ceil((rate.denominator * 1_000_000) / rate.numerator),
+          ),
+        },
+      );
+      const video = plan.format.video;
+      frame = {
+        width: video.width,
+        height: video.height,
+        frame_rate: `${video.frameRate.numerator}/${video.frameRate.denominator}`,
+      };
+    } catch {
+      // Left out when the sources cannot be probed.
+    }
+    let transcripts: LocalTranscript[] = [];
+    try {
+      const view = await transcription!.get({ ...request, job_id: null });
+      if (view.job.status === "completed")
+        transcripts = view.results.map((result) => result.transcript);
+    } catch {
+      // No transcript yet: edit.md says so.
+    }
+    await writeClaudeWorkspace(directory, {
+      timeline,
+      project: frame ? { ...project, frame } : project,
+      transcripts,
+      sourceNames: new Map(
+        project.sources.map((source, index) => [
+          source.source_id,
+          `recording ${index + 1}`,
+        ]),
+      ),
+      guides: claudeGuides,
+    });
+  };
+  const refreshClaudeWorkspace = (
+    projectId: string,
+    directory: string,
+    required = false,
+  ): Promise<void> => {
+    const next = (workspaceWrites.get(projectId) ?? Promise.resolve())
+      .catch(() => undefined)
+      .then(() => writeWorkspace(projectId, directory));
+    workspaceWrites.set(projectId, next);
+    return required ? next : next.catch(() => undefined);
+  };
   const invokeClaudeTool = async (name: unknown, input: unknown) => {
     if (!activeProjectId) throw new CodexVideoEditToolError("inactive_project");
     const projectId = activeProjectId;
-    return invokeWithProjectDraftRefresh({
+    // Captured before the call so an edit that lands after Stop still
+    // belongs to its full edit.
+    const run = claude?.fullEditRun(projectId) ?? null;
+    // A rough cut only reads, cuts and looks; it never decorates.
+    if (
+      claude?.runKind(projectId) === "rough_cut" &&
+      !roughCutTools.has(name as string)
+    )
+      throw new CodexVideoEditToolError("tool_not_available");
+    // A full edit runs on its own; it does not start other edits.
+    if (run && typeof name === "string" && appActionToolNames.has(name))
+      throw new CodexVideoEditToolError("tool_not_available");
+    // Choosing clips only reads, looks and proposes; it never edits.
+    if (
+      claude?.runKind(projectId) === "shorts_pick" &&
+      !shortsPickTools.has(name as string)
+    )
+      throw new CodexVideoEditToolError("tool_not_available");
+    const target =
+      input && typeof input === "object"
+        ? (input as { target_transaction_id?: unknown }).target_transaction_id
+        : undefined;
+    // During a full edit Claude may only undo its own edits, so Undo all can
+    // always restore what was there before the run.
+    if (
+      run &&
+      name === "timeline.undo" &&
+      !claude!.fullEditIncludes(projectId, target)
+    )
+      throw new CodexVideoEditToolError("edit_conflict");
+    const value = await invokeWithProjectDraftRefresh({
       toolName: name,
       projectId,
       activeProjectId: () => activeProjectId,
@@ -1029,10 +2263,45 @@ async function start(): Promise<void> {
           drafts,
           "claude",
           readTranscriptForTool,
+          renderFramesForTool,
+          importCompositionForClaude,
+          checkCompositionForClaude,
+          soundAssets,
+          {
+            propose: (id, proposals) => shortClips!.propose(id, proposals),
+          },
+          zoomTargeter,
+          cameraCatalog,
+          layoutPlanner,
+          appActionsFor("claude"),
         ).invoke(name, input),
       drafts,
       notify: publishDraftNotice,
     });
+    // A full edit's Undo all needs every edit its tools applied.
+    if (
+      run &&
+      value &&
+      typeof value === "object" &&
+      (value as { status?: unknown }).status === "committed"
+    ) {
+      if (name === "timeline.undo") claude?.recordUndo(projectId, target, run);
+      else
+        claude?.recordCommit(
+          projectId,
+          (value as { transaction_id?: unknown }).transaction_id,
+          run,
+        );
+    }
+    // Claude reads the edit from its workspace; keep it current.
+    if (
+      claude &&
+      value &&
+      typeof value === "object" &&
+      (value as { status?: unknown }).status === "committed"
+    )
+      void refreshClaudeWorkspace(projectId, claude.workspaceFor(projectId));
+    return value;
   };
   claudeBroker = await CodexMcpBroker.open(
     path.join(userData, "claude-mcp-runtime"),
@@ -1040,13 +2309,55 @@ async function start(): Promise<void> {
   );
   const claudeMcpRuntime = claudeBroker.runtime(
     process.execPath,
-    await resolveCodexMcpScript(process.resourcesPath),
+    await editingScript,
   );
   claude = new DesktopClaude(userData, {
     platform: process.platform,
     env: process.env,
+    prepareWorkspace: (projectId, directory) =>
+      refreshClaudeWorkspace(projectId, directory, true),
+    assetPolicy: async () =>
+      effectiveAssetPolicy(
+        await new PreferencesStore(
+          path.join(app.getPath("userData"), "preferences"),
+        ).read(),
+      ),
+    // The user's own Claude Code skills, mirrored into the app's profile.
+    userSkills: async () =>
+      (
+        await mirrorUserSkills(
+          userSkillsDirectory(process.env, app.getPath("home")),
+          path.join(userData, "claude", "skills-plugin"),
+        )
+      )?.directory ?? null,
     openExternal: (url) => shell.openExternal(url),
     mcpRuntime: () => claudeMcpRuntime,
+    history: {
+      newest: async (projectId) =>
+        (await drafts.snapshot(projectId)).undo_transaction_id,
+      undo: async (projectId, transactionId) => {
+        const { draft } = await drafts.snapshot(projectId);
+        await invokeWithProjectDraftRefresh({
+          toolName: "timeline.undo",
+          projectId,
+          activeProjectId: () => activeProjectId,
+          drafts,
+          notify: publishDraftNotice,
+          work: () =>
+            drafts.undoManual({
+              schema_version: "1.0",
+              request_id: randomUUID(),
+              project_id: projectId,
+              draft_id: draft.draft_id,
+              base_revision_id: draft.base_revision_id,
+              expected_sequence: draft.draft_sequence,
+              expected_timeline_sha256: draft.timeline_sha256,
+              target_transaction_id: transactionId,
+              reason: "Undo the full AI edit.",
+            }),
+        });
+      },
+    },
   });
   const apiClient = new ApiProviderClient();
   const apiProviders = new DesktopApiProviders(
@@ -1057,9 +2368,12 @@ async function start(): Promise<void> {
     userData,
     apiProviders,
     apiClient,
-    async (projectId, name, input) => {
+    async (projectId, name, input, provider) => {
       if (activeProjectId !== projectId)
         throw new CodexVideoEditToolError("inactive_project");
+      // Magic Edit's story pass only reads and cuts.
+      if (storyEditor.restricted(projectId, "api") && !roughCutTools.has(name))
+        throw new CodexVideoEditToolError("tool_not_available");
       return invokeWithProjectDraftRefresh({
         toolName: name,
         projectId,
@@ -1070,12 +2384,22 @@ async function start(): Promise<void> {
             drafts,
             "api_provider",
             readTranscriptForTool,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            appActionsFor(provider),
           ).invoke(name, input),
         drafts,
         notify: publishDraftNotice,
       });
     },
   );
+  apiStory.current = { providers: apiProviders, threads: apiThreads };
   register(channels.apiProvidersGet, async (request) => {
     assertEmptyRequest(request);
     const value = await apiProviders.get();
@@ -1164,6 +2488,9 @@ async function start(): Promise<void> {
   register(channels.claudeSelect, async (request) =>
     claudeView(() => claude!.select(request as never)),
   );
+  register(channels.claudeSelectRoughCut, async (request) =>
+    claudeView(() => claude!.selectRoughCut(request as never)),
+  );
   register(channels.claudeInstallGuide, async (request) => {
     assertEmptyRequest(request);
     await claude!.openInstallGuide();
@@ -1223,8 +2550,16 @@ async function start(): Promise<void> {
   register(channels.projectCreate, async (request) => {
     assertProjectRequest(request);
     await assertCanLeaveActive();
-    const created = await projects.createFromMedia(request.id),
-      value = await projectRuntime.view(created.project.project_id);
+    const created = await projects.createFromMedia(request.id);
+    // A recording made with a camera brings its camera along.
+    const camera = await cameraLinks.takePending(request.id);
+    if (camera)
+      await cameraLinks.set(created.project.project_id, {
+        sourceId: request.id,
+        mediaId: camera,
+        offsetUs: 0,
+      });
+    const value = await projectRuntime.view(created.project.project_id);
     activeProjectId = value.id;
     return value;
   });
@@ -1263,12 +2598,28 @@ async function start(): Promise<void> {
     }
     return null;
   });
+  register(channels.projectRename, async (request) => {
+    assertProjectRename(request);
+    await projects.rename(request.id, request.name);
+    return projectRuntime.view(request.id);
+  });
+  // Deleting is an explicit Home action on a closed project. Its sources
+  // stay in Media; conversations and per-project choices go with it.
+  register(channels.projectDelete, async (request) => {
+    assertProjectRequest(request);
+    if (activeProjectId === request.id)
+      throw new UserFacingError("Close the project before deleting it.");
+    await projects.open(request.id);
+    await removeProjectSideFiles(userData, request.id);
+    await projects.remove(request.id);
+    return null;
+  });
   register(channels.projectNavigate, async (request) => {
     assertProjectNavigation(request);
     if (activeProjectId !== request.id) throw new Error("Inactive project");
     if (request.stage !== "auto_edit" && transcription!.isRunning(request.id))
       throw new UserFacingError(
-        "Stop local transcription before leaving Auto Edit.",
+        "Stop local transcription before leaving Magic Edit.",
       );
     await projects.navigate(request.id, request.stage);
     return projectRuntime.view(request.id);
@@ -1291,9 +2642,7 @@ async function start(): Promise<void> {
   register(channels.projectIntegrityCheck, async (request) => {
     assertProjectRequest(request);
     if (activeProjectId !== request.id)
-      throw new UserFacingError(
-        "Open the active project in Review to check draft integrity.",
-      );
+      throw new UserFacingError("Open this project to check its edit.");
     try {
       const value = await projectRuntime.verifyDraftIntegrity(request.id);
       if (activeProjectId !== request.id)
@@ -1307,6 +2656,54 @@ async function start(): Promise<void> {
         "Draft integrity could not be checked. Reopen the project and try again.",
       );
     }
+  });
+  // "What Magic Edit did" in Refine: rows from the draft's own records, and
+  // an undo of a whole kind as ordinary history (ADR 0031).
+  const editSummary = new EditSummary(drafts);
+  const activeSummaryProject = (projectId: string) => {
+    if (activeProjectId !== projectId)
+      throw new UserFacingError("Open this project before editing it.");
+  };
+  const summaryEdit = async (
+    projectId: string,
+    work: () => Promise<DraftReadResult>,
+  ) => {
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "timeline.undo",
+        projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work,
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof EditSummaryError)
+        throw new UserFacingError(error.message);
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError("The edit changed. Try again.");
+      throw error;
+    }
+  };
+  register(channels.editSummaryGet, async (request) => {
+    assertEditSummaryProjectRequest(request);
+    activeSummaryProject(request.project_id);
+    return editSummary.view(request.project_id);
+  });
+  register(channels.editSummaryUndo, async (request) => {
+    assertEditSummaryUndoRequest(request);
+    activeSummaryProject(request.project_id);
+    return summaryEdit(request.project_id, () =>
+      editSummary.undoKind(request.project_id, request.kind),
+    );
+  });
+  register(channels.editSummaryPutBack, async (request) => {
+    assertEditSummaryProjectRequest(request);
+    activeSummaryProject(request.project_id);
+    return summaryEdit(request.project_id, () =>
+      editSummary.putBack(request.project_id),
+    );
   });
   const activeCodexProject = async (projectId: string) => {
     if (activeProjectId !== projectId) throw new Error("Inactive project");
@@ -1350,9 +2747,32 @@ async function start(): Promise<void> {
   register(channels.claudeThreadGet, async (request) => {
     assertClaudeThreadProjectRequest(request);
     await activeCodexProject(request.project_id);
-    const value = claude!.getThread(request.project_id);
+    const value = await claude!.getThreadWithHistory(request.project_id);
     assertClaudeThreadView(value);
     return value;
+  });
+  register(channels.claudeFullEditStart, async (request) => {
+    assertClaudeFullEditRequest(request);
+    await activeCodexProject(request.project_id);
+    const value = await claude!.startFullEdit(
+      request.project_id,
+      request.brief,
+    );
+    assertClaudeThreadView(value);
+    return value;
+  });
+  register(channels.claudeFullEditUndo, async (request) => {
+    assertClaudeThreadProjectRequest(request);
+    await activeCodexProject(request.project_id);
+    try {
+      const value = await claude!.undoFullEdit(request.project_id);
+      assertClaudeThreadView(value);
+      return value;
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
   });
   register(channels.claudeThreadOpen, async (request) => {
     assertClaudeThreadProjectRequest(request);
@@ -1508,6 +2928,25 @@ async function start(): Promise<void> {
       return value;
     } finally {
       frameRequests.delete(controller);
+    }
+  });
+  // The filmstrip: one request at a time; a newer one replaces a running one,
+  // so editing never queues pictures of a draft that no longer exists.
+  let stripRequest: AbortController | undefined;
+  register(channels.projectStrip, async (request) => {
+    assertProjectStripRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new Error("Inactive project");
+    stripRequest?.abort();
+    const controller = new AbortController();
+    stripRequest = controller;
+    try {
+      const value = await projectRuntime.strip(request, controller.signal);
+      if (activeProjectId !== request.projectId)
+        throw new Error("Inactive project");
+      return value;
+    } finally {
+      if (stripRequest === controller) stripRequest = undefined;
     }
   });
   register(channels.projectManualTrim, async (request) => {
@@ -1791,6 +3230,328 @@ async function start(): Promise<void> {
       throw error;
     }
   });
+  register(channels.projectManualLayout, async (request) => {
+    assertManualLayoutRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    const { draft } = await drafts.snapshotWithProject(request.projectId);
+    if (
+      draft.draft_sequence !== request.expectedSequence ||
+      draft.timeline_sha256 !== request.expectedTimelineSha256
+    )
+      throw new UserFacingError("The draft changed. Try again.");
+    const clip = draft.timeline.clips.find(
+      (item) =>
+        request.atUs >= item.timeline_start_us &&
+        request.atUs < item.timeline_end_us,
+    );
+    if (!clip) throw new UserFacingError("There is no video at that point.");
+    if (
+      request.kind !== "screen" &&
+      !(await cameraLinks.forSource(request.projectId, clip.source_id))
+    )
+      throw new UserFacingError(
+        "Add a camera video first (Camera in More tools).",
+      );
+    const existing = request.layoutId
+      ? draft.timeline.layouts?.find(
+          (item) => item.layout_id === request.layoutId,
+        )
+      : undefined;
+    if (request.layoutId && !existing)
+      throw new UserFacingError("That layout change was removed.");
+    const layout: LayoutChange = {
+      layout_id:
+        request.layoutId ?? `layout-${randomUUID().replaceAll("-", "")}`,
+      // A change being edited keeps its moment.
+      source_id: existing?.source_id ?? clip.source_id,
+      source_us: existing?.source_us ?? sourceAt(clip, request.atUs),
+      kind: request.kind,
+      move_us: request.moveUs,
+      ...(request.kind === "pip"
+        ? {
+            corner: request.corner,
+            size: request.size,
+            shape: request.shape,
+          }
+        : {}),
+      ...(request.kind !== "screen"
+        ? {
+            face_zoom: request.faceZoom,
+            focus_x: request.focusX,
+            focus_y: request.focusY,
+          }
+        : {}),
+    };
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "layout.set",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "layout" },
+            reason: request.layoutId
+              ? "Change a layout."
+              : "Change the camera layout.",
+            operations: [{ type: "set_layout", layout }],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(
+          error.code === "conflict"
+            ? "That is already the layout there."
+            : error.message,
+        );
+      throw error;
+    }
+  });
+  register(channels.projectManualLayoutRemove, async (request) => {
+    assertManualLayoutRemoveRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "layout.remove",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "layout" },
+            reason: "Remove a layout change.",
+            operations: [
+              { type: "remove_layout", layout_id: request.layoutId },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
+  /** The first recording of the project: the one a camera goes with. */
+  const cameraScreenSource = async (projectId: string) => {
+    const { project } = await drafts.snapshotWithProject(projectId);
+    const sources =
+      project.schema_version === "1.1" ? project.sources : [project.source];
+    return sources[0]!.source_id;
+  };
+  const cameraView = async (projectId: string): Promise<CameraView> => {
+    const link = await cameraLinks.forSource(
+      projectId,
+      await cameraScreenSource(projectId),
+    );
+    if (!link) return idleCameraView(projectId);
+    const media = await library.verifiedSource(link.mediaId);
+    const video = (media.probe.streams as Record<string, unknown>[]).find(
+      (stream) => stream.codec_type === "video",
+    );
+    const view: CameraView = {
+      schema_version: "1.0",
+      project_id: projectId,
+      linked: true,
+      file_name: media.summary.name.slice(0, 255),
+      offset_us: link.offsetUs,
+      width: Number(video?.width ?? 1),
+      height: Number(video?.height ?? 1),
+    };
+    assertCameraView(view);
+    return view;
+  };
+  register(channels.cameraGet, async (request) => {
+    assertCameraRequest(request);
+    return cameraView(request.project_id);
+  });
+  let choosingCamera = false;
+  register(channels.cameraChoose, async (request) => {
+    assertCameraRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project before adding a camera.");
+    if (choosingCamera || !window)
+      throw new UserFacingError("A camera video is already being added.");
+    choosingCamera = true;
+    try {
+      const selected = await dialog.showOpenDialog(window, {
+        title: "Add camera video",
+        properties: ["openFile"],
+        filters: [
+          { name: "Video", extensions: ["mkv", "mp4", "mov", "webm", "avi"] },
+        ],
+      });
+      const file = selected.filePaths[0];
+      if (selected.canceled || !file) return cameraView(request.project_id);
+      const media = await library.importFile(file);
+      const sourceId = await cameraScreenSource(request.project_id);
+      if (media.id === sourceId)
+        throw new UserFacingError(
+          "Choose the camera recording, not the screen recording.",
+        );
+      await cameraLinks.set(request.project_id, {
+        sourceId,
+        mediaId: media.id,
+        offsetUs: 0,
+      });
+      return cameraView(request.project_id);
+    } finally {
+      choosingCamera = false;
+    }
+  });
+  register(channels.cameraOffset, async (request) => {
+    assertCameraOffsetRequest(request);
+    const sourceId = await cameraScreenSource(request.project_id);
+    const link = await cameraLinks.forSource(request.project_id, sourceId);
+    if (!link) throw new UserFacingError("Add a camera video first.");
+    await cameraLinks.set(request.project_id, {
+      ...link,
+      offsetUs: request.offset_us,
+    });
+    return cameraView(request.project_id);
+  });
+  register(channels.cameraRemove, async (request) => {
+    assertCameraRequest(request);
+    const sourceId = await cameraScreenSource(request.project_id);
+    const { draft } = await drafts.snapshotWithProject(request.project_id);
+    if (
+      (draft.timeline.layouts ?? []).some(
+        (item) => item.source_id === sourceId && item.kind !== "screen",
+      )
+    )
+      throw new UserFacingError(
+        "Remove the camera layout changes first, or undo them.",
+      );
+    await cameraLinks.remove(request.project_id, sourceId);
+    return cameraView(request.project_id);
+  });
+  register(channels.projectManualTransition, async (request) => {
+    assertManualTransitionRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    const { draft } = await drafts.snapshotWithProject(request.projectId);
+    if (
+      draft.draft_sequence !== request.expectedSequence ||
+      draft.timeline_sha256 !== request.expectedTimelineSha256
+    )
+      throw new UserFacingError("The draft changed. Try again.");
+    // A transition belongs to a cut: the first frame of an incoming clip
+    // that does not continue the clip before it.
+    const cut = cutAt(
+      draft.timeline.clips.map((clip) => ({
+        sourceId: clip.source_id,
+        timelineStartUs: clip.timeline_start_us,
+        timelineEndUs: clip.timeline_end_us,
+        sourceStartUs: clip.source_start_us,
+        sourceEndUs: clip.source_end_us,
+      })),
+      request.atUs,
+    );
+    if (!cut) throw new UserFacingError("There is no cut at that point.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "transition.set",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "graphics" },
+            reason: request.transitionId
+              ? "Change a transition."
+              : "Add a transition.",
+            operations: [
+              {
+                type: "set_transition",
+                transition: {
+                  transition_id:
+                    request.transitionId ??
+                    `transition-${randomUUID().replaceAll("-", "")}`,
+                  source_id: cut.sourceId,
+                  source_us: cut.sourceUs,
+                  kind: request.kind,
+                  duration_us: request.durationUs,
+                  color: request.color.toLowerCase(),
+                },
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(
+          error.code === "conflict"
+            ? "That cut already has this transition."
+            : error.message,
+        );
+      throw error;
+    }
+  });
+  register(channels.projectManualTransitionRemove, async (request) => {
+    assertManualTransitionRemoveRequest(request);
+    if (activeProjectId !== request.projectId)
+      throw new UserFacingError("Open this project before editing it.");
+    try {
+      const committed = await invokeWithProjectDraftRefresh({
+        toolName: "transition.remove",
+        projectId: request.projectId,
+        activeProjectId: () => activeProjectId,
+        drafts,
+        notify: publishDraftNotice,
+        work: () =>
+          drafts.applyManual({
+            schema_version: "1.0",
+            request_id: randomUUID(),
+            project_id: request.projectId,
+            draft_id: request.draftId,
+            base_revision_id: request.baseRevisionId,
+            expected_sequence: request.expectedSequence,
+            expected_timeline_sha256: request.expectedTimelineSha256,
+            pass_group: { pass_group_id: randomUUID(), kind: "graphics" },
+            reason: "Remove a transition.",
+            operations: [
+              {
+                type: "remove_transition",
+                transition_id: request.transitionId,
+              },
+            ],
+          }),
+      });
+      return committedDraftView(committed);
+    } catch (error) {
+      if (error instanceof DraftTransactionError)
+        throw new UserFacingError(error.message);
+      throw error;
+    }
+  });
   register(channels.projectManualSpeed, async (request) => {
     assertManualSpeedRequest(request);
     if (activeProjectId !== request.projectId)
@@ -1880,7 +3641,7 @@ async function start(): Promise<void> {
       throw new UserFacingError("Reopen the project before restoring footage.");
     }
     if (project.stage !== "edit")
-      throw new UserFacingError("Switch to Edit to restore a source range.");
+      throw new UserFacingError("Switch to Refine to restore a source range.");
     if (activeProjectId !== request.projectId)
       throw new UserFacingError("The active project changed. Try again.");
     try {
@@ -1934,7 +3695,7 @@ async function start(): Promise<void> {
     }
     if (project.stage !== "edit")
       throw new UserFacingError(
-        "Switch to Edit to correct transcript wording.",
+        "Switch to Refine to correct transcript wording.",
       );
     if (activeProjectId !== request.projectId)
       throw new UserFacingError(
@@ -2023,7 +3784,7 @@ async function start(): Promise<void> {
     }
     if (project.stage !== "edit")
       throw new UserFacingError(
-        "Switch to Edit to cut selected transcript words.",
+        "Switch to Refine to cut selected transcript words.",
       );
     if (activeProjectId !== request.projectId)
       throw new UserFacingError(
@@ -2203,6 +3964,7 @@ async function start(): Promise<void> {
     show: false,
     title: appIdentity.displayName,
     backgroundColor: "#11131a",
+    icon: path.join(app.getAppPath(), "icon-256.png"),
     webPreferences: {
       preload: path.join(app.getAppPath(), "preload.cjs"),
       nodeIntegration: false,
@@ -2216,9 +3978,14 @@ async function start(): Promise<void> {
   window.removeMenu();
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
-  // The only frame is the graphics stage; nothing may navigate it away.
+  // The only frames are the graphics stage and the sealed compositions in
+  // it; nothing may navigate them elsewhere.
   window.webContents.on("will-frame-navigate", (event) => {
-    if (!event.isMainFrame && event.url !== `${origin}/stage.html`)
+    if (
+      !event.isMainFrame &&
+      event.url !== `${origin}/stage.html` &&
+      !compositionFrameUrl.test(event.url)
+    )
       event.preventDefault();
   });
   window.webContents.on("will-attach-webview", (event) =>
@@ -2312,12 +4079,17 @@ async function start(): Promise<void> {
     // preference (or the explicit 100% read-failure fallback) before showing it.
     startupWindow.webContents.setZoomFactor(committedScale);
     startupWindow.show();
+    // Reading the microphone list starts a process; do it now, after the
+    // first paint, so opening the recording dialog does not wait for it.
+    recorder?.warm();
   }
 }
-async function showStartupFailure(): Promise<void> {
+async function showStartupFailure(error?: unknown): Promise<void> {
   if (quitting) return;
   const message =
-    "The local application files could not be loaded. Reinstall the application and try again.";
+    error instanceof MediaToolsError
+      ? error.message
+      : "The local application files could not be loaded. Reinstall the application and try again.";
   // Generic diagnostics contain no source paths, credentials or project details.
   console.error(`ai-video-editor: ${message}`);
   try {

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures, openFullEditor } from "./disclosures.ts";
 import type { Page } from "playwright/test";
 import { assertTwoSourceInitialProjectSnapshot } from "../../packages/domain/src/project.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
@@ -91,6 +92,7 @@ async function seek(page: Page, timeUs: number): Promise<void> {
 }
 try {
   let page = await electron.firstWindow();
+  await openDisclosures(page);
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   assert.equal(page.url(), "ai-video-editor://app/index.html");
   await electron.evaluate(({ dialog }, paths) => {
@@ -137,7 +139,7 @@ try {
   if (!restoreBeforeEdit.ok)
     assert.equal(
       restoreBeforeEdit.message,
-      "Switch to Edit to restore a source range.",
+      "Switch to Refine to restore a source range.",
     );
   const baselinePath = join(
     userData,
@@ -166,7 +168,7 @@ try {
   await expect(page.locator("#source-properties")).toContainText("Part 1");
   await expect(page.locator("#source-properties")).toContainText("Part 2");
   await page.screenshot({ path: join(evidence, "two-source-join.png") });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
   await expect(page.locator("#trim-start")).toBeDisabled();
   await expect(page.locator("#trim-end")).toBeDisabled();
@@ -412,6 +414,7 @@ try {
     timeout: 30_000,
   });
   page = await electron.firstWindow();
+  await openDisclosures(page);
   await page.locator(`#projects [data-project-id="${combined.id}"]`).click();
   await expect(page.locator("#duration")).toHaveText(" / 0:02.000", {
     timeout: 30_000,

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
+import type { Stats } from "node:fs";
 import {
   lstat,
   mkdir,
@@ -7,9 +8,11 @@ import {
   readFile,
   readdir,
   realpath,
+  rename,
   writeFile,
 } from "node:fs/promises";
 import { basename, isAbsolute, join, resolve } from "node:path";
+import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -78,11 +81,29 @@ async function hash(path: string, signal?: AbortSignal): Promise<string> {
     path,
     constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
   );
-  for await (const chunk of handle.createReadStream()) {
+  // Large blocks: the 64 KiB default makes hashing a multi-gigabyte master
+  // several times slower.
+  for await (const chunk of handle.createReadStream({
+    highWaterMark: 8 * 1024 * 1024,
+  })) {
     assertNotCancelled(signal);
     digest.update(chunk as Buffer);
   }
   return digest.digest("hex");
+}
+const retryableRename = new Set(["EBUSY", "EPERM", "EACCES"]);
+/** Moves a file; Windows briefly locks a file that was just written. */
+async function moveWithRetry(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (attempt >= 8 || !code || !retryableRename.has(code)) throw error;
+      await new Promise((done) => setTimeout(done, 75 * (attempt + 1)));
+    }
+  }
 }
 type PreviewProfile = "native-bgra" | "h264-yuv420p";
 function previewProfile(
@@ -202,6 +223,17 @@ export class MediaLibrary {
     Promise<PresentationTiming>
   >();
   private readonly thumbnails = new Map<string, Promise<MediaFrame>>();
+  private readonly stripFrames = new Map<string, Promise<MediaFrame>>();
+  /**
+   * Sources fully verified in this process, keyed by their file identity and
+   * change times. Hashing a long recording on every draft read made each edit
+   * cost seconds; any change to the file (content, size, times, replacement)
+   * changes the key and forces a full re-verification.
+   */
+  private readonly verifiedFiles = new Map<
+    string,
+    { key: string; value: VerifiedLibrarySource }
+  >();
   constructor(
     root: string,
     options: { ffmpeg?: string; ffprobe?: string } = {},
@@ -248,11 +280,35 @@ export class MediaLibrary {
     assertMediaList(result);
     return result;
   }
+  /** Identity of the managed file plus its stored record. */
+  private sourceKey(stat: Stats, entry: Entry): string {
+    return [
+      stat.dev,
+      stat.ino,
+      stat.size,
+      stat.mtimeMs,
+      stat.ctimeMs,
+      stat.nlink,
+      // The stored record too: changed measurements must be re-checked.
+      createHash("sha256").update(JSON.stringify(entry)).digest("hex"),
+    ].join(":");
+  }
   async verifiedSource(id: string): Promise<VerifiedLibrarySource> {
     await this.initialize();
     const entry = await this.entry(id);
     const managedPath = join(this.root, "assets", entry.source.file);
     const stat = await lstat(managedPath);
+    const key = this.sourceKey(stat, entry);
+    const known = this.verifiedFiles.get(id);
+    if (
+      known?.key === key &&
+      stat.isFile() &&
+      !stat.isSymbolicLink() &&
+      stat.nlink === 1
+    )
+      return structuredClone(known.value);
+    // One full read per file identity (the unchanged-identity check below
+    // replaces a second hash).
     if (
       !stat.isFile() ||
       stat.isSymbolicLink() ||
@@ -286,7 +342,6 @@ export class MediaLibrary {
         "FIDELITY_MISMATCH",
         "The stored source measurements no longer match the media.",
       );
-    const afterHash = await hash(managedPath);
     const after = await lstat(managedPath);
     if (
       !after.isFile() ||
@@ -296,14 +351,13 @@ export class MediaLibrary {
       after.dev !== stat.dev ||
       after.ino !== stat.ino ||
       after.mtimeMs !== stat.mtimeMs ||
-      after.ctimeMs !== stat.ctimeMs ||
-      afterHash !== entry.source.sha256
+      after.ctimeMs !== stat.ctimeMs
     )
       throw new MediaError(
         "FIDELITY_MISMATCH",
         "The managed source changed during verification.",
       );
-    return {
+    const value: VerifiedLibrarySource = {
       summary: { ...entry.summary },
       originalPath: entry.source.originalPath,
       managedPath,
@@ -311,6 +365,8 @@ export class MediaLibrary {
       sizeBytes: entry.source.size,
       probe: structuredClone(entry.probe),
     };
+    this.verifiedFiles.set(id, { key, value: structuredClone(value) });
+    return value;
   }
   async prepareSpeechAudio(
     id: string,
@@ -416,6 +472,7 @@ export class MediaLibrary {
   async importFile(
     sourcePath: string,
     signal?: AbortSignal,
+    options: { adopt?: { sha256: string } } = {},
   ): Promise<MediaSummary> {
     await this.initialize();
     assertNotCancelled(signal);
@@ -423,33 +480,129 @@ export class MediaLibrary {
     await regular(sourcePath);
     const size = (await lstat(sourcePath)).size;
     if (size <= 0 || size > 100 * 1024 ** 3) invalid();
-    const originalHash = await hash(sourcePath, signal);
     const id = randomUUID();
     const file = `${id}.media`;
     const target = join(this.root, "assets", file);
-    const sourceHandle = await open(
-      sourcePath,
-      constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
-    );
-    try {
-      const destination = await open(target, "wx", 0o600);
-      await pipeline(
-        sourceHandle.createReadStream(),
-        destination.createWriteStream(),
-        signal ? { signal } : {},
-      );
-    } finally {
-      await sourceHandle.close();
+    let originalHash: string;
+    /**
+     * Adoption: the app's own just-finished recording (private folder, the
+     * recorder already hashed it) is moved into the library instead of
+     * copied and re-read. The index records that hash, and every later use
+     * checks the file against it, so a wrong value can only fail closed.
+     */
+    let moved = false;
+    if (options.adopt) {
+      if (!/^[a-f0-9]{64}$/u.test(options.adopt.sha256)) invalid();
+      try {
+        await moveWithRetry(sourcePath, target);
+        moved = true;
+      } catch (error) {
+        // Another volume cannot be renamed into; copy (and verify) instead.
+        if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+      }
     }
-    assertNotCancelled(signal);
-    if (
-      (await hash(target, signal)) !== originalHash ||
-      (await hash(sourcePath, signal)) !== originalHash
-    )
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "Source changed during import; no media was indexed.",
+    let published = false;
+    try {
+      let probe: unknown;
+      if (moved) {
+        originalHash = options.adopt!.sha256;
+        probe = await this.probe(target, signal);
+      } else {
+        // The source is hashed while it is copied: one read, not two.
+        const digest = createHash("sha256");
+        const sourceHandle = await open(
+          sourcePath,
+          constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
+        );
+        try {
+          const destination = await open(target, "wx", 0o600);
+          await pipeline(
+            sourceHandle.createReadStream({ highWaterMark: 4 * 1024 * 1024 }),
+            new Transform({
+              transform(chunk: Buffer, _encoding, done) {
+                digest.update(chunk);
+                done(null, chunk);
+              },
+            }),
+            destination.createWriteStream({ highWaterMark: 4 * 1024 * 1024 }),
+            signal ? { signal } : {},
+          );
+        } finally {
+          await sourceHandle.close();
+        }
+        assertNotCancelled(signal);
+        originalHash = digest.digest("hex");
+        // The copy, the source (unchanged while read) and the container
+        // measurements are independent checks, so they run together.
+        const [copied, again, measured] = await Promise.all([
+          hash(target, signal),
+          hash(sourcePath, signal),
+          this.probe(target, signal),
+        ]);
+        if (copied !== originalHash || again !== originalHash)
+          throw new MediaError(
+            "FIDELITY_MISMATCH",
+            "Source changed during import; no media was indexed.",
+          );
+        probe = measured;
+      }
+      if (
+        !object(probe) ||
+        !Array.isArray(probe.streams) ||
+        !object(probe.format)
+      )
+        invalid();
+      const summary: MediaSummary = {
+        id,
+        name: basename(sourcePath),
+        ...mediaMeasurements(probe),
+      };
+      assertMediaSummary(summary);
+      const entry: Entry = {
+        version: 1,
+        summary,
+        source: { file, originalPath: sourcePath, sha256: originalHash, size },
+        probe,
+      };
+      const staged = join(this.root, "assets", `${id}.index-stage`);
+      await writeFile(staged, JSON.stringify(entry), {
+        flag: "wx",
+        mode: 0o600,
+      });
+      await publishFileWithoutOverwrite(
+        staged,
+        join(this.root, "index", `${id}.json`),
+        signal,
       );
+      published = true;
+      // Its bytes were just checked (or adopted), so the first preview and
+      // project open need no further full read.
+      try {
+        const placed = await lstat(target);
+        if (placed.size === size)
+          this.verifiedFiles.set(id, {
+            key: this.sourceKey(placed, entry),
+            value: {
+              summary: { ...summary },
+              originalPath: sourcePath,
+              managedPath: target,
+              sha256: originalHash,
+              sizeBytes: size,
+              probe: structuredClone(entry.probe),
+            },
+          });
+      } catch {
+        /* The next use verifies the file in full. */
+      }
+      return summary;
+    } catch (error) {
+      // An adopted recording goes back where the recorder can still find it.
+      if (moved && !published)
+        await rename(target, sourcePath).catch(() => undefined);
+      throw error;
+    }
+  }
+  private async probe(path: string, signal?: AbortSignal): Promise<unknown> {
     const result = await runProcess({
       executable: this.ffprobe,
       args: [
@@ -463,42 +616,11 @@ export class MediaLibrary {
         "-show_format",
         "-of",
         "json",
-        target,
+        path,
       ],
       ...(signal ? { signal } : {}),
     });
-    const probe: unknown = JSON.parse(result.stdout.toString("utf8"));
-    if (
-      !object(probe) ||
-      !Array.isArray(probe.streams) ||
-      !object(probe.format)
-    )
-      invalid();
-    const summary: MediaSummary = {
-      id,
-      name: basename(sourcePath),
-      ...mediaMeasurements(probe),
-    };
-    assertMediaSummary(summary);
-    if ((await hash(sourcePath, signal)) !== originalHash)
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "Source changed during import; no media was indexed.",
-      );
-    const entry: Entry = {
-      version: 1,
-      summary,
-      source: { file, originalPath: sourcePath, sha256: originalHash, size },
-      probe,
-    };
-    const staged = join(this.root, "assets", `${id}.index-stage`);
-    await writeFile(staged, JSON.stringify(entry), { flag: "wx", mode: 0o600 });
-    await publishFileWithoutOverwrite(
-      staged,
-      join(this.root, "index", `${id}.json`),
-      signal,
-    );
-    return summary;
+    return JSON.parse(result.stdout.toString("utf8")) as unknown;
   }
   async frame(
     id: string,
@@ -523,12 +645,10 @@ export class MediaLibrary {
         "UNSUPPORTED_PROFILE",
         "This source is preserved, but its preview color or precision path is not yet verified.",
       );
-    const path = join(this.root, "assets", entry.source.file);
-    if ((await hash(path, signal)) !== entry.source.sha256)
-      throw new MediaError(
-        "FIDELITY_MISMATCH",
-        "The managed source has changed.",
-      );
+    // Verified once per file identity; re-hashing a long recording for every
+    // preview frame cost about as much as decoding the frame.
+    const path = (await this.verifiedSource(id)).managedPath;
+    signal?.throwIfAborted();
     const timingKey = `${id}:${entry.source.sha256}`;
     let timing = this.presentationTimings.get(timingKey);
     if (!timing) {
@@ -629,6 +749,96 @@ export class MediaLibrary {
       void pending.catch(() => this.thumbnails.delete(key));
     }
     return pending;
+  }
+  /**
+   * A small picture of a source at `timeUs` for the timeline filmstrip. Like
+   * the card thumbnail it is cosmetic (FFmpeg's default conversion, never a
+   * review frame). Times are rounded to half a second so a redrawn strip
+   * after an edit reuses the pictures of everything that did not change.
+   */
+  async stripFrame(
+    id: string,
+    timeUs: number,
+    signal?: AbortSignal,
+  ): Promise<MediaFrame> {
+    if (!Number.isSafeInteger(timeUs) || timeUs < 0)
+      throw new MediaError("INVALID_INPUT", "Seek is outside the video.");
+    await this.initialize();
+    const entry = await this.entry(id);
+    const { summary } = entry;
+    const atUs = Math.min(
+      // Seeking to the very end of a file yields no frame: stop short of it.
+      Math.max(0, summary.durationUs - 500_000),
+      Math.round(timeUs / 500_000) * 500_000,
+    );
+    const key = `${id}:${entry.source.sha256}:${atUs}`;
+    let pending = this.stripFrames.get(key);
+    if (!pending) {
+      pending = this.decodeStripFrame(entry, atUs, signal);
+      if (this.stripFrames.size >= 512)
+        this.stripFrames.delete(this.stripFrames.keys().next().value!);
+      this.stripFrames.set(key, pending);
+      void pending.catch(() => this.stripFrames.delete(key));
+    }
+    return pending;
+  }
+  private async decodeStripFrame(
+    entry: Entry,
+    atUs: number,
+    signal?: AbortSignal,
+  ): Promise<MediaFrame> {
+    const { summary } = entry;
+    const width = Math.min(160, summary.width);
+    const height = Math.max(
+      2,
+      Math.round((width * summary.height) / summary.width / 2) * 2,
+    );
+    const output = await runProcess({
+      executable: this.ffmpeg,
+      args: [
+        "-v",
+        "error",
+        "-nostdin",
+        "-protocol_whitelist",
+        "file",
+        "-format_whitelist",
+        "matroska,webm,mov,avi",
+        "-ss",
+        (atUs / 1_000_000).toFixed(6),
+        "-i",
+        join(this.root, "assets", entry.source.file),
+        "-map",
+        "0:v:0",
+        "-frames:v",
+        "1",
+        "-an",
+        "-sn",
+        "-dn",
+        "-threads",
+        "1",
+        "-vf",
+        `scale=${width}:${height}:flags=bilinear,format=rgba`,
+        "-f",
+        "rawvideo",
+        "pipe:1",
+      ],
+      maxOutputBytes: width * height * 4 + 64 * 1024,
+      ...(signal ? { signal } : {}),
+    });
+    if (output.stdout.length !== width * height * 4)
+      throw new MediaError(
+        "UNSUPPORTED_PROFILE",
+        "No picture could be decoded for this source.",
+      );
+    const rgba = Buffer.from(output.stdout);
+    for (let i = 3; i < rgba.length; i += 4) rgba[i] = 255;
+    const frame: MediaFrame = {
+      width,
+      height,
+      rgbaBase64: rgba.toString("base64"),
+    };
+    assertThumbnail(frame);
+    return frame;
   }
   private async decodeThumbnail(
     entry: Entry,

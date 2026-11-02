@@ -125,7 +125,7 @@ function rangeCutRequest(
   };
 }
 
-test("Review draft integrity check returns only a validated committed head", async () => {
+test("the draft integrity check export runs returns only a validated committed head", async () => {
   const { source, projects, baseline, drafts, runtime } = await fixture();
   const baselinePath = join(
       baseline.project.storage.project_root,
@@ -135,7 +135,7 @@ test("Review draft integrity check returns only a validated committed head", asy
     baselineBytes = await readFile(baselinePath),
     managedBytes = await readFile(baseline.source.managed_path),
     originalBytes = await readFile(source);
-  await projects.navigate(baseline.project.project_id, "review");
+  await projects.navigate(baseline.project.project_id, "export");
   const initial = await drafts.snapshotWithProject(baseline.project.project_id),
     initialCheck = await runtime.verifyDraftIntegrity(
       baseline.project.project_id,
@@ -152,7 +152,7 @@ test("Review draft integrity check returns only a validated committed head", asy
       1_000_000,
     ),
   );
-  await projects.navigate(baseline.project.project_id, "review");
+  await projects.navigate(baseline.project.project_id, "export");
   const projectBytes = await readFile(projectPath),
     before = await drafts.snapshotWithProject(baseline.project.project_id),
     checked = await runtime.verifyDraftIntegrity(baseline.project.project_id);
@@ -175,10 +175,11 @@ test("Review draft integrity check returns only a validated committed head", asy
   assert.deepEqual(await readFile(baseline.source.managed_path), managedBytes);
   assert.deepEqual(await readFile(source), originalBytes);
 
+  // The check no longer depends on the step; export runs it from any of them.
   await projects.navigate(baseline.project.project_id, "edit");
-  await assert.rejects(
-    runtime.verifyDraftIntegrity(baseline.project.project_id),
-  );
+  const again = await runtime.verifyDraftIntegrity(baseline.project.project_id);
+  assert.deepEqual(again.draft, checked.draft);
+  await assert.rejects(runtime.verifyDraftIntegrity("not-a-project"));
 });
 
 test("committed project views and frames follow trim and undo state without changing source or baseline", async () => {
@@ -323,6 +324,91 @@ test("preview maps every committed fragment through its own source interval", as
     assert.equal(result.status, "ready");
   }
   assert.deepEqual(requested, [299_999, 400_000, 699_999, 900_000, 1_499_999]);
+});
+
+test("filmstrip pictures follow the clip map, tolerate a source that cannot be decoded and refuse a stale head", async () => {
+  const { projects, baseline, drafts } = await fixture();
+  const committed = structuredClone(
+    await drafts.snapshotWithProject(baseline.project.project_id),
+  );
+  const original = committed.draft.timeline.clips[0]!;
+  committed.draft.timeline.clips = [
+    {
+      ...original,
+      clip_id: "clip-first",
+      source_start_us: 0,
+      source_end_us: 300_000,
+      timeline_start_us: 0,
+      timeline_end_us: 300_000,
+    },
+    {
+      ...original,
+      clip_id: "clip-last",
+      source_start_us: 900_000,
+      source_end_us: 1_500_000,
+      timeline_start_us: 300_000,
+      timeline_end_us: 900_000,
+    },
+  ];
+  committed.draft.timeline.duration_us = 900_000;
+  committed.draft.timeline_sha256 = "b".repeat(64);
+  committed.draft.draft_sequence = 1;
+  const asked: number[] = [];
+  let head = committed;
+  const runtime = new DesktopProjectRuntime(
+    {
+      snapshotWithProject: async () => structuredClone(head),
+      recordLatestManualStructureCheckpoint: async () => null,
+    },
+    {
+      frame: async () => {
+        throw new Error("the player's frames are not used by the strip");
+      },
+      stripFrame: async (_id, sourceTimeUs) => {
+        asked.push(sourceTimeUs);
+        // The second part's picture cannot be had.
+        if (sourceTimeUs >= 900_000) throw new Error("cannot decode");
+        return { width: 2, height: 2, rgbaBase64: "AAAAAAAAAAAAAAAAAAAAAA==" };
+      },
+    },
+  );
+  void projects;
+  const project = await runtime.view(baseline.project.project_id);
+  const request = {
+    projectId: project.id,
+    draftId: project.draft.id,
+    baseRevisionId: project.draft.baseRevisionId,
+    expectedSequence: project.draft.sequence,
+    expectedTimelineSha256: project.draft.timelineSha256,
+    timesUs: [100_000, 400_000, 899_999],
+  };
+  const result = await runtime.strip(request);
+  assert.equal(result.status, "ready");
+  if (result.status !== "ready") throw new Error("expected ready");
+  // Output times map through the clip map to source times.
+  assert.deepEqual(asked, [100_000, 1_000_000, 1_499_999]);
+  assert.deepEqual(
+    result.frames.map((entry) => [entry.timelineTimeUs, entry.frame !== null]),
+    [
+      [100_000, true],
+      [400_000, false],
+      [899_999, false],
+    ],
+  );
+  // A time past the edit has no clip and so no picture.
+  const past = await runtime.strip({ ...request, timesUs: [900_000] });
+  assert.equal(past.status === "ready" && past.frames[0]!.frame, null);
+  // A draft that moved on is answered as stale, not drawn.
+  head = {
+    ...committed,
+    draft: { ...committed.draft, draft_sequence: 2 },
+  };
+  assert.equal((await runtime.strip(request)).status, "stale");
+  // Malformed requests are refused before any decode.
+  asked.length = 0;
+  for (const timesUs of [[], [300, 100], [100, 100], Array(33).fill(1)])
+    await assert.rejects(() => runtime.strip({ ...request, timesUs }));
+  assert.deepEqual(asked, []);
 });
 
 test("ripple cut preview maps surviving fragments and keeps both immutable source summaries", async () => {

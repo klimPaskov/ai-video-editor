@@ -1,10 +1,10 @@
-# AI Video Editor
+# Urushi
 
 Record your screen, let AI make the first cut, polish it with simple tools, and export a lossless master, all in one desktop app.
 
-![The Edit step with a zoom and a sped-up part on the timeline](docs/images/edit.png)
+![The Refine step with a zoom and a sped-up part on the timeline](docs/images/edit.png)
 
-AI Video Editor is a standalone desktop recorder and editor for screen recordings, tutorials, demos and talking-head videos. Every edit, whether you make it or an AI assistant does, goes into the same non-destructive draft with full Undo. Your original footage is never changed.
+Urushi is a standalone desktop recorder and editor for screen recordings, tutorials, demos and talking-head videos. Every edit, whether you make it or an AI assistant does, goes into the same non-destructive draft with full Undo. Your original footage is never changed.
 
 > **Status:** early preview. The desktop app currently builds and runs on Linux with X11. Windows packaging and installers are in progress; macOS is not supported yet.
 
@@ -15,11 +15,16 @@ AI Video Editor is a standalone desktop recorder and editor for screen recording
 - Countdown, pause and resume. Recordings are saved losslessly (FFV1 video, PCM audio).
 - If the app quits during a take, recording stops with it and the take can be recovered on the next launch.
 
-**Auto Edit**
+**Magic Edit**
+- **Edit my video**: one button. Claude makes the rough cut, then adds motion graphics, captions and sound, as undoable edits you can review.
 - Local speech-to-text transcription (Whisper, runs on your device).
 - **Magic Edit** makes a safe first cut: long pauses, filler words and repeated takes, at a gentle, balanced or tight setting.
 - Captions from the transcript in three styles, with an .srt file or burned into the video.
 - Audio cleanup: even out loudness and reduce background noise.
+- Transitions on cuts (dip, wipe, iris), added by hand or by Claude, shown in the preview and the export.
+- A camera recorded with the screen (or added as a video) and layouts that arrange it: full screen, in a corner, or gone, with eased changes, planned by Claude from where the screen changes and where the speech starts.
+- Pauses and fillers tightened by the app (Natural, Balanced or Tight), zooms that need a reason, and a library of designed graphics.
+- Music and sound effects from your own audio files, with volume, lowering under speech and Undo; they are mixed into the export.
 
 **Edit**
 - Trim, split, cut a marked range, or restore removed footage.
@@ -36,12 +41,16 @@ AI Video Editor is a standalone desktop recorder and editor for screen recording
 - A verified lossless master (Matroska, FFV1 + PCM) by default, or a smaller MP4 when you choose it.
 - **Short clips:** find self-contained 15–60 second moments and export them as vertical, square or landscape videos with captions.
 
+## Looks
+
+Light Canvas is the default. Settings > Appearance also offers Studio Dark, Paper, Cinematic (the picture fills the window and the controls float over it) and a Custom theme with your own colours.
+
 ## How it works
 
 Each project moves through five steps. Only the current step's tools are shown.
 
-1. **Record or Import**: start a recording or bring in a video.
-2. **Auto Edit**: transcribe, run Magic Edit, set captions and audio.
+1. **Import**: start a recording or bring in a video.
+2. **Magic Edit**: press Edit my video, or open More options for Magic Edit alone, captions, audio and sound.
 3. **Edit**: refine by hand or with the assistant.
 4. **Review**: watch the edit and verify the draft.
 5. **Export**: save the master or an MP4, or make short clips.

@@ -7,10 +7,15 @@ import {
   readdir,
   realpath,
   rename,
+  rm,
   unlink,
 } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { mediaIdPattern } from "../../domain/src/library.ts";
+import {
+  assertProjectName,
+  migrateProjectStage,
+} from "../../domain/src/project-view.ts";
 import {
   assertInitialProjectSnapshot,
   assertTwoSourceInitialProjectSnapshot,
@@ -171,10 +176,17 @@ export class ProjectStore {
     )
       invalid();
     const project = await json(join(folder, "project.json"));
+    // A project saved in the retired Review step opens in Refine (ADR 0031).
+    if (project && typeof project === "object" && !Array.isArray(project)) {
+      const saved = project as Record<string, unknown>;
+      saved.workflow_step = migrateProjectStage(saved.workflow_step);
+    }
     const combined: unknown = { ...baseline, project };
     assertBaseline(combined);
+    // Only the stage, the name and the update time change after creation.
     const expected = {
       ...baseline.project,
+      name: combined.project.name,
       workflow_step: combined.project.workflow_step,
       updated_at: combined.project.updated_at,
     };
@@ -335,6 +347,15 @@ export class ProjectStore {
           await safeDirectory(join(this.root, entry));
           continue;
         }
+        // A removal that was interrupted finishes here.
+        if (
+          entry.startsWith(".removing-") &&
+          mediaIdPattern.test(entry.slice(10))
+        ) {
+          await safeDirectory(join(this.root, entry));
+          await rm(join(this.root, entry), { recursive: true, force: true });
+          continue;
+        }
         result.push(await this.read(entry));
       }
       return result;
@@ -354,28 +375,59 @@ export class ProjectStore {
   navigate(projectId: string, stage: ProjectStage): Promise<ProjectBaseline> {
     return this.serialize(async () => {
       if (!projectStages.includes(stage)) invalid();
-      await this.initialize();
-      const snapshot = await this.read(projectId);
-      snapshot.project.workflow_step = stage;
-      snapshot.project.updated_at = new Date(
-        Math.max(Date.now(), Date.parse(snapshot.project.updated_at)),
-      ).toISOString();
-      assertBaseline(snapshot);
-      const folder = this.folder(projectId),
-        staged = join(folder, `.project-${randomUUID()}.tmp`);
-      let unpublished = true;
-      try {
-        await writeNew(staged, snapshot.project);
-        await safeDirectory(this.root);
-        await safeDirectory(folder);
-        // Revalidate committed state before replacing only navigation metadata.
-        await this.read(projectId);
-        await rename(staged, join(folder, "project.json"));
-        unpublished = false;
-        return snapshot;
-      } finally {
-        if (unpublished) await unlink(staged).catch(() => undefined);
-      }
+      return this.updateMetadata(projectId, (project) => {
+        project.workflow_step = stage;
+      });
     });
+  }
+  /** Renames the project; the immutable baseline keeps its original name. */
+  rename(projectId: string, name: string): Promise<ProjectBaseline> {
+    return this.serialize(async () => {
+      assertProjectName(name);
+      return this.updateMetadata(projectId, (project) => {
+        project.name = name;
+      });
+    });
+  }
+  /**
+   * Removes the project's own folder (baseline, draft and metadata). Its
+   * sources stay in the media library and original files are never touched.
+   */
+  remove(projectId: string): Promise<void> {
+    return this.serialize(async () => {
+      await this.initialize();
+      const folder = this.folder(projectId),
+        removing = join(this.root, `.removing-${projectId}`);
+      await safeDirectory(folder);
+      await renameProjectDirectoryWithRetry(rename, folder, removing);
+      await rm(removing, { recursive: true, force: true });
+    });
+  }
+  private async updateMetadata(
+    projectId: string,
+    change: (project: ProjectBaseline["project"]) => void,
+  ): Promise<ProjectBaseline> {
+    await this.initialize();
+    const snapshot = await this.read(projectId);
+    change(snapshot.project);
+    snapshot.project.updated_at = new Date(
+      Math.max(Date.now(), Date.parse(snapshot.project.updated_at)),
+    ).toISOString();
+    assertBaseline(snapshot);
+    const folder = this.folder(projectId),
+      staged = join(folder, `.project-${randomUUID()}.tmp`);
+    let unpublished = true;
+    try {
+      await writeNew(staged, snapshot.project);
+      await safeDirectory(this.root);
+      await safeDirectory(folder);
+      // Revalidate committed state before replacing only project metadata.
+      await this.read(projectId);
+      await rename(staged, join(folder, "project.json"));
+      unpublished = false;
+      return snapshot;
+    } finally {
+      if (unpublished) await unlink(staged).catch(() => undefined);
+    }
   }
 }

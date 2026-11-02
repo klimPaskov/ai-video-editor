@@ -13,7 +13,8 @@ import {
  * `auth status` JSON with `configDirectory` (2.1.268), `--permission-prompts`
  * (2.1.259) and the stream-json `system/init` tool inventory.
  */
-export const minimumClaudeCodeVersion = "2.1.268";
+/** Turns run in restricted mode (ADR 0021), verified on 2.1.302. */
+export const minimumClaudeCodeVersion = "2.1.302";
 /** Release used for the isolated acceptance probes. */
 export const testedClaudeCodeVersion = "2.1.285";
 

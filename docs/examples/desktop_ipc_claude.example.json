@@ -25,7 +25,8 @@
       ],
       "streaming": "Reading the timeline first.",
       "billing": "subscription",
-      "message": null
+      "message": null,
+      "fullEdit": null
     }
   }
 }

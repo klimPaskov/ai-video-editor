@@ -40,15 +40,16 @@
 - A corrupt file gives a specific repair route.
 - A tagged H.264/BT.709 import shows a native-size frame only after decode; unknown color or higher-precision paths remain explicitly unavailable. Source bytes stay unchanged. This still-frame check does not satisfy smooth A/V preview or multi-source append acceptance.
 
-## S07 Auto Edit
+## S07 Magic Edit
 
 - Magic Wand is the primary control.
 - Presets and switches are understandable without technical terms.
 - Live changes appear in the draft and history.
 - Stop and Undo remain visible.
 
-## S08 Review editor
+## S08 Refine and the full editor
 
+- Refine: the video uses the available width (no small box with black bars), the six tools are never cut off at 800 px window height, and Open full editor opens every existing tool with a Done button back.
 - Preview is visually dominant.
 - The timeline shows only tracks that contain content.
 - One tool or inspector is open.
@@ -61,24 +62,26 @@
 - The user can keep current, restore prior, or return to editing.
 - Restoring creates a new draft and does not rewrite history.
 
-## S10 QA
+## S10 What Magic Edit did
 
-- The top state is Ready, Warnings, or Blocked.
-- Each finding can jump to its range.
-- Blocking failures prevent export.
+- Review is not a step (ADR 0031). The list in Refine shows plain one-line rows built from the draft's own transaction records.
+- The draft check runs by itself when exporting and speaks only on a problem; a failed check stops the export with one plain message.
 - Technical evidence is optional.
 
 ## S11 Export
+
+- The step and its Export button stay fully visible with the assistant open (docked beside the page, a slide-over below 1100 px that never covers the action bar).
+- The draft check runs by itself; nothing is shown unless it fails.
 
 - Common options fit without scrolling at normal window size.
 - Destination and overwrite behavior are explicit.
 - Export requires a user action.
 - Progress can be cancelled safely.
 
-## S12 Complete
+## S12 Done
 
-- Success appears only after full decode and output hash verification.
-- Open Video, Open Folder, and Return to Project work.
+- Success appears only after full decode and output hash verification, then the app moves to the Done screen.
+- Show in folder, Play, Make short clips, Edit another video, Back to Home and Keep editing each work on real state.
 
 ## S13 Settings
 
@@ -89,3 +92,7 @@
 - Runtime-discovered Codex models can be selected.
 - Only one settings section opens at a time.
 - Diagnostics remain separate.
+
+## Layout audit (2026-10-24)
+
+Every screen and dialog must pass `tests/native/layout.test.ts --enforce` in the packaged app for every theme at 1440x900, 1200x800 and 1000x700 (100%), and 1200x800 at 150% and 200%: no sideways page scroll, no control cut off by the window or by a container, no controls drawn over each other, no text cut off without an ellipsis, no target smaller than 20 px, and every text at least 4.5:1 (3:1 for large text) against what is behind it. A person also looks at the screenshots; the audit finds breakage, not taste.

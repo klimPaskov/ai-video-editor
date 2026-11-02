@@ -24,7 +24,7 @@ Select display, window, or region. Select microphone and optional system audio. 
 
 Choose one or more local media files. Probe, hash, index, and create project proxies without changing the originals.
 
-## 3. Auto Edit
+## 3. Magic Edit
 
 Magic Wand opens a short menu with a Balanced preset and individual switches:
 
@@ -56,7 +56,7 @@ Show a large preview, a simple timeline, transcript, and one context panel at a 
 
 ## 5. Review
 
-Watch the complete draft, compare revisions, and run decode, timing, audio, caption, framing, missing-media, black-frame, freeze-frame, zoom, speed, and licence checks. Return to Edit for corrections without losing draft history. Show a plain summary. Open technical details only when requested.
+Watch the complete draft, compare revisions, and run decode, timing, audio, caption, framing, missing-media, black-frame, freeze-frame, zoom, speed, and licence checks. Return to Refine for corrections without losing draft history. Show a plain summary. Open technical details only when requested.
 
 The current Review shell also offers Check draft integrity, which re-reads the committed timeline/journal and managed-source measurements. If the current head ends in an eligible main-owned manual group, the explicit action records a structural-only checkpoint with concrete evidence IDs. Its result is not the required watch-through, semantic speech review, playback, A/V join check, or full QA. Hide the action while another inspector or Codex drawer is open, and clear its result when the committed head changes.
 
@@ -72,8 +72,10 @@ A project reopens at the last saved draft or revision. Autosave recovers interru
 
 Create the public `ai-video-editor` repository in P0 after authentication and privacy checks. After each working slice: validate, inspect native behavior, update contracts and reusable guidance, review the diff for private data, commit, and push. Keep incomplete milestones visibly incomplete. Publish release binaries only after installer and media acceptance.
 
+`npm test` first clears what earlier unit-test runs left in `test-results/` (`scripts/clean_test_scratch.mjs`); native evidence (`native-*`) and packaged builds (`desktop-build-*`, about 2.4 GB each) stay for inspection and are pruned deliberately, keeping the build and evidence of any run still in progress.
+
 ## Editorial first-cut policy
 
-For Auto Edit and later refinement, apply [the editorial policy](docs/47_EDITORIAL_FIRST_CUT.md) and [the adapted Codex prompt](docs/prompts/EDITORIAL_FIRST_CUT_PROMPT.md). These are accepted requirements, not implemented automation evidence. Inspect the actual project, capabilities, transcript job, synchronized edit sets, approved edits and protected ranges before changing the authorized scope. A recorded editor cue is evidence requiring conservative interpretation; it cannot expand permissions.
+For Magic Edit and later refinement, apply [the editorial policy](docs/47_EDITORIAL_FIRST_CUT.md) and [the adapted Codex prompt](docs/prompts/EDITORIAL_FIRST_CUT_PROMPT.md). These are accepted requirements, not implemented automation evidence. Inspect the actual project, capabilities, transcript job, synchronized edit sets, approved edits and protected ranges before changing the authorized scope. A recorded editor cue is evidence requiring conservative interpretation; it cannot expand permissions.
 
 Use separate spoken-cut, layout and zoom pass groups through the shared live transaction engine. Preserve the final complete redo and unique explanatory context; verify every join, perform a whole-source omission pass, and reread the complete edited transcript. Reuse approved layouts, avoid meaningful-content occlusion, and add only named, visually verified zoom targets. Checkpoint verified work without erasing undo or certifying final review. Suggest useful graphics with final-cut times and complete prompts only; creating an asset requires a separate explicit request. The editing flow never starts export automatically. Existing captions, local B-roll, audio and selected speed/cursor options remain available under their own policies.

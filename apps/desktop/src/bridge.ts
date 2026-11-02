@@ -26,9 +26,23 @@ import type {
   AudioSettingsUpdate,
 } from "../../../packages/domain/src/audio-settings.ts";
 import type {
+  SoundAddRequest,
+  SoundRemoveRequest,
+  SoundUpdateRequest,
+  SoundsRequest,
+  SoundsView,
+} from "../../../packages/domain/src/sound-view.ts";
+import type {
+  CameraOffsetRequest,
+  CameraRequest,
+  CameraView,
+} from "../../../packages/domain/src/camera-view.ts";
+import type {
   ShortClipRequest,
   ShortClipsView,
   ShortExportRequest,
+  ShortExportAllRequest,
+  ShortLibraryRequest,
   ShortProjectRequest,
 } from "../../../packages/domain/src/short-clips-view.ts";
 import type {
@@ -50,13 +64,21 @@ import type {
   ExportView,
 } from "../../../packages/domain/src/export-view.ts";
 import type {
+  EditSummaryProjectRequest,
+  EditSummaryUndoRequest,
+  EditSummaryView,
+} from "../../../packages/domain/src/edit-summary.ts";
+import type {
   ProjectDraftView,
   ProjectDraftIntegrityView,
   ProjectFrameRequest,
+  ProjectStripRequest,
+  ProjectStripResult,
   ProjectFrameResult,
   ProjectView,
   ProjectRequest,
   ProjectNavigation,
+  ProjectRename,
   TwoSourceProjectRequest,
   ManualTrimRequest,
   ManualSplitRequest,
@@ -66,6 +88,10 @@ import type {
   ManualSpeedRequest,
   ManualGraphicRequest,
   ManualGraphicRemoveRequest,
+  ManualLayoutRemoveRequest,
+  ManualLayoutRequest,
+  ManualTransitionRequest,
+  ManualTransitionRemoveRequest,
   ManualRestoreRangeRequest,
   ManualTranscriptCorrectionRequest,
   ManualTranscriptCutRequest,
@@ -96,6 +122,7 @@ import type {
 } from "../../../packages/domain/src/transcription.ts";
 
 import type {
+  ClaudeFullEditRequest,
   ClaudeSelection,
   ClaudeThreadProjectRequest,
   ClaudeThreadSendRequest,
@@ -111,6 +138,7 @@ export interface DesktopBridge {
   cancelClaudeSignIn(): Promise<Reply<ClaudeView>>;
   signOutClaude(): Promise<Reply<ClaudeView>>;
   selectClaudeModel(value: ClaudeSelection): Promise<Reply<ClaudeView>>;
+  selectClaudeRoughCutModel(value: ClaudeSelection): Promise<Reply<ClaudeView>>;
   openClaudeInstallGuide(): Promise<Reply<null>>;
   getClaudeThread(
     request: ClaudeThreadProjectRequest,
@@ -122,6 +150,12 @@ export interface DesktopBridge {
     request: ClaudeThreadSendRequest,
   ): Promise<Reply<ClaudeThreadView>>;
   interruptClaudeThread(
+    request: ClaudeThreadProjectRequest,
+  ): Promise<Reply<ClaudeThreadView>>;
+  startClaudeFullEdit(
+    request: ClaudeFullEditRequest,
+  ): Promise<Reply<ClaudeThreadView>>;
+  undoClaudeFullEdit(
     request: ClaudeThreadProjectRequest,
   ): Promise<Reply<ClaudeThreadView>>;
   getApiThread(request: ApiThreadProjectRequest): Promise<Reply<ApiThreadView>>;
@@ -179,6 +213,23 @@ export interface DesktopBridge {
   removeManualGraphic(
     request: ManualGraphicRemoveRequest,
   ): Promise<Reply<ProjectDraftView>>;
+  applyManualLayout(
+    request: ManualLayoutRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  removeManualLayout(
+    request: ManualLayoutRemoveRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  getCamera(request: CameraRequest): Promise<Reply<CameraView>>;
+  /** Opens a file dialog; resolves with the unchanged view when cancelled. */
+  chooseCamera(request: CameraRequest): Promise<Reply<CameraView>>;
+  setCameraOffset(request: CameraOffsetRequest): Promise<Reply<CameraView>>;
+  removeCamera(request: CameraRequest): Promise<Reply<CameraView>>;
+  applyManualTransition(
+    request: ManualTransitionRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  removeManualTransition(
+    request: ManualTransitionRemoveRequest,
+  ): Promise<Reply<ProjectDraftView>>;
   applyManualSpeed(
     request: ManualSpeedRequest,
   ): Promise<Reply<ProjectDraftView>>;
@@ -189,11 +240,22 @@ export interface DesktopBridge {
     request: AudioSettingsRequest,
   ): Promise<Reply<AudioSettings>>;
   setAudioSettings(request: AudioSettingsUpdate): Promise<Reply<AudioSettings>>;
+  getSounds(request: SoundsRequest): Promise<Reply<SoundsView>>;
+  /** Opens a file dialog; resolves with the unchanged view when cancelled. */
+  addSound(request: SoundAddRequest): Promise<Reply<SoundsView>>;
+  updateSound(request: SoundUpdateRequest): Promise<Reply<SoundsView>>;
+  removeSound(request: SoundRemoveRequest): Promise<Reply<SoundsView>>;
   getShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
   findShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
   discardShortClip(request: ShortClipRequest): Promise<Reply<ShortClipsView>>;
   exportShortClip(request: ShortExportRequest): Promise<Reply<ShortClipsView>>;
   cancelShortClip(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
+  exportAllShortClips(
+    request: ShortExportAllRequest,
+  ): Promise<Reply<ShortClipsView>>;
+  revealShortClip(request: ShortLibraryRequest): Promise<Reply<ShortClipsView>>;
+  forgetShortClip(request: ShortLibraryRequest): Promise<Reply<ShortClipsView>>;
+  pickShortClips(request: ShortProjectRequest): Promise<Reply<ShortClipsView>>;
   getCaptionSettings(
     request: CaptionSettingsRequest,
   ): Promise<Reply<CaptionSettings>>;
@@ -236,12 +298,26 @@ export interface DesktopBridge {
   openProject(request: ProjectRequest): Promise<Reply<ProjectView>>;
   closeProject(request: ProjectRequest): Promise<Reply<null>>;
   navigateProject(request: ProjectNavigation): Promise<Reply<ProjectView>>;
+  renameProject(request: ProjectRename): Promise<Reply<ProjectView>>;
+  deleteProject(request: ProjectRequest): Promise<Reply<null>>;
   verifyDraftIntegrity(
     request: ProjectRequest,
   ): Promise<Reply<ProjectDraftIntegrityView>>;
+  getEditSummary(
+    request: EditSummaryProjectRequest,
+  ): Promise<Reply<EditSummaryView>>;
+  undoEditSummary(
+    request: EditSummaryUndoRequest,
+  ): Promise<Reply<ProjectDraftView>>;
+  putBackEditSummary(
+    request: EditSummaryProjectRequest,
+  ): Promise<Reply<ProjectDraftView>>;
   readProjectFrame(
     request: ProjectFrameRequest,
   ): Promise<Reply<ProjectFrameResult>>;
+  readProjectStrip(
+    request: ProjectStripRequest,
+  ): Promise<Reply<ProjectStripResult>>;
   applyManualTrim(request: ManualTrimRequest): Promise<Reply<ProjectDraftView>>;
   applyManualSplit(
     request: ManualSplitRequest,
@@ -263,6 +339,10 @@ export interface DesktopBridge {
   onProjectDraftChanged(
     listener: (reply: Reply<ProjectDraftView>) => void,
   ): () => void;
+  /** The assistant moved the app to another step. */
+  onProjectStageChanged(
+    listener: (reply: Reply<ProjectView>) => void,
+  ): () => void;
   getPreferences(): Promise<Reply<Preferences>>;
   setPreferences(value: Preferences): Promise<Reply<Preferences>>;
   listMedia(): Promise<Reply<MediaSummary[]>>;
@@ -278,13 +358,29 @@ export const channels = Object.freeze({
   projectManualSpeed: "projects:manual-speed",
   projectManualGraphic: "projects:manual-graphic",
   projectManualGraphicRemove: "projects:manual-graphic-remove",
+  projectManualLayout: "projects:manual-layout",
+  projectManualLayoutRemove: "projects:manual-layout-remove",
+  cameraGet: "camera:get",
+  cameraChoose: "camera:choose",
+  cameraOffset: "camera:offset",
+  cameraRemove: "camera:remove",
+  projectManualTransition: "projects:manual-transition",
+  projectManualTransitionRemove: "projects:manual-transition-remove",
   audioGet: "audio:get",
   audioSet: "audio:set",
+  soundsGet: "sounds:get",
+  soundsAdd: "sounds:add",
+  soundsUpdate: "sounds:update",
+  soundsRemove: "sounds:remove",
   shortsGet: "shorts:get",
   shortsFind: "shorts:find",
   shortsDiscard: "shorts:discard",
   shortsExport: "shorts:export",
   shortsCancel: "shorts:cancel",
+  shortsExportAll: "shorts:export-all",
+  shortsReveal: "shorts:reveal",
+  shortsForget: "shorts:forget",
+  shortsPick: "shorts:pick",
   captionsGet: "captions:get",
   captionsSet: "captions:set",
   recordingDevices: "recording:devices",
@@ -313,11 +409,14 @@ export const channels = Object.freeze({
   claudeCancelSignIn: "claude:cancel-sign-in",
   claudeSignOut: "claude:sign-out",
   claudeSelect: "claude:select",
+  claudeSelectRoughCut: "claude:select-rough-cut",
   claudeInstallGuide: "claude:install-guide",
   claudeThreadGet: "claude-thread:get",
   claudeThreadOpen: "claude-thread:open",
   claudeThreadSend: "claude-thread:send",
   claudeThreadInterrupt: "claude-thread:interrupt",
+  claudeFullEditStart: "claude-thread:full-edit",
+  claudeFullEditUndo: "claude-thread:undo-full-edit",
   apiThreadGet: "api-thread:get",
   apiThreadOpen: "api-thread:open",
   apiThreadSend: "api-thread:send",
@@ -347,8 +446,14 @@ export const channels = Object.freeze({
   projectOpen: "projects:open",
   projectClose: "projects:close",
   projectNavigate: "projects:navigate",
+  projectRename: "projects:rename",
+  projectDelete: "projects:delete",
   projectIntegrityCheck: "projects:verify-draft-integrity",
+  editSummaryGet: "edit-summary:get",
+  editSummaryUndo: "edit-summary:undo",
+  editSummaryPutBack: "edit-summary:put-back",
   projectFrame: "projects:frame",
+  projectStrip: "projects:strip",
   projectManualTrim: "projects:manual-trim",
   projectManualSplit: "projects:manual-split",
   projectManualRangeCut: "projects:manual-range-cut",
@@ -358,6 +463,7 @@ export const channels = Object.freeze({
   projectManualUndo: "projects:manual-undo",
   projectManualRedo: "projects:manual-redo",
   projectDraftChanged: "projects:draft-changed",
+  projectStageChanged: "projects:stage-changed",
   preferencesGet: "preferences:get",
   preferencesSet: "preferences:set",
   list: "library:list",

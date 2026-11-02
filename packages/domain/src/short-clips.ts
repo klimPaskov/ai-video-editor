@@ -1,5 +1,6 @@
-import { viewSourceAt } from "./speed.ts";
+import { isClipSpeed, viewSourceAt } from "./speed.ts";
 import { joinCaptionWords, type CaptionWord } from "./captions.ts";
+import type { GraphicInterval } from "./graphics.ts";
 
 /**
  * Short clips from a finished draft. Candidates are found locally from the
@@ -11,6 +12,10 @@ import { joinCaptionWords, type CaptionWord } from "./captions.ts";
 
 export type ShortFormat = "vertical" | "square" | "landscape";
 export type ShortFraming = "fit" | "fill";
+/** Playback speed of a clip; the render supports whole-number speeds. */
+export type ShortSpeed = 1 | 2;
+/** Where a candidate came from: transcript rules, or Claude's picks. */
+export type ShortOrigin = "rules" | "ai";
 
 export interface ShortCandidate {
   id: string;
@@ -21,6 +26,7 @@ export interface ShortCandidate {
   score: number;
   reasons: string[];
   excerpt: string;
+  origin: ShortOrigin;
 }
 
 export interface ShortFindOptions {
@@ -234,6 +240,7 @@ export function findShortCandidates(
         score,
         reasons,
         excerpt: excerptOf(chosen),
+        origin: "rules" as const,
         from,
         to,
       });
@@ -261,6 +268,7 @@ export function findShortCandidates(
       score: window.score,
       reasons: window.reasons,
       excerpt: window.excerpt,
+      origin: "rules" as const,
     }));
 }
 
@@ -369,4 +377,191 @@ export function draftWindowClips(
     });
   }
   return ranges;
+}
+
+/** Whether every part of a clip's window can play `factor` times faster. */
+export function shortSpeedFits(
+  speeds: readonly (number | undefined)[],
+  factor: ShortSpeed,
+): boolean {
+  return speeds.every((speed) => isClipSpeed((speed ?? 1) * factor));
+}
+
+export const shortTitleLimits = Object.freeze({
+  maxChars: 80,
+  showUs: 3_000_000,
+  /** Above the user's graphics (0 to 99 by their own choice) and below transitions (100). */
+  layer: 99,
+});
+
+/** Left edge and width, as fractions of the frame, that stay in the picture. */
+export function shortTitleBox(
+  format: ShortFormat,
+  framing: ShortFraming,
+  position: number,
+  frame: { width: number; height: number },
+): { left: number; width: number } {
+  const target =
+    format === "vertical" ? 9 / 16 : format === "square" ? 1 : 16 / 9;
+  const aspect = frame.width / frame.height;
+  // "Fill" crops the sides when the frame is wider than the format.
+  const visible = framing === "fill" ? Math.min(1, target / aspect) : 1;
+  const at = Math.min(1, Math.max(0, position));
+  const centre = at * (1 - visible) + visible / 2;
+  const width = 0.84 * visible;
+  return { left: centre - width / 2, width };
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function plain(text: string, max: number): string {
+  return [
+    ...text
+      .replace(/[\u0000-\u001f\u007f]/gu, " ")
+      .replace(/\s+/gu, " ")
+      .trim(),
+  ]
+    .slice(0, max)
+    .join("");
+}
+
+/**
+ * A title shown over the first seconds of a clip, as a graphic interval in
+ * the clip's own time. Null when the title is empty or the clip is shorter
+ * than a second.
+ */
+export function shortTitleInterval(
+  title: string,
+  clipUs: number,
+  box: { left: number; width: number },
+  speed: ShortSpeed = 1,
+): GraphicInterval | null {
+  const text = plain(title, shortTitleLimits.maxChars);
+  if (!text || clipUs < 1_000_000) return null;
+  // The title keeps its own pace: it is on screen for the same time at any speed.
+  const endUs = Math.min(Math.floor(clipUs / speed), shortTitleLimits.showUs);
+  const seconds = (endUs / 1_000_000).toFixed(6);
+  const pct = (value: number) => `${(value * 100).toFixed(3)}%`;
+  return {
+    graphicId: "short-title",
+    name: "Title",
+    startUs: 0,
+    endUs,
+    layer: shortTitleLimits.layer,
+    html: `<div class="st"><span>${escapeHtml(text)}</span></div>`,
+    css: `.st{position:absolute;top:7%;left:${pct(box.left)};width:${pct(box.width)};display:flex;justify-content:center;opacity:0;animation:st-show ${seconds}s linear both}.st span{box-sizing:border-box;max-width:100%;padding:.4em .7em;border-radius:.45em;background:rgba(10,12,20,.74);color:#fff;font:700 calc(var(--stage-height,720px)*.045)/1.15 system-ui,sans-serif;text-align:center;text-wrap:balance;box-shadow:0 6px 30px rgba(0,0,0,.35)}@keyframes st-show{0%{opacity:0;transform:translateY(24px);animation-timing-function:cubic-bezier(.2,.8,.2,1)}12%{opacity:1;transform:none}88%{opacity:1;transform:none;animation-timing-function:ease-in}100%{opacity:0;transform:translateY(-12px)}}`,
+  };
+}
+
+/** One clip suggested by an assistant, in output time of the draft. */
+export interface ShortProposal {
+  start_us: number;
+  end_us: number;
+  title: string;
+  reasons: string[];
+}
+
+export interface ShortProposalResult {
+  candidates: ShortCandidate[];
+  /** Why each refused proposal was refused, for the assistant to correct. */
+  rejected: string[];
+}
+
+/** How far a proposed edge may be from a sentence edge before it is refused. */
+const snapUs = 3_000_000;
+
+/**
+ * Checks an assistant's proposed clips against the draft's words and the
+ * same rules the local finder keeps: each edge snaps to the nearest sentence
+ * edge (a clip starts where a sentence starts and ends where one ends), the
+ * length stays within the allowed range, and clips do not overlap. Order is rank; the first
+ * proposal is the strongest. Nothing here trusts the model's text: titles
+ * and reasons are cleaned and bounded, and the excerpt comes from the draft.
+ */
+export function proposeShortCandidates(
+  words: readonly CaptionWord[],
+  proposals: readonly ShortProposal[],
+  options: ShortFindOptions = defaultShortFindOptions,
+): ShortProposalResult {
+  const candidates: ShortCandidate[] = [];
+  const rejected: string[] = [];
+  const nearest = (values: number[], target: number): number | null => {
+    let best: number | null = null;
+    for (const value of values)
+      if (
+        Math.abs(value - target) <= snapUs &&
+        (best === null || Math.abs(value - target) < Math.abs(best - target))
+      )
+        best = value;
+    return best;
+  };
+  const sentences = splitSentences(words, options.sentencePauseUs);
+  const starts = sentences
+    .filter((sentence) => sentence.cleanStart)
+    .map((sentence) => sentence.startUs);
+  const ends = sentences.map((sentence) => sentence.endUs);
+  for (const [index, proposal] of proposals.entries()) {
+    const label = `Clip ${index + 1}`;
+    if (candidates.length >= options.maxClips) {
+      rejected.push(`${label}: at most ${options.maxClips} clips.`);
+      continue;
+    }
+    const startUs = nearest(starts, proposal.start_us);
+    const endUs = nearest(ends, proposal.end_us);
+    if (startUs === null || endUs === null || endUs <= startUs) {
+      rejected.push(
+        `${label}: its start and end must be where spoken sentences start and end.`,
+      );
+      continue;
+    }
+    const length = endUs - startUs;
+    if (length < options.minUs || length > options.maxUs) {
+      rejected.push(
+        `${label}: it is ${Math.round(length / 1_000_000)} s; clips must be ${options.minUs / 1_000_000} to ${options.maxUs / 1_000_000} s.`,
+      );
+      continue;
+    }
+    if (
+      candidates.some((other) => startUs < other.endUs && other.startUs < endUs)
+    ) {
+      rejected.push(`${label}: it overlaps a clip already chosen.`);
+      continue;
+    }
+    const title = plain(proposal.title, 80);
+    if (!title) {
+      rejected.push(`${label}: it needs a title.`);
+      continue;
+    }
+    const spoken = joinCaptionWords(
+      words
+        .filter((word) => word.startUs >= startUs && word.endUs <= endUs)
+        .map((word) => word.text),
+    );
+    candidates.push({
+      id: `clip-${startUs}-${endUs}`,
+      title,
+      startUs,
+      endUs,
+      score: Math.max(0.5, Math.round((0.95 - index * 0.05) * 1000) / 1000),
+      reasons: proposal.reasons
+        .map((reason) => plain(reason, 80))
+        .filter(Boolean)
+        .slice(0, 4),
+      excerpt:
+        spoken.length <= 220
+          ? spoken
+          : `${spoken.slice(0, Math.max(120, spoken.slice(0, 218).lastIndexOf(" ")))}…`,
+      origin: "ai",
+    });
+  }
+  return {
+    candidates: candidates.sort((a, b) => a.startUs - b.startUs),
+    rejected,
+  };
 }

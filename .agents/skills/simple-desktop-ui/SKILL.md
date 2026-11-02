@@ -11,19 +11,19 @@ Changing screen flow, visual hierarchy, design system, editor panels, or empty a
 
 ## Core rules
 
-- Home plus five project steps: Record or Import, Auto Edit, Edit, Review, Export. QA is a screen within Review.
+- Home plus five project steps: Import, Magic Edit, Refine, Clips, Export, then a Done screen after exporting (ADR 0031). Review is gone; Refine is one simple screen (big picture, What Magic Edit did, six tools, Open full editor).
 - One primary action per screen.
 - One tool inspector open at a time.
 - No permanent full feature navigation.
 - AI drawer collapsed unless active or requested.
 - Technical details behind Diagnostics.
-- Large preview and direct manipulation in Edit; watch-through, comparison and quality findings in Review.
+- Large preview and direct manipulation in Refine; watch-through, comparison and quality findings in Review.
 - Hide empty tracks and unavailable controls.
 - Use plain user language.
 
 If only a structural draft-integrity check is implemented in Review, show one Check draft integrity action there and report only what main actually revalidated. If the current manual group has a structural checkpoint, say so explicitly; otherwise state that no manual checkpoint was recorded. Clear the result when the committed draft head changes. Do not label the result a full review, semantic speech check, playback, A/V join review, or export readiness.
 
-Hide the Review integrity action while the Source inspector or Codex drawer is open, and clear its transient result on panel changes. Keep the check in the Review stage beside the preview; do not turn it into a persistent status dashboard.
+The draft integrity check runs by itself before an export and shows nothing unless it fails; it has no button and is never a persistent status dashboard. The assistant and Source details are docked beside the page (a slide-over below 1100 px that never covers the action bar); a step's panel is never hidden because they are open.
 
 For a partial Edit tool, put only actionable trim, Split and Undo controls by the current preview position. Show which part or fragment a two-source action targets, disable trim and Split at fragment boundaries or during a save, and retain the single-inspector/drawer rule. Do not add inactive tracks or a fake full tool rail to match a reference image.
 
@@ -31,7 +31,7 @@ For marked range cutting, keep Mark in, Mark out, Cut range and Clear adjacent t
 
 For manual restoration, keep source choice and exact missing source-time bounds in a compact inline Edit form. Use full-precision microsecond timing from decimal seconds, disable invalid, overlapping or out-of-source intervals, and show a useful validation error. Resolve source identity against the immutable baseline in main; show the restored interval from committed preview state and preserve shared Undo/Redo. Do not infer missing speech or add an empty source-track panel.
 
-For Auto Edit speech-candidate review, nest the transcript-derived list under the completed transcript disclosure. Show concise original-transcript context, source time, protection/disposition, and the earlier transcript occurrence for an exact repeated-segment candidate. Show a still-frame seek control only when the current committed clip map contains the source point. Keep preview read-only; do not imply audio playback, present a candidate as an applied cut, or add a second inspector.
+For Magic Edit speech-candidate review, nest the transcript-derived list under the completed transcript disclosure. Show concise original-transcript context, source time, protection/disposition, and the earlier transcript occurrence for an exact repeated-segment candidate. Show a still-frame seek control only when the current committed clip map contains the source point. Keep preview read-only; do not imply audio playback, present a candidate as an applied cut, or add a second inspector.
 
 The compact AI drawer and Settings provider selector may offer Codex, OpenAI API, DeepSeek and Gemini API. Show one selected provider, its verified model choices, billing/context notice and recovery state; never combine several provider panels or imply a disconnected provider can generate. Gemini's function-call thought signatures and API keys are technical state, never UI content. A synthetic fixture label is test evidence, not a production assistant claim.
 

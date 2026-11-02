@@ -32,7 +32,10 @@ export interface ClaudeView {
     plan: string | null;
   } | null;
   models: ClaudeModelOption[];
+  /** The production model: full edits and the conversation. */
   selection: ClaudeSelection | null;
+  /** The rough cut's model (Magic Edit); Haiku by default when offered. */
+  roughCutSelection: ClaudeSelection | null;
   message: string | null;
 }
 
@@ -44,6 +47,31 @@ export interface ClaudeThreadView {
   streaming: string | null;
   billing: "subscription" | "api" | "other" | null;
   message: string | null;
+  /** The latest full AI edit of this project, or null when none ran. */
+  fullEdit: ClaudeFullEditView | null;
+}
+
+export interface ClaudeFullEditView {
+  status: "running" | "finished" | "stopped" | "failed";
+  /** Edits the run committed that are still in the draft. */
+  changes: number;
+  /** True while the run's edits are the newest in the draft history. */
+  undoable: boolean;
+}
+
+export type ClaudeFullEditLevel = "tidy" | "polished" | "bold";
+
+export interface ClaudeFullEditBrief {
+  goal: string;
+  audience: string;
+  style: string;
+  level: ClaudeFullEditLevel;
+}
+
+export interface ClaudeFullEditRequest {
+  schema_version: "1.0";
+  project_id: string;
+  brief: ClaudeFullEditBrief;
 }
 
 export interface ClaudeThreadProjectRequest {
@@ -66,9 +94,9 @@ export const claudeEfforts: readonly ClaudeEffort[] = Object.freeze([
 /** Fixed user-facing connection issues; raw CLI output never reaches the renderer. */
 export const claudeIssues = Object.freeze({
   missing:
-    "Claude Code was not found. Install it from Anthropic, then choose Check again.",
+    "Claude Code is not installed. Install it from claude.com/claude-code, then choose Check again.",
   outdated:
-    "This Claude Code version is too old. Update Claude Code, then choose Check again.",
+    "Claude Code is out of date. Open a terminal, run: claude update, then choose Check again.",
   runtime:
     "Claude Code could not be started. Check the installation, then choose Check again.",
   status: "Claude sign-in status could not be read. Choose Check again.",
@@ -103,6 +131,7 @@ export const claudeThreadIssues = Object.freeze({
     "The earlier Claude conversation could not be resumed. Your next message starts a new conversation.",
   storage:
     "The conversation could not be saved. Check local storage and reopen the project.",
+  undoLater: "Undo the edits made after the full edit first, then try again.",
 } as const);
 
 const issueSet = new Set<string>(Object.values(claudeIssues));
@@ -166,6 +195,7 @@ export function assertClaudeView(value: unknown): asserts value is ClaudeView {
     "account",
     "models",
     "selection",
+    "roughCutSelection",
     "message",
   ]);
   if (
@@ -212,10 +242,11 @@ export function assertClaudeView(value: unknown): asserts value is ClaudeView {
     prose(model.detail, 160, true);
     for (const level of model.efforts) effort(level);
   }
-  if (view.selection !== null) {
-    assertClaudeSelection(view.selection);
-    if (view.status !== "signed_in") invalid();
-  }
+  for (const chosen of [view.selection, view.roughCutSelection])
+    if (chosen !== null) {
+      assertClaudeSelection(chosen);
+      if (view.status !== "signed_in") invalid();
+    }
   if (view.message !== null && !issueSet.has(view.message as string)) invalid();
   if (
     (view.status === "signed_in") !== (view.account !== null) ||
@@ -248,6 +279,19 @@ export function assertClaudeThreadSendRequest(
 }
 
 export const maxClaudeThreadMessages = 48;
+export const maxBriefChars = 300;
+
+export function assertClaudeFullEditRequest(
+  value: unknown,
+): asserts value is ClaudeFullEditRequest {
+  const request = exact(value, ["schema_version", "project_id", "brief"]);
+  if (request.schema_version !== "1.0") invalid();
+  projectId(request.project_id);
+  const brief = exact(request.brief, ["goal", "audience", "style", "level"]);
+  for (const key of ["goal", "audience", "style"] as const)
+    prose(brief[key], maxBriefChars, true);
+  if (!["tidy", "polished", "bold"].includes(brief.level as string)) invalid();
+}
 
 export function assertClaudeThreadView(
   value: unknown,
@@ -260,7 +304,22 @@ export function assertClaudeThreadView(
     "streaming",
     "billing",
     "message",
+    "fullEdit",
   ]);
+  if (view.fullEdit !== null) {
+    const run = exact(view.fullEdit, ["status", "changes", "undoable"]);
+    if (
+      !["running", "finished", "stopped", "failed"].includes(
+        run.status as string,
+      ) ||
+      !Number.isSafeInteger(run.changes) ||
+      (run.changes as number) < 0 ||
+      (run.changes as number) > 10_000 ||
+      typeof run.undoable !== "boolean" ||
+      (run.undoable && (run.changes === 0 || run.status === "running"))
+    )
+      invalid();
+  }
   if (
     !["closed", "ready", "running", "interrupting", "failed"].includes(
       view.status as string,
@@ -287,7 +346,8 @@ export function assertClaudeThreadView(
         view.activities.length !== 0 ||
         view.streaming !== null ||
         view.billing !== null ||
-        view.message !== null)) ||
+        view.message !== null ||
+        view.fullEdit !== null)) ||
     (view.status !== "closed" && view.projectId === null) ||
     (view.streaming !== null &&
       view.status !== "running" &&

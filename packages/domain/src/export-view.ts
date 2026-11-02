@@ -13,6 +13,8 @@ export const exportIssues = Object.freeze({
   storage:
     "The export finished but its record could not be saved. The file is in place.",
   tools: "FFmpeg is needed to export. Install FFmpeg and try again.",
+  integrity:
+    "The edit could not be checked, so nothing was exported. Reopen the project and try again.",
 } as const);
 
 /** Fixed explanations for drafts the verified exporter refuses to convert. */
@@ -35,6 +37,8 @@ export const exportUnsupported = Object.freeze([
   "This source has no video stream.",
   "This source cannot be read.",
   "Graphics cannot be drawn on video of this precision yet.",
+  "Music and sound effects need a recording that has audio to mix them into.",
+  "A music or sound file of this video is missing or was changed. Add it again in Magic Edit.",
 ] as const);
 
 const messageSet = new Set<string>([
@@ -44,6 +48,8 @@ const messageSet = new Set<string>([
 
 export interface ExportResultView {
   fileName: string;
+  /** The name of the folder it was saved in, such as "Videos"; never a path. */
+  folderName: string;
   profile: ExportProfileChoice;
   durationUs: number;
   frameCount: number;
@@ -203,6 +209,7 @@ export function assertExportView(value: unknown): asserts value is ExportView {
   if (view.result !== null) {
     const result = exact(view.result, [
       "fileName",
+      "folderName",
       "profile",
       "durationUs",
       "frameCount",
@@ -226,6 +233,13 @@ export function assertExportView(value: unknown): asserts value is ExportView {
     )
       invalid();
     fileName(result.fileName);
+    if (
+      typeof result.folderName !== "string" ||
+      result.folderName.length < 1 ||
+      result.folderName.length > 255 ||
+      /[\\/\u0000-\u001f\u007f]/u.test(result.folderName)
+    )
+      invalid();
     profile(result.profile);
     nonNegative(result.durationUs);
     nonNegative(result.frameCount);

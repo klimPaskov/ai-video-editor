@@ -50,7 +50,7 @@ Native Codex children are separate from implementation subagents. The current 0.
 
 The media engineer owns `lossless-media` checks across capture, intermediate rendering, and export. The UX designer and native QA agent use `reference-fidelity` for the current individual references and their correction notes. The release engineer uses `open-source-development` from P0 onward, not only at release. The parent reviews all changes and verifies remote publication.
 
-For five-stage navigation changes, the UX designer and native QA agent verify Edit separately from Review, with comparison and QA inside Review. The Codex bridge engineer and security reviewer verify that authorized active-draft edits and export staging do not require repeated confirmation, while final export and forbidden effects remain outside the AI tool surface.
+For five-step navigation changes (Import, Magic Edit, Refine, Clips, Export, then the Done screen; ADR 0031), the UX designer and native QA agent verify Refine's simple screen separately from the full editor it opens. The Codex bridge engineer and security reviewer verify that authorized active-draft edits and export staging do not require repeated confirmation, while final export and forbidden effects remain outside the AI tool surface.
 
 ## Editorial policy ownership
 

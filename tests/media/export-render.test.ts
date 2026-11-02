@@ -21,6 +21,8 @@ import {
 } from "../../packages/domain/src/zoom.ts";
 import { probePresentationTiming } from "../../packages/media-engine/src/presentation-timing.ts";
 import {
+  audioPassTimeoutMs,
+  compositorThreads,
   exportDraft,
   planExport,
   rawFrameBytes,
@@ -292,6 +294,121 @@ test(
         replace: true,
       });
       assert.equal(replaced.outputSha256, evidence.outputSha256);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "a recording with a missed capture holds the previous frame in its slot",
+  { timeout: 180_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-held-"));
+    try {
+      // 60 fps on a millisecond clock (16/17 ms steps, as screen recorders
+      // write) with frame 50 never captured: later frames keep their times.
+      const recorded = join(directory, "recorded.mkv");
+      await ffmpeg([
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=96x64:rate=60:duration=2",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=48000:duration=2",
+        "-vf",
+        "select='not(eq(n\\,50))'",
+        "-fps_mode",
+        "passthrough",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "pcm_s16le",
+        recorded,
+      ]);
+      const input = await source(directory, "held.mkv", [
+        "-i",
+        recorded,
+        "-c",
+        "copy",
+      ]);
+      assert.equal(input.timing.pts.length, 119);
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 500_000,
+            sourceEndUs: 1_500_000,
+          },
+          // Starts in the empty slot: the frame before it is on screen.
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 833_333,
+            sourceEndUs: 1_000_000,
+          },
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 500_000,
+            sourceEndUs: 1_500_000,
+            speed: 2,
+          },
+        ],
+        [input],
+      );
+      assert.deepEqual(
+        plan.clips.map((clip) => [
+          clip.firstFrame,
+          clip.frameCount,
+          clip.decodeFrames,
+          clip.held,
+          clip.outputFrames,
+        ]),
+        [
+          [30, 60, 59, [[19, 1]], 60],
+          [50, 10, 10, [], 10],
+          [30, 60, 59, [[19, 1]], 30],
+        ],
+      );
+      // Independent expectation: each slot shows the last frame at or before it.
+      const frameBytes = rawFrameBytes("yuv420p", 96, 64);
+      const full = await fullDecode(input, "yuv420p", null);
+      assert.equal(full.video.length, 119 * frameBytes);
+      const slots = input.timing.pts.map((pts) =>
+        Math.round(
+          ((pts * input.timing.timeBaseNumerator) /
+            input.timing.timeBaseDenominator) *
+            60,
+        ),
+      );
+      const expected = createHash("sha256");
+      for (const clip of plan.clips)
+        for (
+          let slot = clip.firstFrame;
+          slot < clip.firstFrame + clip.frameCount;
+          slot += clip.speed
+        ) {
+          const frame = slots.findLastIndex((value) => value <= slot);
+          expected.update(
+            full.video.subarray(frame * frameBytes, (frame + 1) * frameBytes),
+          );
+        }
+      const output = join(directory, "held master.mkv");
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: output,
+        replace: false,
+      });
+      assert.equal(evidence.canonicalVideoSha256, expected.digest("hex"));
+      assert.equal(evidence.samplesEqual, true);
+      assert.equal(evidence.frameCount, 100);
+      // Audio follows the slots, not the decoded frame count.
+      assert.equal(evidence.audioSampleCount, (60 + 10) * 800 + 30 * 800);
+      assert.equal(sha(await readFile(input.path)), input.sha256);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -1408,6 +1525,321 @@ test(
           changed.push(frame);
       }
       assert.deepEqual(changed, [5, 6, 7, 20, 21, 22, 23]);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test("the compositor's threads shrink as graphics inputs grow", () => {
+  // A long edit has dozens of graphics segments; each adds filters that
+  // each start this many threads (a 512-thread container limit broke an
+  // export with 21 segments at the default).
+  assert.equal(compositorThreads(0), 4);
+  assert.equal(compositorThreads(12), 4);
+  assert.equal(compositorThreads(30), 3);
+  assert.equal(compositorThreads(60), 1);
+  assert.equal(compositorThreads(500), 1);
+  for (const inputs of [1, 10, 21, 30, 48, 96])
+    assert.ok(inputs * 2 * compositorThreads(inputs) <= 200);
+});
+
+test("an audio pass may take longer the longer the audio is, within bounds", () => {
+  // Never below two minutes, however short; about 3 s per second of audio
+  // above that; never beyond four hours.
+  assert.equal(audioPassTimeoutMs(48_000, 48_000), 120_000);
+  assert.equal(audioPassTimeoutMs(48_000 * 900, 48_000), 60_000 + 900 * 3_000);
+  assert.ok(audioPassTimeoutMs(48_000 * 900, 48_000) > 30_000 * 50);
+  assert.equal(audioPassTimeoutMs(48_000 * 10_000_000, 48_000), 4 * 3_600_000);
+});
+
+test(
+  "music and effects are mixed into a lossless master, ducked under speech, and verified",
+  { timeout: 180_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-sounds-"));
+    try {
+      // Speech stand-in: a 440 Hz tone for the first 3 s, then silence.
+      const input = await source(directory, "talk.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=30:duration=6",
+        "-f",
+        "lavfi",
+        "-i",
+        "aevalsrc=0.3*sin(2*PI*440*t)*lt(t\\,3):s=48000:d=6",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "rgb",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-c:a",
+        "pcm_s16le",
+      ]);
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 0,
+            sourceEndUs: 6_000_000,
+          },
+        ],
+        [input],
+      );
+      const music = join(directory, "music.wav");
+      await runProcess({
+        executable: "ffmpeg",
+        args: [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-nostdin",
+          "-f",
+          "lavfi",
+          "-i",
+          "aevalsrc=0.5*sin(2*PI*880*t)|0.5*sin(2*PI*880*t):s=44100:d=6",
+          "-y",
+          music,
+        ],
+        timeoutMs: 60_000,
+      });
+      const master = join(directory, "mixed.mkv");
+      const evidence = await exportDraft({
+        plan,
+        profile: "lossless_master",
+        outputPath: master,
+        replace: false,
+        sounds: {
+          layers: [
+            {
+              path: music,
+              startUs: 0,
+              endUs: 6_000_000,
+              assetStartUs: 0,
+              gainDb: -6,
+              fadeInUs: 0,
+              fadeOutUs: 0,
+              duckDb: 12,
+              loop: false,
+            },
+          ],
+        },
+      });
+      // The master's decoded audio is exactly the mix that was rendered.
+      assert.equal(evidence.samplesEqual, true);
+      assert.equal(evidence.audioSampleCount, plan.sampleCount);
+      const decoded = (
+        await runProcess({
+          executable: "ffmpeg",
+          args: [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-i",
+            master,
+            "-map",
+            "0:a:0",
+            "-f",
+            "s16le",
+            "-ac",
+            "1",
+            "-",
+          ],
+          maxOutputBytes: 64 * 1024 * 1024,
+        })
+      ).stdout;
+      const level = (frequency: number, from: number, to: number) => {
+        let real = 0;
+        let imaginary = 0;
+        for (let index = from * 48_000; index < to * 48_000; index++) {
+          const value = decoded.readInt16LE(index * 2) / 32768;
+          const phase = (2 * Math.PI * frequency * index) / 48_000;
+          real += value * Math.cos(phase);
+          imaginary -= value * Math.sin(phase);
+        }
+        return (2 * Math.hypot(real, imaginary)) / ((to - from) * 48_000);
+      };
+      // The recording is mono, so the stereo music folds down to it (its two
+      // equal channels add: 3 dB louder).
+      const full = 0.5 * 10 ** (-6 / 20) * Math.SQRT2;
+      const within = (actual: number, expected: number, share: number) =>
+        assert.ok(
+          Math.abs(actual - expected) <= expected * share,
+          `${actual} is not near ${expected}`,
+        );
+      // After the speech: the music at its full level; under it: 12 dB lower.
+      within(level(880, 4.2, 5.8), full, 0.1);
+      within(level(880, 1.0, 2.5), full * 10 ** (-12 / 20), 0.25);
+      within(level(440, 1.0, 2.5), 0.3, 0.1);
+      // Without audio there is nothing to mix into, said plainly.
+      const silent = await source(directory, "silent.mkv", [
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=160x90:rate=30:duration=2",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "bgra",
+        "-color_range",
+        "pc",
+        "-colorspace",
+        "rgb",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+      ]);
+      await assert.rejects(
+        exportDraft({
+          plan: planExport(
+            [
+              {
+                sourceId: silent.sourceId,
+                sourceStartUs: 0,
+                sourceEndUs: 2_000_000,
+              },
+            ],
+            [silent],
+          ),
+          profile: "lossless_master",
+          outputPath: join(directory, "none.mkv"),
+          replace: false,
+          sounds: {
+            layers: [
+              {
+                path: music,
+                startUs: 0,
+                endUs: 2_000_000,
+                assetStartUs: 0,
+                gainDb: 0,
+                fadeInUs: 0,
+                fadeOutUs: 0,
+                duckDb: 0,
+                loop: false,
+              },
+            ],
+          },
+        }),
+        (error: Error) =>
+          (error as { code?: string }).code === "UNSUPPORTED_PROFILE" &&
+          /audio/u.test(error.message),
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "a cut join fades both sides in the exported audio, and only when asked",
+  { timeout: 180_000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-join-fade-"));
+    try {
+      const recorded = join(directory, "tone.mkv");
+      await ffmpeg([
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=96x64:rate=30:duration=3",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=48000:duration=3",
+        "-af",
+        "volume=0.8",
+        "-c:v",
+        "ffv1",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "pcm_s16le",
+        recorded,
+      ]);
+      const input = await source(directory, "join.mkv", [
+        "-i",
+        recorded,
+        "-c",
+        "copy",
+      ]);
+      // Second 0-1 then second 2-3: one real cut at output 1.0 s.
+      const plan = planExport(
+        [
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 0,
+            sourceEndUs: 1_000_000,
+          },
+          {
+            sourceId: input.sourceId,
+            sourceStartUs: 2_000_000,
+            sourceEndUs: 3_000_000,
+          },
+        ],
+        [input],
+      );
+      const decodeAround = async (name: string, joinFadeMs?: number) => {
+        const output = join(directory, name);
+        await exportDraft({
+          plan,
+          profile: "lossless_master",
+          outputPath: output,
+          replace: false,
+          ...(joinFadeMs ? { joinFadeMs } : {}),
+        });
+        const pcm = await ffmpeg([
+          "-i",
+          output,
+          "-map",
+          "0:a:0",
+          "-c:a",
+          "pcm_s16le",
+          "-f",
+          "s16le",
+          "pipe:1",
+        ]);
+        const at = (frame: number) => {
+          let peak = 0;
+          // The master's audio is stereo or mono; take the loudest channel.
+          const channels = pcm.length / 2 / 96_000;
+          for (let channel = 0; channel < channels; channel++)
+            peak = Math.max(
+              peak,
+              Math.abs(pcm.readInt16LE((frame * channels + channel) * 2)),
+            );
+          return peak;
+        };
+        return { at };
+      };
+      const plain = await decodeAround("plain.mkv");
+      const faded = await decodeAround("faded.mkv", 10);
+      // Far from the join nothing changes.
+      assert.equal(faded.at(24_000), plain.at(24_000));
+      assert.equal(faded.at(72_000), plain.at(72_000));
+      // The frames next to the cut at 48 000 are quiet only when faded.
+      const edge = [47_999, 48_000];
+      for (const frame of edge)
+        assert.ok(
+          faded.at(frame) < 1500,
+          `faded sample ${frame} is ${faded.at(frame)}`,
+        );
+      assert.ok(
+        Math.max(plain.at(47_999), plain.at(48_000)) > 1500 ||
+          plain.at(47_999) !== faded.at(47_999),
+      );
+      // 20 ms from the join the fade is over.
+      assert.equal(faded.at(48_000 - 960), plain.at(48_000 - 960));
+      assert.equal(faded.at(48_000 + 960), plain.at(48_000 + 960));
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

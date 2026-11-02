@@ -37,6 +37,7 @@ import {
   sha256,
 } from "../../packages/media-engine/src/lossless.ts";
 import type { DraftTransactionRecord } from "../../packages/domain/src/draft-transaction.ts";
+import { openFullEditor } from "./disclosures.ts";
 
 await assertNativeTestEnvironment();
 const executablePath = process.argv[2];
@@ -234,7 +235,7 @@ try {
     await expect(page.locator("#claude-sign-in")).toBeVisible();
     await expect(page.locator("#claude-model-settings")).toBeHidden();
     await expect(page.locator("#claude-disclosure")).toContainText(
-      "never receives your password",
+      "never sees your password",
     );
     result.signedOutSettings = true;
     await page.screenshot({ path: join(evidence, "claude-signed-out.png") });
@@ -305,16 +306,21 @@ try {
   await page.getByRole("button", { name: "Close settings" }).click();
 
   step = "import";
+  // A reused private profile can hold earlier runs' projects.
+  const earlier = await page.evaluate(() => window.desktop.listProjects());
+  assert.ok(earlier.ok);
+  const known = new Set(earlier.value.map((item) => item.id));
   await page.getByRole("button", { name: "Import video", exact: true }).click();
   await expect(page.locator("#frame")).toBeVisible({ timeout: 30_000 });
   const listed = await page.evaluate(() => window.desktop.listProjects());
   assert.ok(listed.ok);
-  const project = listed.value[0]!;
+  const project = listed.value.find((item) => !known.has(item.id))!;
+  assert.ok(project, "the imported project is listed");
   const projectFolder = join(userData, "project-store", project.id);
   const baselineBytes = await readFile(join(projectFolder, "baseline.json"));
 
   step = "default-drawer";
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Claude", exact: true }).click();
   await expect(
@@ -364,7 +370,7 @@ try {
       .toBe("ready");
     step = "claude-split";
     const prompt =
-      "Use the AI Video Editor tools to read the project and timeline, then split the only clip at exactly 500000 microseconds on the output timeline. Apply exactly one split and no other edit, read the timeline again to confirm, then reply in one short sentence.";
+      "Use the Urushi tools to read the project and timeline, then split the only clip at exactly 500000 microseconds on the output timeline. Apply exactly one split and no other edit, read the timeline again to confirm, then reply in one short sentence.";
     await page.locator("#codex-thread-input").fill(prompt);
     await page.locator("#send-codex-thread").click();
     let committedDuringTurn = false;
@@ -422,19 +428,23 @@ try {
     await page
       .locator("#codex-thread-input")
       .fill(
-        "Without editing anything, read the project summary and the timeline summary one call at a time, six times each, then reply with the clip count.",
+        "Without editing anything, read the project summary and the timeline summary one call at a time, twenty-five times each, then reply with the clip count.",
       );
     await page.locator("#send-codex-thread").click();
     await expect
       .poll(async () => (await thread()).status, { timeout: 60_000 })
       .toBe("running");
     await expect(page.locator("#interrupt-codex-thread")).toBeEnabled();
-    await page.locator("#interrupt-codex-thread").click();
-    await expect
-      .poll(async () => (await thread()).message, { timeout: 60_000 })
-      .toBe(
+    // The interface learns of the running turn by polling: click Stop until
+    // the turn has ended with its fixed message.
+    await expect(async () => {
+      const stop = page.locator("#interrupt-codex-thread");
+      if (await stop.isEnabled()) await stop.click();
+      assert.equal(
+        (await thread()).message,
         "This turn stopped. Review the current draft before sending again.",
       );
+    }).toPass({ timeout: 90_000, intervals: [3_000] });
     assert.equal((await records()).length, 2, "Stop must not change the draft");
     const messagesBefore = (await thread()).messages.length;
 

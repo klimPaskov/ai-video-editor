@@ -34,6 +34,7 @@ import {
 import { buildCodexAppServerArguments } from "../../packages/codex-bridge/src/client.ts";
 import { buildExperimentalInitialize } from "../../packages/codex-bridge/src/thread-protocol.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
+import { openFullEditor } from "./disclosures.ts";
 
 assert.equal(process.platform, "linux", "Requires isolated Linux guest");
 assert.equal(process.getuid?.(), 1000);
@@ -729,7 +730,7 @@ try {
       "base64",
     ),
   );
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await openFullEditor(page);
   await expect(page.locator("#edit-actions")).toBeVisible();
   await page.locator("#codex-drawer-button").click();
   await page.locator("#assistant-provider").selectOption("codex");
@@ -808,7 +809,7 @@ try {
     electron = await launch();
     page = await electron.firstWindow();
     await page.locator(`#projects [data-project-id="${combined.id}"]`).click();
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await openFullEditor(page);
     await expect(page.locator("#edit-actions")).toBeVisible();
     await page.locator("#codex-drawer-button").click();
     await page.locator("#assistant-provider").selectOption("codex");

@@ -228,6 +228,17 @@ test("tagged H.264/AAC imports byte-identically and decodes deterministic displa
   assert.deepEqual(await readFile(verified.managedPath), sourceBytes);
   assert.deepEqual(await readFile(source), sourceBytes);
   assert.deepEqual(await new MediaLibrary(libraryRoot).list(), [summary]);
+  // A repeat read uses the remembered verification; a same-size change to the
+  // managed bytes is still caught.
+  assert.deepEqual(await library.verifiedSource(summary.id), verified);
+  const changed = Buffer.from(sourceBytes);
+  changed[changed.length - 1] = changed[changed.length - 1]! ^ 0xff;
+  const { chmod: chmodFile } = await import("node:fs/promises");
+  await chmodFile(verified.managedPath, 0o600).catch(() => undefined);
+  await writeFile(verified.managedPath, changed);
+  await assert.rejects(library.verifiedSource(summary.id), /changed/u);
+  await writeFile(verified.managedPath, sourceBytes);
+  assert.deepEqual(await library.verifiedSource(summary.id), verified);
   const frames = [];
   for (const timeUs of [0, 500_000, 1_000_000]) {
     const frame = await library.frame(summary.id, timeUs);
@@ -465,4 +476,50 @@ test("verified source remeasures precision, color and audio metadata despite unc
   }
   await writeFile(path, pristine);
   assert.deepEqual(await library.verifiedSource(summary.id), verified);
+});
+
+test("an adopted recording is moved in, not copied, and later changes are still caught", async () => {
+  const { dir, source } = await fixture();
+  const digest = createHash("sha256")
+    .update(await readFile(source))
+    .digest("hex");
+  const library = new MediaLibrary(join(dir, "library"));
+  const summary = await library.importFile(source, undefined, {
+    adopt: { sha256: digest },
+  });
+  // Moved: the recorder's file is gone and the library holds the bytes.
+  await assert.rejects(readFile(source));
+  const managed = join(dir, "library", "assets", `${summary.id}.media`);
+  assert.equal(
+    createHash("sha256")
+      .update(await readFile(managed))
+      .digest("hex"),
+    digest,
+  );
+  assert.equal((await library.verifiedSource(summary.id)).sha256, digest);
+  assert.equal(
+    (await library.frame(summary.id, 0)).rgbaBase64.length > 0,
+    true,
+  );
+  // A same-size change is seen: the file identity no longer matches.
+  const bytes = await readFile(managed);
+  bytes[bytes.length - 1] = bytes[bytes.length - 1]! ^ 0xff;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  await writeFile(managed, bytes);
+  await assert.rejects(library.frame(summary.id, 0), /changed/u);
+  await assert.rejects(library.verifiedSource(summary.id), /changed/u);
+  // A wrong claimed hash cannot pass verification later.
+  const second = await fixture();
+  const wrong = await new MediaLibrary(join(second.dir, "library")).importFile(
+    second.source,
+    undefined,
+    { adopt: { sha256: "0".repeat(64) } },
+  );
+  await assert.rejects(
+    new MediaLibrary(join(second.dir, "library")).verifiedSource(wrong.id),
+    /changed/u,
+  );
+  await assert.rejects(
+    library.importFile(second.source, undefined, { adopt: { sha256: "bad" } }),
+  );
 });

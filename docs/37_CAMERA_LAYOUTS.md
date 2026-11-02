@@ -1,5 +1,7 @@
 # Camera and layout specification
 
+**Implemented (2026-10-25, ADR 0029):** recording a camera with the screen (a second lossless file with the screen's own frames), linking a camera video in Refine, layouts `screen`, `camera` and corner (`pip`; circle, rounded or rectangle; four corners; size; face zoom and focus; eased changes), the live preview, export, the Camera tools and timeline markers, and Claude's `layout.plan`, `layout.set` and `layout.remove`. Side by side, presenter with inset, border and shadow, background, per-canvas overrides, face detection and automatic sync for a camera made elsewhere are not built. The sections below remain the specification.
+
 ## Source policy
 
 Camera is optional. When enabled during recording, keep it as a separate synchronized source. Imported camera media may be linked manually.

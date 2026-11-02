@@ -1,21 +1,36 @@
 import { setupCodexSettings } from "./codex-settings.ts";
 import { iconElement, setupIcons } from "./icons.ts";
+import { setupBrandMark } from "./brand-mark.ts";
 import { setupTimelineStrip } from "./timeline-strip.ts";
+import { setupDidList, setupToolPopovers } from "./refine.ts";
 import { setupCaptions } from "./captions-panel.ts";
 import { setupShortsPanel } from "./shorts-panel.ts";
 import { setupAudioPanel } from "./audio-panel.ts";
+import { setupSoundPanel } from "./sound-panel.ts";
+import { setupSoundPreview } from "./sound-preview.ts";
 import { mediaRect, setupZoomPreview } from "./zoom-preview.ts";
 import { setupGraphicsPreview } from "./graphics-preview.ts";
+import { setupTransitionTools } from "./transition-tools.ts";
+import { setupCameraTools } from "./camera-tools.ts";
+import { setupCameraPreview } from "./camera-preview.ts";
 import {
   zoomAt,
   zoomLimits,
   zoomWindow,
   type ZoomInterval,
 } from "../../../packages/domain/src/zoom.ts";
-import { draftIntegrityFreshness } from "./draft-integrity.ts";
 import { setupExportPanel } from "./export-panel.ts";
+import { setupDonePanel } from "./done-panel.ts";
 import { setupPlayback } from "./playback.ts";
 import { setupMagicPanel } from "./magic-panel.ts";
+import { setupAutoPanel } from "./auto-panel.ts";
+import {
+  applyRememberedTheme,
+  applyTheme,
+  rememberTheme,
+  setupThemeSettings,
+} from "./theme-settings.ts";
+import { defaultThemeChoice } from "../../../packages/domain/src/theme.ts";
 import { setupRecordPanel } from "./record-panel.ts";
 import { reconcileProjectDraft } from "./project-draft.ts";
 import { pollTranscriptionView } from "./transcription-state.ts";
@@ -30,6 +45,7 @@ import type {
   MediaFrame,
   MediaSummary,
 } from "../../../packages/domain/src/library.ts";
+import { projectStages } from "../../../packages/domain/src/project-view.ts";
 import type {
   ProjectDraftView,
   ProjectStage,
@@ -38,6 +54,7 @@ import type {
 import type { CodexThreadView } from "../../../packages/domain/src/codex-thread-view.ts";
 import type { ApiThreadView } from "../../../packages/domain/src/api-thread-view.ts";
 import type { ApiProviderId } from "../../../packages/domain/src/api-providers.ts";
+import type { MagicWandProvider } from "../../../packages/domain/src/magic-wand-view.ts";
 import type { ClaudeThreadView } from "../../../packages/domain/src/claude-view.ts";
 import type {
   SpokenCandidate,
@@ -50,17 +67,40 @@ import type {
   TranscriptionProjectView,
   TranscriptionSourceResult,
 } from "../../../packages/domain/src/transcription.ts";
+applyRememberedTheme();
 declare global {
   interface Window {
     desktop: DesktopBridge;
   }
 }
+/**
+ * Pixel bytes of a frame. A preview frame is tens of megabytes of base64, so
+ * the built-in decoder is used where Chromium has it.
+ */
+function framePixels(base64: string): Uint8ClampedArray<ArrayBuffer> {
+  const native = (
+    Uint8Array as unknown as {
+      fromBase64?: (text: string) => Uint8Array<ArrayBuffer>;
+    }
+  ).fromBase64;
+  if (native) {
+    const bytes = native(base64);
+    return new Uint8ClampedArray(bytes.buffer, bytes.byteOffset, bytes.length);
+  }
+  const text = atob(base64);
+  const bytes = new Uint8ClampedArray(text.length);
+  for (let index = 0; index < text.length; index++)
+    bytes[index] = text.charCodeAt(index);
+  return bytes;
+}
+
 function element<T extends HTMLElement>(id: string): T {
   const value = document.getElementById(id);
   if (!value) throw new Error("Missing control");
   return value as T;
 }
 setupIcons();
+setupBrandMark(element("brand-mark"));
 const home = element("home"),
   viewer = element("viewer"),
   back = element<HTMLButtonElement>("back");
@@ -100,12 +140,40 @@ const editActions = element("edit-actions"),
   zoomHint = element("zoom-hint"),
   speedSelect = element<HTMLSelectElement>("speed"),
   speedScope = element("speed-scope");
-const reviewActions = element("review-actions"),
-  checkDraftIntegrityButton = element<HTMLButtonElement>(
-    "check-draft-integrity",
-  ),
-  draftIntegrityResult = element("draft-integrity-result"),
-  draftIntegrityError = element("draft-integrity-error");
+const transitionTools = setupTransitionTools({
+  add: element<HTMLButtonElement>("transition-add"),
+  remove: element<HTMLButtonElement>("transition-remove"),
+  kind: element<HTMLSelectElement>("transition-kind"),
+  length: element<HTMLSelectElement>("transition-length"),
+  position: () => Number(seek.value),
+  busy: () => manualEditPending || navigating,
+  time: (us) => time(us),
+  run: (work, failure, seekUs) => runManualEdit(work, failure, seekUs),
+});
+const cameraTools = setupCameraTools({
+  root: element("camera-tools"),
+  add: element<HTMLButtonElement>("camera-add"),
+  remove: element<HTMLButtonElement>("camera-remove"),
+  layout: element<HTMLSelectElement>("camera-layout"),
+  corner: element<HTMLSelectElement>("camera-corner"),
+  size: element<HTMLSelectElement>("camera-size"),
+  shape: element<HTMLSelectElement>("camera-shape"),
+  apply: element<HTMLButtonElement>("camera-apply"),
+  removeChange: element<HTMLButtonElement>("camera-remove-change"),
+  earlier: element<HTMLButtonElement>("camera-earlier"),
+  later: element<HTMLButtonElement>("camera-later"),
+  status: element("camera-status"),
+  position: () => Number(seek.value),
+  busy: () => manualEditPending || navigating,
+  time: (us) => time(us),
+  project: () => activeProject,
+  changed: (view) => {
+    cameraPreview.setCamera(view);
+    refreshZoom();
+  },
+  fail: (message) => showError(message),
+  run: (work, failure, seekUs) => runManualEdit(work, failure, seekUs),
+});
 const autoEditActions = element("auto-edit-actions"),
   transcribeLocalButton = element<HTMLButtonElement>("transcribe-local"),
   stopTranscriptionButton = element<HTMLButtonElement>("stop-transcription"),
@@ -156,10 +224,8 @@ let loadingHome = 0;
 let navigating = false;
 let addingFootage = false;
 let manualEditPending = false;
-let draftIntegrityPending = false;
-let draftIntegrityHeadKey: string | undefined;
-let draftIntegrityMessage: string | null = null;
-let draftIntegrityIssue: string | null = null;
+/** Refine's simple screen is showing, or the complete editor over it. */
+let fullEditor = false;
 let markHead: string | undefined;
 let markInUs: number | undefined;
 let markOutUs: number | undefined;
@@ -196,18 +262,54 @@ let transcriptCorrectionPending = false;
 let transcriptCutIssue: string | null = null;
 let transcriptCutMessage: string | null = null;
 let transcriptCutPending = false;
-const stageLabels: Record<ProjectStage, string> = {
-  record_import: "Record or Import",
-  auto_edit: "Auto Edit",
-  edit: "Edit",
-  review: "Review",
+/**
+ * The steps shown in the step bar. Done is a screen, not a step: it follows
+ * Export and every step then reads as finished.
+ */
+const stageLabels: Record<Exclude<ProjectStage, "done">, string> = {
+  record_import: "Import",
+  auto_edit: "Magic Edit",
+  edit: "Refine",
+  clips: "Clips",
   export: "Export",
 };
+type StepStage = keyof typeof stageLabels;
+const nextStepButton = element<HTMLButtonElement>("next-step-button");
+const actionBar = element("action-bar"),
+  actionSecondary = element<HTMLButtonElement>("action-secondary"),
+  fullEditorBar = element("full-editor-bar"),
+  fullEditorDone = element<HTMLButtonElement>("full-editor-done"),
+  refineTools = element("refine-tools"),
+  rtTrim = element<HTMLButtonElement>("rt-trim"),
+  rtTrimStart = element<HTMLButtonElement>("rt-trim-start"),
+  rtTrimEnd = element<HTMLButtonElement>("rt-trim-end"),
+  rtSplit = element<HTMLButtonElement>("rt-split"),
+  rtDelete = element<HTMLButtonElement>("rt-delete"),
+  rtCaptions = element<HTMLButtonElement>("rt-captions"),
+  rtMusic = element<HTMLButtonElement>("rt-music"),
+  rtVolume = element<HTMLButtonElement>("rt-volume"),
+  refineUndo = element<HTMLButtonElement>("refine-undo"),
+  refineRedo = element<HTMLButtonElement>("refine-redo");
+/** What the secondary button of the action bar does for the current step. */
+let secondaryAction: (() => void) | undefined;
+let nextStepTarget: ProjectStage | undefined;
+nextStepButton.addEventListener("click", () => {
+  if (nextStepTarget) void navigate(nextStepTarget);
+});
 const stageSelect = element<HTMLSelectElement>("stage-select");
-const stageButtons = new Map<ProjectStage, HTMLButtonElement>();
-for (const stage of Object.keys(stageLabels) as ProjectStage[]) {
+const stageButtons = new Map<StepStage, HTMLButtonElement>();
+for (const stage of Object.keys(stageLabels) as StepStage[]) {
   const button = document.createElement("button");
-  button.textContent = stageLabels[stage];
+  // The name stays the stage's own; the number is decoration.
+  button.setAttribute("aria-label", stageLabels[stage]);
+  const number = document.createElement("span");
+  number.className = "step-number";
+  number.setAttribute("aria-hidden", "true");
+  const text = document.createElement("span");
+  text.className = "step-text";
+  text.setAttribute("aria-hidden", "true");
+  text.textContent = stageLabels[stage];
+  button.append(number, text);
   button.addEventListener("click", () => {
     void navigate(stage);
   });
@@ -224,7 +326,12 @@ stageSelect.addEventListener("change", () => {
   void navigate(value);
 });
 function renderStage(): void {
-  element("project-navigation").hidden = !activeProject;
+  if (activeProject?.stage !== "edit") fullEditor = false;
+  viewer.dataset.stage = activeProject?.stage ?? "";
+  viewer.dataset.editor =
+    activeProject?.stage === "edit" ? (fullEditor ? "full" : "simple") : "";
+  fullEditorBar.hidden = !fullEditor;
+  element("project-navigation").hidden = !activeProject || fullEditor;
   addFootageButton.hidden =
     !activeProject ||
     activeProject.stage !== "record_import" ||
@@ -232,18 +339,88 @@ function renderStage(): void {
     activeProject.draft.sequence !== 0;
   addFootageButton.disabled = addingFootage || navigating;
   stageSelect.disabled = navigating;
-  if (activeProject) stageSelect.value = activeProject.stage;
+  if (activeProject && activeProject.stage !== "done")
+    stageSelect.value = activeProject.stage;
+  const order = [...projectStages];
+  const current = activeProject ? order.indexOf(activeProject.stage) : -1;
   for (const [stage, button] of stageButtons) {
     button.disabled = navigating;
+    const index = order.indexOf(stage);
     if (activeProject?.stage === stage)
       button.setAttribute("aria-current", "step");
     else button.removeAttribute("aria-current");
+    button.classList.toggle("done", index < current);
+    const number = button.querySelector(".step-number");
+    if (number) number.textContent = index < current ? "✓" : String(index + 1);
   }
+  // One clear way forward from the steps that have nothing else to do.
+  const forward =
+    activeProject?.stage === "record_import"
+      ? (["auto_edit", "Continue"] as const)
+      : activeProject?.stage === "edit"
+        ? (["clips", "Continue"] as const)
+        : null;
+  element("next-step").hidden = !forward;
+  nextStepButton.textContent = forward?.[1] ?? "";
+  nextStepButton.disabled = navigating;
+  nextStepTarget = forward?.[0];
+  const stage = activeProject?.stage;
+  const secondary =
+    stage === "edit" && !fullEditor
+      ? ([openFullEditor, "Open full editor"] as const)
+      : stage === "clips"
+        ? ([
+            () => void navigate("export"),
+            clipsSaved > 0 ? "Continue" : "Skip",
+          ] as const)
+        : undefined;
+  secondaryAction = secondary?.[0];
+  actionSecondary.hidden = !secondary;
+  actionSecondary.textContent = secondary?.[1] ?? "";
+  actionSecondary.disabled = navigating;
+  // Each step's primary action sits in the bar; the panels show and hide them.
+  element("auto-all-actions").hidden = stage !== "auto_edit";
+  if (stage !== "export") element("export-start").hidden = true;
+  element("shorts-export-all").hidden = stage !== "clips";
+  syncActionBar();
   renderEditTools();
-  renderDraftIntegrityAction();
+  renderStagePanels();
   renderTranscriptionActions();
   renderTranscriptEditor();
 }
+/** The bar shows while any of its buttons does, and never in the full editor. */
+function syncActionBar(): void {
+  const showing = [...actionBar.querySelectorAll("button")].some((button) => {
+    for (
+      let node: HTMLElement | null = button;
+      node && node !== actionBar;
+      node = node.parentElement
+    )
+      if (node.hidden) return false;
+    return true;
+  });
+  const hidden = fullEditor || !showing;
+  if (actionBar.hidden !== hidden) actionBar.hidden = hidden;
+}
+new MutationObserver(syncActionBar).observe(actionBar, {
+  attributes: true,
+  attributeFilter: ["hidden"],
+  subtree: true,
+});
+function openFullEditor(): void {
+  if (activeProject?.stage !== "edit" || navigating) return;
+  popovers.closeAll();
+  fullEditor = true;
+  renderStage();
+  fullEditorDone.focus();
+}
+function closeFullEditor(): void {
+  fullEditor = false;
+  renderStage();
+  actionSecondary.focus();
+}
+actionSecondary.addEventListener("click", () => secondaryAction?.());
+fullEditorDone.addEventListener("click", closeFullEditor);
 function currentClip(): NonNullable<ProjectView["clips"]>[number] | undefined {
   if (!activeProject?.clips) return undefined;
   const position = Number(seek.value);
@@ -276,15 +453,60 @@ function populateRestoreSources(project: ProjectView): void {
   }
   restoreSourceProjectId = project.id;
 }
-function clearDraftIntegrityResult(): void {
-  draftIntegrityHeadKey = undefined;
-  draftIntegrityMessage = null;
-  draftIntegrityIssue = null;
-}
-const exportPanel = setupExportPanel();
+const exportPanel = setupExportPanel({
+  completed: () => void navigate("done"),
+});
+const donePanel = setupDonePanel({
+  thumbnail: (mediaId, name) => thumbnail(mediaId, name),
+  goTo: (stage) => void navigate(stage),
+  home: () => back.click(),
+  importAnother: () => {
+    back.click();
+    importButton.click();
+  },
+});
 /** End of a short clip being previewed; playback stops there. */
 let previewEndUs: number | undefined;
+/** How many short clips this project has saved; Clips then offers Continue. */
+let clipsSaved = 0;
 const shortsPanel = setupShortsPanel({
+  saved: (count) => {
+    if (count === clipsSaved) return;
+    clipsSaved = count;
+    renderStage();
+  },
+  picture: async (timeUs) => {
+    const project = activeProject;
+    if (!project) return null;
+    const at = Math.min(
+      Math.max(0, Math.round(timeUs)),
+      Math.max(0, project.timeline.durationUs - 1),
+    );
+    const reply = await window.desktop
+      .readProjectFrame({
+        projectId: project.id,
+        draftId: project.draft.id,
+        baseRevisionId: project.draft.baseRevisionId,
+        expectedSequence: project.draft.sequence,
+        expectedTimelineSha256: project.draft.timelineSha256,
+        timelineTimeUs: at,
+      })
+      .catch(() => null);
+    if (!reply?.ok || reply.value.status !== "ready") return null;
+    const frame = reply.value.frame;
+    const picture = document.createElement("canvas");
+    picture.width = frame.width;
+    picture.height = frame.height;
+    picture.setAttribute("aria-hidden", "true");
+    picture
+      .getContext("2d")
+      ?.putImageData(
+        new ImageData(framePixels(frame.rgbaBase64), frame.width, frame.height),
+        0,
+        0,
+      );
+    return picture;
+  },
   preview: (startUs, endUs) => {
     playback.stop();
     requestFrame(startUs);
@@ -295,78 +517,13 @@ const shortsPanel = setupShortsPanel({
     }, 50);
   },
 });
-function renderDraftIntegrityAction(): void {
-  const exportVisible =
-    activeProject?.stage === "export" &&
-    element("inspector").hidden === true &&
-    element("codex-drawer").hidden === true;
-  exportPanel.render(activeProject, exportVisible);
-  shortsPanel.render(activeProject, exportVisible);
-  const project = activeProject,
-    visible =
-      project?.stage === "review" &&
-      element("inspector").hidden &&
-      element("codex-drawer").hidden;
-  if (
-    !visible ||
-    (draftIntegrityHeadKey &&
-      project &&
-      draftIntegrityHeadKey !== currentHeadKey(project))
-  )
-    clearDraftIntegrityResult();
-  reviewActions.hidden = !visible;
-  renderReviewSummary(visible ? project : undefined);
-  reviewActions.setAttribute("aria-busy", String(draftIntegrityPending));
-  checkDraftIntegrityButton.disabled =
-    !visible || navigating || draftIntegrityPending;
-  checkDraftIntegrityButton.textContent = draftIntegrityPending
-    ? "Checking…"
-    : "Verify draft";
-  draftIntegrityResult.textContent = draftIntegrityMessage ?? "";
-  draftIntegrityResult.hidden = !visible || !draftIntegrityMessage;
-  draftIntegrityError.textContent = draftIntegrityIssue ?? "";
-  draftIntegrityError.hidden = !visible || !draftIntegrityIssue;
-}
-function renderReviewSummary(project: ProjectView | undefined): void {
-  const summary = element("review-summary");
-  if (!project?.clips) {
-    summary.replaceChildren();
-    return;
-  }
-  const originalUs = restoreSources(project).reduce(
-    (sum, source) => sum + source.durationUs,
-    0,
-  );
-  const editedUs = project.timeline.durationUs;
-  const stat = (label: string, value: string, name = "stat") => {
-    const item = document.createElement("div");
-    item.className = name;
-    const term = document.createElement("span");
-    term.textContent = label;
-    const amount = document.createElement("strong");
-    amount.textContent = value;
-    item.append(term, amount);
-    return item;
-  };
-  // Tenths keep Original - Edited consistent with Removed.
-  const tenths = (us: number) => {
-    const total = Math.round(us / 100_000);
-    return `${Math.floor(total / 600)}:${String(Math.floor((total % 600) / 10)).padStart(2, "0")}.${total % 10}`;
-  };
-  const items = [
-    stat("Original", tenths(originalUs)),
-    stat("Edited", tenths(editedUs)),
-    stat("Clips", String(project.clips.length)),
-  ];
-  if (originalUs > editedUs)
-    items.push(
-      stat(
-        "Removed",
-        `${((originalUs - editedUs) / 1_000_000).toFixed(1)} s`,
-        "stat saved",
-      ),
-    );
-  summary.replaceChildren(...items);
+/** The panels of the steps that are not Magic Edit or Refine. */
+function renderStagePanels(): void {
+  // Export, Clips and the Done screen stay fully usable beside the assistant
+  // and the source details: they have their own room (ADR 0031).
+  exportPanel.render(activeProject, activeProject?.stage === "export");
+  donePanel.render(activeProject, activeProject?.stage === "done");
+  shortsPanel.render(activeProject, activeProject?.stage === "clips");
 }
 function transcriptionRunning(
   view: TranscriptionProjectView | undefined,
@@ -804,7 +961,7 @@ function renderTranscriptWordChoices(force = false): void {
     transcriptEditNote.textContent = `Showing the first 500 of ${matches.length} matching words. Refine the search to find another word. Transcript edits do not alter recorded audio.`;
   else
     transcriptEditNote.textContent =
-      "Transcript text changes do not alter recorded audio. Undo shares the edit history.";
+      "Text changes do not alter the audio. Undo covers them.";
   if (matches.some((word) => word.word_id === previousWordId))
     transcriptEditWord.value = previousWordId;
   else transcriptEditWord.selectedIndex = 0;
@@ -862,10 +1019,7 @@ function transcriptCutRange(
 
 function renderTranscriptEditor(): void {
   const project = activeProject;
-  const visible =
-    project?.stage === "edit" &&
-    element("inspector").hidden &&
-    element("codex-drawer").hidden;
+  const visible = project?.stage === "edit" && fullEditor;
   transcriptEditPanel.hidden = !visible;
   const currentView =
     project && transcriptionView?.project_id === project.id
@@ -978,12 +1132,28 @@ function syncTranscriptionPolling(): void {
     transcriptionPollTimer = undefined;
   }
 }
-const magicPanel = setupMagicPanel(() => void loadTranscription());
+const assistantProviderChoice = (): MagicWandProvider =>
+  (["claude", "codex", "deepseek", "openai", "gemini"] as const).find(
+    (name) => name === element<HTMLSelectElement>("assistant-provider").value,
+  ) ?? "claude";
+const magicPanel = setupMagicPanel(
+  () => void loadTranscription(),
+  assistantProviderChoice,
+);
+const autoPanel = setupAutoPanel({
+  onFinished: () => void loadTranscription(),
+  refine: () => void navigate("edit"),
+  presetValue: () =>
+    element<HTMLSelectElement>("magic-preset").value as
+      "gentle" | "balanced" | "tight",
+  provider: assistantProviderChoice,
+});
 function renderTranscriptionActions(): void {
   refreshCaptions();
   const project = activeProject;
   const visible = project?.stage === "auto_edit";
   magicPanel.render(project, visible);
+  autoPanel.render(project, visible);
   const view =
     transcriptionView?.project_id === project?.id
       ? transcriptionView
@@ -1186,7 +1356,7 @@ async function saveTranscriptCorrection(): Promise<void> {
   } catch {
     if (activeProject?.id === project.id)
       transcriptCorrectionIssue =
-        "The transcript could not be corrected. Refresh the word selection and try again.";
+        "The correction could not be saved. Pick the word again and retry.";
   } finally {
     transcriptCorrectionPending = false;
     manualEditPending = false;
@@ -1260,18 +1430,29 @@ const timelineStrip = setupTimelineStrip({
   },
   time,
 });
-const captions = setupCaptions({ preview: canvas.parentElement! });
+const captions = setupCaptions({
+  preview: canvas.parentElement!,
+  changed: () => renderTimeline(),
+});
 const zoomPreview = setupZoomPreview(canvas.parentElement!);
 const graphicsPreview = setupGraphicsPreview(canvas.parentElement!);
+const cameraPreview = setupCameraPreview(canvas.parentElement!);
 const audioPanel = setupAudioPanel();
+const soundPreview = setupSoundPreview({ projectId: () => activeProject?.id });
+const soundPanel = setupSoundPanel({
+  position: () => Number(seek.value),
+  changed: (layers) => soundPreview.layers(layers),
+});
 function refreshZoom(us = Number(seek.value)): void {
   const project = selected?.previewAvailable ? activeProject : undefined;
   zoomPreview.render(project, us);
   graphicsPreview.render(project, us);
+  cameraPreview.render(project, us, playback.playing());
 }
 function refreshCaptions(): void {
   refreshZoom();
-  audioPanel.render(activeProject?.id);
+  audioPanel.render(activeProject?.id, activeProject?.draft.sequence);
+  soundPanel.render(activeProject?.id, activeProject?.draft.sequence);
   captions.render(
     selected?.previewAvailable ? activeProject : undefined,
     transcriptionView,
@@ -1291,6 +1472,8 @@ function renderTimeline(): void {
     },
     zoomPreview.intervals(),
     graphicsPreview.intervals(),
+    cameraPreview.intervals(),
+    captions.startUs(),
   );
   timelineStrip.playhead(Number(seek.value));
 }
@@ -1306,13 +1489,17 @@ function renderEditTools(): void {
   }
   if (!project || project.stage !== "edit" || !project.clips) {
     editActions.hidden = true;
+    refineTools.hidden = true;
+    didList.render(undefined, false);
+    popovers.closeAll();
     restoreRangeOpen = false;
     restoreHead = undefined;
     setZoomPicking(undefined);
     return;
   }
   populateRestoreSources(project);
-  editActions.hidden = false;
+  editActions.hidden = !fullEditor;
+  refineTools.hidden = fullEditor;
   editActions.setAttribute("aria-busy", String(manualEditPending));
   const clip = currentClip(),
     position = Number(seek.value),
@@ -1360,8 +1547,12 @@ function renderEditTools(): void {
   ]
     .filter(Boolean)
     .join(" · ");
+  renderRefineTools(project, clip, interior);
+  didList.render(project, !fullEditor);
   renderZoomTools(project, inUs, outUs);
   renderSpeedTools(project, inUs, outUs);
+  transitionTools.render(project);
+  cameraTools.render(project);
   restoreToggleButton.disabled = manualEditPending || navigating;
   restoreToggleButton.textContent = restoreRangeOpen
     ? "Cancel restore"
@@ -1423,6 +1614,81 @@ function renderEditTools(): void {
   restoreError.textContent = restoreRangeIssue ?? validationIssue ?? "";
   restoreError.hidden = !restoreRangeOpen || !restoreError.textContent;
 }
+/** A simple tool that cannot act now says why in plain words. */
+function setRefineTool(button: HTMLButtonElement, reason: string | null): void {
+  button.setAttribute("aria-disabled", String(reason !== null));
+  button.classList.toggle("unavailable", reason !== null);
+  if (reason !== null) button.title = reason;
+  else button.removeAttribute("title");
+}
+function renderRefineTools(
+  project: ProjectView,
+  clip: ReturnType<typeof currentClip>,
+  interior: boolean,
+): void {
+  const saving =
+    manualEditPending || navigating ? "Saving the last change." : null;
+  const place = "Move the playhead inside a part first.";
+  const trim = saving ?? (interior ? null : place);
+  setRefineTool(rtTrim, trim);
+  setRefineTool(rtSplit, saving ?? (interior ? null : place));
+  setRefineTool(
+    rtDelete,
+    saving ??
+      (!clip
+        ? "Move the playhead onto the part you want to delete."
+        : project.clips!.length < 2
+          ? "Split the video first, then delete the part you do not want."
+          : null),
+  );
+  rtTrimStart.disabled = trim !== null;
+  rtTrimEnd.disabled = trim !== null;
+  for (const button of [rtCaptions, rtMusic, rtVolume])
+    setRefineTool(button, navigating ? "Saving the last change." : null);
+  refineUndo.disabled =
+    !project.draft.undoTransactionId || manualEditPending || navigating;
+  refineRedo.disabled =
+    !project.draft.redoTransactionId || manualEditPending || navigating;
+}
+/** Runs a simple tool, or says why it cannot run now. */
+function refineTool(button: HTMLButtonElement, run: () => void): void {
+  button.addEventListener("click", () => {
+    if (button.getAttribute("aria-disabled") === "true") {
+      showToast(button.title);
+      return;
+    }
+    run();
+  });
+}
+const popovers = setupToolPopovers();
+refineTool(rtSplit, () => void submitManualSplit());
+refineTool(rtDelete, () => void submitDeletePart());
+rtTrimStart.addEventListener("click", () => {
+  popovers.closeAll();
+  void submitManualTrim("start");
+});
+rtTrimEnd.addEventListener("click", () => {
+  popovers.closeAll();
+  void submitManualTrim("end");
+});
+// A tool that is not available keeps its pop-over closed and says why.
+for (const tool of [rtTrim, rtCaptions, rtMusic, rtVolume])
+  tool.addEventListener(
+    "click",
+    (event) => {
+      if (tool.getAttribute("aria-disabled") !== "true") return;
+      event.stopImmediatePropagation();
+      showToast(tool.title);
+    },
+    true,
+  );
+refineUndo.addEventListener("click", () => void submitManualUndo());
+refineRedo.addEventListener("click", () => void submitManualRedo());
+const didList = setupDidList({
+  apply: (reply) => applyProjectDraft(reply),
+  busy: () => manualEditPending || navigating,
+  fail: (message) => showError(message),
+});
 async function navigate(stage: ProjectStage): Promise<void> {
   playback.stop();
   if (
@@ -1508,7 +1774,8 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
   transcriptCutMessage = null;
   transcriptCutPending = false;
   activeProject = project;
-  clearDraftIntegrityResult();
+  fullEditor = false;
+  clipsSaved = 0;
   restoreSourceProjectId = undefined;
   restoreHead = undefined;
   restoreRangeOpen = false;
@@ -1525,6 +1792,9 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
     ) ??
     undefined;
   element("source-name").textContent = project.name;
+  element("source-duration").textContent = shortClock(
+    project.timeline.durationUs,
+  );
   element<HTMLButtonElement>("codex-drawer-button").hidden = false;
   setCodexDrawer(false);
   renderStage();
@@ -1585,17 +1855,19 @@ async function createProject(
   try {
     const reply = await window.desktop.createProject({ id: media.id });
     if (generation !== routeGeneration) return;
-    await loadLibrary();
-    if (generation !== routeGeneration) return;
     if (!reply.ok) {
+      await loadLibrary();
+      if (generation !== routeGeneration) return;
       showError(reply.message);
       return;
     }
+    // The new project opens at once; the home lists refresh behind it.
     selectProject(reply.value);
+    void loadLibrary().catch(() => undefined);
   } catch {
     if (generation === routeGeneration)
       showError(
-        "The project could not be created. Your imported source is preserved. Try Create project again.",
+        "The project could not be created. Your video is kept. Try again.",
       );
   } finally {
     if (origin) origin.disabled = false;
@@ -1648,25 +1920,126 @@ function thumbnail(mediaId: string, name: string): HTMLElement {
     canvas.height = frame.height;
     canvas.setAttribute("aria-hidden", "true");
     canvas.dataset.thumbnailFor = name;
-    canvas.getContext("2d")?.putImageData(
-      new ImageData(
-        Uint8ClampedArray.from(atob(frame.rgbaBase64), (character) =>
-          character.charCodeAt(0),
-        ),
-        frame.width,
-        frame.height,
-      ),
-      0,
-      0,
-    );
+    canvas
+      .getContext("2d")
+      ?.putImageData(
+        new ImageData(framePixels(frame.rgbaBase64), frame.width, frame.height),
+        0,
+        0,
+      );
     box.prepend(canvas);
   });
   return box;
+}
+/** A length for a label: 9:40 (minutes and seconds). */
+function shortClock(us: number): string {
+  const seconds = Math.round(us / 1_000_000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 function time(value: number): string {
   const seconds = value / 1_000_000;
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(3).padStart(6, "0")}`;
 }
+const projectDialog = element<HTMLDialogElement>("project-dialog"),
+  projectNameInput = element<HTMLInputElement>("project-name");
+let projectOptions: { project: ProjectView; opener: HTMLElement } | null = null;
+let projectBusy = false;
+function projectDialogError(message: string | null): void {
+  const error = element("project-dialog-error");
+  error.textContent = message ?? "";
+  error.hidden = message === null;
+}
+function showProjectView(deleting: boolean): void {
+  element("project-rename-view").hidden = deleting;
+  element("project-delete-view").hidden = !deleting;
+  element("project-dialog-title").textContent = deleting
+    ? "Delete project?"
+    : "Project";
+  projectDialogError(null);
+  (deleting ? element("project-delete-cancel") : projectNameInput).focus();
+}
+/** Rename and delete for a closed project on Home. */
+function openProjectOptions(project: ProjectView, opener: HTMLElement): void {
+  projectOptions = { project, opener };
+  projectNameInput.value = project.name;
+  element("project-delete-text").textContent =
+    `"${project.name}" and its edits, conversations and project choices will be deleted. Your recordings stay in Media, and exported videos are not touched.`;
+  projectDialog.showModal();
+  showProjectView(false);
+  projectNameInput.select();
+}
+function closeProjectOptions(): void {
+  if (projectBusy) return;
+  projectDialog.close();
+}
+projectDialog.addEventListener("close", () => {
+  const opener = projectOptions?.opener;
+  projectOptions = null;
+  if (opener?.isConnected) opener.focus();
+});
+projectDialog.addEventListener("cancel", (event) => {
+  if (projectBusy) event.preventDefault();
+});
+for (const id of ["project-dialog-close", "project-cancel"])
+  element(id).addEventListener("click", closeProjectOptions);
+projectNameInput.addEventListener("input", () => projectDialogError(null));
+element("project-delete").addEventListener("click", () =>
+  showProjectView(true),
+);
+element("project-delete-cancel").addEventListener("click", () =>
+  showProjectView(false),
+);
+async function projectAction(
+  work: (project: ProjectView) => Promise<Reply<unknown>>,
+): Promise<void> {
+  const current = projectOptions;
+  if (!current || projectBusy) return;
+  projectBusy = true;
+  for (const control of projectDialog.querySelectorAll("button, input"))
+    (control as HTMLButtonElement | HTMLInputElement).disabled = true;
+  try {
+    const reply = await work(current.project);
+    if (!reply.ok) {
+      projectDialogError(reply.message);
+      return;
+    }
+    projectBusy = false;
+    projectOptions = null;
+    projectDialog.close();
+    await loadLibrary();
+    // Focus returns to the project's options, or to Import after a delete.
+    const card = document.querySelector<HTMLElement>(
+      `#projects [data-project-options="${current.project.id}"]`,
+    );
+    (card ?? element("import")).focus();
+  } catch {
+    projectDialogError("The project could not be changed. Try again.");
+  } finally {
+    projectBusy = false;
+    for (const control of projectDialog.querySelectorAll("button, input"))
+      (control as HTMLButtonElement | HTMLInputElement).disabled = false;
+  }
+}
+element("project-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = projectNameInput.value.trim();
+  if (!name || name.length > 160 || /[\x00-\x1f\x7f/\\]/u.test(name)) {
+    projectDialogError("Use a name of up to 160 characters without slashes.");
+    return;
+  }
+  if (name === projectOptions?.project.name) {
+    closeProjectOptions();
+    return;
+  }
+  void projectAction((project) =>
+    window.desktop.renameProject({ id: project.id, name }),
+  );
+});
+element("project-delete-confirm").addEventListener("click", () => {
+  void projectAction((project) =>
+    window.desktop.deleteProject({ id: project.id }),
+  );
+});
 async function loadLibrary(): Promise<void> {
   const generation = ++loadingHome;
   const [reply, projects] = await Promise.all([
@@ -1689,7 +2062,7 @@ async function loadLibrary(): Promise<void> {
       detail.textContent = [
         cardTime(project.timeline.durationUs),
         project.sources ? `${project.sources.length} sources` : undefined,
-        stageLabels[project.stage],
+        project.stage === "done" ? "Done" : stageLabels[project.stage],
       ]
         .filter(Boolean)
         .join(" · ");
@@ -1700,7 +2073,16 @@ async function loadLibrary(): Promise<void> {
       button.addEventListener("click", () => {
         void openProject(project.id, button);
       });
-      row.append(button);
+      const options = document.createElement("button");
+      options.type = "button";
+      options.className = "card-options";
+      options.dataset.icon = "more";
+      options.dataset.projectOptions = project.id;
+      options.setAttribute("aria-label", `Options for ${project.name}`);
+      options.addEventListener("click", () =>
+        openProjectOptions(project, options),
+      );
+      row.append(button, options);
       list.append(row);
     }
   }
@@ -1777,6 +2159,12 @@ function select(media: MediaSummary): void {
   viewer.hidden = false;
   back.hidden = false;
   element("source-name").textContent = media.name;
+  element("source-duration").textContent = shortClock(media.durationUs);
+  if (media.width > 0 && media.height > 0)
+    document.documentElement.style.setProperty(
+      "--video-aspect",
+      String(Number((media.width / media.height).toFixed(4))),
+    );
   element("preview-label").textContent = activeProject
     ? "Project preview"
     : "Frame preview";
@@ -1804,7 +2192,7 @@ function select(media: MediaSummary): void {
   const message = element("preview-message");
   message.hidden = media.previewAvailable;
   message.textContent =
-    "This video's format does not have a verified preview yet. Its original file has been preserved.";
+    "This format has no verified preview yet. Your file is kept.";
   element("frame-controls").hidden = !media.previewAvailable;
   playButton.hidden = !activeProject || !media.previewAvailable;
   if (media.previewAvailable) requestFrame(0);
@@ -1895,10 +2283,7 @@ async function decodeFrames(): Promise<void> {
         }
         frame = reply.value;
       }
-      const bytes = Uint8ClampedArray.from(
-        atob(frame.rgbaBase64),
-        (character) => character.charCodeAt(0),
-      );
+      const bytes = framePixels(frame.rgbaBase64);
       canvas.width = frame.width;
       canvas.height = frame.height;
       canvas
@@ -1979,7 +2364,7 @@ addFootageButton.addEventListener("click", async () => {
   } catch {
     if (generation === routeGeneration && activeProject?.id === project.id)
       showError(
-        "Footage could not be added. Any completed import remains in the source library.",
+        "Footage could not be added. Anything already imported is kept.",
       );
   } finally {
     addingFootage = false;
@@ -2080,6 +2465,7 @@ const playback = setupPlayback({
     timelineStrip.playhead(us);
     captions.position(us);
     refreshZoom(us);
+    soundPreview.follow(us);
     if (previewEndUs !== undefined && us >= previewEndUs) {
       previewEndUs = undefined;
       playback.stop();
@@ -2087,8 +2473,12 @@ const playback = setupPlayback({
     previous.disabled = us <= 0;
     next.disabled = us >= Number(seek.max);
   },
-  stopped: (us) => requestFrame(us),
+  stopped: (us) => {
+    soundPreview.stop();
+    requestFrame(us);
+  },
   changed: (playing) => {
+    if (!playing) soundPreview.stop();
     playButton.dataset.icon = playing ? "pause" : "play";
     playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
     playButton.setAttribute("aria-pressed", String(playing));
@@ -2096,6 +2486,32 @@ const playback = setupPlayback({
   failed: (message) => showError(message),
 });
 playButton.addEventListener("click", () => playback.toggle());
+// Side panels start below the application bar, whatever height it wraps to.
+const applicationBar = document.querySelector("header");
+if (applicationBar)
+  new ResizeObserver(() =>
+    document.documentElement.style.setProperty(
+      "--header-height",
+      `${applicationBar.offsetHeight}px`,
+    ),
+  ).observe(applicationBar);
+// A slide-over assistant stops above the action bar, so the step's way
+// forward is never covered.
+new ResizeObserver(() =>
+  document.documentElement.style.setProperty(
+    "--action-bar-space",
+    `${actionBar.hidden ? 0 : actionBar.offsetHeight}px`,
+  ),
+).observe(actionBar);
+element("fullscreen").addEventListener("click", () => {
+  // The picture alone fills the screen; Esc leaves it.
+  const picture = document.querySelector<HTMLElement>(".preview");
+  void (
+    document.fullscreenElement
+      ? document.exitFullscreen()
+      : picture?.requestFullscreen()
+  )?.catch(() => undefined);
+});
 function frameInterval(): number {
   return activeProject
     ? (1_000_000 * activeProject.timeline.frameRate.denominator) /
@@ -2140,7 +2556,7 @@ function applyProjectDraft(
   clearError();
   requestFrame(position);
   renderEditTools();
-  renderDraftIntegrityAction();
+  renderStagePanels();
   renderTranscriptionActions();
   renderTranscriptEditor();
 }
@@ -2189,64 +2605,6 @@ saveTranscriptCorrectionButton.addEventListener("click", () => {
 });
 transcriptCutButton.addEventListener("click", () => {
   void cutSelectedTranscriptWords();
-});
-checkDraftIntegrityButton.addEventListener("click", async () => {
-  const project = activeProject;
-  if (!project || project.stage !== "review" || draftIntegrityPending) return;
-  const generation = routeGeneration,
-    requestedHead = currentHeadKey(project);
-  draftIntegrityPending = true;
-  draftIntegrityHeadKey = requestedHead;
-  draftIntegrityMessage = null;
-  draftIntegrityIssue = null;
-  renderDraftIntegrityAction();
-  try {
-    const reply = await window.desktop.verifyDraftIntegrity({ id: project.id });
-    if (
-      generation !== routeGeneration ||
-      activeProject?.id !== project.id ||
-      activeProject.stage !== "review"
-    )
-      return;
-    if (!reply.ok) {
-      draftIntegrityIssue = reply.message;
-      return;
-    }
-    const checkedHead = `${reply.value.draft.projectId}:${reply.value.draft.draft.id}:${reply.value.draft.draft.sequence}:${reply.value.draft.draft.timelineSha256}`;
-    const freshness = draftIntegrityFreshness(
-      requestedHead,
-      currentHeadKey(activeProject),
-      checkedHead,
-    );
-    if (freshness === "active-head-changed") {
-      draftIntegrityHeadKey = currentHeadKey(activeProject);
-      draftIntegrityIssue =
-        "Draft changed while the check was running. Run it again.";
-      return;
-    }
-    applyProjectDraft({ ok: true, value: reply.value.draft });
-    if (
-      generation !== routeGeneration ||
-      activeProject?.id !== project.id ||
-      activeProject.stage !== "review"
-    )
-      return;
-    draftIntegrityHeadKey = currentHeadKey(activeProject);
-    if (freshness !== "current" || checkedHead !== draftIntegrityHeadKey) {
-      draftIntegrityIssue = "Draft changed during the check. Run it again.";
-      return;
-    }
-    draftIntegrityMessage = reply.value.structuralCheckpointRecorded
-      ? "Structure and managed sources verified. Manual checkpoint recorded; meaning and A/V not reviewed."
-      : "Structure and managed sources verified. No manual checkpoint; meaning and A/V not reviewed.";
-  } catch {
-    if (generation === routeGeneration && activeProject?.id === project.id)
-      draftIntegrityIssue =
-        "Draft integrity could not be checked. Reopen the project and try again.";
-  } finally {
-    draftIntegrityPending = false;
-    renderDraftIntegrityAction();
-  }
 });
 async function submitManualTrim(edge: "start" | "end"): Promise<void> {
   const project = activeProject,
@@ -2343,6 +2701,27 @@ function markBoundary(edge: "in" | "out"): void {
   if (edge === "in") markInUs = position;
   else markOutUs = position;
   renderEditTools();
+}
+/** Refine's Delete part: the whole part under the playhead, as a range cut. */
+async function submitDeletePart(): Promise<void> {
+  const clip = currentClip();
+  if (!clip || !activeProject?.clips || activeProject.clips.length < 2) return;
+  const { timelineStartUs: startUs, timelineEndUs: endUs } = clip;
+  await runManualEdit(
+    (project) =>
+      window.desktop.applyManualRangeCut({
+        schema_version: "1.0",
+        projectId: project.id,
+        draftId: project.draft.id,
+        baseRevisionId: project.draft.baseRevisionId,
+        expectedSequence: project.draft.sequence,
+        expectedTimelineSha256: project.draft.timelineSha256,
+        startUs,
+        endUs,
+      }),
+    "The part could not be deleted. Try again.",
+    startUs,
+  );
 }
 async function submitManualRangeCut(): Promise<void> {
   const project = activeProject,
@@ -2492,8 +2871,38 @@ async function submitManualRestoreRange(): Promise<void> {
         );
       } else
         restoreRangeIssue =
-          "The source range could not be restored. Check the missing interval and try again.";
+          "The range could not be restored. Check the times and retry.";
     }
+  } finally {
+    manualEditPending = false;
+    back.disabled = false;
+    renderEditTools();
+  }
+}
+/**
+ * One manual edit by an Edit tool: the busy state, the saved draft applied
+ * (the player moves to `seekUs`), and a plain message when it cannot be saved.
+ */
+async function runManualEdit(
+  work: (project: ProjectView) => Promise<Reply<ProjectDraftView>>,
+  failure: string,
+  seekUs: number,
+): Promise<void> {
+  const project = activeProject,
+    generation = routeGeneration;
+  if (!project || project.stage !== "edit" || manualEditPending) return;
+  playback.stop();
+  manualEditPending = true;
+  back.disabled = true;
+  renderEditTools();
+  clearError();
+  try {
+    const reply = await work(project);
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      applyProjectDraft(reply, seekUs);
+  } catch {
+    if (generation === routeGeneration && activeProject?.id === project.id)
+      showError(failure);
   } finally {
     manualEditPending = false;
     back.disabled = false;
@@ -2732,6 +3141,8 @@ function setZoomPicking(next: typeof zoomPicking): void {
   const preview = canvas.parentElement!;
   preview.classList.toggle("picking", next !== undefined);
   zoomHint.hidden = next === undefined;
+  // The picture must be on screen, clear of the app bar, to be clicked.
+  if (next !== undefined) preview.scrollIntoView({ block: "center" });
 }
 function renderZoomTools(
   project: ProjectView,
@@ -2766,7 +3177,7 @@ function renderZoomTools(
 function previewMedia(): HTMLCanvasElement | HTMLVideoElement {
   return (
     canvas.parentElement!.querySelector<HTMLVideoElement>(
-      "video:not([hidden])",
+      "video.preview-video:not([hidden])",
     ) ?? canvas
   );
 }
@@ -2918,6 +3329,23 @@ canvas.parentElement!.addEventListener("click", (event) => {
 undoEdit.addEventListener("click", () => void submitManualUndo());
 redoEdit.addEventListener("click", () => void submitManualRedo());
 window.desktop.onProjectDraftChanged(applyProjectDraft);
+// The assistant moved the app to another step (the same as the step bar).
+window.desktop.onProjectStageChanged((reply) => {
+  if (
+    !reply.ok ||
+    !activeProject ||
+    activeProject.id !== reply.value.id ||
+    activeProject.stage === reply.value.stage
+  )
+    return;
+  playback.stop();
+  transcriptCutIssue = null;
+  transcriptCutMessage = null;
+  activeProject = reply.value;
+  renderStage();
+  if (activeProject.stage === "auto_edit" || activeProject.stage === "edit")
+    void loadTranscription();
+});
 void loadLibrary().catch(() =>
   showError(
     "The library could not be opened. Restart the application to retry.",
@@ -2931,6 +3359,32 @@ const codexDrawerButton = element<HTMLButtonElement>("codex-drawer-button");
 const settingsButton = element<HTMLButtonElement>("settings");
 const settingsDialog = element<HTMLDialogElement>("settings-dialog");
 const scaleSelect = element<HTMLSelectElement>("interface-scale");
+const assetPolicySelect = element<HTMLSelectElement>("asset-policy");
+const themeSettings = setupThemeSettings();
+// The material Claude may use is saved as soon as it changes.
+assetPolicySelect.addEventListener("change", async () => {
+  assetPolicySelect.disabled = true;
+  try {
+    const current = await window.desktop.getPreferences();
+    if (!current.ok) throw new Error("load");
+    const value = {
+      ...current.value,
+      assetPolicy: assetPolicySelect.value,
+    };
+    assertPreferences(value);
+    const reply = await window.desktop.setPreferences(value);
+    if (!reply.ok) throw new Error("save");
+    showToast(
+      value.assetPolicy === "copyright_free"
+        ? "Claude will use copyright-free material only"
+        : "Claude may use any material",
+    );
+  } catch {
+    showToast("The material setting could not be saved. Try again.");
+  } finally {
+    assetPolicySelect.disabled = false;
+  }
+});
 const resetSettingsSection = setupCodexSettings(settingsDialog);
 let savingPreferences = false;
 let settingsLoad = 0;
@@ -2963,7 +3417,7 @@ function setInspector(open: boolean): void {
       list.append(term, definition);
     }
   }
-  renderDraftIntegrityAction();
+  renderStagePanels();
   renderTranscriptEditor();
 }
 
@@ -3017,11 +3471,10 @@ function renderCodexThread(view: CodexThreadView): void {
   for (const item of view.messages) {
     const message = document.createElement("p");
     message.className = `codex-message ${item.role}`;
-    const role = document.createElement("strong");
-    role.textContent = item.role === "user" ? "You" : "Codex";
+    message.setAttribute("aria-label", item.role === "user" ? "You" : "Codex");
     const text = document.createElement("span");
     text.textContent = item.text;
-    message.append(role, text);
+    message.append(text);
     messages.append(message);
   }
   const activity = element("codex-thread-activity");
@@ -3072,11 +3525,13 @@ function renderApiThread(view: ApiThreadView): void {
   for (const item of view.messages) {
     const message = document.createElement("p");
     message.className = `codex-message ${item.role}`;
-    const role = document.createElement("strong");
-    role.textContent = item.role === "user" ? "You" : assistantName();
+    message.setAttribute(
+      "aria-label",
+      item.role === "user" ? "You" : assistantName(),
+    );
     const text = document.createElement("span");
     text.textContent = item.text;
-    message.append(role, text);
+    message.append(text);
     messages.append(message);
   }
   element("codex-thread-activity").replaceChildren();
@@ -3122,11 +3577,10 @@ function renderClaudeThread(view: ClaudeThreadView): void {
   for (const item of entries) {
     const message = document.createElement("p");
     message.className = `codex-message ${item.role}`;
-    const role = document.createElement("strong");
-    role.textContent = item.role === "user" ? "You" : "Claude";
+    message.setAttribute("aria-label", item.role === "user" ? "You" : "Claude");
     const text = document.createElement("span");
     text.textContent = item.text;
-    message.append(role, text);
+    message.append(text);
     messages.append(message);
   }
   const activity = element("codex-thread-activity");
@@ -3138,6 +3592,7 @@ function renderClaudeThread(view: ClaudeThreadView): void {
   }
   activity.hidden = activity.childElementCount === 0;
   element("claude-api-notice").hidden = view.billing !== "api";
+  renderFullEdit(view);
   element<HTMLButtonElement>("open-codex-thread").hidden =
     view.status !== "closed";
   element<HTMLFormElement>("codex-thread-form").hidden =
@@ -3159,6 +3614,27 @@ function renderClaudeThread(view: ClaudeThreadView): void {
   issue.hidden = !issue.textContent;
   if (nextIssue && revealIssue) issue.scrollIntoView({ block: "nearest" });
   messages.scrollTop = messages.scrollHeight;
+}
+/** The whole-video edit controls under the Claude conversation. */
+function renderFullEdit(view: ClaudeThreadView): void {
+  const idle = view.status === "ready" || view.status === "failed";
+  const section = element<HTMLDetailsElement>("claude-full-edit");
+  section.hidden = !claudeSelected() || !idle;
+  element("start-full-edit").textContent =
+    view.fullEdit?.status === "finished"
+      ? "Polish with Claude"
+      : "Edit with Claude";
+  const run = view.fullEdit;
+  const result = element("full-edit-result");
+  result.hidden = !claudeSelected() || !idle || !run || run.changes === 0;
+  element("full-edit-changes").textContent = run
+    ? `Full edit: ${run.changes} ${run.changes === 1 ? "change" : "changes"}`
+    : "";
+  const undo = element<HTMLButtonElement>("undo-full-edit");
+  undo.hidden = !run?.undoable;
+  undo.disabled = !run?.undoable;
+  if (view.status === "running" && run?.status === "running")
+    element("codex-thread-status").textContent = "Claude is editing the video…";
 }
 function renderAssistantReply(
   route: string,
@@ -3189,11 +3665,70 @@ assistantProvider.addEventListener("change", () => {
   clearAssistantDisplay();
   if (!codexDrawer.hidden) void pollCodex(++codexPollGeneration);
 });
+element<HTMLFormElement>("claude-full-edit-form").addEventListener(
+  "submit",
+  async (event) => {
+    event.preventDefault();
+    const project = activeProject;
+    if (
+      !project ||
+      !claudeSelected() ||
+      (claudeThreadView?.status !== "ready" &&
+        claudeThreadView?.status !== "failed")
+    )
+      return;
+    const value = (id: string) => element<HTMLInputElement>(id).value.trim();
+    const reply = await window.desktop.startClaudeFullEdit({
+      schema_version: "1.0",
+      project_id: project.id,
+      brief: {
+        goal: value("full-edit-goal"),
+        audience: value("full-edit-audience"),
+        style: value("full-edit-style"),
+        level: element<HTMLSelectElement>("full-edit-level").value as
+          "tidy" | "polished" | "bold",
+      },
+    });
+    if (activeProject?.id !== project.id || !claudeSelected()) return;
+    if (reply.ok) {
+      element<HTMLDetailsElement>("claude-full-edit").open = false;
+      renderClaudeThread(reply.value);
+    } else {
+      const issue = element("codex-thread-error");
+      issue.textContent = reply.message;
+      issue.hidden = false;
+    }
+  },
+);
+element<HTMLButtonElement>("undo-full-edit").addEventListener(
+  "click",
+  async () => {
+    const project = activeProject;
+    if (!project || !claudeSelected() || !claudeThreadView?.fullEdit?.undoable)
+      return;
+    const button = element<HTMLButtonElement>("undo-full-edit");
+    button.disabled = true;
+    const reply = await window.desktop.undoClaudeFullEdit({
+      schema_version: "1.0",
+      project_id: project.id,
+    });
+    if (activeProject?.id !== project.id || !claudeSelected()) return;
+    if (reply.ok) renderClaudeThread(reply.value);
+    else {
+      button.disabled = false;
+      const issue = element("codex-thread-error");
+      issue.textContent = reply.message;
+      issue.hidden = false;
+    }
+  },
+);
 function syncAssistantNotices(): void {
   element("api-turn-notice").hidden = selectedApiProvider() === null;
   element("codex-context-notice").hidden = assistantRoute() !== "codex";
   element("claude-context-notice").hidden = !claudeSelected();
   element("claude-api-notice").hidden = true;
+  element("claude-full-edit").hidden = true;
+  element("full-edit-result").hidden = true;
 }
 function setCodexDrawer(open: boolean): void {
   codexDrawer.hidden = !open;
@@ -3206,7 +3741,7 @@ function setCodexDrawer(open: boolean): void {
   } else {
     codexPollGeneration++;
   }
-  renderDraftIntegrityAction();
+  renderStagePanels();
   renderTranscriptEditor();
 }
 async function pollCodex(generation: number): Promise<void> {
@@ -3303,6 +3838,7 @@ element("open-codex-thread").addEventListener("click", async () => {
         streaming: null,
         billing: null,
         message: null,
+        fullEdit: null,
       });
     else if (provider)
       renderApiThread({
@@ -3502,19 +4038,23 @@ async function openSettings(): Promise<void> {
   resetSettingsSection();
   settingsDialog.showModal();
   scaleSelect.disabled = true;
+  themeSettings.enable(false);
   element("close-settings").focus();
   try {
     const reply = await window.desktop.getPreferences();
     if (!settingsDialog.open || load !== settingsLoad) return;
     if (!reply.ok) throw new Error("load");
     scaleSelect.value = String(reply.value.interfaceScale);
+    assetPolicySelect.value = reply.value.assetPolicy ?? "any";
+    themeSettings.load(reply.value.theme);
+    themeSettings.enable(true);
     scaleSelect.disabled = false;
     element<HTMLButtonElement>("save-settings").disabled = false;
     if (!element("appearance-settings").hidden) scaleSelect.focus();
   } catch {
     if (settingsDialog.open && load === settingsLoad) {
       message.textContent =
-        "Settings could not be loaded. Close this dialog and retry. Your saved settings have been preserved.";
+        "Settings could not be loaded. Close and retry; your saved settings are kept.";
       message.hidden = false;
     }
   } finally {
@@ -3533,6 +4073,7 @@ settingsDialog.addEventListener("cancel", (event) => {
   if (savingPreferences) event.preventDefault();
 });
 settingsDialog.addEventListener("close", () => {
+  themeSettings.revert();
   settingsLoad++;
   settingsButton.disabled = false;
   if (restoreInspector && selected) setInspector(true);
@@ -3564,16 +4105,28 @@ async function savePreferences(): Promise<void> {
     control.disabled = true;
   });
   try {
-    const value = { interfaceScale: Number(scaleSelect.value) };
+    // This form saves the interface size, the material choice and the theme.
+    const theme = themeSettings.current();
+    if (theme.problem) {
+      message.textContent = theme.problem;
+      message.hidden = false;
+      return;
+    }
+    const value = {
+      interfaceScale: Number(scaleSelect.value),
+      assetPolicy: assetPolicySelect.value,
+      theme: theme.choice,
+    };
     assertPreferences(value);
     const reply = await window.desktop.setPreferences(value);
     if (!reply.ok) throw new Error("save");
+    themeSettings.saved(theme.choice);
     savingPreferences = false;
     settingsDialog.close();
-    showToast("Interface size saved");
+    showToast("Settings saved");
   } catch {
     message.textContent =
-      "Settings could not be saved. Your previous interface size is unchanged. Try again.";
+      "Settings could not be saved. Nothing changed. Try again.";
     message.hidden = false;
   } finally {
     savingPreferences = false;
@@ -3614,8 +4167,9 @@ function editShortcut(event: KeyboardEvent): boolean {
           } as const
         )[key];
   if (!button) return false;
+  if (!fullEditor && !command && key !== "s") return false;
   event.preventDefault();
-  if (!button.disabled && !editActions.hidden) button.click();
+  if (!button.disabled && activeProject.clips) button.click();
   return true;
 }
 document.addEventListener("keydown", (event) => {
@@ -3671,6 +4225,12 @@ void window.desktop
       showError(
         "Saved interface settings could not be loaded. Open Settings to retry.",
       );
+    else {
+      const theme = reply.value.theme ?? defaultThemeChoice;
+      applyTheme(theme);
+      rememberTheme(theme);
+      themeSettings.saved(theme);
+    }
   })
   .catch(() =>
     showError(

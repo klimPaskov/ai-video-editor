@@ -55,6 +55,10 @@
     },
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
+      "example": "docs/examples/desktop_ipc_manual_transition.example.json"
+    },
+    {
+      "schema": "docs/schemas/desktop_ipc.schema.json",
       "example": "docs/examples/desktop_ipc_recording_region.example.json"
     },
     {
@@ -104,6 +108,10 @@
     {
       "schema": "docs/schemas/draft_transaction.schema.json",
       "example": "docs/examples/draft_transaction_graphic.example.json"
+    },
+    {
+      "schema": "docs/schemas/draft_transaction.schema.json",
+      "example": "docs/examples/draft_transaction_transition.example.json"
     },
     {
       "schema": "docs/schemas/pass_checkpoint.schema.json",
@@ -276,6 +284,10 @@
     {
       "schema": "docs/schemas/desktop_ipc.schema.json",
       "example": "docs/examples/desktop_ipc_magic_wand.example.json"
+    },
+    {
+      "schema": "docs/schemas/draft_transaction.schema.json",
+      "example": "docs/examples/draft_transaction_captions.example.json"
     }
   ]
 }

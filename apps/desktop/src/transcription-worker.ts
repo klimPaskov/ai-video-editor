@@ -117,25 +117,40 @@ async function main(): Promise<void> {
       if (Array.isArray(output))
         throw new Error("Local model returned multiple outputs.");
       failureReason = "model_output";
+      const buildOptions = {
+        projectId: request.projectId,
+        sourceId: request.sourceId,
+        durationUs: request.durationUs,
+        sourceStartUs: request.sourceStartUs,
+        language: null,
+        modelSha256: request.modelSha256,
+        transcriptId: request.transcriptId,
+      };
       let transcript;
       try {
         const chunks = normalizeTimedWordChunks(output.chunks);
+        transcript = buildLocalTranscript(buildOptions, chunks);
+      } catch (error) {
+        if (!(error instanceof TranscriptBuildError)) throw error;
+        // Silent or noisy audio can make the model invent word times. That
+        // is not a failure: the source simply has no usable speech.
+        const unusable = [
+          "outside_source",
+          "out_of_order",
+          "invalid_timing",
+          "invalid_chunk",
+        ];
+        if (!unusable.includes(error.reason)) {
+          failureReason = `transcript_${error.reason}`;
+          throw error;
+        }
         transcript = buildLocalTranscript(
           {
-            projectId: request.projectId,
-            sourceId: request.sourceId,
-            durationUs: request.durationUs,
-            sourceStartUs: request.sourceStartUs,
-            language: null,
-            modelSha256: request.modelSha256,
-            transcriptId: request.transcriptId,
+            ...buildOptions,
+            warnings: ["The speech in this source could not be timed."],
           },
-          chunks,
+          [],
         );
-      } catch (error) {
-        if (error instanceof TranscriptBuildError)
-          failureReason = `transcript_${error.reason}`;
-        throw error;
       }
       send({ type: "source-result", sourceId: request.sourceId, transcript });
     } catch {

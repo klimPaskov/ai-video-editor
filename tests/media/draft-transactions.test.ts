@@ -2102,3 +2102,377 @@ test("graphics are reversible draft edits that survive reopen", async () => {
   assert.deepEqual(reopened.draft, undone.draft);
   assert.deepEqual(await readFile(source), sourceBytes);
 });
+
+test("transitions are reversible draft edits tied to a cut and survive reopen", async () => {
+  const { projects, projectStore, baseline, source } = await fixture();
+  const sourceBytes = await readFile(source);
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  const pass = {
+    pass_group_id: "pass-transition-001",
+    kind: "graphics" as const,
+  };
+  // Cutting 0.3 to 0.5 s leaves a real cut at 0.3 s of the output; the
+  // incoming clip starts at 0.5 s of the source.
+  const cut = await store.applyManual(
+    trim(initial, {
+      request_id: "request-transition-cut-001",
+      pass_group: { pass_group_id: "pass-manual-001", kind: "manual" },
+      operations: [
+        { type: "ripple_delete", start_us: 300_000, end_us: 500_000 },
+      ],
+    }),
+  );
+  const transition = {
+    transition_id: "transition-001",
+    source_id: baseline.source.source_id,
+    source_us: 500_000,
+    kind: "dip" as const,
+    duration_us: 400_000,
+    color: "#000000",
+  };
+  const added = await store.applyManual(
+    trim(cut.draft, {
+      request_id: "request-transition-add-001",
+      pass_group: pass,
+      reason: "Dip through black at the cut.",
+      operations: [{ type: "set_transition", transition }],
+    }),
+  );
+  assert.equal(added.transaction.operations[0]?.operation_type, "transition");
+  assert.deepEqual(added.draft.timeline.transitions, [transition]);
+  // A second transition at the same cut replaces the first.
+  const replaced = await store.applyManual(
+    trim(added.draft, {
+      request_id: "request-transition-replace-001",
+      pass_group: pass,
+      operations: [
+        {
+          type: "set_transition",
+          transition: {
+            ...transition,
+            transition_id: "transition-002",
+            kind: "iris" as const,
+          },
+        },
+      ],
+    }),
+  );
+  assert.deepEqual(
+    replaced.draft.timeline.transitions?.map((item) => item.transition_id),
+    ["transition-002"],
+  );
+  // Setting exactly the same thing again, a moment outside the source and
+  // removing one that does not exist are refused.
+  for (const bad of [
+    {
+      type: "set_transition" as const,
+      transition: replaced.draft.timeline.transitions![0]!,
+    },
+    {
+      type: "set_transition" as const,
+      transition: { ...transition, source_us: 5_000_000 },
+    },
+    { type: "remove_transition" as const, transition_id: "transition-404" },
+  ])
+    await assert.rejects(async () =>
+      store.applyManual(
+        trim(replaced.draft, {
+          request_id: `request-transition-bad-${bad.type}-${JSON.stringify(bad).length}`,
+          pass_group: pass,
+          operations: [bad],
+        }),
+      ),
+    );
+  const removed = await store.applyManual(
+    trim(replaced.draft, {
+      request_id: "request-transition-remove-001",
+      pass_group: pass,
+      operations: [
+        { type: "remove_transition", transition_id: "transition-002" },
+      ],
+    }),
+  );
+  assert.equal(removed.draft.timeline.transitions, undefined);
+  const undone = await store.undoManual(
+    undo(
+      removed.draft,
+      removed.transaction.transaction_id,
+      "request-transition-undo-001",
+    ),
+  );
+  assert.deepEqual(undone.draft.timeline.transitions, [
+    { ...transition, transition_id: "transition-002", kind: "iris" },
+  ]);
+  const reopened = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopened.draft, undone.draft);
+  assert.deepEqual(await readFile(source), sourceBytes);
+});
+
+test("sound layers are reversible draft edits that survive reopen", async () => {
+  const { projects, projectStore, baseline, source } = await fixture();
+  const sourceBytes = await readFile(source);
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  const music = {
+    sound_id: "sound-music-001",
+    name: "Intro music",
+    kind: "music" as const,
+    asset_id: "asset-music-001",
+    asset_sha256: "a".repeat(64),
+    asset_start_us: 0,
+    duration_us: 900_000,
+    start: { type: "output" as const, start_us: 0 },
+    gain_db: -18,
+    fade_in_us: 100_000,
+    fade_out_us: 200_000,
+    duck_db: 12,
+    loop: true,
+  };
+  const effect = {
+    ...music,
+    sound_id: "sound-effect-001",
+    name: "Whoosh",
+    kind: "effect" as const,
+    asset_id: "asset-effect-001",
+    asset_sha256: "b".repeat(64),
+    duration_us: 300_000,
+    start: {
+      type: "source" as const,
+      source_id: baseline.source.source_id,
+      source_us: 400_000,
+    },
+    gain_db: -6,
+    fade_in_us: 0,
+    fade_out_us: 0,
+    duck_db: 0,
+    loop: false,
+  };
+  const pass = { pass_group_id: "pass-sounds-001", kind: "audio" as const };
+  const added = await store.applyManual(
+    trim(initial, {
+      request_id: "request-sound-add-001",
+      pass_group: pass,
+      reason: "Add a music bed.",
+      operations: [{ type: "set_sound", sound: music }],
+    }),
+  );
+  assert.equal(added.transaction.operations[0]?.operation_type, "sound");
+  assert.deepEqual(added.draft.timeline.sounds, [music]);
+  const second = await store.applyManual(
+    trim(added.draft, {
+      request_id: "request-sound-add-002",
+      pass_group: pass,
+      reason: "Add a whoosh.",
+      operations: [{ type: "set_sound", sound: effect }],
+    }),
+  );
+  // Layers are kept in a stable order by id.
+  assert.deepEqual(
+    second.draft.timeline.sounds?.map((sound) => sound.sound_id),
+    ["sound-effect-001", "sound-music-001"],
+  );
+  // Malformed layers, a source moment outside its source, fades longer than
+  // the layer, a repeat of the same layer and an unknown removal are refused.
+  let attempt = 0;
+  for (const operation of [
+    { type: "set_sound" as const, sound: { ...music, gain_db: 13 } },
+    { type: "set_sound" as const, sound: { ...music, duration_us: 10 } },
+    {
+      type: "set_sound" as const,
+      sound: { ...music, fade_in_us: 800_000, fade_out_us: 800_000 },
+    },
+    {
+      type: "set_sound" as const,
+      sound: {
+        ...effect,
+        start: { ...effect.start, source_us: 5_000_000 },
+      },
+    },
+    { type: "set_sound" as const, sound: { ...music, extra: true } as never },
+    { type: "set_sound" as const, sound: music },
+    { type: "remove_sound" as const, sound_id: "sound-missing-001" },
+  ])
+    await assert.rejects(async () =>
+      store.applyManual(
+        trim(second.draft, {
+          request_id: `request-sound-bad-${++attempt}`,
+          pass_group: pass,
+          operations: [operation],
+        }),
+      ),
+    );
+  const changed = await store.applyManual(
+    trim(second.draft, {
+      request_id: "request-sound-change-001",
+      pass_group: pass,
+      reason: "Quieter music.",
+      operations: [{ type: "set_sound", sound: { ...music, gain_db: -24 } }],
+    }),
+  );
+  assert.equal(
+    changed.draft.timeline.sounds?.find(
+      (sound) => sound.sound_id === "sound-music-001",
+    )?.gain_db,
+    -24,
+  );
+  const removed = await store.applyManual(
+    trim(changed.draft, {
+      request_id: "request-sound-remove-001",
+      pass_group: pass,
+      reason: "Remove the whoosh.",
+      operations: [{ type: "remove_sound", sound_id: "sound-effect-001" }],
+    }),
+  );
+  assert.deepEqual(
+    removed.draft.timeline.sounds?.map((sound) => sound.sound_id),
+    ["sound-music-001"],
+  );
+  const undone = await store.undoManual(
+    undo(
+      removed.draft,
+      removed.transaction.transaction_id,
+      "request-sound-undo-001",
+    ),
+  );
+  assert.equal(undone.draft.timeline.sounds?.length, 2);
+  const redone = await store.redoManual(
+    redo(
+      undone.draft,
+      undone.transaction.transaction_id,
+      "request-sound-redo-001",
+    ),
+  );
+  assert.equal(redone.draft.timeline.sounds?.length, 1);
+  const reopened = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopened.draft, redone.draft);
+  assert.deepEqual(await readFile(source), sourceBytes);
+});
+
+test("caption and audio choices are undoable draft edits that survive reopen", async () => {
+  const { projects, projectStore, baseline } = await fixture();
+  const store = new DraftTransactionStore(
+    projects,
+    projectStore,
+    dependencies(),
+  );
+  const initial = (await store.snapshot(baseline.project.project_id)).draft;
+  assert.equal(initial.timeline.captions, undefined);
+  const captions = {
+    enabled: true,
+    style: "highlight" as const,
+    size: "large" as const,
+    position: "bottom" as const,
+    burnIn: true,
+  };
+  const on = await store.applyClaude(
+    trim(initial, {
+      request_id: "request-captions-001",
+      pass_group: { pass_group_id: "pass-captions-001", kind: "captions" },
+      reason: "Turn captions on.",
+      operations: [{ type: "set_captions", captions }],
+    }),
+  );
+  assert.equal(on.transaction.origin, "claude");
+  assert.deepEqual(on.transaction.operations[0], {
+    schema_version: "1.0",
+    operation_id: on.transaction.operations[0]!.operation_id,
+    operation_type: "captions",
+    before: null,
+    after: captions,
+    inverse: {
+      type: "restore_captions",
+      captions: null,
+      expected_after_sha256: (
+        on.transaction.operations[0] as {
+          inverse: { expected_after_sha256: string };
+        }
+      ).inverse.expected_after_sha256,
+    },
+  });
+  assert.deepEqual(on.draft.timeline.captions, captions);
+  // Setting the same choice again is a conflict, not an empty edit.
+  await assert.rejects(
+    async () =>
+      store.applyManual(
+        trim(on.draft, {
+          request_id: "request-captions-002",
+          pass_group: { pass_group_id: "pass-captions-002", kind: "captions" },
+          operations: [{ type: "set_captions", captions }],
+        }),
+      ),
+    code("conflict"),
+  );
+  for (const bad of [
+    { ...captions, style: "neon" },
+    { ...captions, extra: true },
+  ])
+    await assert.rejects(async () =>
+      store.applyManual(
+        trim(on.draft, {
+          request_id: `request-captions-bad-${JSON.stringify(bad).length}`,
+          pass_group: { pass_group_id: "pass-captions-003", kind: "captions" },
+          operations: [{ type: "set_captions", captions: bad as never }],
+        }),
+      ),
+    );
+  const audio = await store.applyManual(
+    trim(on.draft, {
+      request_id: "request-audio-001",
+      pass_group: { pass_group_id: "pass-audio-001", kind: "audio" },
+      reason: "Even out loudness.",
+      operations: [
+        { type: "set_audio", audio: { normalize: true, denoise: false } },
+      ],
+    }),
+  );
+  assert.deepEqual(audio.draft.timeline.audio, {
+    normalize: true,
+    denoise: false,
+  });
+  assert.equal(audio.draft.timeline.duration_us, initial.timeline.duration_us);
+  assert.deepEqual(audio.draft.timeline.clips, initial.timeline.clips);
+  const undoneAudio = await store.undoManual(
+    undo(
+      audio.draft,
+      audio.transaction.transaction_id,
+      "request-audio-undo-001",
+    ),
+  );
+  assert.equal(undoneAudio.draft.timeline.audio, undefined);
+  const undoneCaptions = await store.undoManual(
+    undo(
+      undoneAudio.draft,
+      on.transaction.transaction_id,
+      "request-captions-undo-001",
+    ),
+  );
+  assert.equal(undoneCaptions.draft.timeline.captions, undefined);
+  const redone = await store.redoManual(
+    redo(
+      undoneCaptions.draft,
+      undoneCaptions.transaction.transaction_id,
+      "request-captions-redo-001",
+    ),
+  );
+  assert.deepEqual(redone.draft.timeline.captions, captions);
+  const reopened = await new DraftTransactionStore(
+    projects,
+    projectStore,
+  ).snapshot(baseline.project.project_id);
+  assert.deepEqual(reopened.draft, redone.draft);
+});

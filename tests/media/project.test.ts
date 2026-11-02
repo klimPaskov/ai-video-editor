@@ -331,7 +331,7 @@ test("initial project creates actual consistent source/timeline/revision contrac
   );
   assert.equal(check.status, 0, check.stderr);
 });
-test("persisted navigation preserves baseline hashes and allows only five actual stages", () => {
+test("persisted navigation preserves baseline hashes and allows only the six actual stages", () => {
   const snapshot = createInitialProject(input());
   const hash = snapshot.revision.timeline_sha256;
   for (const stage of projectStages) {

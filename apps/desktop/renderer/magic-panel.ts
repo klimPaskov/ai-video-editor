@@ -1,15 +1,33 @@
 import type { MagicWandPreset } from "../../../packages/domain/src/magic-wand.ts";
-import type { MagicWandView } from "../../../packages/domain/src/magic-wand-view.ts";
+import type {
+  MagicWandProvider,
+  MagicWandView,
+} from "../../../packages/domain/src/magic-wand-view.ts";
 import type { ProjectView } from "../../../packages/domain/src/project-view.ts";
 
 const presetNotes: Record<MagicWandPreset, string> = {
-  gentle:
-    "Shortens only very long pauses and removes earlier repeated takes. Fillers stay.",
-  balanced:
-    "Shortens long pauses, removes clean um/uh fillers and earlier repeated takes. Protected and uncertain words stay.",
-  tight:
-    "Also shortens shorter pauses. Names, numbers, negations and uncertain words stay.",
+  gentle: "Trims long pauses and fillers, then clear retakes and dead air.",
+  balanced: "Tightens pauses and fillers, then a story edit.",
+  tight: "Leaves only a hint of a pause, then a brisk story edit.",
 };
+
+export const providerNames: Record<MagicWandProvider, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  deepseek: "DeepSeek",
+  openai: "OpenAI API",
+  gemini: "Gemini API",
+};
+
+/** The one line under the preset: what it does and who makes the story edit. */
+export function magicNoteText(
+  preset: MagicWandPreset,
+  provider: MagicWandProvider,
+): string {
+  const paid =
+    provider === "deepseek" || provider === "openai" || provider === "gemini";
+  return `${presetNotes[preset]} The story edit uses ${providerNames[provider]}${provider === "claude" ? ", which gives the best results" : ""}${paid ? " and is billed to your API account" : ""}. Choose another in the assistant drawer.`;
+}
 
 function seconds(us: number): string {
   return `${(us / 1_000_000).toFixed(1)} s`;
@@ -33,15 +51,20 @@ export function magicSummaryText(view: MagicWandView): string {
   const review = summary.leftForReview
     ? ` ${plural(summary.leftForReview, "item", "items")} left for review.`
     : "";
-  return `Removed ${seconds(summary.removedUs)} in ${plural(summary.cuts, "cut", "cuts")}: ${parts.join(", ")}.${review} Undo in Edit reverses each step.`;
+  // Claude's rough cut explains itself in the conversation.
+  const detail = parts.length ? `: ${parts.join(", ")}` : "";
+  return `Removed ${seconds(summary.removedUs)} in ${plural(summary.cuts, "cut", "cuts")}${detail}.${review} Undo in Refine reverses each step.`;
 }
 
 export interface MagicPanel {
   render(project: ProjectView | undefined, visible: boolean): void;
 }
 
-/** Auto Edit's Magic Edit controls: preset, run, live progress, Stop, summary. */
-export function setupMagicPanel(onFinished: () => void): MagicPanel {
+/** The Magic Edit step's rough cut controls: preset, run, live progress, Stop, summary. */
+export function setupMagicPanel(
+  onFinished: () => void,
+  provider: () => MagicWandProvider = () => "claude",
+): MagicPanel {
   const element = <T extends HTMLElement = HTMLElement>(id: string) =>
     document.getElementById(id)! as T;
   const preset = element<HTMLSelectElement>("magic-preset");
@@ -70,7 +93,10 @@ export function setupMagicPanel(onFinished: () => void): MagicPanel {
   function paint(): void {
     if (!visible || !project) return;
     const active = running();
-    note.textContent = presetNotes[preset.value as MagicWandPreset];
+    note.textContent = magicNoteText(
+      preset.value as MagicWandPreset,
+      provider(),
+    );
     start.hidden = active;
     start.disabled = pending;
     preset.disabled = pending || active;
@@ -79,10 +105,12 @@ export function setupMagicPanel(onFinished: () => void): MagicPanel {
     progress.hidden = !active;
     if (active && view?.progress !== null && view?.progress !== undefined)
       progress.value = Math.round(view.progress * 1000);
+    // Claude's edit has no measurable progress: an open-ended bar.
+    else if (active) progress.removeAttribute("value");
     const text = active
       ? view?.status === "transcribing"
-        ? "Transcribing locally before editing…"
-        : "Applying cuts to the draft…"
+        ? "Transcribing on this device…"
+        : `${providerNames[provider()]} is cutting…`
       : view?.status === "completed" || view?.status === "stopped"
         ? magicSummaryText(view)
         : "";
@@ -98,8 +126,10 @@ export function setupMagicPanel(onFinished: () => void): MagicPanel {
   function schedule(): void {
     if (timer) clearTimeout(timer);
     timer = undefined;
-    if (visible && project && running())
-      timer = setTimeout(() => void refresh(), 400);
+    // While idle the panel still looks now and then: the assistant can
+    // start Magic Edit from a chat (ADR 0030) and the card should show it.
+    if (visible && project)
+      timer = setTimeout(() => void refresh(), running() ? 400 : 1500);
   }
 
   async function refresh(): Promise<void> {
@@ -122,7 +152,7 @@ export function setupMagicPanel(onFinished: () => void): MagicPanel {
     try {
       const reply = await work();
       if (!reply.ok)
-        localError = reply.message ?? "Magic Edit could not start.";
+        localError = reply.message ?? "The rough cut could not start.";
       else view = reply.value as MagicWandView;
     } finally {
       pending = false;
@@ -139,6 +169,7 @@ export function setupMagicPanel(onFinished: () => void): MagicPanel {
         window.desktop.startMagicWand({
           ...request(),
           preset: preset.value as MagicWandPreset,
+          provider: provider(),
         }),
       ),
   );

@@ -36,6 +36,11 @@ export function setupRecordPanel(options: {
   const live = element("record-live");
   const displays = element("record-displays");
   const microphone = element<HTMLSelectElement>("record-microphone");
+  const camera = element<HTMLSelectElement>("record-camera");
+  const cameraNote = element("record-camera-note");
+  camera.addEventListener("change", () => {
+    cameraNote.hidden = !camera.value;
+  });
   const start = element<HTMLButtonElement>("record-start");
   const cancel = element<HTMLButtonElement>("record-cancel");
   const close = element<HTMLButtonElement>("record-close");
@@ -226,6 +231,20 @@ export function setupRecordPanel(options: {
     none.value = "";
     none.textContent = "No microphone";
     microphone.append(none);
+    camera.replaceChildren();
+    const noCamera = document.createElement("option");
+    noCamera.value = "";
+    noCamera.textContent = "No camera";
+    camera.append(noCamera);
+    for (const item of devices.cameras) {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = item.label;
+      camera.append(option);
+    }
+    // Without a camera there is nothing to choose.
+    camera.disabled = devices.cameras.length === 0;
+    cameraNote.hidden = true;
     const first =
       devices.displays.find((display) => display.primary) ??
       devices.displays[0];
@@ -302,6 +321,29 @@ export function setupRecordPanel(options: {
     displays.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
   }
 
+  let audio: AudioContext | null = null;
+  /** A short tone for the countdown; silent if sound is unavailable. */
+  function beep(frequency: number, seconds: number): void {
+    try {
+      audio ??= new AudioContext();
+      void audio.resume();
+      const tone = audio.createOscillator();
+      const level = audio.createGain();
+      tone.frequency.value = frequency;
+      level.gain.setValueAtTime(0.0001, audio.currentTime);
+      level.gain.exponentialRampToValueAtTime(0.25, audio.currentTime + 0.01);
+      level.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audio.currentTime + seconds,
+      );
+      tone.connect(level).connect(audio.destination);
+      tone.start();
+      tone.stop(audio.currentTime + seconds + 0.02);
+    } catch {
+      /* No sound device: the countdown stays visual. */
+    }
+  }
+
   async function begin(): Promise<void> {
     if (!selectedDisplay || busy) return;
     busy = true;
@@ -320,6 +362,7 @@ export function setupRecordPanel(options: {
     countdown.hidden = false;
     for (const value of [3, 2, 1]) {
       countdown.textContent = String(value);
+      beep(660, 0.12);
       await new Promise((resolve) => setTimeout(resolve, 1000));
       if (!active) {
         counting = false;
@@ -328,6 +371,7 @@ export function setupRecordPanel(options: {
       }
     }
     counting = false;
+    beep(990, 0.28);
     stop.disabled = true;
     stop.textContent = "Stop";
     countdown.hidden = true;
@@ -339,6 +383,7 @@ export function setupRecordPanel(options: {
         schema_version: "1.0",
         display_id: selectedDisplay,
         microphone_id: microphone.value || null,
+        ...(camera.value ? { camera_id: camera.value } : {}),
         ...(region ? { region } : {}),
       })
       .catch(() => null);

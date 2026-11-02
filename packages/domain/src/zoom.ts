@@ -1,7 +1,9 @@
 /**
  * Zooms are draft edits anchored to source time, so they follow cuts. Each
- * one magnifies a fixed point of the frame by `scale`, easing in at its
- * start and out at its end. The same math drives the preview and export.
+ * one magnifies a point of the frame by `scale`, easing in at its start and
+ * out at its end. A zoom can also push in slowly across its whole length
+ * (`motion: "push"`) and pan to a second point (`end_center_x/y`). The same
+ * math drives the preview and export.
  */
 import { sourceAt, viewTimelineAt } from "./speed.ts";
 
@@ -14,6 +16,17 @@ export interface ZoomEffect {
   center_x: number;
   center_y: number;
   scale: number;
+  /**
+   * "hold" (default): ease in, stay, ease out. "push": the magnification
+   * grows slowly across the whole zoom, then eases out.
+   */
+  motion?: "hold" | "push";
+  /** Pan to this point across the zoom (both or neither). */
+  end_center_x?: number;
+  end_center_y?: number;
+  /** Length of the ease in / out, in microseconds (default 400 ms). */
+  ease_in_us?: number;
+  ease_out_us?: number;
 }
 
 export interface ZoomClip {
@@ -36,6 +49,14 @@ export interface ZoomInterval {
   /** Ease in at the start / out at the end (the zoom's real edges). */
   easeIn: boolean;
   easeOut: boolean;
+  motion: "hold" | "push";
+  endCenterX: number;
+  endCenterY: number;
+  easeInUs: number;
+  easeOutUs: number;
+  /** The share of the whole zoom that this piece covers: [from, to]. */
+  from: number;
+  to: number;
 }
 
 export const zoomLimits = Object.freeze({
@@ -43,6 +64,8 @@ export const zoomLimits = Object.freeze({
   maxScale: 4,
   minDurationUs: 500_000,
   rampUs: 400_000,
+  minEaseUs: 100_000,
+  maxEaseUs: 1_500_000,
   maxZooms: 256,
 });
 
@@ -57,10 +80,54 @@ export function assertZoomEffect(value: unknown): asserts value is ZoomEffect {
     value === null ||
     typeof value !== "object" ||
     Array.isArray(value) ||
-    Object.keys(value).length !== 7
+    Object.keys(value).length < 7
   )
     invalid();
   const zoom = value as Record<string, unknown>;
+  const optional = new Set([
+    "motion",
+    "end_center_x",
+    "end_center_y",
+    "ease_in_us",
+    "ease_out_us",
+  ]);
+  const required = new Set([
+    "zoom_id",
+    "source_id",
+    "source_start_us",
+    "source_end_us",
+    "center_x",
+    "center_y",
+    "scale",
+  ]);
+  for (const key of Object.keys(zoom))
+    if (!required.has(key) && !optional.has(key)) invalid();
+  for (const key of required) if (!(key in zoom)) invalid();
+  if (
+    zoom.motion !== undefined &&
+    zoom.motion !== "hold" &&
+    zoom.motion !== "push"
+  )
+    invalid();
+  if ((zoom.end_center_x === undefined) !== (zoom.end_center_y === undefined))
+    invalid();
+  for (const key of ["end_center_x", "end_center_y"] as const)
+    if (
+      zoom[key] !== undefined &&
+      (typeof zoom[key] !== "number" ||
+        !Number.isFinite(zoom[key]) ||
+        (zoom[key] as number) < 0 ||
+        (zoom[key] as number) > 1)
+    )
+      invalid();
+  for (const key of ["ease_in_us", "ease_out_us"] as const)
+    if (
+      zoom[key] !== undefined &&
+      (!Number.isSafeInteger(zoom[key]) ||
+        (zoom[key] as number) < zoomLimits.minEaseUs ||
+        (zoom[key] as number) > zoomLimits.maxEaseUs)
+    )
+      invalid();
   if (
     typeof zoom.zoom_id !== "string" ||
     !idPattern.test(zoom.zoom_id) ||
@@ -177,6 +244,7 @@ export function zoomIntervals(
       const from = Math.max(zoom.source_start_us, clip.sourceStartUs);
       const to = Math.min(zoom.source_end_us, clip.sourceEndUs);
       if (to <= from) continue;
+      const whole = zoom.source_end_us - zoom.source_start_us;
       pieces.push({
         zoomId: zoom.zoom_id,
         startUs: viewTimelineAt(clip, from),
@@ -186,14 +254,28 @@ export function zoomIntervals(
         scale: zoom.scale,
         easeIn: from === zoom.source_start_us,
         easeOut: to === zoom.source_end_us,
+        motion: zoom.motion ?? "hold",
+        endCenterX: zoom.end_center_x ?? zoom.center_x,
+        endCenterY: zoom.end_center_y ?? zoom.center_y,
+        easeInUs: zoom.ease_in_us ?? zoomLimits.rampUs,
+        easeOutUs: zoom.ease_out_us ?? zoomLimits.rampUs,
+        from: (from - zoom.source_start_us) / whole,
+        to: (to - zoom.source_start_us) / whole,
       });
     }
   return pieces.sort((a, b) => a.startUs - b.startUs);
 }
 
-function ramp(interval: ZoomInterval): number {
+function rampIn(interval: ZoomInterval): number {
   return Math.min(
-    zoomLimits.rampUs,
+    interval.easeInUs,
+    Math.floor((interval.endUs - interval.startUs) / 3),
+  );
+}
+
+function rampOut(interval: ZoomInterval): number {
+  return Math.min(
+    interval.easeOutUs,
     Math.floor((interval.endUs - interval.startUs) / 3),
   );
 }
@@ -203,7 +285,7 @@ function smooth(p: number): number {
   return x * x * (3 - 2 * x);
 }
 
-/** Magnification at output time `us` (1 outside zooms). */
+/** Magnification and centre at output time `us` (1 outside zooms). */
 export function zoomAt(
   intervals: readonly ZoomInterval[],
   us: number,
@@ -212,16 +294,24 @@ export function zoomAt(
     (item) => us >= item.startUs && us < item.endUs,
   );
   if (!interval) return { scale: 1, centerX: 0.5, centerY: 0.5 };
-  const r = ramp(interval);
+  const rIn = rampIn(interval);
+  const rOut = rampOut(interval);
+  // How far through the whole zoom (not just this visible piece) we are.
+  const progress =
+    interval.from +
+    ((interval.to - interval.from) * (us - interval.startUs)) /
+      (interval.endUs - interval.startUs);
   let envelope = 1;
-  if (interval.easeIn && us < interval.startUs + r)
-    envelope = smooth((us - interval.startUs) / r);
-  if (interval.easeOut && us > interval.endUs - r)
-    envelope = Math.min(envelope, smooth((interval.endUs - us) / r));
+  if (interval.motion === "push") envelope = smooth(progress);
+  else if (interval.easeIn && us < interval.startUs + rIn)
+    envelope = smooth((us - interval.startUs) / rIn);
+  if (interval.easeOut && us > interval.endUs - rOut)
+    envelope = Math.min(envelope, smooth((interval.endUs - us) / rOut));
+  const pan = smooth(progress);
   return {
     scale: 1 + (interval.scale - 1) * envelope,
-    centerX: interval.centerX,
-    centerY: interval.centerY,
+    centerX: interval.centerX + (interval.endCenterX - interval.centerX) * pan,
+    centerY: interval.centerY + (interval.endCenterY - interval.centerY) * pan,
   };
 }
 
@@ -287,18 +377,26 @@ export function zoomFilter(
       otherwise,
     );
   const smoothstep = (p: string) => `(${p})*(${p})*(3-2*(${p}))`;
+  const clamp01 = (p: string) => `clip(${p},0,1)`;
+  /** Share of the whole zoom elapsed at time t, within this piece. */
+  const progress = (interval: ZoomInterval) =>
+    `(${interval.from.toFixed(6)}+${(interval.to - interval.from).toFixed(6)}*(t-${seconds(interval.startUs)})/${seconds(interval.endUs - interval.startUs)})`;
   const envelope = (interval: ZoomInterval) => {
-    const r = ramp(interval);
     const a = interval.startUs;
     const b = interval.endUs;
+    const rIn = rampIn(interval);
+    const rOut = rampOut(interval);
     const parts: string[] = [];
-    if (interval.easeIn && r > 0)
+    if (interval.motion === "push") {
+      const p = clamp01(progress(interval));
+      parts.push(smoothstep(p));
+    } else if (interval.easeIn && rIn > 0)
       parts.push(
-        `if(lt(t,${seconds(a + r)}),${smoothstep(`(t-${seconds(a)})/${seconds(r)}`)},1)`,
+        `if(lt(t,${seconds(a + rIn)}),${smoothstep(`(t-${seconds(a)})/${seconds(rIn)}`)},1)`,
       );
-    if (interval.easeOut && r > 0)
+    if (interval.easeOut && rOut > 0)
       parts.push(
-        `if(gt(t,${seconds(b - r)}),${smoothstep(`(${seconds(b)}-t)/${seconds(r)}`)},1)`,
+        `if(gt(t,${seconds(b - rOut)}),${smoothstep(`(${seconds(b)}-t)/${seconds(rOut)}`)},1)`,
       );
     return parts.length === 0
       ? "1"
@@ -311,8 +409,23 @@ export function zoomFilter(
       `(1+${(interval.scale - 1).toFixed(6)}*(${envelope(interval)}))`,
     "1",
   );
-  const cx = pieces((interval) => interval.centerX.toFixed(6), "0.5");
-  const cy = pieces((interval) => interval.centerY.toFixed(6), "0.5");
+  const centre = (
+    from: (interval: ZoomInterval) => number,
+    to: (interval: ZoomInterval) => number,
+  ) =>
+    pieces((interval) => {
+      if (from(interval) === to(interval)) return from(interval).toFixed(6);
+      const p = smoothstep(clamp01(progress(interval)));
+      return `(${from(interval).toFixed(6)}+${(to(interval) - from(interval)).toFixed(6)}*(${p}))`;
+    }, "0.5");
+  const cx = centre(
+    (interval) => interval.centerX,
+    (interval) => interval.endCenterX,
+  );
+  const cy = centre(
+    (interval) => interval.centerY,
+    (interval) => interval.endCenterY,
+  );
   return [
     // At magnification 1 the size is the input's own, so the frame is
     // passed through untouched even when a dimension is odd.

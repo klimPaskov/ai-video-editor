@@ -6,6 +6,12 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { once } from "node:events";
 import type { Readable, Writable } from "node:stream";
 import { MediaError, runProcess } from "./process.ts";
+import {
+  deliveryVideoArguments,
+  selectDeliveryEncoder,
+} from "./delivery-encoder.ts";
+import { mixSoundLayers, type SoundMixLayer } from "./sound-mix.ts";
+import { fadeClipEdges, joinFadeFrames } from "./join-fade.ts";
 import { atempoChain } from "../../domain/src/speed.ts";
 import type { PresentationTiming } from "./presentation-timing.ts";
 import type { MediaExecutables } from "./lossless.ts";
@@ -73,9 +79,17 @@ export interface WorkingFormat {
 export interface PlannedClip {
   sourceId: string;
   path: string;
-  /** Source frame indexes [firstFrame, endFrame). */
+  /** Frame-grid slots [firstFrame, firstFrame + frameCount) of the source. */
   firstFrame: number;
   frameCount: number;
+  /**
+   * Source frames decoded for the slots. A recorder that missed a capture
+   * leaves a slot empty; the frame before it is held there, as a player
+   * shows it, so `held` lists [decoded offset, extra copies] for each such
+   * frame (empty when every slot has its own frame).
+   */
+  decodeFrames: number;
+  held: Array<[number, number]>;
   /** Trim window in seconds with half-frame margins around the kept frames. */
   trimStartSeconds: number;
   trimEndSeconds: number;
@@ -255,6 +269,19 @@ export function nominalFrameRate(
   video: Record<string, unknown>,
   timing: PresentationTiming,
 ): Rational {
+  return frameGrid(video, timing).rate;
+}
+
+/**
+ * The frame grid and each frame's slot on it. Every frame must lie within one
+ * tick (at least 1 ms) of its slot, one frame per slot. A screen recorder
+ * that missed a capture leaves an empty slot (the previous frame stays on
+ * screen); `slots` is null when there is none. Off-grid timing is refused.
+ */
+export function frameGrid(
+  video: Record<string, unknown>,
+  timing: PresentationTiming,
+): { rate: Rational; slots: number[] | null } {
   const { pts, timeBaseNumerator: tbn, timeBaseDenominator: tbd } = timing;
   if (pts.length < 1 || pts[0] !== 0)
     unsupported("This video's frame timing cannot be verified.");
@@ -268,10 +295,23 @@ export function nominalFrameRate(
   if (!rate) unsupported("This video's frame timing cannot be verified.");
   const tolerance = Math.max(tbn / tbd, 0.001) + 1e-9;
   const frameSeconds = rate.denominator / rate.numerator;
-  for (let index = 0; index < pts.length; index++)
-    if (Math.abs((pts[index]! * tbn) / tbd - index * frameSeconds) > tolerance)
+  const offGrid = (index: number, slot: number) =>
+    Math.abs((pts[index]! * tbn) / tbd - slot * frameSeconds) > tolerance;
+  let gap = -1;
+  for (let index = 0; index < pts.length && gap < 0; index++)
+    if (offGrid(index, index)) gap = index;
+  if (gap < 0) return { rate, slots: null };
+  // Held frames are only told apart from jitter when slots are well apart.
+  if (tolerance > frameSeconds / 4)
+    unsupported("Variable frame rate video cannot be exported yet.");
+  const slots = Array.from({ length: gap }, (_, index) => index);
+  for (let index = gap; index < pts.length; index++) {
+    const slot = Math.round((pts[index]! * tbn) / tbd / frameSeconds);
+    if ((index > 0 && slot <= slots[index - 1]!) || offGrid(index, slot))
       unsupported("Variable frame rate video cannot be exported yet.");
-  return rate;
+    slots.push(slot);
+  }
+  return { rate, slots };
 }
 
 /** Exact working format of one source, or an explicit unsupported error. */
@@ -406,6 +446,14 @@ export function planExport(
       unsupported(
         "These sources use different video or audio formats. Exporting them together needs a conversion that is not available yet.",
       );
+  const grids = new Map(
+    sources.map((source) => {
+      const video = streams(source.probe).find(
+        (stream) => stream.codec_type === "video",
+      )!;
+      return [source.sourceId, frameGrid(video, source.timing).slots];
+    }),
+  );
   const planned: PlannedClip[] = [];
   let frameCount = 0;
   let sampleCount = 0;
@@ -427,7 +475,10 @@ export function planExport(
     // Frame i is presented at exactly i / rate (see nominalFrameRate).
     const fn = BigInt(first.video.frameRate.numerator);
     const fd = BigInt(first.video.frameRate.denominator);
-    const frames = source.timing.pts.length;
+    const slots = grids.get(source.sourceId) ?? null;
+    const slotOf = (frame: number) => (slots ? slots[frame]! : frame);
+    const decoded = source.timing.pts.length;
+    const frames = slotOf(decoded - 1) + 1;
     const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
     const frameAt = (us: number) =>
       Math.min(frames, Number(ceilDiv(BigInt(us) * fn, fd * 1_000_000n)));
@@ -435,9 +486,37 @@ export function planExport(
     const endFrame = frameAt(clip.sourceEndUs);
     const count = endFrame - firstFrame;
     if (count <= 0) continue;
+    // Decoded frames [firstDecoded, endDecoded) cover the slots; the first
+    // is the frame on screen at the first slot.
+    let firstDecoded = firstFrame;
+    let endDecoded = endFrame;
+    const held: Array<[number, number]> = [];
+    if (slots) {
+      const atOrBefore = (slot: number) => {
+        let low = 0;
+        let high = decoded - 1;
+        while (low < high) {
+          const middle = (low + high + 1) >> 1;
+          if (slots[middle]! <= slot) low = middle;
+          else high = middle - 1;
+        }
+        return low;
+      };
+      firstDecoded = atOrBefore(firstFrame);
+      endDecoded = atOrBefore(endFrame - 1) + 1;
+      for (let frame = firstDecoded; frame < endDecoded; frame++) {
+        const next = frame + 1 < decoded ? slots[frame + 1]! : frames;
+        const shown =
+          Math.min(next, endFrame) - Math.max(slots[frame]!, firstFrame);
+        if (shown > 1) held.push([frame - firstDecoded, shown - 1]);
+      }
+    }
     const frameSeconds = Number(fd) / Number(fn);
-    const trimStartSeconds = Math.max(0, (firstFrame - 0.5) * frameSeconds);
-    const trimEndSeconds = (endFrame - 0.5) * frameSeconds;
+    const trimStartSeconds = Math.max(
+      0,
+      (slotOf(firstDecoded) - 0.5) * frameSeconds,
+    );
+    const trimEndSeconds = (slotOf(endDecoded - 1) + 0.5) * frameSeconds;
     let firstSample = 0;
     let samples = 0;
     if (first.audio) {
@@ -462,6 +541,8 @@ export function planExport(
       path: source.path,
       firstFrame,
       frameCount: count,
+      decodeFrames: endDecoded - firstDecoded,
+      held,
       trimStartSeconds,
       trimEndSeconds,
       seekSeconds: Math.max(0, trimStartSeconds - 2),
@@ -493,7 +574,35 @@ export function planExport(
 
 const quiet = ["-hide_banner", "-loglevel", "error", "-nostdin"];
 
+/**
+ * Time allowed for one pass over the audio. It grows with the audio's length
+ * and is generous, because a computer busy with other work can run several
+ * times slower than usual; a fixed 30 s limit made a long edit's loudness
+ * pass fail on a loaded machine.
+ */
+export function audioPassTimeoutMs(
+  sampleCount: number,
+  sampleRate: number,
+): number {
+  const seconds = sampleCount / sampleRate;
+  return Math.min(
+    4 * 3_600_000,
+    Math.max(120_000, Math.round(60_000 + seconds * 3_000)),
+  );
+}
+
 /** Retimes a graphics segment so its first frame is output frame `startFrame`. */
+/**
+ * Threads for the compositor's filter graph. Every graphics input adds a
+ * scaler and an overlay, and each filter starts this many threads, so an
+ * edit with dozens of graphics would otherwise start hundreds and can hit a
+ * process or container thread limit (FFmpeg then fails to configure the
+ * graph). Keeps the total near 200.
+ */
+export function compositorThreads(graphicsInputs: number): number {
+  return Math.max(1, Math.min(4, Math.floor(96 / Math.max(1, graphicsInputs))));
+}
+
 export function graphicsTiming(
   startFrame: number,
   frameRate: { numerator: number; denominator: number },
@@ -550,9 +659,15 @@ function startProcess(
   });
 }
 
-/** Resolves on exit 0, rejects otherwise; stderr is drained, never surfaced. */
+/**
+ * Resolves on exit 0, rejects otherwise. Stderr is drained and never shown to
+ * users; the end of it travels with the error for private diagnostics.
+ */
 function exited(child: ChildProcess): Promise<void> {
-  child.stderr?.resume();
+  let tail = "";
+  child.stderr?.on("data", (chunk: Buffer) => {
+    tail = (tail + chunk.toString("utf8")).slice(-4000);
+  });
   const result = new Promise<void>((resolvePromise, reject) => {
     child.once("error", () =>
       reject(
@@ -565,7 +680,11 @@ function exited(child: ChildProcess): Promise<void> {
     child.once("close", (code) =>
       code === 0
         ? resolvePromise()
-        : reject(new MediaError("PROCESS_FAILED", "Media executable failed.")),
+        : reject(
+            new MediaError("PROCESS_FAILED", "Media executable failed.", {
+              detail: `exit ${code}: ${tail}`,
+            }),
+          ),
     );
   });
   // A process killed by cancellation may fail before anyone awaits it.
@@ -628,8 +747,19 @@ export interface ExportRequest {
    * optionally followed by burned-in captions at the new size.
    */
   compose?: ExportComposition;
+  /**
+   * Milliseconds of fade on each side of an audio cut (where consecutive
+   * clips are not contiguous in their source), so a join does not click.
+   * Unset leaves the samples exactly as decoded.
+   */
+  joinFadeMs?: number;
   /** Speech cleanup applied to the assembled audio before encoding. */
   audioCleanup?: { normalize: boolean; denoise: boolean };
+  /**
+   * Music and sound effects mixed into the assembled audio after the speech
+   * cleanup (the caller has verified each file). The recording needs audio.
+   */
+  sounds?: { layers: readonly SoundMixLayer[] };
 }
 
 export interface ExportComposition {
@@ -697,6 +827,7 @@ async function cleanAudio(options: {
     const target = "I=-16:TP=-1.5:LRA=11";
     const measured = await runProcess({
       executable: options.ffmpeg,
+      timeoutMs: audioPassTimeoutMs(options.sampleCount, audio.sampleRate),
       args: [
         "-hide_banner",
         "-nostdin",
@@ -735,6 +866,7 @@ async function cleanAudio(options: {
   const processed = join(options.staging, "processed-audio.raw");
   await runProcess({
     executable: options.ffmpeg,
+    timeoutMs: audioPassTimeoutMs(options.sampleCount, audio.sampleRate),
     args: [
       ...quiet,
       ...input,
@@ -788,12 +920,23 @@ export async function exportDraft(
   const { video, audio } = plan.format;
   const children = new Set<ChildProcess>();
   const closed: Promise<void>[] = [];
+  // Processes that ended on their own with an error, for private diagnostics:
+  // a broken pipe to one of them is reported with its own reason.
+  const exits: string[] = [];
   const track = (child: ChildProcess) => {
     children.add(child);
+    let tail = "";
+    child.stderr?.on("data", (chunk: Buffer) => {
+      tail = (tail + chunk.toString("utf8")).slice(-3000);
+    });
     closed.push(
       new Promise<void>((resolveClose) =>
-        child.once("close", () => {
+        child.once("close", (code, exitSignal) => {
           children.delete(child);
+          if (code !== 0 && !halt.signal.aborted)
+            exits.push(
+              `${child.spawnargs.slice(1).join(" ").slice(0, 600)}\nexit ${code ?? exitSignal}: ${tail}`,
+            );
           resolveClose();
         }),
       ),
@@ -831,9 +974,16 @@ export async function exportDraft(
     throw new MediaError(
       "PROCESS_FAILED",
       "The export could not be completed.",
+      {
+        cause: error,
+      },
     );
   };
   try {
+    if (request.sounds?.layers.length && !audio)
+      unsupported(
+        "Music and sound effects need a recording that has audio to mix them into.",
+      );
     const version = await runProcess({
       executable: executables.ffmpeg,
       args: ["-version"],
@@ -908,9 +1058,39 @@ export async function exportDraft(
       };
       const output = createWriteStream(audioPath, { mode: 0o600 });
       try {
-        for (const clip of plan.clips) {
+        for (const [clipIndex, clip] of plan.clips.entries()) {
           const source = decodedAudio.get(clip.path)!;
           const offset = clip.firstSample * sampleBytes;
+          // Fade only across real cuts, never inside continuous audio.
+          const joins = (a: PlannedClip, b: PlannedClip) =>
+            !(
+              a.path === b.path &&
+              a.speed === 1 &&
+              b.speed === 1 &&
+              a.firstSample + a.sampleCount === b.firstSample
+            );
+          const previous = plan.clips[clipIndex - 1];
+          const next = plan.clips[clipIndex + 1];
+          const fadeFrames = joinFadeFrames(
+            audio.sampleRate,
+            request.joinFadeMs ?? 0,
+            clip.outputSamples,
+          );
+          const fade = {
+            raw: audio.raw,
+            channels: audio.channels,
+            totalFrames: clip.outputSamples,
+            inFrames: previous && joins(previous, clip) ? fadeFrames : 0,
+            outFrames: next && joins(clip, next) ? fadeFrames : 0,
+          };
+          const faded = fade.inFrames > 0 || fade.outFrames > 0;
+          let written = 0;
+          const fadeThenWrite = async (buffer: Buffer) => {
+            if (faded) fadeClipEdges(buffer, written, fade);
+            written += buffer.length;
+            hash.update(buffer);
+            await writeChunk(output, buffer);
+          };
           const expected = clip.sampleCount * sampleBytes;
           const available = Math.max(
             0,
@@ -919,12 +1099,8 @@ export async function exportDraft(
           // A source whose audio ends before its video contributes silence.
           const silence = Buffer.alloc(expected - available);
           if (clip.speed === 1) {
-            const write = async (buffer: Buffer) => {
-              hash.update(buffer);
-              await writeChunk(output, buffer);
-            };
-            await copyRange(source.file, offset, available, write);
-            if (silence.length) await write(silence);
+            await copyRange(source.file, offset, available, fadeThenWrite);
+            if (silence.length) await fadeThenWrite(silence);
           } else {
             // Time-stretch the slice without changing pitch, then fix its
             // length to the exact planned sample count.
@@ -942,6 +1118,10 @@ export async function exportDraft(
             }
             await runProcess({
               executable: executables.ffmpeg,
+              timeoutMs: audioPassTimeoutMs(
+                clip.outputSamples,
+                audio.sampleRate,
+              ),
               args: [
                 ...quiet,
                 "-f",
@@ -968,10 +1148,7 @@ export async function exportDraft(
                 "FIDELITY_MISMATCH",
                 "Sped-up audio does not match the draft length.",
               );
-            await copyRange(stretched, 0, length, async (buffer) => {
-              hash.update(buffer);
-              await writeChunk(output, buffer);
-            });
+            await copyRange(stretched, 0, length, fadeThenWrite);
             await rm(slice, { force: true });
             await rm(stretched, { force: true });
           }
@@ -998,6 +1175,18 @@ export async function exportDraft(
           ...(signal ? { signal } : {}),
         });
       }
+      // Music and effects go in after the speech has been cleaned, so they
+      // keep their own level; the mix becomes the canonical audio.
+      if (request.sounds?.layers.length)
+        canonicalAudioSha256 = await mixSoundLayers({
+          ffmpeg: executables.ffmpeg,
+          audio,
+          audioPath,
+          staging,
+          sampleCount: plan.sampleCount,
+          layers: request.sounds.layers,
+          ...(signal ? { signal } : {}),
+        });
     }
 
     // 2. Canonical video frames streamed straight into the encoder.
@@ -1031,6 +1220,10 @@ export async function exportDraft(
           frameBytes: plan.frameBytes,
           color: video.color,
         };
+    const deliveryEncoder =
+      profile === "smaller_mp4"
+        ? await selectDeliveryEncoder(executables.ffmpeg)
+        : null;
     const encoderArgs = [
       ...quiet,
       "-f",
@@ -1088,12 +1281,11 @@ export async function exportDraft(
             "matroska",
           ]
         : [
-            "-c:v",
-            "libx264",
-            "-preset",
-            "medium",
-            "-crf",
-            "18",
+            ...deliveryVideoArguments(deliveryEncoder!, {
+              width: target.width,
+              height: target.height,
+              frameRate: video.frameRate,
+            }),
             "-pix_fmt",
             "yuv420p",
             ...colorArgs(target.color),
@@ -1175,8 +1367,15 @@ export async function exportDraft(
             `${video.frameRate.numerator}/${video.frameRate.denominator}`,
             "-i",
             "pipe:0",
-            ...(graphics?.segments.flatMap((segment) => ["-i", segment.path]) ??
-              []),
+            // One decoder thread per graphics input: a long edit has dozens.
+            ...(graphics?.segments.flatMap((segment) => [
+              "-threads",
+              "1",
+              "-i",
+              segment.path,
+            ]) ?? []),
+            "-filter_complex_threads",
+            String(compositorThreads(graphics?.segments.length ?? 0)),
             // A relative name avoids filter-argument escaping of full paths.
             "-filter_complex",
             graph,
@@ -1220,7 +1419,8 @@ export async function exportDraft(
     const sink = compositor ? compositor.stdin! : encoder.stdin!;
     try {
       for (const clip of plan.clips) {
-        const expected = clip.frameCount * plan.frameBytes;
+        const expected = clip.decodeFrames * plan.frameBytes;
+        const extra = new Map(clip.held);
         const child = track(
           startProcess(
             executables.ffmpeg,
@@ -1236,7 +1436,7 @@ export async function exportDraft(
               "-vf",
               `trim=start=${seconds6(clip.trimStartSeconds)}:end=${seconds6(clip.trimEndSeconds)}`,
               "-frames:v",
-              String(clip.frameCount),
+              String(clip.decodeFrames),
               "-fps_mode",
               "passthrough",
               "-c:v",
@@ -1254,20 +1454,37 @@ export async function exportDraft(
         let written = 0;
         let kept = 0;
         let reported = 0;
+        // The slot of decoded frame `current`; a held frame fills several.
+        let current = 0;
+        let slot = 0;
+        let pending: Buffer[] = [];
         await drain(child.stdout!, async (chunk) => {
           const start = written;
           written += chunk.length;
           if (written > expected) return;
-          // A sped-up clip keeps every `speed`-th decoded frame.
+          // A sped-up clip keeps every `speed`-th slot's frame.
           const parts: Buffer[] = [];
-          if (clip.speed === 1) parts.push(chunk);
+          if (clip.speed === 1 && extra.size === 0) parts.push(chunk);
           else
             for (let at = start; at < written;) {
               const frame = Math.floor(at / plan.frameBytes);
+              for (; current < frame; current++)
+                slot += 1 + (extra.get(current) ?? 0);
               const frameEnd = (frame + 1) * plan.frameBytes;
               const until = Math.min(frameEnd, written);
-              if (frame % clip.speed === 0)
-                parts.push(chunk.subarray(at - start, until - start));
+              const piece = chunk.subarray(at - start, until - start);
+              const copies = 1 + (extra.get(frame) ?? 0);
+              if (copies === 1) {
+                if (slot % clip.speed === 0) parts.push(piece);
+              } else {
+                pending.push(piece);
+                if (until === frameEnd) {
+                  const whole = Buffer.concat(pending);
+                  pending = [];
+                  for (let copy = slot; copy < slot + copies; copy++)
+                    if (copy % clip.speed === 0) parts.push(whole);
+                }
+              }
               at = until;
             }
           for (const part of parts) {
@@ -1312,6 +1529,7 @@ export async function exportDraft(
       (
         await runProcess({
           executable: executables.ffprobe,
+          timeoutMs: 300_000,
           args: [
             "-v",
             "error",
@@ -1509,6 +1727,17 @@ export async function exportDraft(
         : null,
     };
   } catch (error) {
+    if (!(error instanceof MediaError) && !cancelled && !signal?.aborted) {
+      // A write to a process that has just died: give its exit a moment to
+      // arrive, then report it with the error.
+      await new Promise((resolveWait) => setTimeout(resolveWait, 3000));
+      return fail(
+        new MediaError("PROCESS_FAILED", "The export could not be completed.", {
+          cause: error,
+          detail: exits.join("\n---\n") || "no process exited on its own",
+        }),
+      );
+    }
     return fail(error);
   } finally {
     halt.abort();

@@ -32,7 +32,7 @@ The two user-provided videos, appended in the user-specified order, are the fina
 - ordered source manifest, both hashes, and immutable-copy checks
 - Magic Wand plan and operations
 - Codex thread and tool transaction summary with secrets removed
-- screenshots of Home, Auto Edit, editor, QA, and export complete
+- screenshots of Home, Magic Edit, editor, QA, and export complete
 - short native test recording
 - timeline and revision hashes
 - QA report

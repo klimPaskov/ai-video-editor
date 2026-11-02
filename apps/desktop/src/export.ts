@@ -30,6 +30,7 @@ import {
   type ExportView,
 } from "../../../packages/domain/src/export-view.ts";
 import { MediaError } from "../../../packages/media-engine/src/process.ts";
+import { recordExportFolder, redactPaths } from "./private-notes.ts";
 import { draftWindowClips } from "../../../packages/domain/src/short-clips.ts";
 import {
   windowZoomIntervals,
@@ -41,7 +42,22 @@ import {
   graphicIntervals,
   type GraphicInterval,
 } from "../../../packages/domain/src/graphics.ts";
+import { transitionGraphicIntervals } from "../../../packages/domain/src/transitions.ts";
+import {
+  layoutIntervals,
+  windowLayoutIntervals,
+  type LayoutInterval,
+} from "../../../packages/domain/src/layouts.ts";
+import {
+  renderCameraTrack,
+  type CameraSource,
+} from "../../../packages/media-engine/src/camera-layer.ts";
 import type { GraphicsRenderRequest, GraphicsTrack } from "./graphics-track.ts";
+import {
+  soundIntervals,
+  type SoundInterval,
+} from "../../../packages/domain/src/sounds.ts";
+import type { SoundMixLayer } from "../../../packages/media-engine/src/sound-mix.ts";
 import { probePresentationTiming } from "../../../packages/media-engine/src/presentation-timing.ts";
 import {
   exportDraft,
@@ -52,9 +68,21 @@ import {
 } from "../../../packages/media-engine/src/render.ts";
 import type { DraftProjectReadResult } from "../../../packages/project-store/src/transactions.ts";
 
-type DraftReader = {
+export type DraftReader = {
   snapshotWithProject(projectId: string): Promise<DraftProjectReadResult>;
 };
+
+/** An error, its private detail and its causes, for the failure note. */
+function describe(error: unknown, depth = 0): string {
+  if (!(error instanceof Error)) return String(error);
+  const detail =
+    error instanceof MediaError && error.detail ? `\n${error.detail}` : "";
+  const cause =
+    error.cause !== undefined && depth < 4
+      ? `\ncaused by: ${describe(error.cause, depth + 1)}`
+      : "";
+  return `${error.name}: ${error.message}${detail}\n${error.stack ?? ""}${cause}`;
+}
 
 export interface DesktopExportOptions {
   drafts: DraftReader;
@@ -78,12 +106,29 @@ export interface DesktopExportOptions {
   /** Audio cleanup chosen for the project. */
   audio?: (projectId: string) => Promise<AudioSettings>;
   /**
+   * The verified file of a project's audio asset (its bytes still match the
+   * hash a sound layer names); throws when it is missing or changed.
+   */
+  soundFile?: (
+    projectId: string,
+    assetId: string,
+    sha256: string,
+  ) => Promise<string>;
+  /**
    * Renders motion graphics into a lossless track (Electron offscreen
    * rendering in the app). Without it, drafts with graphics cannot export.
    */
   renderGraphics?: (
     request: GraphicsRenderRequest,
   ) => Promise<GraphicsTrack | null>;
+  /**
+   * The camera recording that goes with a recording of the project (its
+   * verified file, size and sync offset), or null when there is none.
+   */
+  camera?: (
+    projectId: string,
+    sourceId: string,
+  ) => Promise<CameraSource | null>;
 }
 
 interface Job {
@@ -96,6 +141,12 @@ interface Job {
   audio: AudioSettings;
   zooms: ZoomInterval[];
   graphics: GraphicInterval[];
+  /** Camera and screen arrangements in the exported output's own time. */
+  layouts: LayoutInterval[];
+  /** The recording whose camera the layouts show, with the camera file. */
+  camera: { sourceId: string; source: CameraSource } | null;
+  /** Music and effects with their verified files, ready to mix. */
+  sounds: SoundMixLayer[];
 }
 
 const unsupportedSet = new Set<string>(exportUnsupported);
@@ -112,13 +163,15 @@ function safeName(name: string): string {
 
 /**
  * Plans the export of the active draft, or of output time [startUs, endUs)
- * of it when a window is given. Throws `MediaError` with a fixed message.
+ * of it when a window is given. A window may play `speed` times faster (a
+ * whole number the render supports for every part in it); zooms and
+ * graphics then move with it. Throws `MediaError` with a fixed message.
  */
 export async function planDraft(
   drafts: DraftReader,
   ffprobe: string,
   projectId: string,
-  window?: { startUs: number; endUs: number },
+  window?: { startUs: number; endUs: number; speed?: number },
 ): Promise<{
   plan: ReturnType<typeof planExport>;
   snapshot: DraftProjectReadResult;
@@ -126,6 +179,10 @@ export async function planDraft(
   zooms: ZoomInterval[];
   /** The draft's graphics in the exported output's own time. */
   graphics: GraphicInterval[];
+  /** The draft's camera layouts in the exported output's own time. */
+  layouts: LayoutInterval[];
+  /** The draft's music and sound effects in the exported output's own time. */
+  sounds: SoundInterval[];
 }> {
   const snapshot = await drafts.snapshotWithProject(projectId);
   const project = snapshot.project;
@@ -146,28 +203,69 @@ export async function planDraft(
     sourceEndUs: clip.source_end_us,
     ...(clip.speed ? { speed: clip.speed } : {}),
   }));
+  const factor = window?.speed ?? 1;
   const allZooms = zoomIntervals(snapshot.draft.timeline.zooms ?? [], mapped);
   const zooms = window
-    ? windowZoomIntervals(allZooms, window.startUs, window.endUs)
+    ? windowZoomIntervals(allZooms, window.startUs, window.endUs).map(
+        (interval) => ({
+          ...interval,
+          startUs: Math.floor(interval.startUs / factor),
+          endUs: Math.floor(interval.endUs / factor),
+        }),
+      )
     : allZooms;
-  const allGraphics = graphicIntervals(
-    snapshot.draft.timeline.graphics ?? [],
-    mapped,
-    snapshot.draft.timeline.duration_us,
-  );
+  // Transitions are drawn like graphics, on top of them.
+  const allGraphics = [
+    ...graphicIntervals(
+      snapshot.draft.timeline.graphics ?? [],
+      mapped,
+      snapshot.draft.timeline.duration_us,
+    ),
+    ...transitionGraphicIntervals(
+      snapshot.draft.timeline.transitions ?? [],
+      mapped,
+      snapshot.draft.timeline.duration_us,
+    ),
+  ].sort((a, b) => a.startUs - b.startUs || a.layer - b.layer);
   const graphics = window
     ? allGraphics
         .filter(
           (item) => item.endUs > window.startUs && item.startUs < window.endUs,
         )
-        .map((item) => ({
-          ...item,
-          startUs: item.startUs - window.startUs,
-          endUs: item.endUs - window.startUs,
-        }))
+        .map((item) => {
+          const startUs = Math.floor((item.startUs - window.startUs) / factor);
+          const endUs = Math.floor((item.endUs - window.startUs) / factor);
+          // A transition follows the cut it hides; a graphic keeps the time
+          // it is on screen, so its animation is not cut short.
+          return {
+            ...item,
+            startUs,
+            endUs: item.graphicId.startsWith("transition-")
+              ? endUs
+              : Math.min(
+                  Math.floor((window.endUs - window.startUs) / factor),
+                  startUs + (item.endUs - item.startUs),
+                ),
+          };
+        })
     : allGraphics;
+  const allLayouts = layoutIntervals(
+    snapshot.draft.timeline.layouts ?? [],
+    mapped,
+  );
+  const layouts = window
+    ? windowLayoutIntervals(allLayouts, window.startUs, window.endUs).map(
+        (interval) => ({
+          ...interval,
+          startUs: Math.floor(interval.startUs / factor),
+          moveUs: Math.floor(interval.moveUs / factor),
+        }),
+      )
+    : allLayouts;
   const clips = window
-    ? draftWindowClips(mapped, window.startUs, window.endUs)
+    ? draftWindowClips(mapped, window.startUs, window.endUs).map((clip) =>
+        factor === 1 ? clip : { ...clip, speed: (clip.speed ?? 1) * factor },
+      )
     : ordered.map((clip) => ({
         sourceId: clip.source_id,
         sourceStartUs: clip.source_start_us,
@@ -196,7 +294,23 @@ export async function planDraft(
       ),
     });
   }
-  return { plan: planExport(clips, exportSources), snapshot, zooms, graphics };
+  // Sound layers are mixed into whole-draft exports; a picture or a short
+  // clip of a window of the draft carries none.
+  const sounds = window
+    ? []
+    : soundIntervals(
+        snapshot.draft.timeline.sounds ?? [],
+        mapped,
+        snapshot.draft.timeline.duration_us,
+      );
+  return {
+    plan: planExport(clips, exportSources),
+    snapshot,
+    zooms,
+    graphics,
+    layouts,
+    sounds,
+  };
 }
 
 /**
@@ -223,6 +337,16 @@ function composition(
       pixelFormat: video.pixelFormat,
     },
   };
+}
+
+/** The folder's own name for the Done screen, never its path. */
+export function folderLabel(file: string): string {
+  const directory = path.dirname(file);
+  return (
+    path.basename(directory) ||
+    path.parse(directory).root.replace(/[\\/]+$/u, "") ||
+    "this computer"
+  );
 }
 
 /**
@@ -278,7 +402,24 @@ export class DesktopExports {
       this.fail(projectId, profile, error);
       return this.get(projectId);
     }
-    const { plan, snapshot, zooms, graphics } = draft;
+    const { plan, snapshot, zooms, graphics, layouts, sounds } = draft;
+    // The camera that goes with the layouts' recording, found before the
+    // save dialog so a missing camera file stops the export early.
+    let camera: Job["camera"] = null;
+    if (layouts.length) {
+      const layoutSource = (snapshot.draft.timeline.layouts ?? []).find(
+        (item) => item.kind !== "screen",
+      )?.source_id;
+      if (layoutSource && this.options.camera) {
+        try {
+          const found = await this.options.camera(projectId, layoutSource);
+          if (found) camera = { sourceId: layoutSource, source: found };
+        } catch (error) {
+          this.fail(projectId, profile, error);
+          return this.get(projectId);
+        }
+      }
+    }
     const project = snapshot.project;
     const extension = profile === "lossless_master" ? ".mkv" : ".mp4";
     const suffix = profile === "lossless_master" ? "master" : "share";
@@ -311,12 +452,50 @@ export class DesktopExports {
     const audio =
       (await this.options.audio?.(projectId).catch(() => null)) ??
       defaultAudioSettings;
+    // Music and effects are fixed when the export starts too; each file is
+    // checked against the hash its layer names before anything is rendered.
+    const soundLayers: SoundMixLayer[] = [];
+    try {
+      for (const sound of sounds) {
+        if (!this.options.soundFile)
+          throw new MediaError("UNSUPPORTED_PROFILE", exportUnsupported[19]);
+        soundLayers.push({
+          path: await this.options.soundFile(
+            projectId,
+            sound.assetId,
+            sound.assetSha256,
+          ),
+          startUs: sound.startUs,
+          endUs: sound.endUs,
+          assetStartUs: sound.assetStartUs,
+          gainDb: sound.gainDb,
+          fadeInUs: sound.fadeInUs,
+          fadeOutUs: sound.fadeOutUs,
+          duckDb: sound.duckDb,
+          loop: sound.loop,
+        });
+      }
+    } catch (error) {
+      this.fail(
+        projectId,
+        profile,
+        error instanceof MediaError
+          ? error
+          : new MediaError("UNSUPPORTED_PROFILE", exportUnsupported[19], {
+              cause: error,
+            }),
+      );
+      return this.get(projectId);
+    }
     const controller = new AbortController();
     const job: Job = {
       audio,
       captions: captions && captions.cues.length ? captions : null,
       zooms,
       graphics,
+      layouts,
+      camera,
+      sounds: soundLayers,
       projectId,
       profile,
       controller,
@@ -333,6 +512,12 @@ export class DesktopExports {
       result: null,
       message: null,
     });
+    // Remember where the export writes, so staging folders an interrupted
+    // export leaves behind can be swept at the next start.
+    void recordExportFolder(
+      this.options.recordRoot,
+      path.dirname(job.outputPath),
+    ).catch(() => undefined);
     void this.run(job, plan, replace);
     return this.get(projectId);
   }
@@ -345,14 +530,43 @@ export class DesktopExports {
     let evidence: ExportEvidence;
     let scratch: string | null = null;
     try {
-      // Graphics are rendered first, then composed over the frames.
+      // Graphics and the camera are rendered first, then composed over the
+      // frames: the camera goes under the graphics.
       let graphics: GraphicsTrack | null = null;
-      if (job.graphics.length) {
-        if (!this.options.renderGraphics)
-          throw new MediaError("UNSUPPORTED_PROFILE", exportIssues.failed);
+      if (job.camera || job.graphics.length)
         scratch = await mkdtemp(
           path.join(tmpdir(), "ai-video-editor-graphics-"),
         );
+      let cameraTrack: GraphicsTrack | null = null;
+      if (job.camera && scratch) {
+        const cameraScratch = scratch;
+        cameraTrack = await renderCameraTrack({
+          ffmpeg: this.options.ffmpeg ?? "ffmpeg",
+          directory: cameraScratch,
+          signal: job.controller.signal,
+          camera: job.camera.source,
+          cameraSourceId: job.camera.sourceId,
+          canvas: {
+            width: plan.format.video.width,
+            height: plan.format.video.height,
+          },
+          frameRate: plan.format.video.frameRate,
+          clips: plan.clips,
+          frameCount: plan.frameCount,
+          intervals: job.layouts,
+          onProgress: (fraction) => {
+            if (this.job !== job || this.view.status !== "running") return;
+            this.set({
+              ...this.view,
+              phase: "rendering",
+              fraction: Math.round(fraction * 250) / 1000,
+            });
+          },
+        });
+      }
+      if (job.graphics.length) {
+        if (!this.options.renderGraphics || !scratch)
+          throw new MediaError("UNSUPPORTED_PROFILE", exportIssues.failed);
         graphics = await this.options.renderGraphics({
           intervals: job.graphics,
           width: plan.format.video.width,
@@ -372,6 +586,10 @@ export class DesktopExports {
           },
         });
       }
+      if (cameraTrack && cameraTrack.segments.length)
+        graphics = {
+          segments: [...cameraTrack.segments, ...(graphics?.segments ?? [])],
+        };
       const share = graphics ? 0.75 : 1;
       evidence = await exportDraft({
         plan,
@@ -384,6 +602,8 @@ export class DesktopExports {
         },
         signal: job.controller.signal,
         audioCleanup: job.audio,
+        joinFadeMs: 8,
+        ...(job.sounds.length ? { sounds: { layers: job.sounds } } : {}),
         ...composition(job, plan.format.video, graphics),
         onProgress: (progress) => {
           if (this.job !== job || this.view.status !== "running") return;
@@ -426,6 +646,10 @@ export class DesktopExports {
     if (this.job !== job) return;
     this.job = null;
     this.lastOutput = job.outputPath;
+    // A success replaces the note of an earlier failure.
+    void rm(path.join(this.options.recordRoot, "last-failure.json"), {
+      force: true,
+    }).catch(() => undefined);
     this.set({
       status: "completed",
       projectId: job.projectId,
@@ -434,6 +658,7 @@ export class DesktopExports {
       fraction: null,
       result: {
         fileName: path.basename(job.outputPath),
+        folderName: folderLabel(job.outputPath),
         profile: job.profile,
         durationUs: evidence.durationUs,
         frameCount: evidence.frameCount,
@@ -508,6 +733,29 @@ export class DesktopExports {
                 ? error.message
                 : exportIssues.failed
         : exportIssues.failed;
+    // The technical reason stays private (never shown to the renderer), for
+    // diagnosing a failure the user only sees as a plain message.
+    if (message !== exportIssues.cancelled)
+      void mkdir(this.options.recordRoot, { recursive: true, mode: 0o700 })
+        .then(() =>
+          writeFile(
+            path.join(this.options.recordRoot, "last-failure.json"),
+            JSON.stringify({
+              at: new Date().toISOString(),
+              profile,
+              name: error instanceof Error ? error.name : typeof error,
+              code: error instanceof MediaError ? error.code : null,
+              detail: redactPaths(describe(error), [
+                {
+                  path: path.dirname(this.options.recordRoot),
+                  as: "<app data>",
+                },
+              ]).slice(0, 12_000),
+            }),
+            { mode: 0o600 },
+          ),
+        )
+        .catch(() => undefined);
     this.set({
       status: "failed",
       projectId,

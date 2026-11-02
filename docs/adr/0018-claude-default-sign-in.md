@@ -1,6 +1,6 @@
 # ADR 0018: Claude account sign-in as the default AI connection
 
-- Status: Accepted user requirement; implementation decided 2026-10-04 (see Decision); signed-in native acceptance pending
+- Status: Accepted user requirement; implementation decided 2026-10-04 (see Decision); real signed-in edit/Undo/Stop/restart passed 2026-10-18; completion through the app's own sign-in button pending
 - Date: 2026-10-04
 - Scope: Default app onboarding/AI connection and continuation in Claude
 
@@ -31,4 +31,34 @@ The editor runs the user's own installed, unmodified Claude Code CLI. Anthropic'
 
 Details, evidence and remaining gates are in `docs/48_CLAUDE_CONNECTION.md`.
 
-Addendum (2026-10-07): the guarded editor inventory grew from nine to twelve tools with `zoom.set`, `zoom.remove` and `speed.set`; the init inventory check derives from the same shared tool-name list. A fresh real-CLI init probe of the larger inventory is pending.
+Addendum (2026-10-07): the guarded editor inventory grew from nine to twelve tools with `zoom.set`, `zoom.remove` and `speed.set`; the init inventory check derives from the same shared tool-name list. A real-CLI init probe of the larger inventory later passed (see the 2026-10-15 addendum).
+
+Addendum (2026-10-15): `graphics.set` and `graphics.remove` raise the inventory to fourteen tools; the init check and allowlist still derive from the shared list. Signed-out Claude Code 2.1.292 on Windows reported exactly those fourteen tools through the production turn code. `captions.configure` and `audio.configure` later raised it to sixteen; a fresh signed-out real-CLI probe confirmed the sixteen-tool inventory. The read-only `media.get_frames` then raised the Claude inventory to seventeen (the API providers keep sixteen); a signed-out real-CLI probe confirmed the seventeen-tool inventory.
+
+Addendum (2026-10-18): with the user signed in (the user completed Anthropic's sign-in for a private guest profile by pasting the code into the waiting, unmodified CLI themselves; no code or credential passed through the app or the agent), the packaged app on Claude Code 2.1.302 made a real Claude split during the turn, shared manual Undo reversed it, Stop left the draft unchanged and the history survived a restart. The first attempt found that Claude Code passes an untyped constant such as `"schema_version": "1.0"` as the number 1, so every editor tool rejected its calls; every constant and choice in the tool schemas now declares `type: "string"`, with a regression test.
+
+Addendum (2026-10-18): ADR 0021 replaces the "built-in tools disabled" turn design. Turns now run in a per-project workspace in Claude Code's restricted mode with the confined `Read`, `Write`, `Edit`, `Glob`, `Grep` and `Task` tools and two read-only helper agents; command execution and web access stay off, and the timeline still changes only through the guarded editor tools. Turns need Claude Code 2.1.302 or later.
+
+Addendum (2026-10-18): the Claude-only `composition.check` (ADR 0021) raises Claude's editor inventory to eighteen tools; Codex keeps seventeen and the API providers sixteen. The init check and allowlist derive from the shared Claude tool list. A real-CLI init with the eighteen tools is still to be confirmed.
+
+Addendum (2026-10-18): following the user's direction that the rough cut runs on Haiku and production on Opus, Settings has two Claude model choices. A fresh production choice is the catalog's Opus model when offered (otherwise the account-recommended `default`, as before), and the rough cut (Magic Edit) defaults to Haiku when offered, otherwise the production model. Both are explicit, remembered and revalidated against the live catalog; IPC adds `claude:select-rough-cut` and the view's `roughCutSelection`.
+
+Addendum (2026-10-19): at the user's direction the fresh production choice is Sonnet, not Opus, when the account offers it (otherwise the account-recommended `default`); the rough cut stays on Haiku. Opus remains selectable in Settings. Sonnet is chosen by catalog name because the `default` entry can itself resolve to Opus. Remembered explicit choices are unchanged.
+
+Addendum (2026-10-24): ADR 0023 adds the Claude-only `sound.list`, `sound.set` and `sound.remove`, raising Claude's editor inventory to twenty-one tools (Codex keeps seventeen, the API providers sixteen). The init check and allowlist still derive from the shared Claude tool list; a real-CLI init with the twenty-one tools is still to be confirmed.
+
+Addendum (2026-10-25): ADR 0025 adds `transition.set` and `transition.remove` to the shared tool list, raising Claude's editor inventory to twenty-three tools (Codex nineteen, the API providers eighteen). The init check and allowlist still derive from the shared Claude tool list; a real-CLI init with the twenty-three tools is still to be confirmed.
+
+Addendum (2026-10-25): the Claude-only `shorts.propose` (docs/49) raises Claude's editor inventory to twenty-four tools (Codex nineteen, the API providers eighteen). A clip-picking run is a Claude run kind that main restricts to reading, looking and this tool. The init check and allowlist still derive from the shared Claude tool list; a real-CLI init with the twenty-four tools is still to be confirmed.
+
+Addendum (2026-10-25, later): Confirmed 2026-10-25: with the user's signed-in private guest profile, the packaged app on Claude Code 2.1.302 initialized with the full twenty-four-tool inventory (including `transition.set`, `transition.remove` and `shorts.propose`) and a real Claude edit committed during its turn with origin `claude` (`tests/native/claude-connection.test.ts --require-signed-in`).
+
+Addendum (2026-10-25, later): the Claude-only `zoom.targets` (ADR 0027) raises Claude's editor inventory to twenty-five tools (Codex nineteen, the API providers eighteen). A real-CLI init with the twenty-five tools is still to be confirmed.
+
+Addendum (2026-10-25, later still): the Claude-only `graphics.component` (ADR 0028) raises Claude's editor inventory to twenty-six tools (Codex nineteen, the API providers eighteen). A real-CLI init with the twenty-six tools is still to be confirmed.
+
+Addendum (2026-10-25, camera): the Claude-only `layout.set`, `layout.remove` and `layout.plan` (ADR 0029) raise Claude's editor inventory to twenty-nine tools (Codex nineteen, the API providers eighteen). A real-CLI init with the twenty-nine tools is still to be confirmed.
+
+Addendum (2026-10-25, confirmed): with the signed-in private guest profile the packaged app on Claude Code 2.1.302 initialised with the full twenty-nine tools and a real Claude called `layout_plan` and applied `layout_set` changes (tests/native/camera-claude.test.ts); the real-CLI init check is now confirmed for twenty-nine tools.
+
+Addendum (2026-11-01): ADR 0030 adds `app.start_magic_edit`, `app.stop_edit` and `app.go_to_step` to the shared tool list and the Claude-only `app.start_edit_my_video`, raising Claude's editor inventory to thirty-three tools (Codex twenty-two, the API providers twenty-one). The init check and allowlist still derive from the shared Claude tool list; a real-CLI init with the thirty-three tools is still to be confirmed. Claude Code older than the required version no longer blocks Magic Edit's deterministic tightening (ADR 0030).

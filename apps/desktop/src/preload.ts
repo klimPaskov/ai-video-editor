@@ -3,6 +3,7 @@ import {
   assertCodexSelection,
 } from "../../../packages/domain/src/codex-view.ts";
 import {
+  assertClaudeFullEditRequest,
   assertClaudeSelection,
   assertClaudeThreadProjectRequest,
   assertClaudeThreadSendRequest,
@@ -27,6 +28,11 @@ import {
   assertTranscriptionProjectView,
   assertTranscriptionStopRequest,
 } from "../../../packages/domain/src/transcription.ts";
+import {
+  assertEditSummaryProjectRequest,
+  assertEditSummaryUndoRequest,
+  assertEditSummaryView,
+} from "../../../packages/domain/src/edit-summary.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import {
   assertMagicWandProjectRequest,
@@ -44,9 +50,23 @@ import {
   assertAudioSettingsUpdate,
 } from "../../../packages/domain/src/audio-settings.ts";
 import {
+  assertSoundAddRequest,
+  assertSoundRemoveRequest,
+  assertSoundUpdateRequest,
+  assertSoundsRequest,
+  assertSoundsView,
+} from "../../../packages/domain/src/sound-view.ts";
+import {
+  assertCameraOffsetRequest,
+  assertCameraRequest,
+  assertCameraView,
+} from "../../../packages/domain/src/camera-view.ts";
+import {
   assertShortClipRequest,
   assertShortClipsView,
   assertShortExportRequest,
+  assertShortExportAllRequest,
+  assertShortLibraryRequest,
   assertShortProjectRequest,
 } from "../../../packages/domain/src/short-clips-view.ts";
 import {
@@ -72,6 +92,8 @@ import {
   assertProjectDraftIntegrityView,
   assertProjectFrameRequest,
   assertProjectFrameResult,
+  assertProjectStripRequest,
+  assertProjectStripResult,
   assertManualTrimRequest,
   assertManualSplitRequest,
   assertManualRangeCutRequest,
@@ -80,6 +102,10 @@ import {
   assertManualSpeedRequest,
   assertManualGraphicRequest,
   assertManualGraphicRemoveRequest,
+  assertManualLayoutRemoveRequest,
+  assertManualLayoutRequest,
+  assertManualTransitionRequest,
+  assertManualTransitionRemoveRequest,
   assertManualRestoreRangeRequest,
   assertManualTranscriptCorrectionRequest,
   assertManualTranscriptCutRequest,
@@ -88,6 +114,7 @@ import {
   assertProjectRequest,
   assertTwoSourceProjectRequest,
   assertProjectNavigation,
+  assertProjectRename,
   assertProjectView,
   assertProjectList,
 } from "../../../packages/domain/src/project-view.ts";
@@ -216,6 +243,10 @@ const bridge: DesktopBridge = {
     assertClaudeSelection(value);
     return invoke(channels.claudeSelect, value, assertClaudeView);
   },
+  selectClaudeRoughCutModel: (value) => {
+    assertClaudeSelection(value);
+    return invoke(channels.claudeSelectRoughCut, value, assertClaudeView);
+  },
   openClaudeInstallGuide: () =>
     invoke(channels.claudeInstallGuide, undefined, (value) => {
       if (value !== null) throw new Error("Invalid install guide response");
@@ -239,6 +270,18 @@ const bridge: DesktopBridge = {
       request,
       assertClaudeThreadView,
     );
+  },
+  startClaudeFullEdit: (request) => {
+    assertClaudeFullEditRequest(request);
+    return invoke(
+      channels.claudeFullEditStart,
+      request,
+      assertClaudeThreadView,
+    );
+  },
+  undoClaudeFullEdit: (request) => {
+    assertClaudeThreadProjectRequest(request);
+    return invoke(channels.claudeFullEditUndo, request, assertClaudeThreadView);
   },
   getCodex: () => invoke(channels.codexGet, undefined, assertCodexView),
   reconnectCodex: () =>
@@ -298,6 +341,54 @@ const bridge: DesktopBridge = {
       assertProjectDraftView,
     );
   },
+  applyManualLayout: (request) => {
+    assertManualLayoutRequest(request);
+    return invoke(
+      channels.projectManualLayout,
+      request,
+      assertProjectDraftView,
+    );
+  },
+  removeManualLayout: (request) => {
+    assertManualLayoutRemoveRequest(request);
+    return invoke(
+      channels.projectManualLayoutRemove,
+      request,
+      assertProjectDraftView,
+    );
+  },
+  getCamera: (request) => {
+    assertCameraRequest(request);
+    return invoke(channels.cameraGet, request, assertCameraView);
+  },
+  chooseCamera: (request) => {
+    assertCameraRequest(request);
+    return invoke(channels.cameraChoose, request, assertCameraView);
+  },
+  setCameraOffset: (request) => {
+    assertCameraOffsetRequest(request);
+    return invoke(channels.cameraOffset, request, assertCameraView);
+  },
+  removeCamera: (request) => {
+    assertCameraRequest(request);
+    return invoke(channels.cameraRemove, request, assertCameraView);
+  },
+  applyManualTransition: (request) => {
+    assertManualTransitionRequest(request);
+    return invoke(
+      channels.projectManualTransition,
+      request,
+      assertProjectDraftView,
+    );
+  },
+  removeManualTransition: (request) => {
+    assertManualTransitionRemoveRequest(request);
+    return invoke(
+      channels.projectManualTransitionRemove,
+      request,
+      assertProjectDraftView,
+    );
+  },
   applyManualSpeed: (request) => {
     assertManualSpeedRequest(request);
     return invoke(channels.projectManualSpeed, request, assertProjectDraftView);
@@ -322,6 +413,22 @@ const bridge: DesktopBridge = {
     assertAudioSettingsUpdate(request);
     return invoke(channels.audioSet, request, assertAudioSettings);
   },
+  getSounds: (request) => {
+    assertSoundsRequest(request);
+    return invoke(channels.soundsGet, request, assertSoundsView);
+  },
+  addSound: (request) => {
+    assertSoundAddRequest(request);
+    return invoke(channels.soundsAdd, request, assertSoundsView);
+  },
+  updateSound: (request) => {
+    assertSoundUpdateRequest(request);
+    return invoke(channels.soundsUpdate, request, assertSoundsView);
+  },
+  removeSound: (request) => {
+    assertSoundRemoveRequest(request);
+    return invoke(channels.soundsRemove, request, assertSoundsView);
+  },
   getShortClips: (request) => {
     assertShortProjectRequest(request);
     return invoke(channels.shortsGet, request, assertShortClipsView);
@@ -341,6 +448,22 @@ const bridge: DesktopBridge = {
   cancelShortClip: (request) => {
     assertShortProjectRequest(request);
     return invoke(channels.shortsCancel, request, assertShortClipsView);
+  },
+  exportAllShortClips: (request) => {
+    assertShortExportAllRequest(request);
+    return invoke(channels.shortsExportAll, request, assertShortClipsView);
+  },
+  revealShortClip: (request) => {
+    assertShortLibraryRequest(request);
+    return invoke(channels.shortsReveal, request, assertShortClipsView);
+  },
+  forgetShortClip: (request) => {
+    assertShortLibraryRequest(request);
+    return invoke(channels.shortsForget, request, assertShortClipsView);
+  },
+  pickShortClips: (request) => {
+    assertShortProjectRequest(request);
+    return invoke(channels.shortsPick, request, assertShortClipsView);
   },
   getCaptionSettings: (request) => {
     assertCaptionSettingsRequest(request);
@@ -452,6 +575,16 @@ const bridge: DesktopBridge = {
     assertProjectNavigation(request);
     return invoke(channels.projectNavigate, request, assertProjectView);
   },
+  renameProject: (request) => {
+    assertProjectRename(request);
+    return invoke(channels.projectRename, request, assertProjectView);
+  },
+  deleteProject: (request) => {
+    assertProjectRequest(request);
+    return invoke(channels.projectDelete, request, (value) => {
+      if (value !== null) throw new Error("Invalid response");
+    });
+  },
   verifyDraftIntegrity: (request) => {
     assertProjectRequest(request);
     return invoke(
@@ -460,9 +593,25 @@ const bridge: DesktopBridge = {
       assertProjectDraftIntegrityView,
     );
   },
+  getEditSummary: (request) => {
+    assertEditSummaryProjectRequest(request);
+    return invoke(channels.editSummaryGet, request, assertEditSummaryView);
+  },
+  undoEditSummary: (request) => {
+    assertEditSummaryUndoRequest(request);
+    return invoke(channels.editSummaryUndo, request, assertProjectDraftView);
+  },
+  putBackEditSummary: (request) => {
+    assertEditSummaryProjectRequest(request);
+    return invoke(channels.editSummaryPutBack, request, assertProjectDraftView);
+  },
   readProjectFrame: (request) => {
     assertProjectFrameRequest(request);
     return invoke(channels.projectFrame, request, assertProjectFrameResult);
+  },
+  readProjectStrip: (request) => {
+    assertProjectStripRequest(request);
+    return invoke(channels.projectStrip, request, assertProjectStripResult);
   },
   applyManualTrim: (request) => {
     assertManualTrimRequest(request);
@@ -521,6 +670,16 @@ const bridge: DesktopBridge = {
     ipcRenderer.on(channels.projectDraftChanged, receive);
     return () =>
       ipcRenderer.removeListener(channels.projectDraftChanged, receive);
+  },
+  onProjectStageChanged: (listener) => {
+    if (typeof listener !== "function")
+      throw new Error("Invalid project listener");
+    const receive = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      listener(reply(value, assertProjectView));
+    };
+    ipcRenderer.on(channels.projectStageChanged, receive);
+    return () =>
+      ipcRenderer.removeListener(channels.projectStageChanged, receive);
   },
   getPreferences: () =>
     invoke(channels.preferencesGet, undefined, assertPreferences),

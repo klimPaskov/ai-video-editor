@@ -32,6 +32,7 @@ test("export views reject paths, raw errors and inconsistent states", () => {
     fraction: null,
     result: {
       fileName: "Talk master.mkv",
+      folderName: "Videos",
       profile: "lossless_master",
       durationUs: 1_000_000,
       frameCount: 30,

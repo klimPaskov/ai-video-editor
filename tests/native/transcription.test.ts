@@ -12,6 +12,7 @@ import {
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { _electron, expect } from "playwright/test";
+import { openDisclosures } from "./disclosures.ts";
 import { assertNativeTestEnvironment } from "../../scripts/native-test-environment.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
 import { encodeVerifiedMaster } from "../../packages/media-engine/src/lossless.ts";
@@ -143,6 +144,7 @@ const electron = await _electron.launch({
 });
 try {
   const page = await electron.firstWindow();
+  await openDisclosures(page);
   assert.equal(page.url(), "ai-video-editor://app/index.html");
   assert.equal(await electron.evaluate(({ app }) => app.isPackaged), true);
   assert.ok(
@@ -163,14 +165,14 @@ try {
   ).toBeVisible();
   await page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true })
+    .getByRole("button", { name: "Magic Edit", exact: true })
     .click();
   const autoEdit = page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true });
+    .getByRole("button", { name: "Magic Edit", exact: true });
   await expect(autoEdit).toHaveAttribute("aria-current", "step");
   await expect(
-    page.getByText(/First use downloads about 76 MiB/u),
+    page.getByText(/speech model \(about 76 MB\) is downloaded/u),
   ).toBeVisible();
   const userData = await electron.evaluate(({ app }) =>
     app.getPath("userData"),
@@ -328,7 +330,7 @@ try {
   const firstWord = firstTranscript.segments[0]!.words[0]!;
   await page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Edit", exact: true })
+    .getByRole("button", { name: "Refine", exact: true })
     .click();
   await expect(page.locator("#transcript-edit-panel")).toBeVisible();
   await page.locator("#transcript-edit-details summary").click();
@@ -503,7 +505,7 @@ try {
   );
   await page
     .getByRole("navigation", { name: "Project stages" })
-    .getByRole("button", { name: "Auto Edit", exact: true })
+    .getByRole("button", { name: "Magic Edit", exact: true })
     .click();
   const repeatedCompletedStart = await page.evaluate(async (id) => {
     const reply = await window.desktop.startTranscription({

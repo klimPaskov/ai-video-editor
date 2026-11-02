@@ -21,7 +21,7 @@ import {
 } from "node:path";
 import { createHash } from "node:crypto";
 import { createPackage, extractAll } from "@electron/asar";
-import { _electron, expect } from "playwright/test";
+import { _electron, expect as baseExpect } from "playwright/test";
 import type { ElectronApplication } from "playwright/test";
 import type { DesktopBridge } from "../../apps/desktop/src/bridge.ts";
 import { MediaLibrary } from "../../packages/media-engine/src/library.ts";
@@ -38,6 +38,8 @@ assert.ok(process.getuid);
 assert.equal(process.getuid(), 1000);
 assert.equal(process.env.DISPLAY, ":99");
 await assertNativeTestEnvironment();
+// Crash recovery in the guest is slow (see crashRenderer); give waits room.
+const expect = baseExpect.configure({ timeout: 90_000 });
 const suppliedExecutable = process.argv[2];
 assert.ok(
   suppliedExecutable && isAbsolute(suppliedExecutable),
@@ -64,7 +66,9 @@ async function crashRenderer(instance: ElectronApplication): Promise<void> {
       (resolve, reject) => {
         const timeout = setTimeout(
           () => reject(new Error("Renderer crash notification timed out")),
-          45_000,
+          // Chromium reports a forced crash only after its crash reporter has
+          // finished, which takes 10 to 60 seconds or more in the guest.
+          240_000,
         );
         contents.once("render-process-gone", (_event, details) => {
           clearTimeout(timeout);
@@ -163,7 +167,7 @@ async function acceptNativeDialog(): Promise<void> {
 
 function exitOf(
   child: ChildProcess,
-  timeoutMs = 15_000,
+  timeoutMs = 60_000,
 ): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
   if (child.exitCode !== null || child.signalCode !== null)
     return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
@@ -292,10 +296,13 @@ try {
     1.5,
   );
   await page.locator(`[data-project-id="${projectId}"]`).click();
-  await page.getByRole("button", { name: "Review", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Review", exact: true }),
-  ).toHaveAttribute("aria-current", "step");
+  // At a large interface size the steps are a list, otherwise buttons.
+  const stepButton = page
+    .locator("#stage-buttons")
+    .getByRole("button", { name: "Export", exact: true });
+  if (await stepButton.isVisible()) await stepButton.click();
+  else await page.locator("#stage-select").selectOption("export");
+  await expect(page.locator("#stage-select")).toHaveValue("export");
   const committedMetadata = await readFile(
     join(created.project.storage.project_root, "project.json"),
   );
@@ -363,9 +370,7 @@ try {
     1.5,
   );
   await page.locator(`[data-project-id="${projectId}"]`).click();
-  await expect(
-    page.getByRole("button", { name: "Review", exact: true }),
-  ).toHaveAttribute("aria-current", "step");
+  await expect(page.locator("#stage-select")).toHaveValue("export");
   assert.deepEqual(await readFile(baselinePath), baseline);
   assert.deepEqual(await readFile(preferencePath), preferences);
   assert.deepEqual(await readFile(managedPath), sourceBytes);
@@ -402,7 +407,7 @@ try {
           const contents = BrowserWindow.getAllWindows()[0]!.webContents;
           if (contents.isCrashed() || contents.isLoading()) return false;
           return contents.executeJavaScript(
-            `Boolean([...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Import video' && button.getClientRects().length))`,
+            `Boolean([...document.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === 'Import video' && button.getClientRects().length))`,
           );
         }),
       { timeout: 30_000 },
@@ -429,12 +434,12 @@ try {
       () =>
         instance.evaluate(({ BrowserWindow }) =>
           BrowserWindow.getAllWindows()[0]!.webContents.executeJavaScript(
-            `document.querySelector('button[aria-current="step"]')?.textContent.trim()`,
+            `document.getElementById('stage-select').value`,
           ),
         ),
       { timeout: 30_000 },
     )
-    .toBe("Review");
+    .toBe("export");
   assert.deepEqual(await readFile(baselinePath), baseline);
   assert.deepEqual(await readFile(preferencePath), preferences);
   assert.deepEqual(await readFile(managedPath), sourceBytes);
@@ -514,7 +519,7 @@ try {
       timeout: 30_000,
     });
     application = broken;
-    await nativeDialog("Could not open AI Video Editor", broken);
+    await nativeDialog("Could not open Urushi", broken);
     assert.equal(
       await broken.evaluate(
         ({ BrowserWindow }) => BrowserWindow.getAllWindows().length,
@@ -525,7 +530,7 @@ try {
     // finished its fatal-startup shutdown on a loaded guest. Keep the exact
     // exit-code assertion while allowing that separate process transition to
     // use the same bound as packaged startup.
-    const failedExit = exitOf(broken.process(), 30_000);
+    const failedExit = exitOf(broken.process(), 90_000);
     await acceptNativeDialog();
     assert.equal((await failedExit).code, 1);
     application = undefined;
