@@ -8797,7 +8797,7 @@
       "description": "A styled overlay that hides a cut, centred on the first frame of the incoming clip, which starts at source moment source_us of source_id. It follows later cuts and is dormant while no cut is there. At most one per cut. It draws like a motion graphic over the video and changes no audio."
     },
     "shortExportAllRequest": {
-      "description": "Exports every clip of the project in one folder chosen through a system dialog, one after another.",
+      "description": "Exports the chosen clips (clip_ids) or, when absent, every clip of the project in one folder chosen through a system dialog, one after another.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -8847,6 +8847,16 @@
             1,
             2
           ]
+        },
+        "clip_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^clip-\\d{1,16}-\\d{1,16}$"
+          }
         }
       }
     },

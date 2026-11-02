@@ -65,9 +65,14 @@ export interface ShortExportOptions {
 export interface ShortExportRequest
   extends ShortClipRequest, ShortExportOptions {}
 
-/** Exports every clip in one folder, one after another. */
+/**
+ * Exports clips in one folder, one after another: the clips named in
+ * `clip_ids` (the ones the user chose in Clips), or every clip when absent.
+ */
 export interface ShortExportAllRequest
-  extends ShortProjectRequest, ShortExportOptions {}
+  extends ShortProjectRequest, ShortExportOptions {
+  clip_ids?: string[];
+}
 
 /** Acts on one entry of the clip library. */
 export interface ShortLibraryRequest extends ShortProjectRequest {
@@ -206,12 +211,32 @@ export function assertShortExportRequest(
 export function assertShortExportAllRequest(
   value: unknown,
 ): asserts value is ShortExportAllRequest {
-  const request = exact(value, ["schema_version", "project_id", ...optionKeys]);
+  const chosen =
+    value !== null &&
+    typeof value === "object" &&
+    Object.hasOwn(value, "clip_ids");
+  const request = exact(value, [
+    "schema_version",
+    "project_id",
+    ...optionKeys,
+    ...(chosen ? ["clip_ids"] : []),
+  ]);
   assertShortProjectRequest({
     schema_version: request.schema_version,
     project_id: request.project_id,
   });
   assertExportOptions(request);
+  if (chosen) {
+    const ids = request.clip_ids;
+    if (
+      !Array.isArray(ids) ||
+      ids.length < 1 ||
+      ids.length > 64 ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => typeof id !== "string" || !clipIdPattern.test(id))
+    )
+      invalid();
+  }
 }
 
 export function assertShortLibraryRequest(

@@ -70,6 +70,9 @@
 
 ## S11 Export
 
+- The step and its Export button stay fully visible with the assistant open (docked beside the page, a slide-over below 1100 px that never covers the action bar).
+- The draft check runs by itself; nothing is shown unless it fails.
+
 - Common options fit without scrolling at normal window size.
 - Destination and overwrite behavior are explicit.
 - Export requires a user action.

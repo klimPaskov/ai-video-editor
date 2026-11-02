@@ -184,6 +184,8 @@ Visible:
 
 Advanced codec settings are collapsed.
 
+Update (2026-11-02, ADR 0031): Export is one centred column, the picture and then the two quality choices side by side; **Export** is in the action bar at the bottom right (accessible name "Export video", because "Export" is also the step's name). The assistant is docked beside the page, so Export and the whole step stay visible and the page scrolls on its own; the draft check runs by itself before an export starts. A finished export goes to Done. Short clips are no longer here (Clips is step 4).
+
 Implemented (2026-10-07): the Export step shows two stacked, selectable quality options with radio dots (Lossless master by default, Smaller file), a one-line note about the choice and Export…; the file name and destination come from the system save dialog. While exporting it shows only progress, Rendering/Verifying and Cancel. Caption sidecars are not available yet.
 
 ## S12: Done (after a finished export; ADR 0031)
@@ -204,7 +206,7 @@ Implemented (2026-10-07): file name, duration, size and "verified lossless" for 
 
 ## S14: short clips (Clips step; ADR 0031)
 
-Its own step between Refine and Export, with **Skip**. The step finds or lets Claude pick self-contained moments, shows them as cards the user selects, and makes the selected clips with the existing short-clip export (docs/49). Skipping never blocks Export.
+Its own step between Refine and Export, with **Skip**. The step shows the picture compactly (Preview on a card plays that moment in it), the two ways to find clips (Find clips, Pick with Claude), "Clip options" (format, framing, captions, title, speed) folded away, and the clips as cards: a picture of the moment, a choice box (new clips start chosen), the title and length, Preview, Discard and Save only this. **Make N clips** (the action bar, right) exports the chosen clips to one folder through `shorts:export-all` with an optional `clip_ids` list (absent means every clip); once a clip is saved the left button reads Continue instead of Skip. Skipping never blocks Export; Done offers Make short clips while none exists.
 
 ## S13: settings
 

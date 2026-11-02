@@ -23,6 +23,10 @@ function clock(us: number): string {
  */
 export function setupShortsPanel(options: {
   preview(startUs: number, endUs: number): void;
+  /** A small picture of the edit at this time, or null. */
+  picture(timeUs: number): Promise<HTMLCanvasElement | null>;
+  /** How many clips are saved, so the step can offer to go on. */
+  saved(count: number): void;
 }): { render(project: ProjectView | undefined, visible: boolean): void } {
   const find = element<HTMLButtonElement>("shorts-find");
   const pick = element<HTMLButtonElement>("shorts-pick");
@@ -45,6 +49,9 @@ export function setupShortsPanel(options: {
   let poll: number | undefined;
   let shown = false;
   let renderKey = "";
+  /** The clips the user wants made; new clips start chosen. */
+  const chosen = new Set<string>();
+  const seen = new Set<string>();
 
   function showError(message: string | null): void {
     error.textContent = message ?? "";
@@ -72,7 +79,15 @@ export function setupShortsPanel(options: {
       view?.status === "none" || !view ? "Find clips" : "Find again";
     const running = view?.job.status === "running";
     const shown = view?.status === "ready" ? view.candidates : [];
-    exportAll.disabled = pending || running || picking || shown.length === 0;
+    for (const candidate of shown)
+      if (!seen.has(candidate.id)) {
+        seen.add(candidate.id);
+        chosen.add(candidate.id);
+      }
+    const count = shown.filter((candidate) => chosen.has(candidate.id)).length;
+    exportAll.textContent = `Make ${count === 1 ? "1 clip" : `${count} clips`}`;
+    exportAll.disabled = pending || running || picking || count === 0;
+    options.saved(view?.library.length ?? 0);
     note.textContent = !view
       ? ""
       : picking
@@ -149,42 +164,52 @@ export function setupShortsPanel(options: {
         const item = document.createElement("li");
         item.className = "short-item";
         item.dataset.clipId = candidate.id;
-        const head = document.createElement("div");
-        head.className = "short-head";
-        const title = document.createElement("strong");
-        title.textContent = candidate.title;
-        const time = document.createElement("span");
-        time.className = "short-time";
-        time.textContent = `${clock(candidate.startUs)}–${clock(candidate.endUs)} · ${Math.round((candidate.endUs - candidate.startUs) / 1_000_000)} s`;
-        head.append(title, time);
-        const reasons = document.createElement("div");
-        reasons.className = "short-reasons";
-        if (candidate.origin === "ai") {
-          const chip = document.createElement("span");
-          chip.className = "short-origin";
-          chip.textContent = "Claude's pick";
-          reasons.append(chip);
-        }
-        for (const reason of candidate.reasons) {
-          const chip = document.createElement("span");
-          chip.textContent = reason;
-          reasons.append(chip);
-        }
-        const excerpt = document.createElement("p");
-        excerpt.className = "short-excerpt";
-        excerpt.textContent = candidate.excerpt;
-        const actions = document.createElement("div");
-        actions.className = "short-actions";
+        item.classList.toggle("chosen", chosen.has(candidate.id));
         const job = view!.job.clipId === candidate.id ? view!.job : null;
+        const seconds = Math.round((candidate.endUs - candidate.startUs) / 1e6);
+        // The picture, with Preview over it and the choice in its corner.
+        const picture = document.createElement("div");
+        picture.className = "short-picture";
+        void options.picture(candidate.startUs + 200_000).then((canvas) => {
+          if (canvas) picture.prepend(canvas);
+        });
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.className = "short-check";
+        check.checked = chosen.has(candidate.id);
+        check.setAttribute("aria-label", `Choose ${candidate.title}`);
+        check.addEventListener("change", () => {
+          if (check.checked) chosen.add(candidate.id);
+          else chosen.delete(candidate.id);
+          draw();
+        });
         const previewButton = document.createElement("button");
         previewButton.type = "button";
-        previewButton.className = "ghost";
+        previewButton.className = "short-preview";
         previewButton.dataset.icon = "play";
-        previewButton.textContent = "Preview";
+        previewButton.textContent = `${clock(candidate.startUs)}–${clock(candidate.endUs)}`;
         previewButton.setAttribute("aria-label", `Preview ${candidate.title}`);
         previewButton.addEventListener("click", () =>
           options.preview(candidate.startUs, candidate.endUs),
         );
+        picture.append(check, previewButton);
+        // Name and length on one line; Claude's pick is marked.
+        const foot = document.createElement("div");
+        foot.className = "short-foot";
+        const title = document.createElement("strong");
+        title.textContent = candidate.title;
+        const time = document.createElement("span");
+        time.className = "short-time";
+        time.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+        foot.append(title, time);
+        const actions = document.createElement("div");
+        actions.className = "short-actions";
+        if (candidate.origin === "ai") {
+          const chip = document.createElement("span");
+          chip.className = "short-origin";
+          chip.textContent = "Claude's pick";
+          actions.append(chip);
+        }
         const discard = document.createElement("button");
         discard.type = "button";
         discard.className = "ghost";
@@ -197,17 +222,16 @@ export function setupShortsPanel(options: {
         );
         const exportButton = document.createElement("button");
         exportButton.type = "button";
-        exportButton.className = "primary";
-        exportButton.dataset.icon = "export";
-        exportButton.textContent = "Export clip";
+        exportButton.className = "ghost";
+        exportButton.textContent = "Save only this";
         exportButton.setAttribute("aria-label", `Export ${candidate.title}`);
         exportButton.disabled = pending || running;
         exportButton.addEventListener(
           "click",
           () => void act("export", candidate.id),
         );
-        actions.append(previewButton, discard, exportButton);
-        item.append(head, reasons, excerpt, actions);
+        actions.append(discard, exportButton);
+        item.append(picture, foot, actions);
         if (job && job.status !== "idle") {
           const status = document.createElement("div");
           status.className = "short-status";
@@ -286,6 +310,9 @@ export function setupShortsPanel(options: {
                 ? window.desktop.exportAllShortClips({
                     ...base,
                     ...exportOptions(),
+                    clip_ids: (view?.status === "ready" ? view.candidates : [])
+                      .filter((candidate) => chosen.has(candidate.id))
+                      .map((candidate) => candidate.id),
                   })
                 : action === "reveal"
                   ? window.desktop.revealShortClip({

@@ -357,24 +357,54 @@ function renderStage(): void {
       ? (["auto_edit", "Continue"] as const)
       : activeProject?.stage === "edit"
         ? (["clips", "Continue"] as const)
-        : activeProject?.stage === "clips"
-          ? (["export", "Skip"] as const)
-          : null;
+        : null;
   element("next-step").hidden = !forward;
   nextStepButton.textContent = forward?.[1] ?? "";
   nextStepButton.disabled = navigating;
   nextStepTarget = forward?.[0];
-  secondaryAction =
-    activeProject?.stage === "edit" && !fullEditor ? openFullEditor : undefined;
-  actionSecondary.hidden = !secondaryAction;
-  actionSecondary.textContent = secondaryAction ? "Open full editor" : "";
+  const stage = activeProject?.stage;
+  const secondary =
+    stage === "edit" && !fullEditor
+      ? ([openFullEditor, "Open full editor"] as const)
+      : stage === "clips"
+        ? ([
+            () => void navigate("export"),
+            clipsSaved > 0 ? "Continue" : "Skip",
+          ] as const)
+        : undefined;
+  secondaryAction = secondary?.[0];
+  actionSecondary.hidden = !secondary;
+  actionSecondary.textContent = secondary?.[1] ?? "";
   actionSecondary.disabled = navigating;
-  actionBar.hidden = fullEditor || !(forward || secondaryAction);
+  // Each step's primary action sits in the bar; the panels show and hide them.
+  element("auto-all-actions").hidden = stage !== "auto_edit";
+  if (stage !== "export") element("export-start").hidden = true;
+  element("shorts-export-all").hidden = stage !== "clips";
+  syncActionBar();
   renderEditTools();
   renderStagePanels();
   renderTranscriptionActions();
   renderTranscriptEditor();
 }
+/** The bar shows while any of its buttons does, and never in the full editor. */
+function syncActionBar(): void {
+  const showing = [...actionBar.querySelectorAll("button")].some((button) => {
+    for (
+      let node: HTMLElement | null = button;
+      node && node !== actionBar;
+      node = node.parentElement
+    )
+      if (node.hidden) return false;
+    return true;
+  });
+  const hidden = fullEditor || !showing;
+  if (actionBar.hidden !== hidden) actionBar.hidden = hidden;
+}
+new MutationObserver(syncActionBar).observe(actionBar, {
+  attributes: true,
+  attributeFilter: ["hidden"],
+  subtree: true,
+});
 function openFullEditor(): void {
   if (activeProject?.stage !== "edit" || navigating) return;
   popovers.closeAll();
@@ -435,7 +465,46 @@ const donePanel = setupDonePanel({
 });
 /** End of a short clip being previewed; playback stops there. */
 let previewEndUs: number | undefined;
+/** How many short clips this project has saved; Clips then offers Continue. */
+let clipsSaved = 0;
 const shortsPanel = setupShortsPanel({
+  saved: (count) => {
+    if (count === clipsSaved) return;
+    clipsSaved = count;
+    renderStage();
+  },
+  picture: async (timeUs) => {
+    const project = activeProject;
+    if (!project) return null;
+    const at = Math.min(
+      Math.max(0, Math.round(timeUs)),
+      Math.max(0, project.timeline.durationUs - 1),
+    );
+    const reply = await window.desktop
+      .readProjectFrame({
+        projectId: project.id,
+        draftId: project.draft.id,
+        baseRevisionId: project.draft.baseRevisionId,
+        expectedSequence: project.draft.sequence,
+        expectedTimelineSha256: project.draft.timelineSha256,
+        timelineTimeUs: at,
+      })
+      .catch(() => null);
+    if (!reply?.ok || reply.value.status !== "ready") return null;
+    const frame = reply.value.frame;
+    const picture = document.createElement("canvas");
+    picture.width = frame.width;
+    picture.height = frame.height;
+    picture.setAttribute("aria-hidden", "true");
+    picture
+      .getContext("2d")
+      ?.putImageData(
+        new ImageData(framePixels(frame.rgbaBase64), frame.width, frame.height),
+        0,
+        0,
+      );
+    return picture;
+  },
   preview: (startUs, endUs) => {
     playback.stop();
     requestFrame(startUs);

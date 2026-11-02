@@ -217,10 +217,10 @@ try {
   await expect(items.first()).toBeVisible({ timeout: 30_000 });
   const found = await items.count();
   const titles = await page
-    .locator("#shorts-list .short-head strong")
+    .locator("#shorts-list .short-foot strong")
     .allTextContents();
   const times = await page
-    .locator("#shorts-list .short-time")
+    .locator("#shorts-list .short-preview")
     .allTextContents();
   result.found = found;
   result.titles = titles;
@@ -229,7 +229,7 @@ try {
 
   step = "preview";
   const first = items.first();
-  const firstTime = (await first.locator(".short-time").textContent())!;
+  const firstTime = (await first.locator(".short-preview").textContent())!;
   const [startText] = firstTime.split("–");
   const [minutes, seconds] = startText!.split(":").map(Number);
   await first.getByRole("button", { name: /^Preview / }).click();
@@ -491,12 +491,12 @@ try {
   step = "discard";
   if (found > 1) {
     const last = items.last();
-    const title = await last.locator(".short-head strong").textContent();
+    const title = await last.locator(".short-foot strong").textContent();
     await last.getByRole("button", { name: /^Discard / }).click();
     await expect(items).toHaveCount(found - 1);
     assert.ok(
       !(
-        await page.locator("#shorts-list .short-head strong").allTextContents()
+        await page.locator("#shorts-list .short-foot strong").allTextContents()
       ).includes(title!),
     );
   }

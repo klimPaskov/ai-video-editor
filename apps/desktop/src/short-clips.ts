@@ -591,7 +591,9 @@ export class DesktopShortClips {
     if (this.busy()) throw new ShortClipError(shortIssues.busy);
     const { stored, words } = await this.current(projectId);
     const candidates = stored.candidates.filter(
-      (item) => !stored.discarded.includes(item.id),
+      (item) =>
+        !stored.discarded.includes(item.id) &&
+        (request.clip_ids === undefined || request.clip_ids.includes(item.id)),
     );
     if (candidates.length === 0) throw new ShortClipError(shortIssues.noClips);
     for (const candidate of candidates)

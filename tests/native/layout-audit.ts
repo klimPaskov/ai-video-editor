@@ -320,7 +320,7 @@ const primaryActions: Record<string, string[]> = {
   record_import: ["#next-step-button"],
   auto_edit: ["#auto-all-refine", "#auto-all-start"],
   edit: ["#next-step-button"],
-  clips: ["#next-step-button"],
+  clips: ["#shorts-export-all", "#action-secondary"],
   export: ["#export-open", "#export-start"],
 };
 

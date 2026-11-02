@@ -83,6 +83,8 @@ export function setupExportPanel(options: {
     running.hidden = !active;
     done.hidden = state !== "completed";
     note.textContent = profileNotes[profileSelect.value as ExportProfileChoice];
+    // The button lives in the action bar; it shows while there is a choice to act on.
+    startButton.hidden = active || state === "completed";
     startButton.disabled = pending;
     profileSelect.disabled = pending;
     for (const card of cards) {

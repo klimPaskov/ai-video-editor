@@ -84,6 +84,11 @@ class DesktopIpcContractTests(unittest.TestCase):
         self.valid({'channel': 'shorts:export-all', 'payload': export_all, 'response': {'ok': True, 'value': view}})
         for wrong in [dict(export_all, folder='/tmp'), dict(export_all, speed=4), dict(export, clip_id=clip['id'])]:
             self.invalid({'channel': 'shorts:export-all', 'payload': wrong, 'response': {'ok': True, 'value': view}})
+        # The clips the user chose in Clips (ADR 0031): a short list of clip ids.
+        self.valid({'channel': 'shorts:export-all', 'payload': dict(export_all, clip_ids=[clip['id']]), 'response': {'ok': True, 'value': view}})
+        for wrong in [dict(export_all, clip_ids=[]), dict(export_all, clip_ids=['../x']), dict(export_all, clip_ids=[clip['id'], clip['id']]),
+                      dict(export_all, clip_ids=clip['id'])]:
+            self.invalid({'channel': 'shorts:export-all', 'payload': wrong, 'response': {'ok': True, 'value': view}})
         saved_request = dict(request, export_id=saved['id'])
         for channel in ['reveal', 'forget']:
             self.valid({'channel': 'shorts:' + channel, 'payload': saved_request, 'response': {'ok': True, 'value': view}})

@@ -24,6 +24,8 @@ The interface follows the Light Canvas reference designs (kept privately in `loc
 
 Deviations from the references, because the real app needs them: the player bar has a Full screen control (Esc leaves it) but no volume control, because the preview plays no audio and such a control would do nothing; the Edit timeline has a thumbnail filmstrip and a time ruler but marks zooms, graphics and transitions as small bars and hatched markers rather than the reference's flag pins; at 820 px and narrower the stepper becomes a list; the Export step has no "Export video" heading or subtitle (the step name already says it, and repeated headings are not shipped), its Short clips is a small disclosure rather than a card row, and the Claude button sits in the app bar rather than as a blue circle in the Edit toolbar.
 
+Update (2026-11-02, ADR 0031): the assistant (and Source details) is docked beside the page. The page makes room and scrolls on its own, so every step, Export included, stays fully visible with the assistant open; the old rule that hid a step's panel while a drawer was open is gone. Below 1100 px wide the drawer becomes a slide-over from the right with its own close button; it ends above the action bar, so the step's primary action is never covered. Every step's one primary action is in the action bar at the bottom of the page (Continue, Edit my video, Make clips, Export); Done has none. The Done screen has no assistant button. Spacing follows a 4/8/12/16/24/32 scale, radius 12 for controls and 20 for cards, three text sizes, one button system (docs/33).
+
 ## Editor layout (earlier text, kept for the tool details)
 
 ### Top bar

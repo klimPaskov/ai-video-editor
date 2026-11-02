@@ -4196,3 +4196,162 @@ button.link-button:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* The action bar holds each step's primary action. */
+#viewer[data-stage="auto_edit"] .action-bar {
+  justify-content: center;
+}
+#viewer[data-stage="auto_edit"] .action-spacer {
+  display: none;
+}
+.auto-all-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+.action-bar > button.primary.large {
+  min-width: 200px;
+}
+
+/* Clips: its own step. The cards are the choice; the bar makes them. */
+#viewer[data-stage="clips"] #timeline-strip {
+  display: none;
+}
+#viewer[data-stage="clips"] .workspace {
+  max-height: 24vh;
+}
+.clips-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.clips-head {
+  text-align: center;
+}
+.clips-head h2 {
+  font-size: var(--text-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.clips-head p {
+  margin-top: var(--space-1);
+  font-size: var(--text-body);
+}
+.shorts {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.shorts-header {
+  justify-content: center;
+}
+.shorts-more {
+  align-self: center;
+}
+.shorts-list {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+.short-item {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 2px solid transparent;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+.short-item.chosen {
+  border-color: var(--accent);
+}
+.short-picture {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  background: var(--surface-3);
+}
+.short-picture canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.short-check {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+button.short-preview {
+  position: absolute;
+  left: var(--space-2);
+  bottom: var(--space-2);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  color: #fff;
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  background: rgb(10 11 16 / 62%);
+  border: 0;
+  border-radius: 999px;
+}
+button.short-preview:hover:not(:disabled) {
+  background: rgb(10 11 16 / 82%);
+}
+.short-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) 0;
+}
+.short-foot strong {
+  min-width: 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+.short-actions {
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-3) var(--space-3);
+}
+.short-actions .short-origin {
+  margin-right: auto;
+  padding-left: var(--space-1);
+  font-size: var(--text-small);
+}
+.short-item > .short-status {
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+/* Export: the picture, then the choices, in one centred column. */
+#viewer[data-stage="export"] .stage-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  max-width: 900px;
+}
+#viewer[data-stage="export"] #timeline-strip {
+  display: none;
+}
+#viewer[data-stage="export"] .workspace {
+  max-height: 44vh;
+}
+.export-actions {
+  padding: var(--space-5);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.quality-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@container page (max-width: 640px) {
+  .quality-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

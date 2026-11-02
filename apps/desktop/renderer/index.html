@@ -412,27 +412,6 @@
                   <p class="auto-all-lead">
                     Cuts, graphics, captions and sound, in one go.
                   </p>
-                  <div class="auto-all-actions">
-                    <button
-                      id="auto-all-start"
-                      class="primary large"
-                      type="button"
-                      data-icon="wand"
-                    >
-                      Edit my video
-                    </button>
-                    <button id="auto-all-stop" type="button" hidden>
-                      Stop
-                    </button>
-                    <button
-                      id="auto-all-refine"
-                      class="primary large"
-                      type="button"
-                      hidden
-                    >
-                      Refine
-                    </button>
-                  </div>
                   <progress
                     id="auto-all-progress"
                     aria-label="Edit progress"
@@ -876,14 +855,6 @@
                     <option value="smaller_mp4">Smaller file</option>
                   </select>
                   <p id="export-profile-note"></p>
-                  <button
-                    id="export-start"
-                    class="primary"
-                    type="button"
-                    data-icon="export"
-                  >
-                    Export…
-                  </button>
                 </div>
                 <div id="export-running" class="export-running" hidden>
                   <progress
@@ -983,9 +954,7 @@
               <section id="clips-actions" class="clips-actions" hidden>
                 <div class="clips-head">
                   <h2 id="clips-title">Short clips from your best moments</h2>
-                  <p class="muted">
-                    Vertical clips for social video. Optional.
-                  </p>
+                  <p class="muted">Pick the ones you want.</p>
                 </div>
                 <div id="shorts-more">
                   <div id="shorts" class="shorts">
@@ -1004,49 +973,47 @@
                       >
                         Pick with Claude
                       </button>
-                      <button
-                        id="shorts-export-all"
-                        type="button"
-                        data-icon="export"
-                      >
-                        Export all
-                      </button>
                     </div>
-                    <div class="shorts-options">
-                      <select id="shorts-format" aria-label="Clip format">
-                        <option value="vertical">Vertical 9:16</option>
-                        <option value="square">Square 1:1</option>
-                        <option value="landscape">Landscape 16:9</option>
-                      </select>
-                      <select id="shorts-framing" aria-label="Clip framing">
-                        <option value="fit">Fit with blurred background</option>
-                        <option value="fill">Fill the frame</option>
-                      </select>
-                      <input
-                        id="shorts-position"
-                        type="range"
-                        min="0"
-                        max="100"
-                        value="50"
-                        aria-label="Crop position"
-                        hidden
-                      />
-                      <label class="switch" for="shorts-captions"
-                        ><input
-                          id="shorts-captions"
-                          type="checkbox"
-                          checked
-                        />Burn in captions</label
-                      >
-                      <label class="switch" for="shorts-title"
-                        ><input id="shorts-title" type="checkbox" />Show
-                        title</label
-                      >
-                      <select id="shorts-speed" aria-label="Clip speed">
-                        <option value="1">Normal speed</option>
-                        <option value="2">2× speed</option>
-                      </select>
-                    </div>
+                    <details class="more shorts-more">
+                      <summary>Clip options</summary>
+                      <div class="shorts-options">
+                        <select id="shorts-format" aria-label="Clip format">
+                          <option value="vertical">Vertical 9:16</option>
+                          <option value="square">Square 1:1</option>
+                          <option value="landscape">Landscape 16:9</option>
+                        </select>
+                        <select id="shorts-framing" aria-label="Clip framing">
+                          <option value="fit">
+                            Fit with blurred background
+                          </option>
+                          <option value="fill">Fill the frame</option>
+                        </select>
+                        <input
+                          id="shorts-position"
+                          type="range"
+                          min="0"
+                          max="100"
+                          value="50"
+                          aria-label="Crop position"
+                          hidden
+                        />
+                        <label class="switch" for="shorts-captions"
+                          ><input
+                            id="shorts-captions"
+                            type="checkbox"
+                            checked
+                          />Burn in captions</label
+                        >
+                        <label class="switch" for="shorts-title"
+                          ><input id="shorts-title" type="checkbox" />Show
+                          title</label
+                        >
+                        <select id="shorts-speed" aria-label="Clip speed">
+                          <option value="1">Normal speed</option>
+                          <option value="2">2× speed</option>
+                        </select>
+                      </div>
+                    </details>
                     <p id="shorts-note" class="muted"></p>
                     <div
                       id="shorts-batch"
@@ -1081,6 +1048,43 @@
               hidden
             ></button>
             <span class="action-spacer"></span>
+            <div id="auto-all-actions" class="auto-all-actions" hidden>
+              <button
+                id="auto-all-start"
+                class="primary large"
+                type="button"
+                data-icon="wand"
+              >
+                Edit my video
+              </button>
+              <button id="auto-all-stop" type="button" hidden>Stop</button>
+              <button
+                id="auto-all-refine"
+                class="primary large"
+                type="button"
+                hidden
+              >
+                Refine
+              </button>
+            </div>
+            <button
+              id="export-start"
+              class="primary large"
+              type="button"
+              data-icon="export"
+              aria-label="Export video"
+              hidden
+            >
+              Export
+            </button>
+            <button
+              id="shorts-export-all"
+              class="primary large"
+              type="button"
+              hidden
+            >
+              Make clips
+            </button>
             <div id="next-step" class="next-step" hidden>
               <button
                 id="next-step-button"
