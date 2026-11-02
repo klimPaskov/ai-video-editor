@@ -227,6 +227,20 @@ export async function auditLayout(page: Page): Promise<LayoutFinding[]> {
     const channels = (
       value: string,
     ): [number, number, number, number] | null => {
+      // A colour made with color-mix() is reported as color(srgb 0.9 0.5 0.2).
+      const mixed = /color\(srgb ([^)]+)\)/u.exec(value);
+      if (mixed) {
+        const parts = mixed[1]!
+          .split(/[ ,/]+/u)
+          .filter(Boolean)
+          .map(Number);
+        return [
+          parts[0]! * 255,
+          parts[1]! * 255,
+          parts[2]! * 255,
+          parts[3] ?? 1,
+        ];
+      }
       const match = /rgba?\(([^)]+)\)/u.exec(value);
       if (!match) return null;
       const parts = match[1]!
