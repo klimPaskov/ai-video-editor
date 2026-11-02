@@ -11,7 +11,7 @@ Changing screen flow, visual hierarchy, design system, editor panels, or empty a
 
 ## Core rules
 
-- Home plus five project steps: Import, Magic Edit, Refine, Review, Export. QA is a screen within Review.
+- Home plus five project steps: Import, Magic Edit, Refine, Clips, Export, then a Done screen after exporting (ADR 0031). Review is gone; Refine is one simple screen (big picture, What Magic Edit did, six tools, Open full editor).
 - One primary action per screen.
 - One tool inspector open at a time.
 - No permanent full feature navigation.
@@ -23,7 +23,7 @@ Changing screen flow, visual hierarchy, design system, editor panels, or empty a
 
 If only a structural draft-integrity check is implemented in Review, show one Check draft integrity action there and report only what main actually revalidated. If the current manual group has a structural checkpoint, say so explicitly; otherwise state that no manual checkpoint was recorded. Clear the result when the committed draft head changes. Do not label the result a full review, semantic speech check, playback, A/V join review, or export readiness.
 
-Hide the Review integrity action while the Source inspector or Codex drawer is open, and clear its transient result on panel changes. Keep the check in the Review stage beside the preview; do not turn it into a persistent status dashboard.
+The draft integrity check runs by itself before an export and shows nothing unless it fails; it has no button and is never a persistent status dashboard. The assistant and Source details are docked beside the page (a slide-over below 1100 px that never covers the action bar); a step's panel is never hidden because they are open.
 
 For a partial Edit tool, put only actionable trim, Split and Undo controls by the current preview position. Show which part or fragment a two-source action targets, disable trim and Split at fragment boundaries or during a save, and retain the single-inspector/drawer rule. Do not add inactive tracks or a fake full tool rail to match a reference image.
 

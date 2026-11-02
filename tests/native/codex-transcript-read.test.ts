@@ -324,7 +324,7 @@ try {
   await page.locator("#assistant-provider").selectOption("codex");
   await expect(page.locator("#codex-context-notice")).toBeVisible();
   await expect(page.locator("#codex-context-notice")).toContainText(
-    "included in later turns",
+    "Your video and audio stay on this device",
   );
   await page
     .getByRole("button", { name: "Open conversation", exact: true })

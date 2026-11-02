@@ -235,7 +235,7 @@ try {
     await expect(page.locator("#claude-sign-in")).toBeVisible();
     await expect(page.locator("#claude-model-settings")).toBeHidden();
     await expect(page.locator("#claude-disclosure")).toContainText(
-      "never receives your password",
+      "never sees your password",
     );
     result.signedOutSettings = true;
     await page.screenshot({ path: join(evidence, "claude-signed-out.png") });

@@ -127,7 +127,7 @@ export function setupDidList(options: {
         what === "putBack"
           ? await window.desktop.putBackEditSummary(request())
           : await window.desktop.undoEditSummary({ ...request(), kind: kind! });
-      if (!reply.ok) options.fail(reply.message);
+      // A refusal reaches the person through the same error line as any edit.
       options.apply(reply);
     } catch {
       options.fail("The change could not be undone. Try again.");

@@ -172,7 +172,7 @@ try {
     .getByRole("button", { name: "Magic Edit", exact: true });
   await expect(autoEdit).toHaveAttribute("aria-current", "step");
   await expect(
-    page.getByText(/First use downloads about 76 MiB/u),
+    page.getByText(/speech model \(about 76 MB\) is downloaded/u),
   ).toBeVisible();
   const userData = await electron.evaluate(({ app }) =>
     app.getPath("userData"),

@@ -37,6 +37,6 @@ Left and Right step one frame; Space plays and pauses.
 
 Open **Transcript** under the player to correct words or to select words and remove them from the edit.
 
-## Review
+## Refine and the full editor
 
-**Review** shows how much was kept and removed. **Verify draft** checks that the edit is consistent before export.
+**Refine** shows what Magic Edit did, with an Undo for each kind of change, and six simple tools. **Open full editor** has every tool. The app checks the edit by itself before it exports.

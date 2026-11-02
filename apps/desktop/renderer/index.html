@@ -9,7 +9,7 @@
   <body>
     <header>
       <span class="brand">
-        <img class="mark" src="logo.png" alt="" width="32" height="32" />
+        <span class="mark" id="brand-mark" aria-hidden="true"></span>
         <span class="brand-name">Urushi</span>
       </span>
       <nav aria-label="Application">
@@ -474,8 +474,8 @@
                     </button>
                   </div>
                   <p id="transcription-disclosure">
-                    First use downloads about 76 MiB of model weights from
-                    Hugging Face. Source audio stays on this device.
+                    The first time, a speech model (about 76 MB) is downloaded.
+                    Your audio stays on this device.
                   </p>
                   <details id="transcript-results" hidden>
                     <summary id="transcript-summary">Transcript</summary>
@@ -1125,27 +1125,23 @@
             <option value="gemini">Gemini API</option>
           </select>
           <p id="claude-context-notice">
-            Claude receives your requests, project and timeline details, the
-            transcript and small pictures of your edit. Earlier messages are
-            included in later turns. Source audio and video stay on this device.
+            Claude sees your project details, the transcript and a few preview
+            frames. Your video and audio stay on this device.
           </p>
           <p id="claude-api-notice" hidden>
-            This sign-in uses Anthropic API billing: each turn can use paid
-            credits.
+            This sign-in is billed to your API account.
           </p>
           <p id="codex-context-notice" hidden>
-            Codex receives your requests, project details and small pictures of
-            your edit. Transcript text may stay in the conversation and be
-            included in later turns. Source audio and video stay on this device.
+            Codex sees your project details, the transcript and a few preview
+            frames. Your video and audio stay on this device.
           </p>
           <p id="codex-thread-status" role="status"></p>
           <div id="codex-thread-messages" aria-live="polite"></div>
           <ul id="codex-thread-activity" aria-label="Assistant activity"></ul>
           <p id="api-turn-notice" hidden>
-            Sending shares your request and timeline details with this provider.
-            Transcript text may stay in the conversation and be included in
-            later turns. Calls can use paid credits; source audio and video stay
-            on this device.
+            The provider sees your project details, the transcript and a few
+            preview frames. Your video and audio stay on this device. Billed to
+            your API account.
           </p>
           <button id="open-codex-thread">Open conversation</button>
           <details id="claude-full-edit" hidden>
@@ -1292,10 +1288,9 @@
           <p id="claude-account" role="status"></p>
           <p id="claude-disclosure">
             Claude runs through Claude Code on this device. You sign in with
-            Anthropic in your browser; this app never receives your password or
-            sign-in token. A turn you start shares your request, timeline
-            details, the transcript and small pictures of your edit. Source
-            audio and video stay on this device.
+            Anthropic in your browser; this app never sees your password. Claude
+            sees your project details, the transcript and a few preview frames.
+            Your video and audio stay on this device.
           </p>
           <div class="codex-actions">
             <button type="button" id="claude-sign-in" hidden>
@@ -1331,10 +1326,8 @@
         <section id="codex-settings" aria-label="Codex account" hidden>
           <p id="codex-account" role="status"></p>
           <p id="codex-disclosure">
-            Codex may receive project details, bounded local transcript pages,
-            timeline state and requested preview frames. Transcript pages may
-            stay in the thread and be included in later turns. Source
-            audio/video stays on this device by default.
+            Codex sees your project details, the transcript and a few preview
+            frames. Your video and audio stay on this device.
           </p>
           <div class="codex-actions">
             <button type="button" id="codex-login" hidden>
@@ -1407,7 +1400,8 @@
           </div>
           <p id="api-provider-error" role="alert" hidden></p>
           <p class="api-provider-disclosure">
-            Requests can use paid API credits. Connecting does not start one.
+            Requests are billed to your API account. Connecting does not start
+            one.
           </p>
         </section>
         <p id="settings-error" role="alert" hidden></p>

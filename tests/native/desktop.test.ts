@@ -343,7 +343,7 @@ try {
   ).toBeVisible();
   await expect(window.locator("#codex-context-notice")).toBeVisible();
   await expect(window.locator("#codex-context-notice")).toContainText(
-    "included in later turns",
+    "Your video and audio stay on this device",
   );
   await expect(window.locator("#api-turn-notice")).toBeHidden();
   await expect(window.locator("#codex-thread-status")).toBeHidden();
@@ -381,7 +381,7 @@ try {
   ).toBeVisible();
   await expect(window.locator("#api-turn-notice")).toBeVisible();
   await expect(window.locator("#api-turn-notice")).toContainText(
-    "included in later turns",
+    "Your video and audio stay on this device",
   );
   await expect(window.locator("#codex-context-notice")).toBeHidden();
   await window.getByRole("button", { name: "Open conversation" }).click();

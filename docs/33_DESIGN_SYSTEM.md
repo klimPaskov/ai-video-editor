@@ -88,3 +88,15 @@ Do not add hero headings, instructional subtitles, permanent Ready or Saved indi
 One icon set in `apps/desktop/renderer/icons.ts`: a 24 px grid with a 3 px margin, a 1.75 stroke, round caps and joins, 1.5 corner radii and outline circles of radius 9; play, pause, stop and record are filled shapes of the same footprint. The Magic Edit step's wand has a sparkle at its tip. Copy is as short as it can be and still useful: a label or one short sentence, never a paragraph of explanation, except where a privacy disclosure must be complete. Step names are Import, Magic Edit, Refine, Review and Export (ADR 0003).
 
 In the Cinematic layout the step's primary action (Continue to Magic Edit, Edit my video, Continue to Export, Export) must always be visible and clickable, with the assistant drawer closed, with a long file name, and with a message banner showing; messages that normally sit in the page flow float over the full-window viewer. `tests/native/layout.test.ts` checks this in every theme and size.
+
+## One scale for every screen and theme (ADR 0031, 2026-11-02)
+
+Themes change only colour tokens; sizes are shared (tokens in `apps/desktop/renderer/style.css`).
+
+- Spacing: 4, 8, 12, 16, 24, 32 px (`--space-1` to `--space-6`).
+- Radius: 12 px for controls (`--radius-control`, also `--radius-sm`), 20 px for cards, panels, dialogs and tiles (`--radius-card`, also `--radius`). One card style: surface colour, the shared shadow, no border. The picture inside a card has a 16 px radius.
+- Type: three sizes, small 13 px, body 15 px and title 24 px (`--text-small`, `--text-body`, `--text-title`), two weights (regular, 600). Two display sizes exist on purpose: the Home headline and the Done title. No all-caps labels and no hero titles elsewhere.
+- Buttons: one primary pill per screen, in the action bar at the bottom right of the step; one quiet secondary (outline pill, at the bottom left of the bar); ghost buttons for the rest; icon buttons 36 px. Icons sit on the 24 px grid with one stroke weight.
+- Layout: each step is one centred column (the picture card, then the step's panel) under the same header and step bar, with the same action bar. Refine is the one two-column step (the picture card and "What Magic Edit did"). The assistant is docked beside the page and becomes a slide-over below 1100 px.
+- The header mark is an inline vector (`brand-mark.ts`, outline from `docs/brand/urushi/urushi-icon.svg`) coloured by `--mark-tile` and `--mark-ink`: gold on a dark tile in Studio Dark and Cinematic, black on an ivory tile in Light Canvas and Paper, the accent colour in a custom theme. The taskbar and installer icons are unchanged. A custom title bar is not part of this change.
+- Copy: short sentences, no jargon. Every assistant connection says the same thing about privacy ("… sees your project details, the transcript and a few preview frames. Your video and audio stay on this device."), plus "Billed to your API account" where that is true.

@@ -29,8 +29,8 @@
   --clip-current: #0f55d4;
   --clip-second: #5b7fb8;
   --clip-text: #ffffff;
-  --radius-sm: 10px;
-  --radius: 14px;
+  --radius-sm: 12px;
+  --radius: 20px;
   --radius-lg: 20px;
   --header: 64px;
   --focus: #1766f0;
@@ -41,7 +41,7 @@
     system-ui,
     -apple-system,
     sans-serif;
-  font-size: 14px;
+  font-size: var(--text-body);
   line-height: 1.45;
   color: var(--text);
   background: var(--bg);
@@ -181,7 +181,7 @@ p {
 }
 h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-body);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -198,7 +198,7 @@ h2 {
 }
 .muted {
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 
 /* Icons */
@@ -332,7 +332,7 @@ textarea::placeholder {
 }
 label {
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 progress {
   appearance: none;
@@ -360,7 +360,7 @@ details[open] > summary {
 }
 [role="alert"] {
   color: var(--danger-text);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 a {
   color: var(--accent-text);
@@ -404,23 +404,6 @@ header {
   font-weight: 600;
   letter-spacing: -0.01em;
 }
-.mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: linear-gradient(135deg, #8f6bff, #4f7cff);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
-  position: relative;
-}
-.mark::after {
-  content: "";
-  position: absolute;
-  left: 8px;
-  top: 6px;
-  border-left: 8px solid #fff;
-  border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent;
-}
 header nav {
   margin-left: auto;
   display: flex;
@@ -454,7 +437,7 @@ main {
   gap: 16px;
   min-height: 96px;
   padding: 20px 24px;
-  font-size: 16px;
+  font-size: var(--text-body);
   font-weight: 600;
   background:
     radial-gradient(120% 140% at 0% 0%, var(--accent-soft), transparent 60%),
@@ -488,7 +471,7 @@ main {
 #home section > h2 {
   margin-bottom: 16px;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -606,7 +589,7 @@ main {
   right: 8px;
   bottom: 8px;
   padding: 2px 8px;
-  font-size: 12px;
+  font-size: var(--text-small);
   font-weight: 500;
   color: #fff;
   background: rgb(10 11 16 / 72%);
@@ -628,7 +611,7 @@ main {
 .card-grid small,
 .media-list small {
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 .media-list {
   display: flex;
@@ -697,12 +680,12 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15px;
+  font-size: var(--text-body);
   font-weight: 600;
 }
 #append-progress {
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 .source-bar-spacer {
   flex: 1;
@@ -719,7 +702,7 @@ details.more > summary {
   padding-top: 6px;
   padding-bottom: 6px;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
   cursor: pointer;
   list-style: none;
 }
@@ -809,7 +792,7 @@ canvas,
   right: 12px;
   margin: 0;
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: var(--text-small);
   color: var(--text);
   background: rgb(10 11 16 / 72%);
   border-radius: 6px;
@@ -862,7 +845,7 @@ dl {
 dt {
   margin-top: 16px;
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 dt:first-child {
   margin-top: 0;
@@ -874,7 +857,7 @@ dd {
 
 /* Assistant */
 #codex-drawer > label {
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 #assistant-provider {
   margin-bottom: 4px;
@@ -885,7 +868,7 @@ dd {
 #api-turn-notice {
   padding: 10px 12px;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--text-small);
   line-height: 1.5;
   background: var(--surface-2);
   border-radius: var(--radius-sm);
@@ -896,7 +879,7 @@ dd {
 }
 #codex-thread-status {
   color: var(--accent-text);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 #claude-full-edit-form {
   display: flex;
@@ -904,7 +887,7 @@ dd {
   gap: 6px;
 }
 #claude-full-edit-form label {
-  font-size: 12px;
+  font-size: var(--text-small);
   color: var(--text-2);
 }
 #claude-full-edit-form button {
@@ -917,7 +900,7 @@ dd {
   justify-content: space-between;
   gap: 8px;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 #full-edit-result[hidden] {
   display: none;
@@ -956,7 +939,7 @@ dd {
   padding: 0;
   list-style: none;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 #codex-thread-activity li::before {
   content: "";
@@ -991,7 +974,7 @@ dd {
 .codex-thread-actions button {
   min-height: 32px;
   padding: 0 12px;
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 
 /* Player bar and timeline */
@@ -1057,13 +1040,13 @@ dd {
 .playback-status {
   flex: none;
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--text-small);
   white-space: nowrap;
 }
 #preview-time {
   flex: none;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1284,7 +1267,7 @@ dd {
 .area-choice button {
   min-height: 32px;
   padding: 0 14px;
-  font-size: 13px;
+  font-size: var(--text-small);
   color: var(--text-2);
   background: transparent;
   border: 0;
@@ -1376,7 +1359,7 @@ dd {
   left: 50%;
   margin: 0;
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: var(--text-small);
   color: #1b1405;
   background: #f4b740;
   border-radius: 6px;
@@ -1418,7 +1401,7 @@ dd {
 }
 .timeline-summary {
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 
 /* Stage panel: the one tool area for the current step */
@@ -1451,7 +1434,7 @@ dd {
 }
 .card-title label {
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--text-body);
 }
 .card-title .icon {
   color: var(--accent-text);
@@ -1490,7 +1473,7 @@ dd {
 #transcription-disclosure,
 #transcription-status {
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 #magic-status {
   color: var(--success);
@@ -1520,7 +1503,7 @@ dd {
 .speech-candidate-unavailable {
   margin-top: 6px;
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 #transcript-content strong {
   display: block;
@@ -1550,7 +1533,7 @@ dd {
   overflow: auto;
 }
 .speech-candidate-source > strong {
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 .speech-candidate-list {
   display: grid;
@@ -1573,7 +1556,7 @@ dd {
 .speech-candidate-related {
   grid-column: 1;
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 .speech-candidate-excerpt {
   color: var(--text-2);
@@ -1590,7 +1573,7 @@ dd {
 }
 .speech-candidate-item button {
   min-height: 30px;
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 
 /* Captions */
@@ -1629,18 +1612,18 @@ dd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 .sound-row input[type="range"] {
   width: 100%;
   accent-color: var(--accent);
 }
 .sound-level {
-  font-size: 12px;
+  font-size: var(--text-small);
   text-align: right;
 }
 .sound-where {
-  font-size: 12px;
+  font-size: var(--text-small);
   text-align: right;
 }
 .switch {
@@ -1648,7 +1631,7 @@ dd {
   align-items: center;
   gap: 8px;
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--text-small);
   cursor: pointer;
 }
 .switch input {
@@ -1735,7 +1718,7 @@ dd {
 #transcript-cut-status {
   margin-top: 8px;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 #transcript-correction-error,
 #transcript-cut-error {
@@ -1753,7 +1736,7 @@ dd {
 .tool {
   min-height: 36px;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: var(--text-small);
   color: var(--text-2);
   background: transparent;
   border-color: transparent;
@@ -1776,7 +1759,7 @@ dd {
 #cut-selection {
   padding: 4px 10px;
   color: var(--accent-text);
-  font-size: 12px;
+  font-size: var(--text-small);
   font-variant-numeric: tabular-nums;
   background: var(--accent-soft);
   border-radius: 999px;
@@ -1872,12 +1855,12 @@ dd {
   box-shadow: inset 0 0 0 4px var(--surface);
 }
 .quality-card strong {
-  font-size: 16px;
+  font-size: var(--text-body);
   font-weight: 600;
 }
 .quality-card span {
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
   font-weight: 400;
 }
 .quality-card[aria-checked="true"],
@@ -1889,7 +1872,7 @@ dd {
   flex: 1 1 100%;
   justify-content: center;
   min-height: 52px;
-  font-size: 17px;
+  font-size: var(--text-body);
   border-radius: 999px;
 }
 #export-profile-note,
@@ -1897,7 +1880,7 @@ dd {
 #export-phase {
   flex-basis: 100%;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 #export-result {
   color: var(--success);
@@ -1962,7 +1945,7 @@ dd {
 .short-time {
   flex: none;
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--text-small);
   font-variant-numeric: tabular-nums;
 }
 .short-reasons {
@@ -1981,7 +1964,7 @@ dd {
   display: -webkit-box;
   overflow: hidden;
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--text-small);
   line-height: 1.5;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -2018,14 +2001,14 @@ dd {
 .short-actions button {
   min-height: 32px;
   padding: 0 12px;
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 .short-status {
   display: flex;
   align-items: center;
   gap: 10px;
   color: var(--success);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 .short-status progress {
   flex: 1;
@@ -2178,7 +2161,7 @@ dialog::backdrop {
 .api-provider-disclosure,
 #api-provider-session-note {
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--text-small);
   line-height: 1.5;
 }
 .codex-actions {
@@ -2209,7 +2192,7 @@ dialog::backdrop {
 #codex-device-code {
   justify-self: start;
   padding: 6px 12px;
-  font-size: 18px;
+  font-size: var(--text-title);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.1em;
   background: var(--surface-2);
@@ -2222,7 +2205,7 @@ dialog::backdrop {
   margin: 0;
   padding-left: 18px;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 .api-provider-check {
   display: flex;
@@ -2245,13 +2228,13 @@ dialog::backdrop {
 .field-label {
   margin-top: 8px;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
   font-weight: 500;
 }
 .field-note {
   margin: 4px 0 0;
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 .choice-grid {
   display: grid;
@@ -2274,7 +2257,7 @@ dialog::backdrop {
 }
 .choice-grid small {
   color: var(--text-3);
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 .choice-grid [aria-checked="true"] {
   background: var(--accent-soft);
@@ -2306,7 +2289,7 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 28px;
+  font-size: var(--text-title);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -2483,7 +2466,7 @@ dialog::backdrop {
 button.large {
   min-height: 48px;
   padding: 0 28px;
-  font-size: 16px;
+  font-size: var(--text-body);
 }
 #auto-all-progress {
   width: 100%;
@@ -2506,7 +2489,7 @@ button {
 button.large {
   min-height: 48px;
   padding: 0 28px;
-  font-size: 16px;
+  font-size: var(--text-body);
 }
 .preview,
 .player-bar,
@@ -2628,7 +2611,7 @@ button.large {
   opacity: 0.9;
 }
 .theme-name {
-  font-size: 12px;
+  font-size: var(--text-small);
   font-weight: 600;
   text-align: center;
 }
@@ -2674,23 +2657,9 @@ header {
 }
 .brand {
   gap: 12px;
-  font-size: 18px;
+  font-size: var(--text-title);
   font-weight: 500;
   letter-spacing: -0.01em;
-}
-.mark {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--accent);
-  box-shadow: none;
-}
-.mark::after {
-  left: 12px;
-  top: 9px;
-  border-left-width: 11px;
-  border-top-width: 7px;
-  border-bottom-width: 7px;
 }
 header nav {
   align-items: center;
@@ -2700,7 +2669,7 @@ header nav .ghost,
 header nav .icon-button {
   min-height: 40px;
   color: var(--text-2);
-  font-size: 15px;
+  font-size: var(--text-body);
   background: transparent;
   border-color: transparent;
 }
@@ -2737,7 +2706,7 @@ header nav .icon-button:hover:not(:disabled) {
   --space-6: 32px;
   --radius-control: 12px;
   --radius-card: 20px;
-  --text-title: 28px;
+  --text-title: 24px;
   --text-body: 15px;
   --text-small: 13px;
   --action-bar-space: 0px;
@@ -3122,7 +3091,7 @@ button.outline:hover:not(:disabled) {
   top: 0;
   padding: 1px var(--space-2);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--text-small);
   line-height: 20px;
   white-space: nowrap;
   background: var(--surface);
@@ -3245,7 +3214,7 @@ button.rtool.unavailable:hover {
   box-shadow: var(--shadow);
 }
 .did-card > h2 {
-  font-size: 20px;
+  font-size: var(--text-title);
   font-weight: 600;
 }
 .did-list {
@@ -3347,7 +3316,7 @@ button.rtool.unavailable:hover {
   padding: var(--space-3) 0 0;
 }
 .full-editor-title {
-  font-size: 20px;
+  font-size: var(--text-title);
   font-weight: 600;
 }
 #viewer[data-editor="full"] {
@@ -3436,7 +3405,7 @@ button.rtool.unavailable:hover {
   text-align: center;
   background: var(--surface);
   border: 0;
-  border-radius: 24px;
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow);
 }
 .action-tile:hover:not(:disabled) {
@@ -3456,19 +3425,19 @@ button.rtool.unavailable:hover {
   stroke-width: 1.5;
 }
 .tile-title {
-  font-size: 28px;
+  font-size: var(--text-title);
   font-weight: 500;
   letter-spacing: -0.01em;
 }
 .tile-sub {
   color: var(--text-2);
-  font-size: 16px;
+  font-size: var(--text-body);
   font-weight: 400;
 }
 #home section > h2 {
   margin: 0 0 20px;
   color: var(--text);
-  font-size: 28px;
+  font-size: var(--text-title);
   font-weight: 500;
   letter-spacing: -0.01em;
   text-transform: none;
@@ -3483,7 +3452,7 @@ button.rtool.unavailable:hover {
   gap: 14px;
   background: var(--surface);
   border: 0;
-  border-radius: 24px;
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow);
 }
 .card-grid .thumb {
@@ -3493,18 +3462,18 @@ button.rtool.unavailable:hover {
   padding: 0 4px 4px;
 }
 .card-grid .card-body span {
-  font-size: 20px;
+  font-size: var(--text-title);
   font-weight: 500;
 }
 .card-grid small {
-  font-size: 15px;
+  font-size: var(--text-body);
 }
 .card-grid .card-options {
   top: 28px;
   right: 28px;
 }
 dialog {
-  border-radius: 24px;
+  border-radius: var(--radius-card);
 }
 
 @media (min-width: 821px) and (min-height: 561px) {
@@ -3544,7 +3513,7 @@ dialog {
     background: var(--glass);
     backdrop-filter: blur(18px);
     border: 1px solid var(--border);
-    border-radius: 24px;
+    border-radius: var(--radius-card);
   }
   /* The controls float over the video, below the step bar. A tall step
      scrolls inside this area instead of growing upward over the step bar. */
@@ -3680,7 +3649,7 @@ dialog {
     right: var(--space-4);
     z-index: 7;
     width: 340px;
-    max-height: calc(100vh - 184px - 140px);
+    max-height: calc(100vh - 184px - 340px);
     pointer-events: auto;
     background: var(--glass);
     backdrop-filter: blur(18px);
@@ -3845,7 +3814,7 @@ body:has(#home:not([hidden])) #source-details {
   label:not(.switch):not(.api-provider-check):not(.custom-theme label),
 #project-form label {
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--text-small);
   font-weight: 500;
 }
 #appearance-settings,
@@ -4000,7 +3969,7 @@ details.more[open] .restore-actions {
     padding: 0;
   }
   #record-dialog .record-status {
-    font-size: 20px;
+    font-size: var(--text-title);
   }
   #record-dialog .record-live .dialog-actions {
     margin: 0;
@@ -4008,16 +3977,6 @@ details.more[open] .restore-actions {
 }
 
 /* The brand mark is the app icon. */
-img.mark {
-  display: block;
-  object-fit: contain;
-  background: none;
-  box-shadow: none;
-  border-radius: 8px;
-}
-img.mark::after {
-  display: none;
-}
 
 /* Refine is tight on height: the picture gets what the controls leave. */
 #viewer[data-stage="edit"][data-editor="simple"] .stage-media {
@@ -4129,7 +4088,7 @@ body:has(#viewer[data-stage="done"]:not([hidden])) #source-details {
 }
 .done-info strong {
   display: block;
-  font-size: 24px;
+  font-size: var(--text-title);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -4354,4 +4313,40 @@ button.short-preview:hover:not(:disabled) {
   .quality-cards {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* The mark takes the theme's colours: gold on a dark tile in the dark themes
+   and Cinematic, black on an ivory tile in Light Canvas and Paper, the accent
+   colour in a custom theme. */
+:root {
+  --mark-tile: #f4ecdd;
+  --mark-ink: #15110f;
+}
+:root[data-theme="studio_dark"],
+:root[data-theme="cinematic"] {
+  --mark-tile: #15110f;
+  --mark-ink: #d9b26b;
+}
+:root[data-theme="custom"] {
+  --mark-tile: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  --mark-ink: var(--accent);
+}
+.mark {
+  display: block;
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+.mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.mark-tile {
+  fill: var(--mark-tile);
+  stroke: var(--border-strong);
+  stroke-width: 2;
+}
+.mark-ink {
+  fill: var(--mark-ink);
 }

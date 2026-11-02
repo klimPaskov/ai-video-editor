@@ -1,5 +1,6 @@
 import { setupCodexSettings } from "./codex-settings.ts";
 import { iconElement, setupIcons } from "./icons.ts";
+import { setupBrandMark } from "./brand-mark.ts";
 import { setupTimelineStrip } from "./timeline-strip.ts";
 import { setupDidList, setupToolPopovers } from "./refine.ts";
 import { setupCaptions } from "./captions-panel.ts";
@@ -99,6 +100,7 @@ function element<T extends HTMLElement>(id: string): T {
   return value as T;
 }
 setupIcons();
+setupBrandMark(element("brand-mark"));
 const home = element("home"),
   viewer = element("viewer"),
   back = element<HTMLButtonElement>("back");
@@ -1773,6 +1775,7 @@ function selectProject(project: ProjectView, origin?: HTMLButtonElement): void {
   transcriptCutPending = false;
   activeProject = project;
   fullEditor = false;
+  clipsSaved = 0;
   restoreSourceProjectId = undefined;
   restoreHead = undefined;
   restoreRangeOpen = false;
