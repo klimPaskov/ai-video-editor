@@ -154,6 +154,36 @@ await writeFile(
   join(mcpResources, "manifest.json"),
   JSON.stringify(mcpManifest, null, 2),
 );
+// The Rust engine (docs/58) is optional until it is proven in the packaged
+// app: pass its prebuilt executable in URUSHI_ENGINE_BINARY. It is copied
+// beside a manifest with its size and hash, which the app checks at start.
+const engineBinary = process.env.URUSHI_ENGINE_BINARY;
+const engineResources = join(output, "engine");
+if (engineBinary) {
+  assert.ok((await lstat(engineBinary)).isFile());
+  assert.ok(!(await lstat(engineBinary)).isSymbolicLink());
+  await mkdir(engineResources);
+  const engineName = windows ? "urushi-engine.exe" : "urushi-engine";
+  await copyFile(engineBinary, join(engineResources, engineName));
+  await chmod(join(engineResources, engineName), 0o755);
+  const cargo = await readFile(join(root, "engine/Cargo.toml"), "utf8");
+  const engineManifest = {
+    schemaVersion: 1,
+    version: /^version = "([^"]+)"/mu.exec(
+      cargo.split("[workspace.package]")[1] ?? "",
+    )?.[1],
+    protocol: 1,
+    platform: windows ? "win32" : "linux",
+    executable: engineName,
+    size: (await lstat(join(engineResources, engineName))).size,
+    sha256: await sha256(join(engineResources, engineName)),
+  };
+  assert.ok(engineManifest.version);
+  await writeFile(
+    join(engineResources, "manifest.json"),
+    JSON.stringify(engineManifest, null, 2),
+  );
+}
 const ffmpegResources = join(output, "ffmpeg");
 const ffmpegManifest = windowsPins
   ? await provisionFfmpeg(windowsPins.ffmpeg, downloadCache, ffmpegResources)
@@ -360,6 +390,7 @@ const packages = await packager({
     mcpResources,
     captureResources,
     ...(windows ? [ffmpegResources] : []),
+    ...(engineBinary ? [engineResources] : []),
   ],
   ...(windows
     ? {

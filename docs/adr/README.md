@@ -35,3 +35,4 @@ Files in this directory are accepted starting decisions. Revisit them only with 
 - 0029: a camera recording linked to the screen recording and layouts (screen, camera, corner) as an undoable draft effect
 - 0030: Magic Edit's story edit runs on the chosen connection (Claude, Codex or an API provider) and degrades to the deterministic tightening; chats get guarded app actions (Magic Edit, Edit my video on Claude, Stop, go to a step; never export or cleanup)
 - 0031: five steps (Import, Magic Edit, Refine, Clips, Export) and a Done screen; Review is removed (saved projects open in Refine); Refine is one big simple screen with a What Magic Edit did list and an Open full editor; the draft check runs by itself on export; the assistant is docked beside the page
+- 0032: heavy engines are written in Rust, one version-pinned sidecar per job; short clips first

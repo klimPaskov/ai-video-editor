@@ -49,6 +49,10 @@ The numbered documents are the product and engineering specifications. Many end 
 - [Short clips](49_SHORT_CLIPS.md)
 - [Transitions](53_TRANSITIONS.md)
 - [Name and logo plan](54_NAME_AND_LOGO_PLAN.md)
+- [UI redesign plan](55_UI_REDESIGN_PLAN.md)
+- [Launch trailer plan](56_TRAILER_PLAN.md)
+- [Clips engine plan](57_CLIPS_ENGINE_PLAN.md)
+- [Rust engine plan](58_RUST_ENGINE_PLAN.md)
 - [Full AI edit](50_FULL_AI_EDIT.md)
 
 ### AI assistants and tools

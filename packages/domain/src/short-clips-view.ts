@@ -84,6 +84,9 @@ export const shortIssues = Object.freeze({
   none: "No self-contained moments of 15 to 60 seconds were found in this draft.",
   busy: "A clip is already exporting.",
   failed: "The clip could not be exported. Try again.",
+  diskFull:
+    "There is not enough free space to save the clip. Free some space and try again.",
+  timedOut: "The clip took too long to make. Try a shorter clip.",
   stale: "The draft changed since these clips were found. Find clips again.",
   unknown: "That clip is no longer available. Find clips again.",
   speed:

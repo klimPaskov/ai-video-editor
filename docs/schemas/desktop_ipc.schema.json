@@ -3948,6 +3948,8 @@
             "No self-contained moments of 15 to 60 seconds were found in this draft.",
             "A clip is already exporting.",
             "The clip could not be exported. Try again.",
+            "There is not enough free space to save the clip. Free some space and try again.",
+            "The clip took too long to make. Try a shorter clip.",
             "The draft changed since these clips were found. Find clips again.",
             "That clip is no longer available. Find clips again.",
             "Parts of this clip are already sped up too far to play faster. Choose normal speed.",
