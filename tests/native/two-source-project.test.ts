@@ -419,6 +419,8 @@ try {
   await expect(page.locator("#duration")).toHaveText(" / 0:02.000", {
     timeout: 30_000,
   });
+  // A reopened project is on Refine's simple screen; the editor opens from it.
+  await openFullEditor(page);
   await seek(page, 1_000_000);
   assert.deepEqual(await canvasBytes(page), expectedSecond);
   assert.deepEqual(await readFile(baselinePath), baselineBytes);

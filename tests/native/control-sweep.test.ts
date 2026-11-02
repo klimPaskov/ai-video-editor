@@ -72,7 +72,7 @@ await encodeVerifiedMaster(
 
 /** Long, irreversible, leaving-the-step or credentialed controls. */
 const skipped =
-  /delete|remove project|discard|quit|exit|record|capture|sign|log ?(in|out)|transcribe|edit my video|auto-all|magic|next-step|export|download|cleanup|clean up|reveal|open folder|^home$|^back$|^import$|magic edit|rough cut|^refine$|^review$|continue|verify|ask|send|stop/iu;
+  /delete|remove project|discard|quit|exit|record|capture|sign|log ?(in|out)|transcribe|edit my video|auto-all|magic|next-step|export|download|cleanup|clean up|reveal|open folder|^home$|^back$|^import$|magic edit|rough cut|^refine$|^review$|continue|verify|ask|send|stop|full-editor-done/iu;
 
 const problems: string[] = [];
 const pressed: Record<string, string[]> = {};
@@ -181,6 +181,9 @@ try {
       }
       // The window still answers.
       assert.equal(await page.evaluate(() => 1 + 1), 2);
+      // The complete editor hides the step bar; its own controls get their
+      // turn, and its Done button (pressed last) returns to Refine.
+      if (!(await page.locator("#project-navigation").isVisible())) continue;
       // A control may have moved the project to another step: come back.
       if (
         (await page
@@ -192,6 +195,8 @@ try {
         await openDisclosures(page);
       }
     }
+    if (await page.locator("#full-editor-done").isVisible())
+      await page.locator("#full-editor-done").click();
     await page.screenshot({
       path: join(evidence, `after-${name.replaceAll(" ", "-")}.png`),
     });

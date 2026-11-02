@@ -251,6 +251,10 @@ try {
   await editStageButton.click();
   await expect(editStageButton).toHaveAttribute("aria-current", "step");
   await expect(window.locator("#stage-select")).toHaveValue("edit");
+  // Refine is the simple screen; the complete editor opens from it.
+  await expect(window.locator("#refine-tools")).toBeVisible();
+  await expect(window.locator("#edit-actions")).toBeHidden();
+  await window.getByRole("button", { name: "Open full editor" }).click();
   await expect(window.locator("#edit-actions")).toBeVisible();
   await window
     .getByRole("button", {
@@ -261,6 +265,7 @@ try {
   await expect(window.locator("#duration")).toHaveText(" / 0:01.500");
   await expect(window.locator("#undo-edit")).toBeEnabled();
   await expect(window.locator("#edit-clip")).toHaveText("Part 2");
+  await window.locator("#full-editor-done").click();
   const exportStageButton = window
     .getByRole("navigation", { name: "Project stages" })
     .getByRole("button", { name: "Export", exact: true });

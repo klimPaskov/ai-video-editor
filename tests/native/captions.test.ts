@@ -154,6 +154,7 @@ try {
   await expect(page.locator("#captions-note")).toHaveText(
     "Captions use the transcript. Transcribe first.",
   );
+  await openStep(page, "Magic Edit");
   await page
     .getByRole("button", { name: "Transcribe locally", exact: true })
     .click();

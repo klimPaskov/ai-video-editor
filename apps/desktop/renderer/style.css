@@ -4417,8 +4417,21 @@ button.short-preview:hover:not(:disabled) {
   }
 }
 
-/* Cinematic: the floating action bar leaves room for an open side panel. */
+/* Cinematic: the floating action bar leaves room for an open side panel, and
+   the step bar is as wide as its steps. */
 @media (min-width: 821px) and (min-height: 561px) {
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    #project-navigation {
+    width: fit-content;
+    max-width: calc(100% - 32px);
+  }
+  html[data-layout="cinematic"]
+    #viewer:not([data-editor="full"])
+    .stepper
+    button:not(:last-child)::after {
+    width: clamp(12px, 2.5vw, 40px);
+  }
   html[data-layout="cinematic"]
     #viewer:not([data-editor="full"]):has(#codex-drawer:not([hidden]))
     .action-bar {

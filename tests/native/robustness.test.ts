@@ -223,13 +223,13 @@ try {
   await openStep(page, "Magic Edit");
   await page.locator("#auto-edit-more > summary").click();
   await page.getByRole("button", { name: "Transcribe locally" }).click();
-  await expect(page.locator("#transcription-error")).toBeVisible({
-    timeout: 180_000,
-  });
-  plain(await page.locator("#transcription-error").textContent());
-  await expect(
-    page.getByRole("button", { name: "Transcribe locally" }),
-  ).toBeEnabled();
+  // Since e9a4b51 a clip with no speech is a finished transcript with no
+  // words, not an error.
+  await expect(page.locator("#transcription-status")).toContainText(
+    "Transcript complete",
+    { timeout: 180_000 },
+  );
+  await expect(page.locator("#transcription-error")).toBeHidden();
   await page.screenshot({
     path: join(evidence, "transcription-without-speech.png"),
   });
