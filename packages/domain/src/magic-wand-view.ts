@@ -53,6 +53,7 @@ export const magicWandIssues = Object.freeze({
   transcription:
     "The rough cut needs a transcript, and transcription did not finish. Try again from Magic Edit.",
   noAudio: "The rough cut needs a video with speech.",
+  noSpeech: "No speech found, so there was nothing to cut.",
   changed:
     "The draft changed during the rough cut. Applied cuts are kept and can be undone.",
   failed:

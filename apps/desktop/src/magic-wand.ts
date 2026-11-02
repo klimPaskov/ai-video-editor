@@ -429,13 +429,27 @@ export class DesktopMagicWand {
           tightened,
         );
     } catch (error) {
-      const message =
+      // A video without usable speech is not an error: there is simply
+      // nothing to cut, and the visual edits can go on.
+      if (
         error instanceof Error &&
         (error.message === magicWandIssues.noAudio ||
           error.message === magicWandIssues.transcription)
-          ? error.message
-          : magicWandIssues.failed;
-      this.end(job, "failed", message, await change().catch(() => null));
+      ) {
+        this.end(
+          job,
+          "completed",
+          magicWandIssues.noSpeech,
+          await change().catch(() => null),
+        );
+        return;
+      }
+      this.end(
+        job,
+        "failed",
+        magicWandIssues.failed,
+        await change().catch(() => null),
+      );
     } finally {
       this.editor.release?.(job.projectId);
     }
