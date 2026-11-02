@@ -193,7 +193,7 @@ try {
     if (elapsed() > 3 * 3600) throw new Error("The edit ran too long.");
     await new Promise((resolve) => setTimeout(resolve, 3_000));
   }
-  await expect(page.locator("#auto-all-status")).toContainText("edited");
+  await expect(page.locator("#auto-all-status")).toContainText("Done");
   await page.screenshot({ path: join(evidence, "auto-edit-done.png") });
 
   step = "result";
