@@ -265,6 +265,13 @@ export class DesktopMagicWand {
       const status = view.job.status;
       if (view.job.source_count === 0) throw new Error(magicWandIssues.noAudio);
       if (status === "completed") return view;
+      if (["failed", "cancelled"].includes(status) && !started) {
+        // A transcription that was stopped or failed earlier is not this
+        // run's: ask for a fresh one once, then follow it.
+        view = await this.transcriptions.start(request);
+        started = true;
+        continue;
+      }
       if (
         ["failed", "cancelled"].includes(status) ||
         (status === "idle" && started)
@@ -459,7 +466,8 @@ export class DesktopMagicWand {
           job,
           "completed",
           magicWandIssues.noSpeech,
-          await change().catch(() => null),
+          // A completed run always reports a summary, even an empty one.
+          (await change().catch(() => null)) ?? { removedUs: 0, cuts: 0 },
         );
         return;
       }

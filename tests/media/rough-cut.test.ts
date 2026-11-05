@@ -17,6 +17,7 @@ import type {
   TranscriptAnalysis,
 } from "../../packages/domain/src/transcription.ts";
 import {
+  assertMagicWandView,
   magicWandIssues,
   magicWandProviders,
   magicWandSkipMessage,
@@ -33,6 +34,8 @@ function harness(script: {
   block?: MagicWandBlock;
   results?: unknown[];
   tightener?: Tightener;
+  /** The first answer about an earlier transcription job (before any start). */
+  earlierJob?: "cancelled" | "failed";
 }) {
   const calls: string[] = [];
   const started: Array<{
@@ -45,19 +48,26 @@ function harness(script: {
   let operations: string[] = ["op-before"];
   let finished: RoughCutOutcome | null = null;
   let stopped = 0;
+  let transcriptionStarts = 0;
+  let asked = 0;
+  const completedView = (status: string) =>
+    ({
+      job: {
+        status,
+        source_count: 1,
+        progress_percent: status === "completed" ? 100 : null,
+        job_id: "job-1",
+      },
+      results: script.results ?? [],
+    }) as never;
   const transcriptions = {
     get: async () =>
-      ({
-        job: {
-          status: "completed",
-          source_count: 1,
-          progress_percent: 100,
-          job_id: "job-1",
-        },
-        results: script.results ?? [],
-      }) as never,
+      completedView(
+        asked++ === 0 && script.earlierJob ? script.earlierJob : "completed",
+      ),
     start: async () => {
-      throw new Error("not needed");
+      transcriptionStarts++;
+      return completedView("completed");
     },
   };
   const invoke = async (_projectId: string, name: string) => {
@@ -111,6 +121,7 @@ function harness(script: {
     started,
     released,
     stopped: () => stopped,
+    transcriptionStarts: () => transcriptionStarts,
     finish: (outcome: RoughCutOutcome) => (finished = outcome),
   };
 }
@@ -433,4 +444,61 @@ test("Stop also stops the transcription Magic Edit is waiting for, so the step c
   assert.deepEqual(stopRequests, [
     { schema_version: "1.0", project_id: project, job_id: "job-running" },
   ]);
+});
+
+test("a transcription stopped earlier does not fail the next Magic Edit: a fresh one is started", async () => {
+  const run = harness({ outcome: "completed", earlierJob: "cancelled" });
+  run.magic.start(project, "balanced");
+  const view = await settle(run.magic);
+  assert.equal(view.status, "completed");
+  assert.equal(run.transcriptionStarts(), 1);
+});
+
+test("a video with no usable speech finishes as a valid completed view with a plain note", async () => {
+  const failing = {
+    get: async () =>
+      ({
+        job: {
+          status: "failed",
+          source_count: 1,
+          progress_percent: null,
+          job_id: "job-1",
+        },
+        results: [],
+      }) as never,
+    start: async () =>
+      ({
+        job: {
+          status: "failed",
+          source_count: 1,
+          progress_percent: null,
+          job_id: "job-2",
+        },
+        results: [],
+      }) as never,
+  };
+  const editor: RoughCutEditor = {
+    async blocked() {
+      return null;
+    },
+    async start() {
+      throw new Error("the story pass must not start without speech");
+    },
+    outcome: () => null,
+    async stop() {},
+  };
+  const magic = new DesktopMagicWand(
+    failing,
+    async () => {
+      throw new Error("no tool call is expected");
+    },
+    editor,
+    { pollMs: 5 },
+  );
+  magic.start(project, "balanced");
+  const view = await settle(magic);
+  assertMagicWandView(view);
+  assert.equal(view.status, "completed");
+  assert.equal(view.message, magicWandIssues.noSpeech);
+  assert.deepEqual(view.summary?.cuts, 0);
 });
