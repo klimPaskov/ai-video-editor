@@ -1,6 +1,6 @@
 # Urushi launch trailer: plan
 
-Status: plan (2026-11-02). Production starts when the redesign (docs/55) is merged and verified, because the trailer shows the real app. Nothing is published; the owner approves the music and the cut.
+Status: PAUSED by the owner (2026-11-05): no trailer is made now; the owner will make a real video with the finished app first, and the trailer is then built from that footage. Until then only a tour of the real UI is produced. Plan (2026-11-02). Production starts when the redesign (docs/55) is merged and verified, because the trailer shows the real app. Nothing is published; the owner approves the music and the cut.
 
 ## Goal
 
