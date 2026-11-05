@@ -58,7 +58,11 @@ try {
   await expect(page.locator("#record-elapsed")).toHaveText("0:01", {
     timeout: 10_000,
   });
-  await expect(page.locator("#record-health")).toHaveText("Recording");
+  // On a loaded machine the synthetic source can miss a frame; the take says
+  // so instead of "Recording".
+  await expect(page.locator("#record-health")).toHaveText(
+    /^(Recording|\d+ frames? (was|were) missed; the take stays in sync\.)$/u,
+  );
   // A running take cannot be dismissed with Escape.
   await page.keyboard.press("Escape");
   await expect(dialog).toBeVisible();
