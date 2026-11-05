@@ -55,6 +55,7 @@ Problems found while using the app for the trailer are listed here and fixed in 
 | --- | --- | --- |
 | A video with irregular frame timing imported but could not become a project (vague error) | Import | Fixed: a difference under one frame is accepted (`92bab32`) |
 | Silent or oddly timed audio made Magic Edit fail | Magic Edit | Fixed (`e9a4b51`) |
+| Screening the owner's two recordings (2026-11-05, contact sheets every 30 s of both): every minute is Hearts of Iron IV mod tooling with the tab titles visible, so none of it can be used under the no-HOI4 rule | Footage | Open: neutral footage needed (see Decisions) |
 
 ## Decisions (owner, 2026-11-02)
 
