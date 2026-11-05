@@ -83,6 +83,13 @@
 - Success appears only after full decode and output hash verification, then the app moves to the Done screen.
 - Show in folder, Play, Make short clips, Edit another video, Back to Home and Keep editing each work on real state.
 
+## S14 Clips (step 4)
+
+- Clips is its own step between Refine and Export (ADR 0031). It offers one **Find clips** button until clips exist, then selectable clip cards with a short title and length.
+- Skip (or Continue once a clip is saved) always works; making clips is never required to export.
+- "Make N clips" makes only the selected clips; each is rendered by the Rust engine when present, otherwise by the TypeScript path, with a plain message and one retry on failure.
+- Face-following framing is used for Fill when a face is found; corner webcam bubbles are ignored; with no face the fixed crop is kept.
+
 ## S13 Settings
 
 - Codex remains available with managed ChatGPT sign-in; implemented OpenAI API, DeepSeek and Gemini API rows show separate key and billing states with no exposed key bytes.
