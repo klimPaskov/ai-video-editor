@@ -22,6 +22,16 @@ export interface LayoutFinding {
  * hidden-overflow cuts count there.
  */
 export async function auditLayout(page: Page): Promise<LayoutFinding[]> {
+  // Colours are measured at rest: a button part-way through a colour
+  // transition is not a state anyone reads.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation instanceof CSSTransition)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    ),
+  );
   return page.evaluate(() => {
     const findings: LayoutFinding[] = [];
     const add = (kind: LayoutFinding["kind"], detail: string) => {

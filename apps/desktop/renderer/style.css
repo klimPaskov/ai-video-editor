@@ -736,7 +736,7 @@ details.more[open] {
   border-color: transparent;
 }
 .assistant-toggle:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  background: color-mix(in srgb, var(--accent) 17%, transparent);
 }
 .assistant-toggle[aria-expanded="true"] {
   color: var(--on-accent);
@@ -2687,7 +2687,7 @@ header nav .icon-button:hover:not(:disabled) {
   border-radius: 999px;
 }
 .assistant-toggle:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--accent) 17%, transparent);
 }
 .assistant-toggle[aria-expanded="true"],
 .assistant-toggle[aria-expanded="true"]:hover:not(:disabled) {
