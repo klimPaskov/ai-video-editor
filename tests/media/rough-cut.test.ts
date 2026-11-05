@@ -383,3 +383,54 @@ test("every connection gets the same guarded tools and rules, adapted to what it
   for (const tool of roughCutTools)
     assert.equal(tool.startsWith("app."), false, tool);
 });
+
+test("Stop also stops the transcription Magic Edit is waiting for, so the step can be left", async () => {
+  const stopRequests: unknown[] = [];
+  let running = true;
+  const transcriptions = {
+    get: async () =>
+      ({
+        job: {
+          status: running ? "transcribing" : "cancelled",
+          source_count: 1,
+          progress_percent: 10,
+          job_id: "job-running",
+        },
+        results: [],
+      }) as never,
+    start: async () => {
+      throw new Error("a transcription is already running");
+    },
+    stop: async (request: unknown) => {
+      stopRequests.push(request);
+      running = false;
+      return (await transcriptions.get()) as never;
+    },
+  };
+  const editor: RoughCutEditor = {
+    async blocked() {
+      return null;
+    },
+    async start() {
+      throw new Error("the story pass must not start after Stop");
+    },
+    outcome: () => null,
+    async stop() {},
+  };
+  const magic = new DesktopMagicWand(
+    transcriptions,
+    async () => {
+      throw new Error("no tool call is expected");
+    },
+    editor,
+    { pollMs: 5 },
+  );
+  magic.start(project, "balanced");
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  magic.stop(project);
+  const view = await settle(magic);
+  assert.equal(view.status, "stopped");
+  assert.deepEqual(stopRequests, [
+    { schema_version: "1.0", project_id: project, job_id: "job-running" },
+  ]);
+});

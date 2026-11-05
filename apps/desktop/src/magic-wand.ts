@@ -33,6 +33,12 @@ type Transcriptions = {
   start(
     request: TranscriptionProjectRequest,
   ): Promise<TranscriptionProjectView>;
+  /** Optional so test stand-ins stay small; main's service always has it. */
+  stop?(request: {
+    schema_version: "1.0";
+    project_id: string;
+    job_id: string;
+  }): Promise<TranscriptionProjectView>;
 };
 
 /** Calls one guarded editor tool as the Magic Wand origin for a project. */
@@ -242,7 +248,20 @@ export class DesktopMagicWand {
     let view = await this.transcriptions.get({ ...request, job_id: null });
     let started = false;
     for (;;) {
-      if (job.stop) return null;
+      if (job.stop) {
+        // Stopping Magic Edit also stops the transcription it is waiting
+        // for; otherwise that job keeps running and the step cannot be left.
+        const running = ["preparing", "downloading_model", "transcribing"];
+        if (
+          this.transcriptions.stop &&
+          view.job.job_id &&
+          running.includes(view.job.status)
+        )
+          await this.transcriptions
+            .stop({ ...request, job_id: view.job.job_id })
+            .catch(() => undefined);
+        return null;
+      }
       const status = view.job.status;
       if (view.job.source_count === 0) throw new Error(magicWandIssues.noAudio);
       if (status === "completed") return view;
