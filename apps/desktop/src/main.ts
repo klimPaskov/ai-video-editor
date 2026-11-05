@@ -674,12 +674,17 @@ async function start(): Promise<void> {
     });
   });
   // Only the player's full-screen button is allowed, and only for the app's
-  // own pages; every other permission stays denied.
+  // own main page, never for a frame inside it (the sealed graphics and
+  // compositions); every other permission stays denied.
   const ownPage = (url: string | undefined) =>
     !!url && url.startsWith(`${appIdentity.urlScheme}://`);
   session.defaultSession.setPermissionRequestHandler(
     (_contents, permission, callback, details) =>
-      callback(permission === "fullscreen" && ownPage(details.requestingUrl)),
+      callback(
+        permission === "fullscreen" &&
+          details.isMainFrame === true &&
+          ownPage(details.requestingUrl),
+      ),
   );
   session.defaultSession.setPermissionCheckHandler(
     (_contents, permission, requestingOrigin) =>

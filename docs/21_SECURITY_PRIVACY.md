@@ -127,3 +127,13 @@ Claude keeps a workspace per project (`claude/workspaces/<project id>`: the whol
 ## Web permissions (2026-11-02)
 
 The app denies every web permission request except `fullscreen`, and only for its own pages (the app scheme). The player's full-screen button needs it; camera, microphone, notifications, clipboard and the rest stay denied.
+
+## Security pass, 2026-11-05 (redesign, chat actions, Rust engine)
+
+Reviewed by reading the code: the engine client and its resolution, the face-model download, the Rust request validation and process spawning, the new chat action tools, and the web permission handler. Nothing here replaces a third-party audit.
+
+- **Engine program (`urushi-engine`).** Started without a shell, with a fixed argument list, by the main process only; its request is one JSON line over stdin. It validates sizes, frame totals, clip ranges and an absolute output path before work, runs FFmpeg as a child with time and stall limits, and removes its own partial files. The packaged program is checked against its manifest (size and SHA-256) at start; a mismatch or a missing engine leaves the TypeScript path in charge (FFmpeg, by contrast, stops the app). The `URUSHI_ENGINE` override is ignored in packaged builds. Trust boundary: the engine trusts the filter strings and the FFmpeg path that main gives it, because main builds them from validated project data and never from model or user text.
+- **Face model.** Fetched only from the pinned host over HTTPS and accepted only if the size and SHA-256 match; checked again by the engine before loading. Open risk: the pinned URL is a third-party repository at a fixed commit. If it is removed, face-following stops and the fixed crop remains. Moving the pin to the model's official upstream, after checking the hash matches, is open.
+- **Chat actions (`app.*`).** Exact request shapes, fixed lists of allowed presets, levels and steps, the active project only, no export, delete or cleanup tool, and `app.start_edit_my_video` only for Claude. `app.go_to_step` can open the Export step but exporting stays a button press; it cannot reach Done.
+- **Web permissions.** Only `fullscreen`, only for the main frame of the app's own page. Frames inside it (graphics and sealed compositions) are refused, and every other permission stays denied.
+- **Known limits.** The check-then-spawn gap between verifying a bundled program and starting it exists for every bundled tool and is accepted because the install folder is per user. The Windows engine has been built but not run on Windows.
