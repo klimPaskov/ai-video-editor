@@ -334,7 +334,17 @@ class SpeechWorkerClient {
   async close(): Promise<void> {
     this.closing = true;
     this.fail(new Error("Local transcription stopped."));
-    await this.worker.terminate().catch(() => undefined);
+    // A worker inside a long native call stops only when that call returns,
+    // so Stop does not wait for it: the thread ends in the background.
+    const ended = this.worker.terminate().catch(() => undefined);
+    let timer: NodeJS.Timeout | undefined;
+    await Promise.race([
+      ended,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, 1500);
+      }),
+    ]);
+    clearTimeout(timer);
   }
 }
 
