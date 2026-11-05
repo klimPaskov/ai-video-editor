@@ -1,4 +1,3 @@
-import { parentPort, workerData } from "node:worker_threads";
 import { env, LogLevel, pipeline } from "@huggingface/transformers";
 import {
   buildLocalTranscript,
@@ -41,13 +40,16 @@ type WorkerOutput =
   | { type: "source-result"; sourceId: string; transcript: unknown }
   | { type: "worker-error"; reason: WorkerFailureReason };
 
-const port = parentPort;
-if (!port) throw new Error("Speech worker requires a parent port.");
-const configuration = workerData as WorkerData;
+if (!process.send) throw new Error("Speech worker requires a parent process.");
+const configuration = JSON.parse(
+  process.env.URUSHI_SPEECH_CONFIG ?? "null",
+) as WorkerData | null;
 let busy = false;
+// If the app goes away, so does the worker.
+process.on("disconnect", () => process.exit(0));
 
 function send(message: WorkerOutput): void {
-  port!.postMessage(message);
+  process.send!(message);
 }
 
 async function main(): Promise<void> {
@@ -97,7 +99,7 @@ async function main(): Promise<void> {
   )
     throw new Error("The local speech model changed during initialization.");
   send({ type: "ready" });
-  port!.on("message", async (request: TranscribeRequest) => {
+  process.on("message", async (request: TranscribeRequest) => {
     if (busy) {
       send({ type: "worker-error", reason: "model_inference" });
       return;

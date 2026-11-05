@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, realpath, rename, unlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { Worker } from "node:worker_threads";
+import { fork, type ChildProcess } from "node:child_process";
 import {
   assertTranscriptionJobRequest,
   assertTranscriptionProjectRequest,
@@ -195,7 +195,7 @@ function parseWorkerReply(value: unknown): WorkerReply {
 }
 
 class SpeechWorkerClient {
-  private readonly worker: Worker;
+  private readonly worker: ChildProcess;
   private readonly queue: WorkerReply[] = [];
   private readonly waiters: WorkerWaiter[] = [];
   private failure: Error | undefined;
@@ -206,10 +206,20 @@ class SpeechWorkerClient {
     cacheRoot: string,
     onModelProgress: (progress: number) => void,
   ) {
-    this.worker = new Worker(workerPath, {
-      workerData: { cacheRoot, allowModelNetwork: true },
-      env: safeWorkerEnvironment(),
+    // The speech model runs in its own process: Stop ends it at once, even
+    // in the middle of a native model run, without touching the app itself.
+    this.worker = fork(workerPath, [], {
+      execPath: process.execPath,
+      env: {
+        ...safeWorkerEnvironment(),
+        ELECTRON_RUN_AS_NODE: "1",
+        URUSHI_SPEECH_CONFIG: JSON.stringify({
+          cacheRoot,
+          allowModelNetwork: true,
+        }),
+      },
       execArgv: [],
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
     });
     this.worker.on("message", (value: unknown) => {
       try {
@@ -303,7 +313,7 @@ class SpeechWorkerClient {
       ["source-result", "worker-error"],
       request.signal,
     );
-    this.worker.postMessage({
+    this.worker.send({
       type: "transcribe",
       projectId: request.projectId,
       sourceId: request.sourceId,
@@ -334,16 +344,15 @@ class SpeechWorkerClient {
   async close(): Promise<void> {
     this.closing = true;
     this.fail(new Error("Local transcription stopped."));
-    // A worker inside a long native call stops only when that call returns,
-    // so Stop does not wait for it: the thread ends in the background.
-    const ended = this.worker.terminate().catch(() => undefined);
+    if (this.worker.exitCode !== null || this.worker.signalCode !== null)
+      return;
     let timer: NodeJS.Timeout | undefined;
-    await Promise.race([
-      ended,
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, 1500);
-      }),
-    ]);
+    const ended = new Promise<void>((resolve) => {
+      this.worker.once("exit", () => resolve());
+      timer = setTimeout(resolve, 2000);
+    });
+    this.worker.kill("SIGKILL");
+    await ended;
     clearTimeout(timer);
   }
 }
