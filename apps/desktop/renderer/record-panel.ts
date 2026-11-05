@@ -36,6 +36,8 @@ export function setupRecordPanel(options: {
   const live = element("record-live");
   const displays = element("record-displays");
   const microphone = element<HTMLSelectElement>("record-microphone");
+  const desktopAudio = element<HTMLInputElement>("record-desktop-audio");
+  const desktopAudioNote = element("record-desktop-audio-note");
   const camera = element<HTMLSelectElement>("record-camera");
   const cameraNote = element("record-camera-note");
   camera.addEventListener("change", () => {
@@ -231,6 +233,11 @@ export function setupRecordPanel(options: {
     none.value = "";
     none.textContent = "No microphone";
     microphone.append(none);
+    // On by default; where the computer cannot record its own sound the
+    // choice is off and says so.
+    desktopAudio.disabled = !devices.desktop_audio;
+    desktopAudio.checked = devices.desktop_audio;
+    desktopAudioNote.hidden = devices.desktop_audio;
     camera.replaceChildren();
     const noCamera = document.createElement("option");
     noCamera.value = "";
@@ -384,6 +391,7 @@ export function setupRecordPanel(options: {
         display_id: selectedDisplay,
         microphone_id: microphone.value || null,
         ...(camera.value ? { camera_id: camera.value } : {}),
+        ...(desktopAudio.checked ? { desktop_audio: true } : {}),
         ...(region ? { region } : {}),
       })
       .catch(() => null);

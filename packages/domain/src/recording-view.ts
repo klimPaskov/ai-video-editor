@@ -26,6 +26,8 @@ export interface RecordingDevices {
   displays: RecordingDisplay[];
   microphones: RecordingMicrophone[];
   cameras: RecordingCamera[];
+  /** Whether this computer can record its own sound (what it plays). */
+  desktop_audio: boolean;
   /** Set when recording is not possible on this device. */
   message: string | null;
 }
@@ -44,6 +46,8 @@ export interface RecordingStartRequest {
   microphone_id: string | null;
   /** A camera recorded alongside the screen; omitted for none. */
   camera_id?: string | null;
+  /** Also record the computer's own sound; omitted means not. */
+  desktop_audio?: boolean;
   /** Omitted to record the whole display. */
   region?: RecordingRegion;
 }
@@ -200,17 +204,23 @@ export function assertRecordingStartRequest(
     value !== null &&
     typeof value === "object" &&
     Object.hasOwn(value, "camera_id");
+  const hasDesktopAudio =
+    value !== null &&
+    typeof value === "object" &&
+    Object.hasOwn(value, "desktop_audio");
   const request = exact(value, [
     "schema_version",
     "display_id",
     "microphone_id",
     ...(hasCamera ? ["camera_id"] : []),
+    ...(hasDesktopAudio ? ["desktop_audio"] : []),
     ...(hasRegion ? ["region"] : []),
   ]);
   if (request.schema_version !== "1.0") invalid();
   id(request.display_id);
   if (request.microphone_id !== null) id(request.microphone_id);
   if (hasCamera && request.camera_id !== null) id(request.camera_id);
+  if (hasDesktopAudio && typeof request.desktop_audio !== "boolean") invalid();
   if (hasRegion) assertRecordingRegion(request.region);
 }
 
@@ -267,8 +277,10 @@ export function assertRecordingDevices(
     "displays",
     "microphones",
     "cameras",
+    "desktop_audio",
     "message",
   ]);
+  if (typeof devices.desktop_audio !== "boolean") invalid();
   if (
     !Array.isArray(devices.displays) ||
     !Array.isArray(devices.microphones) ||

@@ -96,7 +96,7 @@ export const claudeIssues = Object.freeze({
   missing:
     "Claude Code is not installed. Install it from claude.com/claude-code, then choose Check again.",
   outdated:
-    "Claude Code is out of date. Open a terminal, run: claude update, then choose Check again.",
+    "Claude Code is too old (2.1.302 or newer is needed). Install the latest from claude.com/claude-code, then choose Check again.",
   runtime:
     "Claude Code could not be started. Check the installation, then choose Check again.",
   status: "Claude sign-in status could not be read. Choose Check again.",

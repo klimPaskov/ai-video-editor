@@ -2503,10 +2503,26 @@ async function start(): Promise<void> {
   });
   register(channels.projectList, async (request) => {
     assertEmptyRequest(request);
-    const value = await Promise.all(
+    // One project that cannot be read (a missing source, a file from a newer
+    // version) must not hide the others: Home would look empty and the work
+    // would seem lost, although it is all still on disk.
+    const views = await Promise.all(
       (await projects.list()).map((snapshot) =>
-        projectRuntime.view(snapshot.project.project_id),
+        projectRuntime.view(snapshot.project.project_id).then(
+          (view) => view,
+          (error: unknown) => {
+            console.error(
+              "A project could not be listed",
+              snapshot.project.project_id,
+              error instanceof Error ? error.message : "unknown error",
+            );
+            return null;
+          },
+        ),
       ),
+    );
+    const value = views.filter(
+      (view): view is NonNullable<typeof view> => view !== null,
     );
     assertProjectList(value);
     return value;

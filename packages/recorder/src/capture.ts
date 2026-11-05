@@ -23,7 +23,13 @@ export interface AudioInput {
   id: string;
   label: string;
   /** FFmpeg input format and device name; main only. */
-  format: "pulse" | "alsa" | "dshow" | "avfoundation" | "test_tone";
+  format:
+    | "pulse"
+    | "alsa"
+    | "dshow"
+    | "avfoundation"
+    | "test_tone"
+    | "test_desktop_tone";
   device: string;
 }
 
@@ -49,6 +55,11 @@ export interface SegmentRequest {
   x11Display?: string;
   display: DisplayTarget;
   microphone: AudioInput | null;
+  /**
+   * The computer's own sound (what plays through the speakers), recorded
+   * with the microphone into one audio track.
+   */
+  desktopAudio?: AudioInput | null;
   /** A camera recorded alongside the screen, into `cameraOutputPath`. */
   camera?: VideoInput | null;
   cameraOutputPath?: string;
@@ -57,6 +68,15 @@ export interface SegmentRequest {
 }
 
 export const captureSampleRate = 48_000;
+
+/** The audio inputs of a capture, in FFmpeg input order after the screen. */
+export function audioSources(
+  request: Pick<SegmentRequest, "microphone" | "desktopAudio">,
+): AudioInput[] {
+  return [request.microphone, request.desktopAudio ?? null].filter(
+    (source): source is AudioInput => source !== null,
+  );
+}
 
 function even(value: number): number {
   return Math.max(2, Math.floor(value / 2) * 2);
@@ -145,22 +165,37 @@ export function segmentArguments(request: SegmentRequest): string[] {
       ];
       break;
   }
+  const sources = audioSources(request);
   const audio: string[] = [];
-  const microphone = request.microphone;
-  if (microphone) {
-    if (microphone.format === "test_tone")
+  for (const source of sources) {
+    // Every input gets wall-clock timestamps so their offsets are real.
+    audio.push(
+      "-thread_queue_size",
+      "1024",
+      "-use_wallclock_as_timestamps",
+      "1",
+    );
+    if (source.format === "test_tone")
       audio.push(
         "-f",
         "lavfi",
         "-i",
         `sine=frequency=440:sample_rate=${captureSampleRate},arealtime`,
       );
-    else if (microphone.format === "dshow")
-      audio.push("-f", "dshow", "-i", `audio=${microphone.device}`);
-    else if (microphone.format === "avfoundation")
-      audio.push("-f", "avfoundation", "-i", `:${microphone.device}`);
-    else audio.push("-f", microphone.format, "-i", microphone.device);
+    else if (source.format === "test_desktop_tone")
+      audio.push(
+        "-f",
+        "lavfi",
+        "-i",
+        `sine=frequency=880:sample_rate=${captureSampleRate},arealtime`,
+      );
+    else if (source.format === "dshow")
+      audio.push("-f", "dshow", "-i", `audio=${source.device}`);
+    else if (source.format === "avfoundation")
+      audio.push("-f", "avfoundation", "-i", `:${source.device}`);
+    else audio.push("-f", source.format, "-i", source.device);
   }
+  const hasAudio = sources.length > 0;
   // The camera is the last input, so the screen and microphone keep indexes
   // 0 and 1 whether or not there is one.
   const camera = request.camera ?? null;
@@ -218,7 +253,7 @@ export function segmentArguments(request: SegmentRequest): string[] {
         camera.device,
       );
   }
-  const cameraIndex = microphone ? 2 : 1;
+  const cameraIndex = 1 + sources.length;
   return [
     "-hide_banner",
     // Input headers (with each input's wall-clock start) go to stderr; stop
@@ -235,20 +270,19 @@ export function segmentArguments(request: SegmentRequest): string[] {
     "-thread_queue_size",
     "1024",
     ...video,
-    ...(microphone
+    ...audio,
+    ...cameraInput,
+    // Two sources (microphone and computer sound) are summed into one track;
+    // the limiter only acts when the sum would clip.
+    ...(sources.length === 2
       ? [
-          "-thread_queue_size",
-          "1024",
-          // Every input gets wall-clock timestamps so their offsets are real.
-          "-use_wallclock_as_timestamps",
-          "1",
-          ...audio,
+          "-filter_complex",
+          "[1:a:0][2:a:0]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.97[mix]",
         ]
       : []),
-    ...cameraInput,
     "-map",
     "0:v:0",
-    ...(microphone ? ["-map", "1:a:0"] : []),
+    ...(hasAudio ? ["-map", sources.length === 2 ? "[mix]" : "1:a:0"] : []),
     "-fps_mode",
     "cfr",
     "-r",
@@ -281,7 +315,7 @@ export function segmentArguments(request: SegmentRequest): string[] {
     "bt709",
     "-color_trc",
     "iec61966-2-1",
-    ...(microphone
+    ...(hasAudio
       ? ["-c:a", "pcm_s16le", "-ar", String(captureSampleRate)]
       : []),
     "-f",
@@ -359,12 +393,54 @@ export function parsePulseSources(text: string): AudioInput[] {
   return inputs;
 }
 
+/** Linux: what plays through the speakers, as a PulseAudio monitor source. */
+export function parsePulseDesktopAudio(text: string): AudioInput | null {
+  const monitors: { name: string; running: boolean }[] = [];
+  for (const line of text.split(/\r?\n/u)) {
+    const name = line.split("\t")[1];
+    if (!name?.endsWith(".monitor") || !/^[\w.:@-]{1,200}$/u.test(name))
+      continue;
+    monitors.push({ name, running: /RUNNING/u.test(line) });
+  }
+  const chosen = monitors.find((item) => item.running) ?? monitors[0];
+  return chosen
+    ? {
+        id: "desktop-audio",
+        label: "Computer sound",
+        format: "pulse",
+        device: chosen.name,
+      }
+    : null;
+}
+
+/**
+ * Windows DirectShow devices that carry what the computer plays ("Stereo
+ * Mix" and similar). They are not microphones.
+ */
+const desktopAudioPattern =
+  /stereo mix|what u hear|wave out mix|virtual-audio-capturer|loopback|wasapi/iu;
+
+/** Windows: a DirectShow device that records what the computer plays. */
+export function parseDshowDesktopAudio(text: string): AudioInput | null {
+  for (const line of text.split(/\r?\n/u)) {
+    const match = /\]\s+"([^"]{1,200})"\s+\(audio\)/u.exec(line);
+    if (match && desktopAudioPattern.test(match[1]!))
+      return {
+        id: "desktop-audio",
+        label: "Computer sound",
+        format: "dshow",
+        device: match[1]!,
+      };
+  }
+  return null;
+}
+
 /** Windows DirectShow audio devices from `ffmpeg -list_devices true -f dshow`. */
 export function parseDshowAudio(text: string): AudioInput[] {
   const inputs: AudioInput[] = [];
   for (const line of text.split(/\r?\n/u)) {
     const match = /\]\s+"([^"]{1,200})"\s+\(audio\)/u.exec(line);
-    if (!match) continue;
+    if (!match || desktopAudioPattern.test(match[1]!)) continue;
     inputs.push({
       id: `dshow-${inputs.length + 1}`,
       label: match[1]!,
@@ -404,6 +480,14 @@ export const testToneInput: AudioInput = Object.freeze({
   id: "test-tone",
   label: "Test tone (not a microphone)",
   format: "test_tone",
+  device: "sine",
+});
+
+/** Labelled synthetic computer sound for repeatable tests. */
+export const testDesktopInput: AudioInput = Object.freeze({
+  id: "desktop-audio",
+  label: "Test tone (not computer sound)",
+  format: "test_desktop_tone",
   device: "sine",
 });
 

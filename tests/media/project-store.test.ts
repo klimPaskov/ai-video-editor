@@ -301,6 +301,12 @@ test("rename changes only the project name and keeps the baseline", async () => 
     JSON.stringify({ ...changed, created_at: "2020-01-01T00:00:00.000Z" }),
   );
   await assert.rejects(store.open(id));
+  // One unreadable project does not hide the others from Home.
+  const other = await store.createFromMedia(media.id);
+  assert.deepEqual(
+    (await store.list()).map((project) => project.project.project_id),
+    [other.project.project_id],
+  );
 });
 test("remove deletes the project folder and keeps its source in the library", async () => {
   const { store, projects, library, media, source } = await fixture();

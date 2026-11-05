@@ -76,6 +76,7 @@ test("devices hide FFmpeg names and report unavailable sessions", async () => {
         ],
         microphones: [{ id: "pulse-1", label: "usb Mic" }],
         cameras: [],
+        desktop_audio: true,
         message: null,
       },
     );

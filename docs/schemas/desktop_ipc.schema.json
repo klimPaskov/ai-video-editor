@@ -4386,9 +4386,14 @@
         "displays",
         "microphones",
         "cameras",
+        "desktop_audio",
         "message"
       ],
       "properties": {
+        "desktop_audio": {
+          "description": "Whether this computer can record its own sound (what it plays).",
+          "type": "boolean"
+        },
         "displays": {
           "type": "array",
           "maxItems": 16,
@@ -4502,6 +4507,10 @@
               "$ref": "#/$defs/recordingDeviceId"
             }
           ]
+        },
+        "desktop_audio": {
+          "description": "Also record the computer's own sound into the same audio track. Omitted means not.",
+          "type": "boolean"
         },
         "region": {
           "$ref": "#/$defs/recordingRegion"
@@ -4880,7 +4889,7 @@
             "The story edit found nothing more to cut for this preset.",
             "Your AI provider's usage limit was reached. Cuts made so far are kept; run the rough cut again after it resets.",
             "The story edit was skipped. Sign in with your Claude account in Settings, then run the rough cut again.",
-            "The story edit was skipped. Claude Code is out of date: run claude update in a terminal, choose Check again in Settings, then run the rough cut again.",
+            "The story edit was skipped. Claude Code is too old (2.1.302 or newer is needed): install the latest from claude.com/claude-code, choose Check again in Settings, then run the rough cut again.",
             "The story edit was skipped. Claude Code is not installed: install it from claude.com/claude-code, then run the rough cut again.",
             "The story edit was skipped. Claude is not ready: open Settings, choose Check again under Claude, then run the rough cut again.",
             "The story edit was skipped. Sign in to Codex in Settings, then run the rough cut again.",
@@ -7718,7 +7727,7 @@
           "enum": [
             null,
             "Claude Code is not installed. Install it from claude.com/claude-code, then choose Check again.",
-            "Claude Code is out of date. Open a terminal, run: claude update, then choose Check again.",
+            "Claude Code is too old (2.1.302 or newer is needed). Install the latest from claude.com/claude-code, then choose Check again.",
             "Claude Code could not be started. Check the installation, then choose Check again.",
             "Claude sign-in status could not be read. Choose Check again.",
             "Sign-in did not finish. Choose Sign in with Claude to try again.",

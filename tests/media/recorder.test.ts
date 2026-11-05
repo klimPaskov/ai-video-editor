@@ -8,10 +8,13 @@ import test from "node:test";
 import {
   audioAlignmentFilter,
   parseDshowAudio,
+  parseDshowDesktopAudio,
   parseInputStarts,
   parseProgress,
+  parsePulseDesktopAudio,
   parsePulseSources,
   segmentArguments,
+  testDesktopInput,
   testPatternCamera,
   testToneInput,
   type DisplayTarget,
@@ -135,6 +138,81 @@ test("parsers read counters, devices and input start times", () => {
     "atrim=start_sample=2400,asetpts=N/SR/TB",
   );
 });
+
+test(
+  "a take with the microphone and computer sound keeps one aligned audio track holding both",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await realpath(
+      await mkdtemp(join(tmpdir(), "recorder-desktop-")),
+    );
+    try {
+      const session = new CaptureSession({
+        ffmpeg: "ffmpeg",
+        ffprobe: "ffprobe",
+        directory,
+        request: {
+          platform: "test",
+          display: { ...display, x: 0, width: 160, height: 90 },
+          microphone: testToneInput,
+          desktopAudio: testDesktopInput,
+          frameRate: 30,
+        },
+      });
+      await session.record();
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const finished = await session.stop();
+      const probe = JSON.parse(
+        (
+          await runProcess({
+            executable: "ffprobe",
+            args: [
+              "-v",
+              "error",
+              "-show_streams",
+              "-of",
+              "json",
+              finished.path,
+            ],
+          })
+        ).stdout.toString(),
+      ) as { streams: { codec_type: string; codec_name: string }[] };
+      const audio = probe.streams.filter(
+        (stream) => stream.codec_type === "audio",
+      );
+      assert.equal(audio.length, 1);
+      assert.equal(audio[0]!.codec_name, "pcm_s16le");
+      // Both tones (440 Hz microphone, 880 Hz computer sound) are in it.
+      const levels = async (frequency: number) =>
+        (
+          await runProcess({
+            executable: "ffmpeg",
+            args: [
+              "-v",
+              "info",
+              "-i",
+              finished.path,
+              "-map",
+              "0:a:0",
+              "-af",
+              `bandpass=f=${frequency}:width_type=h:w=40,volumedetect`,
+              "-f",
+              "null",
+              "-",
+            ],
+          })
+        ).stderr
+          .toString()
+          .match(/max_volume: (-?[\d.]+) dB/u)?.[1];
+      const low = Number(await levels(440));
+      const high = Number(await levels(880));
+      assert.ok(low > -40, `440 Hz level ${low}`);
+      assert.ok(high > -40, `880 Hz level ${high}`);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
 
 test(
   "a paused and resumed take becomes one exact, aligned, exportable lossless file",
@@ -371,6 +449,55 @@ test(
     }
   },
 );
+
+test("computer sound is found, kept out of the microphones and mixed into one audio track", () => {
+  assert.equal(
+    parsePulseDesktopAudio(
+      "0\talsa_output.pci.monitor\tmodule\ts16le\tSUSPENDED\n1\talsa_output.usb.monitor\tmodule\ts16le\tRUNNING\n2\talsa_input.mic\tmodule\ts16le\tIDLE\n",
+    )?.device,
+    "alsa_output.usb.monitor",
+  );
+  assert.equal(parsePulseDesktopAudio("2\talsa_input.mic\tmodule\n"), null);
+  const dshow =
+    '[dshow @ 0001] "Microphone Array (Realtek)" (audio)\n[dshow @ 0001] "Stereo Mix (Realtek)" (audio)\n';
+  assert.equal(parseDshowDesktopAudio(dshow)?.device, "Stereo Mix (Realtek)");
+  assert.deepEqual(
+    parseDshowAudio(dshow).map((input) => input.label),
+    ["Microphone Array (Realtek)"],
+  );
+  assert.equal(parseDshowDesktopAudio('[dshow @ 0001] "Mic" (audio)\n'), null);
+
+  const base = {
+    platform: "test" as const,
+    display,
+    frameRate: 30 as const,
+    outputPath: "/take/segment-001.mkv",
+  };
+  const both = segmentArguments({
+    ...base,
+    microphone: testToneInput,
+    desktopAudio: testDesktopInput,
+    camera: testPatternCamera,
+    cameraOutputPath: "/take/camera-001.mkv",
+  });
+  // Screen 0, microphone 1, computer sound 2, camera 3; one mixed track.
+  assert.ok(
+    both.includes(
+      "[1:a:0][2:a:0]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.97[mix]",
+    ),
+  );
+  assert.ok(both.includes("[mix]") && both.includes("3:v:0"));
+  assert.equal(both.filter((arg) => arg === "pcm_s16le").length, 1);
+  const only = segmentArguments({
+    ...base,
+    microphone: null,
+    desktopAudio: testDesktopInput,
+  });
+  assert.ok(only.includes("1:a:0") && !only.includes("-filter_complex"));
+  assert.ok(only.includes("pcm_s16le"));
+  const none = segmentArguments({ ...base, microphone: null });
+  assert.ok(!none.includes("-c:a") && !none.includes("1:a:0"));
+});
 
 test("a camera arguments add a second lossless file without moving the screen's inputs", () => {
   const args = segmentArguments({

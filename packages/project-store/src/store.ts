@@ -356,7 +356,13 @@ export class ProjectStore {
           await rm(join(this.root, entry), { recursive: true, force: true });
           continue;
         }
-        result.push(await this.read(entry));
+        // A project that cannot be read stays on disk untouched; it must not
+        // hide every other project from Home.
+        try {
+          result.push(await this.read(entry));
+        } catch {
+          continue;
+        }
       }
       return result;
     });

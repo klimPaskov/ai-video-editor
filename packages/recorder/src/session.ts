@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { killProcessTree } from "./process-tree.ts";
 import {
   audioAlignmentFilter,
+  audioSources,
   captureSampleRate,
   parseInputStarts,
   parseProgress,
@@ -314,9 +315,17 @@ export class CaptureSession {
     return session;
   }
 
-  /** The camera is the last input: after the screen and the microphone. */
+  /** When the audio starts: the earliest of its inputs, which follow the screen. */
+  private audioStart(starts: (number | undefined)[]): number | null {
+    const found = starts
+      .slice(1, 1 + audioSources(this.options.request).length)
+      .filter((value): value is number => value !== undefined);
+    return found.length > 0 ? Math.min(...found) : null;
+  }
+
+  /** The camera is the last input: after the screen and the audio. */
   private cameraInputIndex(): number {
-    return this.options.request.microphone ? 2 : 1;
+    return 1 + audioSources(this.options.request).length;
   }
 
   /** Persists the take record; writes are serialised and best effort. */
@@ -329,9 +338,7 @@ export class CaptureSession {
         ...running.record,
         frames: running.counters.frames,
         videoStartSeconds: starts[0] ?? null,
-        audioStartSeconds: this.options.request.microphone
-          ? (starts[1] ?? null)
-          : null,
+        audioStartSeconds: this.audioStart(starts),
         ...(running.record.cameraFile
           ? { cameraStartSeconds: starts[this.cameraInputIndex()] ?? null }
           : {}),
@@ -344,7 +351,7 @@ export class CaptureSession {
       created_at: this.createdAt,
       platform: this.options.request.platform,
       display: this.options.request.display.label,
-      microphone: this.options.request.microphone?.label ?? null,
+      microphone: audioSources(this.options.request)[0]?.label ?? null,
       camera: this.options.request.camera?.label ?? null,
       frame_rate: this.options.request.frameRate,
       segments,
@@ -497,7 +504,10 @@ export class CaptureSession {
       throw new CaptureStartError(
         outcome === "timeout"
           ? "timeout"
-          : startFailure(running.stderr, !!this.options.request.microphone),
+          : startFailure(
+              running.stderr,
+              audioSources(this.options.request).length > 0,
+            ),
       );
     }
     this.saveTake();
@@ -510,9 +520,7 @@ export class CaptureSession {
     running.record.duplicated = running.counters.duplicated;
     running.record.dropped = running.counters.dropped;
     running.record.videoStartSeconds = starts[0] ?? null;
-    running.record.audioStartSeconds = this.options.request.microphone
-      ? (starts[1] ?? null)
-      : null;
+    running.record.audioStartSeconds = this.audioStart(starts);
     if (running.record.cameraFile)
       running.record.cameraStartSeconds =
         starts[this.cameraInputIndex()] ?? null;
@@ -583,7 +591,7 @@ export class CaptureSession {
     this.options.onUpdate?.();
     try {
       const fn = this.frameRate;
-      const microphone = this.options.request.microphone;
+      const microphone = audioSources(this.options.request).length > 0;
       // Frame counts: a clean stop already reported its exact count, so the
       // file need not be read again; anything else is counted by FFmpeg.
       const counts = await Promise.all(
@@ -808,7 +816,7 @@ export class CaptureSession {
             created_at: new Date().toISOString(),
             platform: this.options.request.platform,
             display: this.options.request.display.label,
-            microphone: this.options.request.microphone?.label ?? null,
+            microphone: audioSources(this.options.request)[0]?.label ?? null,
             camera: this.options.request.camera?.label ?? null,
             frame_rate: this.frameRate,
             sample_rate: captureSampleRate,

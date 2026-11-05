@@ -3599,8 +3599,10 @@ dialog {
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-lg);
   }
+  /* A step with More options open may use all the room between the step bar
+     and the bottom buttons; it scrolls inside only beyond that. */
   html[data-layout="cinematic"] #viewer:not([data-editor="full"]) .stage-panel {
-    max-height: 45vh;
+    max-height: max(240px, calc(100vh - 184px - 96px - var(--space-3)));
     overflow-y: auto;
   }
   html[data-layout="cinematic"]

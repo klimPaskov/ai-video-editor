@@ -5,8 +5,11 @@ import { join } from "node:path";
 import {
   captureSize,
   parseDshowAudio,
+  parseDshowDesktopAudio,
   parseDshowVideo,
+  parsePulseDesktopAudio,
   parsePulseSources,
+  testDesktopInput,
   testPatternCamera,
   testToneInput,
   type AudioInput,
@@ -41,6 +44,8 @@ export class RecordingError extends Error {}
 interface InputListing {
   microphones: AudioInput[];
   cameras: VideoInput[];
+  /** Where the computer's own sound can be recorded, when it can. */
+  desktopAudio: AudioInput | null;
   reliable: boolean;
 }
 
@@ -129,6 +134,7 @@ export class DesktopRecorder {
   private inputCache: { at: number; found: InputListing } | null = null;
   private inputProbe: Promise<InputListing> | null = null;
   private cameras = new Map<string, VideoInput>();
+  private desktopAudio: AudioInput | null = null;
   private session: CaptureSession | null = null;
   private directory: string | null = null;
   private view: RecordingView = idle;
@@ -199,6 +205,7 @@ export class DesktopRecorder {
       return {
         microphones: [testToneInput],
         cameras: [testPatternCamera],
+        desktopAudio: testDesktopInput,
         reliable: true,
       };
     if (this.options.platform === "linux") {
@@ -206,6 +213,7 @@ export class DesktopRecorder {
       return {
         microphones: parsePulseSources(text),
         cameras: await this.v4l2Cameras(),
+        desktopAudio: parsePulseDesktopAudio(text),
         reliable: text.trim() !== "",
       };
     }
@@ -222,10 +230,11 @@ export class DesktopRecorder {
       return {
         microphones: parseDshowAudio(text),
         cameras: parseDshowVideo(text),
+        desktopAudio: parseDshowDesktopAudio(text),
         reliable: text.trim() !== "",
       };
     }
-    return { microphones: [], cameras: [], reliable: true };
+    return { microphones: [], cameras: [], desktopAudio: null, reliable: true };
   }
 
   /**
@@ -270,6 +279,7 @@ export class DesktopRecorder {
     this.displays.clear();
     this.microphones.clear();
     this.cameras.clear();
+    this.desktopAudio = null;
     if (!message) {
       const displays: PhysicalDisplay[] = this.testCapture()
         ? [
@@ -291,6 +301,7 @@ export class DesktopRecorder {
         this.microphones.set(microphone.id, microphone);
       for (const camera of inputs.cameras.slice(0, 16))
         this.cameras.set(camera.id, camera);
+      this.desktopAudio = inputs.desktopAudio;
     }
     const value: RecordingDevices = {
       displays: [...this.displays.values()].map((display, index) => {
@@ -311,6 +322,7 @@ export class DesktopRecorder {
         id: camera.id,
         label: camera.label,
       })),
+      desktop_audio: this.desktopAudio !== null,
       message,
     };
     assertRecordingDevices(value);
@@ -436,6 +448,10 @@ export class DesktopRecorder {
           : {}),
         display,
         microphone,
+        // Asked for but not available here: record without it.
+        ...(request.desktop_audio === true && this.desktopAudio
+          ? { desktopAudio: this.desktopAudio }
+          : {}),
         ...(camera ? { camera } : {}),
         frameRate: 30,
       },

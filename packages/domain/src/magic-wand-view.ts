@@ -65,7 +65,7 @@ export const magicWandIssues = Object.freeze({
   claudeSignIn:
     "The story edit was skipped. Sign in with your Claude account in Settings, then run the rough cut again.",
   claudeOutdated:
-    "The story edit was skipped. Claude Code is out of date: run claude update in a terminal, choose Check again in Settings, then run the rough cut again.",
+    "The story edit was skipped. Claude Code is too old (2.1.302 or newer is needed): install the latest from claude.com/claude-code, choose Check again in Settings, then run the rough cut again.",
   claudeMissing:
     "The story edit was skipped. Claude Code is not installed: install it from claude.com/claude-code, then run the rough cut again.",
   claudeSetup:

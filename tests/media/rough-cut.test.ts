@@ -341,7 +341,7 @@ test("when the chosen connection cannot run, the tightening stands and the resul
   const view = await settle(bare.magic);
   assert.equal(view.status, "failed");
   assert.equal(view.message, magicWandIssues.claudeOutdated);
-  assert.match(view.message ?? "", /claude update/u);
+  assert.match(view.message ?? "", /2.1.302 or newer/u);
 });
 
 test("a sign-in problem found after the tightening keeps the tightening and names the provider", async () => {

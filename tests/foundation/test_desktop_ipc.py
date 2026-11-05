@@ -149,11 +149,12 @@ class DesktopIpcContractTests(unittest.TestCase):
     def test_recording_channels_use_opaque_ids_and_fixed_messages(self):
         devices = {'displays': [{'id': 'display-1', 'label': 'Built-in display', 'width': 2560, 'height': 1600, 'primary': True}],
                    'microphones': [{'id': 'pulse-1', 'label': 'USB microphone'}],
-                   'cameras': [{'id': 'dshow-video-1', 'label': 'Webcam'}], 'message': None}
+                   'cameras': [{'id': 'dshow-video-1', 'label': 'Webcam'}], 'desktop_audio': True, 'message': None}
         self.valid({'channel': 'recording:devices', 'response': {'ok': True, 'value': devices}})
         for wrong in [dict(devices, displays=[dict(devices['displays'][0], x=0)]),
                       dict(devices, microphones=[{'id': 'pulse-1', 'label': 'Mic', 'device': 'alsa_input.usb'}]),
                       dict(devices, cameras=[{'id': 'dshow-video-1', 'label': 'Cam', 'device': 'video=Cam'}]),
+                      dict(devices, desktop_audio='yes'),
                       dict(devices, message='ffmpeg: x11grab failed')]:
             self.invalid({'channel': 'recording:devices', 'response': {'ok': True, 'value': wrong}})
         self.invalid({'channel': 'recording:devices', 'payload': {}, 'response': {'ok': True, 'value': devices}})
@@ -170,6 +171,8 @@ class DesktopIpcContractTests(unittest.TestCase):
         self.valid({'channel': 'recording:start', 'payload': dict(start, microphone_id='pulse-1'), 'response': {'ok': False, 'message': 'A recording is already in progress.'}})
         self.valid({'channel': 'recording:start', 'payload': dict(start, camera_id='dshow-video-1'), 'response': {'ok': True, 'value': recording}})
         self.valid({'channel': 'recording:start', 'payload': dict(start, camera_id=None), 'response': {'ok': True, 'value': recording}})
+        self.valid({'channel': 'recording:start', 'payload': dict(start, desktop_audio=True), 'response': {'ok': True, 'value': recording}})
+        self.invalid({'channel': 'recording:start', 'payload': dict(start, desktop_audio='yes'), 'response': {'ok': True, 'value': recording}})
         self.invalid({'channel': 'recording:start', 'payload': dict(start, camera_id='video=Cam 0'), 'response': {'ok': True, 'value': recording}})
         for wrong in [dict(start, display_id=':0.0+0,0 -i /etc/passwd'), dict(start, microphone_id='alsa input'), {'display_id': 'display-1'}]:
             self.invalid({'channel': 'recording:start', 'payload': wrong, 'response': {'ok': True, 'value': recording}})
@@ -648,7 +651,7 @@ class DesktopIpcContractTests(unittest.TestCase):
         # A skipped story edit explains how to fix it, in one of the fixed messages.
         skipped = deepcopy(example)
         skipped['response']['value']['message'] = (
-            'The story edit was skipped. Claude Code is out of date: run claude update in a terminal, '
+            'The story edit was skipped. Claude Code is too old (2.1.302 or newer is needed): install the latest from claude.com/claude-code, '
             'choose Check again in Settings, then run the rough cut again.')
         self.valid(skipped)
 
