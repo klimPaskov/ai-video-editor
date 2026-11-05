@@ -4235,6 +4235,9 @@ button.link-button:hover:not(:disabled) {
 .shorts-more {
   align-self: center;
 }
+#shorts-note {
+  text-align: center;
+}
 .shorts-list {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: var(--space-4);
