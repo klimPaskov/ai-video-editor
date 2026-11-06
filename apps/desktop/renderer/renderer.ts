@@ -361,7 +361,10 @@ function renderStage(): void {
         ? (["clips", "Continue"] as const)
         : null;
   element("next-step").hidden = !forward;
+  // The arrow is the app's own icon, centred by the button, not a text glyph
+  // from a fallback font (which sat below the label).
   nextStepButton.textContent = forward?.[1] ?? "";
+  if (forward) nextStepButton.append(iconElement("arrow-right"));
   nextStepButton.disabled = navigating;
   nextStepTarget = forward?.[0];
   const stage = activeProject?.stage;

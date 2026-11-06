@@ -3309,13 +3309,10 @@ button.rtool.unavailable:hover {
 #next-step-button {
   min-width: 200px;
 }
-#next-step-button::after {
-  content: "\2192";
-  font-size: 1.15em;
-  line-height: 1;
-}
-#next-step-button:empty::after {
-  content: none;
+#next-step-button .icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.25;
 }
 
 /* The complete editor: the whole window, with Done to go back to Refine. */

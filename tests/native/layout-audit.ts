@@ -9,6 +9,7 @@ export interface LayoutFinding {
     | "text-clipped"
     | "tiny-target"
     | "contrast"
+    | "misaligned"
     | "primary-action";
   detail: string;
 }
@@ -334,6 +335,30 @@ export async function auditLayout(page: Page): Promise<LayoutFinding[]> {
           );
         }
       }
+    }
+    // An icon and its label share one centre line (a text glyph from a
+    // fallback font, or a mis-sized icon, sits visibly off it).
+    for (const element of controls) {
+      if (!visible(element) || !inScope(element)) continue;
+      const icon = element.querySelector(":scope > svg.icon");
+      if (!icon) continue;
+      const textNode = Array.from(element.childNodes).find(
+        (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+      );
+      if (!textNode) continue;
+      const range = document.createRange();
+      range.selectNodeContents(textNode);
+      const text = range.getBoundingClientRect();
+      const box = icon.getBoundingClientRect();
+      if (text.height === 0 || box.height === 0) continue;
+      const off = Math.abs(
+        (text.top + text.bottom) / 2 - (box.top + box.bottom) / 2,
+      );
+      if (off > 2.5)
+        add(
+          "misaligned",
+          `${label(element)}: icon and label centres are ${off.toFixed(1)}px apart`,
+        );
     }
     return findings;
   });
