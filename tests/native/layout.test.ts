@@ -331,6 +331,20 @@ try {
         await shot(
           join(evidence, `${themeId}-${size.replace("@", "x")}-done.png`),
         );
+        // The Publish dialog from the Done screen, on both tabs.
+        await page.locator("#done-publish").click();
+        await expect(page.locator("#publish-title-input")).not.toHaveValue("", {
+          timeout: 60_000,
+        });
+        await audit(`${tag} / Publish YouTube`);
+        await page.locator("#publish-tab-posts").click();
+        await expect(page.locator("#publish-posts")).toBeVisible();
+        await audit(`${tag} / Publish posts`);
+        await shot(
+          join(evidence, `${themeId}-${size.replace("@", "x")}-publish.png`),
+        );
+        await page.locator("#publish-close").click();
+        await expect(page.locator("#publish-dialog")).toBeHidden();
         await page.locator("#done-keep").click();
         await expect(page.locator("#export-done")).toBeVisible();
         await audit(`${tag} / Export done`);
