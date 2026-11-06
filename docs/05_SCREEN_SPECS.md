@@ -208,6 +208,10 @@ Implemented (2026-10-07): file name, duration, size and "verified lossless" for 
 
 Its own step between Refine and Export, with **Skip**. The step shows the picture compactly (Preview on a card plays that moment in it), the two ways to find clips (Find clips, Pick with Claude), "Clip options" (format, framing, captions, title, speed) folded away, and the clips as cards: a picture of the moment, a choice box (new clips start chosen), the title and length, Preview, Discard and Save only this. **Make N clips** (the action bar, right) exports the chosen clips to one folder through `shorts:export-all` with an optional `clip_ids` list (absent means every clip); once a clip is saved the left button reads Continue instead of Skip. Skipping never blocks Export; Done offers Make short clips while none exists.
 
+## S15: Publish (dialog; docs/59)
+
+Opened from **Publish text** on the Done screen (the whole video) and on each short clip card in Clips. A dialog with two tabs. **YouTube**: a YouTube-red header with the mark, **Title** with a live "n / 100" count and other title ideas to pick, **Description**, the **Chapters** (times from the transcript, titles editable), **Tags** as removable chips with a field that adds one (Enter or a comma), and a **thumbnail card** from the footage with the title and length over it (**Save thumbnail** for a video: a 1280 by 720 JPEG under 2 MB into `Thumbnails`). **Posts**: cards for X (ring counter to 280, solid Copy), Reddit (title and body with vote arrows), LinkedIn and Discord, each with its own mark and colour and its own **Copy**. Below the tabs: **Wording** (Casual, Professional, Funny) with **Write again**, then **Copy title and description**, **Show in folder** and **Upload to YouTube** (copies the text, opens YouTube's upload page, shows the folder). Edits are saved as they are typed; a plain draft says it is plain. Designed from `docs/design/ui-previews/publish-brand-*.png`; every theme passes the layout audit with it open.
+
 ## S13: settings
 
 Sections:

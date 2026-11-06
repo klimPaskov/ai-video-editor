@@ -178,6 +178,18 @@
         "P9"
       ],
       "reference_required": false
+    },
+    {
+      "screen_id": "S15",
+      "name": "Publish",
+      "step": "done",
+      "primary_action": "Upload to YouTube",
+      "panel_policy": "one_context_panel",
+      "spec": "docs/05_SCREEN_SPECS.md",
+      "task_phases": [
+        "P9"
+      ],
+      "reference_required": false
     }
   ]
 }

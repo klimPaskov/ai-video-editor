@@ -35,3 +35,7 @@ Short clips live in the Export step, after the main export, because they are mad
 ## Engine (2026-11-02)
 
 Clips are rendered by the Rust engine (`engine/`, [58](58_RUST_ENGINE_PLAN.md)) when it is packaged, in one FFmpeg pass with an exact-frame check of the result, one retry on a safer path (software encoder, fixed crop) and cleanup of partial files. The TypeScript pipeline above stays as the fallback for audio cleanup, a missing or failing engine, and as the parity reference (`tests/media/short-engine.test.ts`). `reframeFilter` now crops before scaling for **Fill** and blurs the **Fit** backdrop at a quarter of the size, which speeds both paths.
+
+## Publishing text (2026-11-06)
+
+Each clip has **Publish text** (title, description, tags, posts; [59](59_PUBLISHING.md)). Exported clips go to `Videos/Urushi/<project>/Shorts` by default and their text to `Publish/Shorts`.

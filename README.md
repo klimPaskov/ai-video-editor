@@ -40,6 +40,7 @@ Urushi is a standalone desktop recorder and editor for screen recordings, tutori
 **Export**
 - A verified lossless master (Matroska, FFV1 + PCM) by default, or a smaller MP4 when you choose it.
 - **Short clips:** find self-contained 15–60 second moments and export them as vertical, square or landscape videos with captions.
+- **Publish:** a YouTube title, description with exact chapters, tags and a thumbnail from your footage, plus posts for X, Reddit, LinkedIn and Discord, for the video and for each short; everything is saved in `Videos/Urushi/<project>/` and **Upload to YouTube** opens the upload page with the text copied.
 
 ## Looks
 
