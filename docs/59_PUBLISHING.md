@@ -16,7 +16,7 @@ For a finished video: a YouTube **title** (at most 100 characters, with other id
 
 ## Screens
 
-**Publish** is a dialog (not a workflow step) reached from **Publish text** on the Done screen and from **Publish text** on each short clip in Clips. Tabs: **YouTube** (title, title ideas, description, editable chapter titles, tags) and **Posts** (X, Reddit, LinkedIn, Discord, each with Copy). Below: **Wording** with **Write again**, **Copy title and description**, **Show in folder** and **Upload to YouTube**.
+**Publish** is a dialog (not a workflow step) reached from **Publish text** on the Done screen and from **Publish text** on each short clip in Clips. Tabs: **YouTube** (YouTube header, title with a live length count, title ideas, description, editable chapter titles, tags as removable chips, and a thumbnail card from the footage with the title and length over it) and **Posts** (X with a ring counter and a solid Copy button, Reddit with a title and a vote-arrow body, LinkedIn and Discord composers, each with its own mark and colours and its own Copy). Designed from generated previews: `docs/design/ui-previews/publish-brand-*.png`. Below: **Wording** with **Write again**, **Copy title and description**, **Show in folder** and **Upload to YouTube**.
 
 ## Upload
 
