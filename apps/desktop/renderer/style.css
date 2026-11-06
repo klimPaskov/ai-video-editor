@@ -4635,7 +4635,7 @@ button.short-preview:hover:not(:disabled) {
   border-radius: var(--radius);
 }
 .publish-post[data-brand] .publish-post-head button {
-  color: var(--brand);
+  color: color-mix(in srgb, var(--brand) 55%, var(--text));
   border-color: color-mix(in srgb, var(--brand) 55%, var(--border));
 }
 .publish-post[data-brand] .publish-post-head button:hover:not(:disabled) {
@@ -4677,7 +4677,7 @@ button.short-preview:hover:not(:disabled) {
   font-size: 20px;
 }
 .publish-tabs button[data-tab="youtube"][aria-pressed="true"] {
-  color: color-mix(in srgb, #d90000 72%, var(--text));
+  color: color-mix(in srgb, #d90000 50%, var(--text));
   border-bottom-color: #d90000;
 }
 .field-count {
