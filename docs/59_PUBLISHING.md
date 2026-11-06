@@ -26,6 +26,14 @@ For a finished video: a YouTube **title** (at most 100 characters, with other id
 
 Not built in the app yet. The plan: a frame from the footage chosen with the editor's own frame reading, 1280x720 under 2 MB, saved in `Thumbnails`. Generated images are out of scope for now by the person's decision.
 
+## Security and privacy
+
+- Every `publish:*` channel checks the sender, requires the request's project to be the open one, and validates its shape in preload and again in main (`assertPublishRequest`, `assertPublishSaveRequest`, `assertPublishThumbnailRequest`). Ids are `[A-Za-z0-9_-]` only, so a stored draft can never leave `userData/publish/<project>/`.
+- The renderer never supplies a path: folders come from the user's Videos folder and the project name made safe for every file system (`safeFolderName`); a thumbnail is accepted only as a JPEG (magic bytes checked) of at most 2 MB, written through a staged file and rename.
+- **Upload to YouTube** opens one fixed address (`https://www.youtube.com/upload`) and puts text on the clipboard; no account, token or cookie is handled.
+- Writing with a connected API provider sends the video's name and the start of its transcript (at most about 2,400 characters) plus the section texts to that provider, which the person chose and keyed in Settings. Without a provider nothing leaves the device. This is the only network use added.
+- Edits are checked against the limits before they are stored, and the plain draft is never presented as written by a model (`writtenBy`).
+
 ## Tests
 
 `tests/media/publish.test.ts` (limits, chapters, parsing, drafts), `tests/media/publisher.test.ts` (folders, drafting with and without a model, edits, Open YouTube), `tests/foundation/test_desktop_ipc.py` (the five `publish:*` channels), and the native `short-clips.test.ts` and `export.test.ts` (dialog from a short and from the Done screen, files written, folder revealed).
