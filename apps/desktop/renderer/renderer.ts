@@ -462,7 +462,41 @@ function populateRestoreSources(project: ProjectView): void {
 const exportPanel = setupExportPanel({
   completed: () => void navigate("done"),
 });
-const publishDialog = setupPublishDialog();
+async function projectPicture(
+  timeUs: number,
+): Promise<HTMLCanvasElement | null> {
+  const project = activeProject;
+  if (!project) return null;
+  const at = Math.min(
+    Math.max(0, Math.round(timeUs)),
+    Math.max(0, project.timeline.durationUs - 1),
+  );
+  const reply = await window.desktop
+    .readProjectFrame({
+      projectId: project.id,
+      draftId: project.draft.id,
+      baseRevisionId: project.draft.baseRevisionId,
+      expectedSequence: project.draft.sequence,
+      expectedTimelineSha256: project.draft.timelineSha256,
+      timelineTimeUs: at,
+    })
+    .catch(() => null);
+  if (!reply?.ok || reply.value.status !== "ready") return null;
+  const frame = reply.value.frame;
+  const picture = document.createElement("canvas");
+  picture.width = frame.width;
+  picture.height = frame.height;
+  picture.setAttribute("aria-hidden", "true");
+  picture
+    .getContext("2d")
+    ?.putImageData(
+      new ImageData(framePixels(frame.rgbaBase64), frame.width, frame.height),
+      0,
+      0,
+    );
+  return picture;
+}
+const publishDialog = setupPublishDialog({ picture: projectPicture });
 const donePanel = setupDonePanel({
   publish: (project, opener) =>
     publishDialog.open({
@@ -471,6 +505,7 @@ const donePanel = setupDonePanel({
       subjectId: project.id,
       name: project.name,
       opener,
+      pictureAtUs: Math.round(project.timeline.durationUs * 0.1),
     }),
   thumbnail: (mediaId, name) => thumbnail(mediaId, name),
   goTo: (stage) => void navigate(stage),
@@ -485,7 +520,7 @@ let previewEndUs: number | undefined;
 /** How many short clips this project has saved; Clips then offers Continue. */
 let clipsSaved = 0;
 const shortsPanel = setupShortsPanel({
-  publish: (clipId, title, opener) => {
+  publish: (clipId, title, startUs, opener) => {
     const project = activeProject;
     if (!project) return;
     publishDialog.open({
@@ -494,6 +529,7 @@ const shortsPanel = setupShortsPanel({
       subjectId: clipId,
       name: title,
       opener,
+      pictureAtUs: startUs + 200_000,
     });
   },
   saved: (count) => {
@@ -501,38 +537,7 @@ const shortsPanel = setupShortsPanel({
     clipsSaved = count;
     renderStage();
   },
-  picture: async (timeUs) => {
-    const project = activeProject;
-    if (!project) return null;
-    const at = Math.min(
-      Math.max(0, Math.round(timeUs)),
-      Math.max(0, project.timeline.durationUs - 1),
-    );
-    const reply = await window.desktop
-      .readProjectFrame({
-        projectId: project.id,
-        draftId: project.draft.id,
-        baseRevisionId: project.draft.baseRevisionId,
-        expectedSequence: project.draft.sequence,
-        expectedTimelineSha256: project.draft.timelineSha256,
-        timelineTimeUs: at,
-      })
-      .catch(() => null);
-    if (!reply?.ok || reply.value.status !== "ready") return null;
-    const frame = reply.value.frame;
-    const picture = document.createElement("canvas");
-    picture.width = frame.width;
-    picture.height = frame.height;
-    picture.setAttribute("aria-hidden", "true");
-    picture
-      .getContext("2d")
-      ?.putImageData(
-        new ImageData(framePixels(frame.rgbaBase64), frame.width, frame.height),
-        0,
-        0,
-      );
-    return picture;
-  },
+  picture: projectPicture,
   preview: (startUs, endUs) => {
     playback.stop();
     requestFrame(startUs);

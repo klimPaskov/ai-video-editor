@@ -25,6 +25,8 @@ export interface PublishSubject {
   name: string;
   /** The control that opened the dialog, focused again when it closes. */
   opener?: HTMLElement | undefined;
+  /** The time in the video whose picture is shown as the thumbnail. */
+  pictureAtUs: number;
 }
 
 type Reply = { ok: true; value: PublishView } | { ok: false; message: string };
@@ -36,7 +38,10 @@ type Reply = { ok: true; value: PublishView } | { ok: false; message: string };
  * main-process publisher that writes the files into the project's Publish
  * folder.
  */
-export function setupPublishDialog(): { open(subject: PublishSubject): void } {
+export function setupPublishDialog(options: {
+  /** A picture of the footage at this time, or null. */
+  picture(timeUs: number): Promise<HTMLCanvasElement | null>;
+}): { open(subject: PublishSubject): void } {
   const dialog = element<HTMLDialogElement>("publish-dialog");
   const heading = element("publish-title");
   const subjectText = element("publish-subject");
@@ -49,7 +54,15 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
   const intro = element<HTMLTextAreaElement>("publish-intro");
   const chaptersBox = element("publish-chapters-box");
   const chapters = element("publish-chapters");
-  const tags = element<HTMLInputElement>("publish-tags");
+  const titleCount = element("publish-title-count");
+  const tagChips = element("publish-tag-chips");
+  const tagInput = element<HTMLInputElement>("publish-tag-input");
+  const tagEditor = element("publish-tag-editor");
+  const thumb = element("publish-thumb");
+  const thumbPicture = element("publish-thumb-picture");
+  const thumbTitle = element("publish-thumb-title");
+  const thumbTime = element("publish-thumb-time");
+  const xRing = element("publish-x-ring");
   const postX = element<HTMLTextAreaElement>("publish-x");
   const postXCount = element("publish-x-count");
   const redditTitle = element<HTMLInputElement>("publish-reddit-title");
@@ -69,6 +82,10 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
   let subject: PublishSubject | undefined;
   let kit: PublishKit | null = null;
   let busy = false;
+  /** The tags as chips; the kit takes them when the text is read. */
+  let tagList: string[] = [];
+  /** The footage picture for the current subject, drawn once. */
+  let picture: HTMLCanvasElement | null = null;
   let saveTimer: number | undefined;
   let generation = 0;
 
@@ -115,7 +132,10 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
     tone.value = kit.tone;
     titleInput.value = kit.youtube.title;
     intro.value = kit.youtube.intro;
-    tags.value = kit.youtube.tags.join(", ");
+    tagList = [...kit.youtube.tags];
+    drawTags();
+    countTitle();
+    drawThumb();
     postX.value = kit.posts.x;
     countX();
     redditTitle.value = kit.posts.redditTitle;
@@ -167,11 +187,69 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
     );
   }
 
-  /** The X counter turns to a warning near the limit. */
+  /** The X counter fills a ring and turns to a warning near the limit. */
   function countX(): void {
     const used = postX.value.length;
     postXCount.textContent = `${used}/${publishLimits.x}`;
-    postXCount.classList.toggle("near-limit", used >= publishLimits.x - 20);
+    const near = used >= publishLimits.x - 20;
+    postXCount.classList.toggle("near-limit", near);
+    xRing.classList.toggle("near-limit", near);
+    xRing.style.setProperty(
+      "--used",
+      String(Math.min(100, Math.round((used / publishLimits.x) * 100))),
+    );
+  }
+
+  function countTitle(): void {
+    titleCount.textContent = `${titleInput.value.length} / ${publishLimits.title}`;
+    thumbTitle.textContent = titleInput.value;
+  }
+
+  /** The tags as removable chips in front of the field that adds one. */
+  function drawTags(): void {
+    tagChips.replaceChildren(
+      ...tagList.map((tag) => {
+        const chip = document.createElement("span");
+        chip.className = "tag-chip";
+        const text = document.createElement("span");
+        text.textContent = tag;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "tag-remove";
+        remove.dataset.icon = "close";
+        remove.setAttribute("aria-label", `Remove the tag ${tag}`);
+        remove.addEventListener("click", () => {
+          tagList = tagList.filter((entry) => entry !== tag);
+          drawTags();
+          queueSave();
+        });
+        chip.append(text, remove);
+        return chip;
+      }),
+    );
+  }
+
+  /** Adds what is typed as tags (several at once with commas). */
+  function addTags(text: string): void {
+    const next = cleanTags([...tagList, ...text.split(",")]);
+    if (next.length === tagList.length) {
+      tagInput.value = "";
+      return;
+    }
+    tagList = next;
+    tagInput.value = "";
+    drawTags();
+    queueSave();
+  }
+
+  /** The footage picture with the title and length over it, as on YouTube. */
+  function drawThumb(): void {
+    const show = picture !== null && kit !== null;
+    thumb.hidden = !show;
+    thumbPicture.replaceChildren(...(picture ? [picture] : []));
+    thumbTime.textContent = kit ? formatTimestamp(kit.subject.durationUs) : "";
+    thumbTitle.textContent = titleInput.value;
+    thumb.classList.toggle("vertical", kit?.subject.kind === "short");
   }
 
   function readFields(): PublishKit | null {
@@ -182,7 +260,7 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
         ...kit.youtube,
         title: titleInput.value.trim() || kit.youtube.title,
         intro: intro.value,
-        tags: cleanTags(tags.value.split(",")),
+        tags: cleanTags([...tagList, ...tagInput.value.split(",")]),
       },
       posts: {
         x: postX.value,
@@ -289,8 +367,27 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
     // Only the pane changes: redrawing would replace unsaved typing.
     tab.addEventListener("click", () => showTab(tab.dataset.tab ?? "youtube"));
 
-  for (const field of [titleInput, intro, tags, redditTitle, redditBody])
+  for (const field of [titleInput, intro, redditTitle, redditBody])
     field.addEventListener("input", queueSave);
+  titleInput.addEventListener("input", countTitle);
+  tagEditor.addEventListener("click", () => tagInput.focus());
+  tagInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      addTags(tagInput.value);
+    } else if (
+      event.key === "Backspace" &&
+      tagInput.value === "" &&
+      tagList.length > 0
+    ) {
+      tagList = tagList.slice(0, -1);
+      drawTags();
+      queueSave();
+    }
+  });
+  tagInput.addEventListener("blur", () => {
+    if (tagInput.value.trim()) addTags(tagInput.value);
+  });
   for (const field of [postX, linkedin, discord])
     field.addEventListener("input", () => {
       countX();
@@ -361,6 +458,14 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
       generation++;
       subject = next;
       kit = null;
+      picture = null;
+      tagList = [];
+      tagInput.value = "";
+      void options.picture(next.pictureAtUs).then((canvas) => {
+        if (subject !== next) return;
+        picture = canvas;
+        drawThumb();
+      });
       busy = false;
       heading.textContent =
         next.kind === "video" ? "Publish your video" : "Publish this short";

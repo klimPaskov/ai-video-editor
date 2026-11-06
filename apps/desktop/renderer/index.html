@@ -1558,7 +1558,7 @@
         <div id="publish-youtube" class="publish-pane" data-brand="youtube">
           <div class="publish-brand-head">
             <span
-              class="brand-logo"
+              class="brand-logo large"
               data-brand-logo="youtube"
               aria-hidden="true"
             ></span>
@@ -1566,12 +1566,15 @@
             <span class="muted">Title, description, chapters and tags</span>
           </div>
           <label class="field-label" for="publish-title-input">Title</label>
-          <input
-            type="text"
-            id="publish-title-input"
-            maxlength="100"
-            autocomplete="off"
-          />
+          <div class="field-count">
+            <input
+              type="text"
+              id="publish-title-input"
+              maxlength="100"
+              autocomplete="off"
+            />
+            <span id="publish-title-count" class="count-text"></span>
+          </div>
           <div id="publish-ideas" class="publish-ideas"></div>
           <label class="field-label" for="publish-intro">Description</label>
           <textarea id="publish-intro" rows="5" maxlength="4000"></textarea>
@@ -1579,13 +1582,28 @@
             <span class="field-label">Chapters</span>
             <ol id="publish-chapters" class="publish-chapters"></ol>
           </div>
-          <label class="field-label" for="publish-tags">Tags</label>
-          <input
-            type="text"
-            id="publish-tags"
-            autocomplete="off"
-            spellcheck="false"
-          />
+          <div class="publish-lower">
+            <div class="publish-tags-box">
+              <label class="field-label" for="publish-tag-input">Tags</label>
+              <div id="publish-tag-editor" class="tag-editor">
+                <span id="publish-tag-chips" class="tag-chips"></span>
+                <input
+                  type="text"
+                  id="publish-tag-input"
+                  maxlength="40"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="Add a tag"
+                  aria-label="Add a tag"
+                />
+              </div>
+            </div>
+            <figure id="publish-thumb" class="publish-thumb" hidden>
+              <span id="publish-thumb-picture" class="thumb-picture"></span>
+              <figcaption id="publish-thumb-title"></figcaption>
+              <span id="publish-thumb-time" class="thumb-time"></span>
+            </figure>
+          </div>
         </div>
         <div id="publish-posts" class="publish-pane" hidden>
           <div class="publish-post" data-post="x" data-brand="x">
@@ -1596,17 +1614,25 @@
                 aria-hidden="true"
               ></span>
               <label class="field-label" for="publish-x">X</label>
-              <span class="muted" id="publish-x-count"></span>
+              <span
+                class="count-ring"
+                id="publish-x-ring"
+                aria-hidden="true"
+              ></span>
+              <span class="muted count-text" id="publish-x-count"></span>
               <button
                 type="button"
-                class="ghost"
+                class="brand-solid"
                 data-copy="x"
                 data-icon="copy"
               >
                 Copy
               </button>
             </div>
-            <textarea id="publish-x" rows="3" maxlength="280"></textarea>
+            <div class="composer">
+              <span class="avatar" data-icon="user" aria-hidden="true"></span>
+              <textarea id="publish-x" rows="3" maxlength="280"></textarea>
+            </div>
           </div>
           <div class="publish-post" data-post="reddit" data-brand="reddit">
             <div class="publish-post-head">
@@ -1632,13 +1658,20 @@
               id="publish-reddit-title"
               maxlength="300"
               autocomplete="off"
+              aria-label="Reddit post title"
             />
-            <textarea
-              id="publish-reddit-body"
-              rows="4"
-              maxlength="8000"
-              aria-label="Reddit post text"
-            ></textarea>
+            <div class="composer votes">
+              <span class="vote-column" aria-hidden="true">
+                <span class="vote-up"></span>
+                <span class="vote-down"></span>
+              </span>
+              <textarea
+                id="publish-reddit-body"
+                rows="4"
+                maxlength="8000"
+                aria-label="Reddit post text"
+              ></textarea>
+            </div>
           </div>
           <div class="publish-post" data-post="linkedin" data-brand="linkedin">
             <div class="publish-post-head">
@@ -1657,11 +1690,14 @@
                 Copy
               </button>
             </div>
-            <textarea
-              id="publish-linkedin"
-              rows="4"
-              maxlength="3000"
-            ></textarea>
+            <div class="composer">
+              <span class="avatar" data-icon="user" aria-hidden="true"></span>
+              <textarea
+                id="publish-linkedin"
+                rows="4"
+                maxlength="3000"
+              ></textarea>
+            </div>
           </div>
           <div class="publish-post" data-post="discord" data-brand="discord">
             <div class="publish-post-head">
@@ -1680,7 +1716,14 @@
                 Copy
               </button>
             </div>
-            <textarea id="publish-discord" rows="3" maxlength="3000"></textarea>
+            <div class="composer discord-message">
+              <span class="avatar" data-icon="user" aria-hidden="true"></span>
+              <textarea
+                id="publish-discord"
+                rows="3"
+                maxlength="3000"
+              ></textarea>
+            </div>
           </div>
         </div>
         <p id="publish-empty" class="muted" hidden>

@@ -28,7 +28,12 @@ export function setupShortsPanel(options: {
   /** How many clips are saved, so the step can offer to go on. */
   saved(count: number): void;
   /** Opens the publishing text of one clip. */
-  publish(clipId: string, title: string, opener: HTMLElement): void;
+  publish(
+    clipId: string,
+    title: string,
+    startUs: number,
+    opener: HTMLElement,
+  ): void;
 }): { render(project: ProjectView | undefined, visible: boolean): void } {
   const find = element<HTMLButtonElement>("shorts-find");
   const pick = element<HTMLButtonElement>("shorts-pick");
@@ -255,7 +260,12 @@ export function setupShortsPanel(options: {
           `Write the title, tags and posts for ${candidate.title}`,
         );
         publishButton.addEventListener("click", () =>
-          options.publish(candidate.id, candidate.title, publishButton),
+          options.publish(
+            candidate.id,
+            candidate.title,
+            candidate.startUs,
+            publishButton,
+          ),
         );
         actions.append(discard, exportButton, publishButton);
         item.append(picture, foot, actions);

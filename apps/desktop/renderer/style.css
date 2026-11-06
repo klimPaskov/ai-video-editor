@@ -4667,3 +4667,241 @@ button.short-preview:hover:not(:disabled) {
 .publish-brand-head strong {
   font-size: var(--text-body, 15px);
 }
+
+/* Publish: closer to each platform's own look (docs/design/ui-previews/publish-brand-*) */
+.brand-logo.large {
+  width: 40px;
+  height: 40px;
+}
+.publish-brand-head strong {
+  font-size: 20px;
+}
+.publish-tabs button[data-tab="youtube"][aria-pressed="true"] {
+  color: color-mix(in srgb, #d90000 72%, var(--text));
+  border-bottom-color: #d90000;
+}
+.field-count {
+  position: relative;
+}
+.field-count input {
+  padding-right: 84px;
+}
+.field-count .count-text {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--text-2);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.publish-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 240px);
+  gap: var(--space-4);
+  align-items: start;
+}
+.publish-lower:has(.publish-thumb[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.tag-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  cursor: text;
+}
+.tag-editor:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.tag-chips {
+  display: contents;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 4px 2px var(--space-3);
+  background: var(--surface-3);
+  border-radius: 999px;
+}
+.tag-chip button.tag-remove {
+  width: 24px;
+  min-height: 24px;
+  padding: 0;
+  color: var(--text-2);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+}
+.tag-chip button.tag-remove svg {
+  width: 14px;
+  height: 14px;
+}
+#publish-tag-input {
+  flex: 1;
+  min-width: 96px;
+  min-height: 28px;
+  padding: 0 var(--space-1);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  outline: none;
+}
+.publish-thumb {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #000;
+  border-radius: var(--radius);
+}
+.publish-thumb .thumb-picture,
+.publish-thumb canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.publish-thumb canvas {
+  object-fit: cover;
+}
+.publish-thumb figcaption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: var(--space-5) var(--space-3) var(--space-2);
+  overflow: hidden;
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+  background: linear-gradient(transparent, rgb(0 0 0 / 70%));
+}
+.publish-thumb .thumb-time {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  padding: 1px 6px;
+  color: #fff;
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+  background: rgb(0 0 0 / 80%);
+  border-radius: 4px;
+}
+.publish-thumb figcaption {
+  padding-right: 56px;
+}
+.count-ring {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  background: conic-gradient(
+    #1d9bf0 calc(var(--used, 0) * 1%),
+    var(--border-strong) 0
+  );
+  border-radius: 50%;
+  mask: radial-gradient(circle, transparent 7px, #000 8px);
+}
+.count-ring.near-limit {
+  background: conic-gradient(
+    var(--danger) calc(var(--used, 0) * 1%),
+    var(--border-strong) 0
+  );
+}
+.publish-post-head .count-text {
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+.publish-post[data-brand] .publish-post-head button.brand-solid {
+  color: var(--surface);
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.composer {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--brand) 25%, var(--border));
+  border-radius: var(--radius);
+}
+.composer textarea {
+  min-height: 0;
+  padding: var(--space-1) 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  outline: none;
+  resize: vertical;
+}
+.composer:focus-within {
+  border-color: var(--brand);
+}
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 16%, var(--surface-3));
+  border-radius: 50%;
+}
+.avatar svg {
+  width: 20px;
+  height: 20px;
+}
+.composer.votes {
+  grid-template-columns: 28px minmax(0, 1fr);
+  margin-top: var(--space-2);
+  background: color-mix(in srgb, var(--text) 4%, var(--surface));
+}
+.vote-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  padding-top: var(--space-2);
+}
+.vote-up,
+.vote-down {
+  width: 0;
+  height: 0;
+  border-right: 8px solid transparent;
+  border-left: 8px solid transparent;
+}
+.vote-up {
+  border-bottom: 11px solid #ff4500;
+}
+.vote-down {
+  border-top: 11px solid var(--text-2);
+}
+.publish-post[data-brand="reddit"] > input[type="text"] {
+  margin-top: var(--space-1);
+}
+.composer.discord-message {
+  background: #313338;
+  border-color: #1e1f22;
+}
+.composer.discord-message textarea {
+  color: #dbdee1;
+}
+.composer.discord-message .avatar {
+  color: #fff;
+  background: #5865f2;
+}
+.publish-post-head .field-label {
+  font-size: 16px;
+  font-weight: 700;
+}

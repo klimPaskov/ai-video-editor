@@ -569,7 +569,28 @@ try {
   );
   // An edit is saved as it is made, in the project and in the file.
   await page.locator("#publish-title-input").fill("My own short title");
-  await page.locator("#publish-tags").fill("hoi4, mod, #shorts");
+  // Tags are chips: typed, added with Enter, removable.
+  await page.locator("#publish-tag-input").fill("nativetag");
+  await page.locator("#publish-tag-input").press("Enter");
+  await expect(
+    page.locator("#publish-tag-chips .tag-chip").last(),
+  ).toContainText("nativetag");
+  const chipCount = await page.locator("#publish-tag-chips .tag-chip").count();
+  await page
+    .locator("#publish-tag-chips .tag-chip")
+    .last()
+    .getByRole("button")
+    .click();
+  await expect(page.locator("#publish-tag-chips .tag-chip")).toHaveCount(
+    chipCount - 1,
+  );
+  await page.locator("#publish-tag-input").fill("kept, second");
+  await page.locator("#publish-tag-input").press("Enter");
+  // The title shows its length and the thumbnail card the footage and title.
+  await expect(page.locator("#publish-title-count")).toHaveText("18 / 100");
+  await expect(page.locator("#publish-thumb-title")).toHaveText(
+    "My own short title",
+  );
   await page.locator("#publish-tab-posts").click();
   await expect(page.locator("#publish-posts")).toBeVisible();
   await expect(page.locator("#publish-x")).not.toHaveValue("");
@@ -585,7 +606,10 @@ try {
               .filter((name) => name.endsWith(".md"))
               .map((name) => readFile(join(publishFolder, name), "utf8")),
           )
-        ).some((text) => text.startsWith("# My own short title")),
+        ).some(
+          (text) =>
+            text.startsWith("# My own short title") && text.includes("second"),
+        ),
       { timeout: 15_000 },
     )
     .toBe(true);
