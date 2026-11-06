@@ -1,4 +1,5 @@
 import { DesktopCodex } from "./codex.ts";
+import { ShortcutService } from "./shortcuts.ts";
 import {
   MediaToolsError,
   pathWithMediaTools,
@@ -98,6 +99,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  globalShortcut,
   ipcMain,
   net,
   protocol,
@@ -329,6 +331,11 @@ let servicesClosed = false;
 let recorder: DesktopRecorder | undefined;
 let playbackProxies: DesktopPlaybackProxies | undefined;
 let shortClips: DesktopShortClips | undefined;
+let shortcutService: ShortcutService | undefined;
+app.on("will-quit", () => {
+  shortcutService?.release();
+  globalShortcut.unregisterAll();
+});
 app.on("before-quit", (event) => {
   quitting = true;
   if (
@@ -718,9 +725,23 @@ async function start(): Promise<void> {
     path.join(app.getPath("userData"), "preferences"),
   );
   let committedScale = 1;
+  // The global (recording) shortcuts; the window handles the others itself.
+  shortcutService = new ShortcutService(globalShortcut, (id) => {
+    if (!window || window.isDestroyed()) return;
+    // Starting from another program brings the window forward first.
+    if (id === "record.start") {
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+    }
+    window.webContents.send(channels.shortcutFired, id);
+  });
   try {
-    committedScale = (await preferences.read()).interfaceScale;
+    const stored = await preferences.read();
+    committedScale = stored.interfaceScale;
+    shortcutService.apply(stored.shortcuts);
   } catch {
+    shortcutService.apply(undefined);
     /* Renderer reports the read failure through validated IPC. */
   }
   register(channels.preferencesGet, async (request) => {
@@ -732,7 +753,12 @@ async function start(): Promise<void> {
     const value = await preferences.write(request);
     committedScale = value.interfaceScale;
     window?.webContents.setZoomFactor(value.interfaceScale);
+    shortcutService?.apply(value.shortcuts);
     return value;
+  });
+  register(channels.shortcutStatus, async (request) => {
+    assertEmptyRequest(request);
+    return shortcutService?.status() ?? { unavailable: [] };
   });
   const userData = app.getPath("userData");
   const cameraLinks = new CameraLinks(path.join(userData, "camera-links"));

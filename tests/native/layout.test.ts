@@ -413,6 +413,7 @@ try {
         ["Claude", "settings-claude"],
         ["Codex", "settings-codex"],
         ["API providers", "settings-api-providers"],
+        ["Shortcuts", "settings-shortcuts"],
       ] as const) {
         await page.locator(`#${id}`).click();
         await audit(`${tag} / Settings ${section}`);

@@ -492,4 +492,20 @@ export function setupRecordPanel(options: {
     stopPolling();
     if (!active) openButton.focus();
   });
+
+  // The recording shortcuts (Settings, Shortcuts) work from any program.
+  async function startFromShortcut(): Promise<void> {
+    // A take is already running (or finishing): nothing to start.
+    if (busy || !live.hidden || openButton.hidden) return;
+    if (!dialog.open) await openDialog();
+    // Same as pressing Start with what the dialog chose; the countdown can be cancelled.
+    if (dialog.open && live.hidden && !start.disabled) start.click();
+  }
+  window.desktop.onShortcut((id) => {
+    if (id === "record.start") void startFromShortcut();
+    else if (id === "record.pause" && !live.hidden && !pause.disabled)
+      pause.click();
+    else if (id === "record.stop" && !live.hidden && !stop.disabled)
+      stop.click();
+  });
 }

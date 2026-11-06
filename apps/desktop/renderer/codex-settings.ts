@@ -2,8 +2,12 @@ import type { CodexView } from "../../../packages/domain/src/codex-view.ts";
 import type { Reply } from "../src/bridge.ts";
 import { setupProviderSettings } from "./provider-settings.ts";
 import { setupClaudeSettings } from "./claude-settings.ts";
+import type { ShortcutsSection } from "./shortcuts-settings.ts";
 
-export function setupCodexSettings(dialog: HTMLDialogElement): () => void {
+export function setupCodexSettings(
+  dialog: HTMLDialogElement,
+  shortcutsSettings: ShortcutsSection,
+): () => void {
   const element = <T extends HTMLElement = HTMLElement>(id: string) =>
     document.getElementById(id)! as T;
   const panel = element("codex-settings");
@@ -329,7 +333,9 @@ export function setupCodexSettings(dialog: HTMLDialogElement): () => void {
         );
     },
   );
-  function section(selected: "appearance" | "claude" | "codex" | "api"): void {
+  function section(
+    selected: "appearance" | "claude" | "codex" | "api" | "shortcuts",
+  ): void {
     stop();
     clearDeviceCode();
     providerSettings.deactivate();
@@ -338,6 +344,7 @@ export function setupCodexSettings(dialog: HTMLDialogElement): () => void {
     panel.hidden = selected !== "codex";
     element("claude-settings").hidden = selected !== "claude";
     element("api-provider-settings").hidden = selected !== "api";
+    element("shortcuts-settings").hidden = selected !== "shortcuts";
     element("appearance-settings").hidden = selected !== "appearance";
     element("appearance-actions").hidden = selected !== "appearance";
     element("settings-error").hidden = true;
@@ -357,6 +364,11 @@ export function setupCodexSettings(dialog: HTMLDialogElement): () => void {
       "aria-pressed",
       String(selected === "api"),
     );
+    element("settings-shortcuts").setAttribute(
+      "aria-pressed",
+      String(selected === "shortcuts"),
+    );
+    if (selected === "shortcuts") shortcutsSettings.activate();
     if (selected === "codex") {
       setText("codex-account", "Connecting to Codex…");
       void refresh();
@@ -371,6 +383,9 @@ export function setupCodexSettings(dialog: HTMLDialogElement): () => void {
   element("settings-codex").addEventListener("click", () => section("codex"));
   element("settings-api-providers").addEventListener("click", () =>
     section("api"),
+  );
+  element("settings-shortcuts").addEventListener("click", () =>
+    section("shortcuts"),
   );
   dialog.addEventListener("close", () => {
     stop();

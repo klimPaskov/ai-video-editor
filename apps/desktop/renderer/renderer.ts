@@ -1,4 +1,6 @@
 import { setupCodexSettings } from "./codex-settings.ts";
+import { setupShortcutsSettings } from "./shortcuts-settings.ts";
+import { acceleratorFromEvent } from "../../../packages/domain/src/shortcuts.ts";
 import { iconElement, setupIcons } from "./icons.ts";
 import { setupBrandMark } from "./brand-mark.ts";
 import { setupTimelineStrip } from "./timeline-strip.ts";
@@ -3389,7 +3391,11 @@ assetPolicySelect.addEventListener("change", async () => {
     assetPolicySelect.disabled = false;
   }
 });
-const resetSettingsSection = setupCodexSettings(settingsDialog);
+const shortcutsSettings = setupShortcutsSettings(settingsDialog);
+const resetSettingsSection = setupCodexSettings(
+  settingsDialog,
+  shortcutsSettings,
+);
 let savingPreferences = false;
 let settingsLoad = 0;
 let restoreInspector = false;
@@ -4116,10 +4122,15 @@ async function savePreferences(): Promise<void> {
       message.hidden = false;
       return;
     }
+    // The shortcuts are saved from their own section; keep them.
+    const stored = await window.desktop.getPreferences();
     const value = {
       interfaceScale: Number(scaleSelect.value),
       assetPolicy: assetPolicySelect.value,
       theme: theme.choice,
+      ...(stored.ok && stored.value.shortcuts
+        ? { shortcuts: stored.value.shortcuts }
+        : {}),
     };
     assertPreferences(value);
     const reply = await window.desktop.setPreferences(value);
@@ -4145,33 +4156,46 @@ function editShortcut(event: KeyboardEvent): boolean {
   if (
     activeProject?.stage !== "edit" ||
     settingsDialog.open ||
-    event.altKey ||
     (target &&
       (target.isContentEditable ||
         ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) &&
       target !== seek)
   )
     return false;
-  const command = event.ctrlKey || event.metaKey;
-  const key = event.key.toLowerCase();
-  const button = command
-    ? key === "z" && !event.shiftKey
-      ? undoEdit
-      : (key === "z" && event.shiftKey) || key === "y"
-        ? redoEdit
-        : undefined
-    : event.shiftKey
-      ? undefined
-      : (
-          {
-            i: markInButton,
-            o: markOutButton,
-            s: splitClip,
-            z: zoomAdd,
-          } as const
-        )[key];
-  if (!button) return false;
-  if (!fullEditor && !command && key !== "s") return false;
+  const accelerator = acceleratorFromEvent(event);
+  if (!accelerator) return false;
+  const map = shortcutsSettings.map();
+  const actions = [
+    "edit.undo",
+    "edit.redo",
+    "edit.split",
+    "edit.markIn",
+    "edit.markOut",
+    "edit.zoom",
+  ] as const;
+  // Ctrl+Y has always redone as well as the chosen Redo shortcut.
+  const id =
+    actions.find((candidate) => map[candidate] === accelerator) ??
+    (accelerator === "CommandOrControl+Y" && map["edit.redo"] !== null
+      ? "edit.redo"
+      : undefined);
+  if (!id) return false;
+  // Outside the complete editor only Split, Undo and Redo act.
+  if (
+    !fullEditor &&
+    id !== "edit.split" &&
+    id !== "edit.undo" &&
+    id !== "edit.redo"
+  )
+    return false;
+  const button = {
+    "edit.undo": undoEdit,
+    "edit.redo": redoEdit,
+    "edit.split": splitClip,
+    "edit.markIn": markInButton,
+    "edit.markOut": markOutButton,
+    "edit.zoom": zoomAdd,
+  }[id];
   event.preventDefault();
   if (!button.disabled && activeProject.clips) button.click();
   return true;
@@ -4179,7 +4203,7 @@ function editShortcut(event: KeyboardEvent): boolean {
 document.addEventListener("keydown", (event) => {
   const target = event.target as HTMLElement | null;
   if (
-    event.key === " " &&
+    acceleratorFromEvent(event) === shortcutsSettings.map()["play.toggle"] &&
     !playButton.hidden &&
     !settingsDialog.open &&
     (target === document.body || target === canvas || target === seek)
@@ -4196,20 +4220,30 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   if (editShortcut(event)) return;
+  const frameStep = (() => {
+    const accelerator = acceleratorFromEvent(event);
+    const map = shortcutsSettings.map();
+    return accelerator === null
+      ? undefined
+      : accelerator === map["frame.previous"]
+        ? previous
+        : accelerator === map["frame.next"]
+          ? next
+          : undefined;
+  })();
   if (
-    (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !event.altKey &&
+    frameStep &&
     !settingsDialog.open &&
     (target === document.body || target === canvas)
   ) {
-    const button = event.key === "ArrowLeft" ? previous : next;
+    const button = frameStep;
     event.preventDefault();
     if (!button.disabled && !button.hidden) button.click();
     return;
   }
-  if ((event.ctrlKey || event.metaKey) && event.key === ",") {
+  if (
+    acceleratorFromEvent(event) === shortcutsSettings.map()["settings.open"]
+  ) {
     event.preventDefault();
     void openSettings();
   } else if (
@@ -4230,6 +4264,7 @@ void window.desktop
         "Saved interface settings could not be loaded. Open Settings to retry.",
       );
     else {
+      shortcutsSettings.load(reply.value.shortcuts);
       const theme = reply.value.theme ?? defaultThemeChoice;
       applyTheme(theme);
       rememberTheme(theme);

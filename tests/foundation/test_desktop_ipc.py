@@ -316,6 +316,22 @@ class DesktopIpcContractTests(unittest.TestCase):
             self.invalid({'channel': 'preferences:get', 'response': {'ok': True, 'value': wrong}})
             self.invalid({'channel': 'preferences:set', 'payload': valid, 'response': {'ok': True, 'value': wrong}})
 
+    def test_shortcut_preferences_and_status(self):
+        base = {'interfaceScale': 1}
+        for shortcuts in [{}, {'edit.split': 'X'}, {'record.start': 'CommandOrControl+Alt+R', 'edit.zoom': None},
+                          {'frame.next': 'Right', 'settings.open': 'CommandOrControl+,'}]:
+            value = dict(base, shortcuts=shortcuts)
+            self.valid({'channel': 'preferences:set', 'payload': value, 'response': {'ok': True, 'value': value}})
+        for wrong in [{'unknown.action': 'X'}, {'edit.split': 'x'}, {'edit.split': 'Ctrl+S'}, {'edit.split': 5},
+                      {'edit.split': 'Shift+Alt+S'}, {'edit.split': 'Tab'}]:
+            self.invalid({'channel': 'preferences:set', 'payload': dict(base, shortcuts=wrong),
+                          'response': {'ok': True, 'value': base}})
+        for unavailable in [[], ['record.pause'], ['record.start', 'record.stop']]:
+            self.valid({'channel': 'shortcuts:status', 'response': {'ok': True, 'value': {'unavailable': unavailable}}})
+        for wrong in [['edit.split'], ['record.stop', 'record.stop'], ['nope']]:
+            self.invalid({'channel': 'shortcuts:status', 'response': {'ok': True, 'value': {'unavailable': wrong}}})
+        self.invalid({'channel': 'shortcuts:status', 'payload': {}, 'response': {'ok': True, 'value': {'unavailable': []}}})
+
     def project_view(self):
         return {
             'id': '11111111-1111-4111-8111-111111111111', 'name': 'Synthetic project',

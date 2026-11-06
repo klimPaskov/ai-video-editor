@@ -1286,6 +1286,9 @@
           >
             API providers
           </button>
+          <button type="button" id="settings-shortcuts" aria-pressed="false">
+            Shortcuts
+          </button>
         </nav>
         <div id="appearance-settings">
           <div class="theme-field">
@@ -1447,6 +1450,19 @@
             Requests are billed to your API account. Connecting does not start
             one.
           </p>
+        </section>
+        <section id="shortcuts-settings" aria-label="Keyboard shortcuts" hidden>
+          <p class="muted">
+            Click a shortcut, then press the keys you want. The recording
+            shortcuts also work while another program is in front.
+          </p>
+          <ul id="shortcut-list" class="shortcut-list"></ul>
+          <p id="shortcut-message" class="muted" role="status"></p>
+          <div class="dialog-actions">
+            <button type="button" id="shortcuts-reset-all">
+              Restore all defaults
+            </button>
+          </div>
         </section>
         <p id="settings-error" role="alert" hidden></p>
         <div class="dialog-actions" id="appearance-actions">

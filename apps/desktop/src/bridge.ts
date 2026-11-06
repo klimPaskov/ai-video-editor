@@ -11,6 +11,10 @@ import type {
 } from "../../../packages/domain/src/api-providers.ts";
 import type { Preferences } from "../../../packages/domain/src/preferences.ts";
 import type {
+  ShortcutId,
+  ShortcutStatus,
+} from "../../../packages/domain/src/shortcuts.ts";
+import type {
   MagicWandProjectRequest,
   MagicWandStartRequest,
   MagicWandView,
@@ -343,6 +347,10 @@ export interface DesktopBridge {
   onProjectStageChanged(
     listener: (reply: Reply<ProjectView>) => void,
   ): () => void;
+  /** Which global shortcuts the system refused (another program owns them). */
+  getShortcutStatus(): Promise<Reply<ShortcutStatus>>;
+  /** A global shortcut was pressed while the app may be out of the way. */
+  onShortcut(listener: (id: ShortcutId) => void): () => void;
   getPreferences(): Promise<Reply<Preferences>>;
   setPreferences(value: Preferences): Promise<Reply<Preferences>>;
   listMedia(): Promise<Reply<MediaSummary[]>>;
@@ -464,6 +472,8 @@ export const channels = Object.freeze({
   projectManualRedo: "projects:manual-redo",
   projectDraftChanged: "projects:draft-changed",
   projectStageChanged: "projects:stage-changed",
+  shortcutStatus: "shortcuts:status",
+  shortcutFired: "shortcuts:fired",
   preferencesGet: "preferences:get",
   preferencesSet: "preferences:set",
   list: "library:list",

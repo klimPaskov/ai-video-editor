@@ -1391,6 +1391,42 @@
       "additionalProperties": false,
       "required": [
         "channel",
+        "response"
+      ],
+      "properties": {
+        "channel": {
+          "const": "shortcuts:status"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ok",
+                "value"
+              ],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/shortcutStatus"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
         "response",
         "payload"
       ],
@@ -5474,6 +5510,156 @@
               }
             }
           ]
+        },
+        "shortcuts": {
+          "description": "Keyboard shortcuts the user changed (Settings, Shortcuts); the defaults apply to the rest. A string is an Electron-style accelerator in canonical order, null turns the shortcut off. The three recording shortcuts work while another program is in front and need Ctrl, Alt or a function key; no two actions share one.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "record.start": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "record.pause": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "record.stop": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "play.toggle": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "edit.split": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "edit.markIn": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "edit.markOut": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "edit.zoom": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "edit.undo": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "edit.redo": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "frame.previous": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "frame.next": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            },
+            "settings.open": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^(CommandOrControl\\+)?(Alt\\+)?(Shift\\+)?([A-Z0-9,.=-]|F([1-9]|1[0-9]|2[0-4])|Space|Left|Right|Up|Down|Home|End|PageUp|PageDown|Backspace|Delete)$"
+                }
+              ]
+            }
+          }
         }
       }
     },
@@ -9032,6 +9218,28 @@
           }
         }
       ]
+    },
+    "shortcutStatus": {
+      "description": "Which global shortcuts the system refused (another program already owns the keys); empty when all are registered.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unavailable"
+      ],
+      "properties": {
+        "unavailable": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 3,
+          "items": {
+            "enum": [
+              "record.start",
+              "record.pause",
+              "record.stop"
+            ]
+          }
+        }
+      }
     }
   }
 }

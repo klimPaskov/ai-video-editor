@@ -351,6 +351,8 @@ export async function auditLayout(page: Page): Promise<LayoutFinding[]> {
       const text = range.getBoundingClientRect();
       const box = icon.getBoundingClientRect();
       if (text.height === 0 || box.height === 0) continue;
+      // An icon stacked above its label is a different layout, not a misalignment.
+      if (text.top >= box.bottom - 1 || box.top >= text.bottom - 1) continue;
       const off = Math.abs(
         (text.top + text.bottom) / 2 - (box.top + box.bottom) / 2,
       );

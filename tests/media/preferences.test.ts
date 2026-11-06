@@ -113,3 +113,40 @@ test("linked directories, hardlinked files and non-file settings are rejected wi
   );
   assert.throws(() => new PreferencesStore("relative/path"));
 });
+
+test("changed shortcuts are kept with the other settings, and every shortcut changed still fits", async () => {
+  const root = await directory();
+  const store = new PreferencesStore(root);
+  const shortcuts = {
+    "record.start": "CommandOrControl+Alt+R",
+    "record.pause": "CommandOrControl+Alt+P",
+    "record.stop": "CommandOrControl+Alt+S",
+    "play.toggle": "P",
+    "edit.split": "X",
+    "edit.markIn": "J",
+    "edit.markOut": "K",
+    "edit.zoom": null,
+    "edit.undo": "CommandOrControl+Alt+Z",
+    "edit.redo": "CommandOrControl+Alt+Y",
+    "frame.previous": "Up",
+    "frame.next": "Down",
+    "settings.open": "CommandOrControl+.",
+  } as const;
+  const saved = await store.write({
+    interfaceScale: 1.25,
+    theme: { id: "studio_dark" },
+    shortcuts,
+  });
+  assert.deepEqual(saved.shortcuts, shortcuts);
+  assert.deepEqual(await new PreferencesStore(root).read(), {
+    interfaceScale: 1.25,
+    theme: { id: "studio_dark" },
+    shortcuts,
+  });
+  // A file far larger than any settings are is still refused.
+  await writeFile(
+    join(root, "preferences.json"),
+    JSON.stringify({ interfaceScale: 1, pad: "x".repeat(9000) }),
+  );
+  await assert.rejects(new PreferencesStore(root).read());
+});

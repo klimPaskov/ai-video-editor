@@ -4445,3 +4445,41 @@ button.short-preview:hover:not(:disabled) {
     right: 360px;
   }
 }
+
+/* Settings, Shortcuts: one row per action, its keys, Off and Reset. */
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shortcut-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.shortcut-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.shortcut-name small {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.shortcut-name small.shortcut-bad {
+  color: var(--danger-text);
+}
+.shortcut-key {
+  min-width: 168px;
+  font-variant-numeric: tabular-nums;
+}
+#shortcut-message {
+  min-height: 1.4em;
+  margin: var(--space-2) 0 0;
+}

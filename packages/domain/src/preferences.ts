@@ -1,3 +1,4 @@
+import { assertShortcutChoices, type ShortcutChoices } from "./shortcuts.ts";
 import { assertThemeChoice, type ThemeChoice } from "./theme.ts";
 
 export interface Preferences {
@@ -11,6 +12,8 @@ export interface Preferences {
   assetPolicy?: AssetPolicy;
   /** The interface theme (ADR 0024); Light Canvas when absent. */
   theme?: ThemeChoice;
+  /** Keyboard shortcuts the user changed; the defaults apply to the rest. */
+  shortcuts?: ShortcutChoices;
 }
 
 export type AssetPolicy = "any" | "copyright_free";
@@ -25,7 +28,10 @@ export function assertPreferences(
     Array.isArray(value) ||
     Object.keys(value).some(
       (key) =>
-        key !== "interfaceScale" && key !== "assetPolicy" && key !== "theme",
+        key !== "interfaceScale" &&
+        key !== "assetPolicy" &&
+        key !== "theme" &&
+        key !== "shortcuts",
     ) ||
     !Object.hasOwn(value, "interfaceScale") ||
     !("interfaceScale" in value) ||
@@ -39,6 +45,7 @@ export function assertPreferences(
   )
     throw new Error("Choose which material Claude may use.");
   if ("theme" in value) assertThemeChoice(value.theme);
+  if ("shortcuts" in value) assertShortcutChoices(value.shortcuts);
 }
 
 /** The asset policy in effect: any material unless the user chose otherwise. */

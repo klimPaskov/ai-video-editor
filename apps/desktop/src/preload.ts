@@ -35,6 +35,10 @@ import {
 } from "../../../packages/domain/src/edit-summary.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import {
+  assertShortcutStatus,
+  isShortcutId,
+} from "../../../packages/domain/src/shortcuts.ts";
+import {
   assertMagicWandProjectRequest,
   assertMagicWandStartRequest,
   assertMagicWandView,
@@ -680,6 +684,17 @@ const bridge: DesktopBridge = {
     ipcRenderer.on(channels.projectStageChanged, receive);
     return () =>
       ipcRenderer.removeListener(channels.projectStageChanged, receive);
+  },
+  getShortcutStatus: () =>
+    invoke(channels.shortcutStatus, undefined, assertShortcutStatus),
+  onShortcut: (listener) => {
+    if (typeof listener !== "function")
+      throw new Error("Invalid shortcut listener");
+    const receive = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      if (isShortcutId(value)) listener(value);
+    };
+    ipcRenderer.on(channels.shortcutFired, receive);
+    return () => ipcRenderer.removeListener(channels.shortcutFired, receive);
   },
   getPreferences: () =>
     invoke(channels.preferencesGet, undefined, assertPreferences),

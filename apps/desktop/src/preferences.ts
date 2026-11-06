@@ -6,6 +6,8 @@ import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import type { Preferences } from "../../../packages/domain/src/preferences.ts";
 
 const pending = new Map<string, Promise<unknown>>();
+/** Settings are small; this leaves room for a theme and every shortcut changed. */
+const maxBytes = 8192;
 const loadError =
   "Interface settings could not be loaded. Check local storage access and restart the application.";
 const saveError =
@@ -57,7 +59,7 @@ export class PreferencesStore {
       if (
         !stat.isFile() ||
         stat.isSymbolicLink() ||
-        stat.size > 1024 ||
+        stat.size > maxBytes ||
         stat.nlink !== 1
       )
         throw new Error(loadError);
@@ -71,7 +73,7 @@ export class PreferencesStore {
     );
     try {
       const stat = await handle.stat();
-      if (!stat.isFile() || stat.size > 1024 || stat.nlink !== 1)
+      if (!stat.isFile() || stat.size > maxBytes || stat.nlink !== 1)
         throw new Error(loadError);
       const value: unknown = JSON.parse(
         await handle.readFile({ encoding: "utf8" }),
@@ -81,6 +83,9 @@ export class PreferencesStore {
         interfaceScale: value.interfaceScale,
         ...(value.assetPolicy ? { assetPolicy: value.assetPolicy } : {}),
         ...(value.theme ? { theme: structuredClone(value.theme) } : {}),
+        ...(value.shortcuts
+          ? { shortcuts: structuredClone(value.shortcuts) }
+          : {}),
       };
     } finally {
       await handle.close();
@@ -102,6 +107,9 @@ export class PreferencesStore {
       interfaceScale: value.interfaceScale,
       ...(value.assetPolicy ? { assetPolicy: value.assetPolicy } : {}),
       ...(value.theme ? { theme: structuredClone(value.theme) } : {}),
+      ...(value.shortcuts
+        ? { shortcuts: structuredClone(value.shortcuts) }
+        : {}),
     };
     return this.serialize(async () => {
       let staged: string | undefined;
