@@ -13,10 +13,7 @@ input.on("line", (line) => {
   if (message.method === "initialize") {
     initializations++;
     if (mode === "init-error") {
-      write({
-        id: message.id,
-        error: { code: -32000, message: "PRIVATE SECRET" },
-      });
+      write({ id: message.id, error: { code: -32000, message: "PRIVATE SECRET" } });
     } else {
       write({ id: message.id, result: { initializations, pid: process.pid } });
     }
@@ -36,55 +33,25 @@ input.on("line", (line) => {
       write({ id: message.id, result: message.params });
       break;
     case "order":
-      setTimeout(
-        () => write({ id: message.id, result: message.params }),
-        message.params.delay,
-      );
+      setTimeout(() => write({ id: message.id, result: message.params }), message.params.delay);
       break;
     case "environment":
-      write({
-        id: message.id,
-        result: {
-          cwd: process.cwd(),
-          marker: process.env.TRANSPORT_MARKER ?? null,
-        },
-      });
+      write({ id: message.id, result: { cwd: process.cwd(), marker: process.env.TRANSPORT_MARKER ?? null } });
       break;
     case "error":
       process.stderr.write("PRIVATE SECRET STDERR\n");
-      write({
-        id: message.id,
-        error: {
-          code: -32001,
-          message: "PRIVATE SECRET",
-          data: { token: "secret" },
-        },
-      });
+      write({ id: message.id, error: { code: -32001, message: "PRIVATE SECRET", data: { token: "secret" } } });
       break;
     case "fragment": {
-      const encoded = Buffer.from(
-        JSON.stringify({ id: message.id, result: "é 🌍" }) + "\r\n",
-      );
-      for (let i = 0; i < encoded.length; i++)
-        setTimeout(() => process.stdout.write(encoded.subarray(i, i + 1)), i);
+      const encoded = Buffer.from(JSON.stringify({ id: message.id, result: "é 🌍" }) + "\r\n");
+      for (let i = 0; i < encoded.length; i++) setTimeout(() => process.stdout.write(encoded.subarray(i, i + 1)), i);
       break;
     }
     case "coalesce":
-      process.stdout.write(
-        JSON.stringify({ method: "event", params: { delta: "first" } }) +
-          "\n" +
-          JSON.stringify({ method: "event", params: { delta: "second" } }) +
-          "\n" +
-          JSON.stringify({ id: message.id, result: true }) +
-          "\n",
-      );
+      process.stdout.write(JSON.stringify({ method: "event", params: { delta: "first" } }) + "\n" + JSON.stringify({ method: "event", params: { delta: "second" } }) + "\n" + JSON.stringify({ id: message.id, result: true }) + "\n");
       break;
     case "raw":
-      process.stdout.write(
-        message.params.repeat
-          ? Buffer.alloc(message.params.repeat, 120)
-          : Buffer.from(message.params.bytes),
-      );
+      process.stdout.write(message.params.repeat ? Buffer.alloc(message.params.repeat, 120) : Buffer.from(message.params.bytes));
       if (message.params.exit) process.stdout.end(() => process.exit(0));
       break;
     case "unknown":
@@ -96,11 +63,7 @@ input.on("line", (line) => {
       break;
     case "server":
       clientRequest = message.id;
-      write({
-        id: "approval-1",
-        method: "permission/request",
-        params: { action: "forbidden" },
-      });
+      write({ id: "approval-1", method: "permission/request", params: { action: "forbidden" } });
       break;
     case "duplicate-server":
       clientRequest = message.id;
