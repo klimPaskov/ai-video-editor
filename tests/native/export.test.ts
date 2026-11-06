@@ -251,6 +251,18 @@ try {
   await expect(page.locator("#done-name")).toHaveText("Talk master.mkv");
   await expect(page.locator("#done-meta")).toContainText("saved to");
   await page.screenshot({ path: join(evidence, "done-screen.png") });
+  // Publish text writes the title, description and tags for the video.
+  await page.locator("#done-publish").click();
+  await expect(page.locator("#publish-title")).toHaveText("Publish your video");
+  await expect(page.locator("#publish-title-input")).not.toHaveValue("", {
+    timeout: 30_000,
+  });
+  await expect(page.locator("#publish-folder")).toContainText(
+    /Urushi[\\/].+[\\/]Publish/u,
+  );
+  await page.screenshot({ path: join(evidence, "publish-video.png") });
+  await page.locator("#publish-close").click();
+  await expect(page.locator("#publish-dialog")).toBeHidden();
   // Keep editing returns to Export, where the verified result is listed.
   await page.locator("#done-keep").click();
   await expect(page.locator("#export-done")).toBeVisible();

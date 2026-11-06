@@ -53,6 +53,7 @@ The numbered documents are the product and engineering specifications. Many end 
 - [Launch trailer plan](56_TRAILER_PLAN.md)
 - [Clips engine plan](57_CLIPS_ENGINE_PLAN.md)
 - [Rust engine plan](58_RUST_ENGINE_PLAN.md)
+- [Publishing text and upload](59_PUBLISHING.md)
 - [Full AI edit](50_FULL_AI_EDIT.md)
 
 ### AI assistants and tools

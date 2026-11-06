@@ -532,6 +532,75 @@ try {
   await page.screenshot({ path: join(evidence, "shorts-claude-pick.png") });
   result.claudePick = scripted;
 
+  step = "publish-text";
+  // The clip's own title, tags and posts, written without any account from
+  // the transcript, kept in the project's tidy Publish folder.
+  const clipTitle = (await page
+    .locator("#shorts-list .short-foot strong")
+    .first()
+    .textContent())!;
+  await page
+    .locator("#shorts-list .short-item")
+    .first()
+    .getByRole("button", {
+      name: /^Write the title, tags and posts for /,
+    })
+    .click();
+  const dialog = page.locator("#publish-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#publish-title")).toHaveText("Publish this short");
+  await expect(page.locator("#publish-subject")).toHaveText(clipTitle);
+  await expect(page.locator("#publish-title-input")).not.toHaveValue("", {
+    timeout: 30_000,
+  });
+  // A short has no chapters; the plain version says it is plain.
+  await expect(page.locator("#publish-chapters-box")).toBeHidden();
+  await expect(page.locator("#publish-message")).toContainText(
+    "Connect Claude or an API provider",
+  );
+  const shortTitle = await page.locator("#publish-title-input").inputValue();
+  assert.ok(shortTitle.length > 0 && shortTitle.length <= 100);
+  const folderLine = (await page.locator("#publish-folder").textContent())!;
+  const publishFolder = folderLine.replace(/^Saved to /u, "");
+  assert.match(publishFolder, /[\\/]Urushi[\\/].+[\\/]Publish[\\/]Shorts$/u);
+  assert.ok(
+    (await readdir(publishFolder)).some((name) => name.endsWith(".md")),
+    "the clip's text file is written",
+  );
+  // An edit is saved as it is made, in the project and in the file.
+  await page.locator("#publish-title-input").fill("My own short title");
+  await page.locator("#publish-tags").fill("hoi4, mod, #shorts");
+  await page.locator("#publish-tab-posts").click();
+  await expect(page.locator("#publish-posts")).toBeVisible();
+  await expect(page.locator("#publish-x")).not.toHaveValue("");
+  await page.screenshot({ path: join(evidence, "publish-posts.png") });
+  await page.locator("#publish-tab-youtube").click();
+  await page.locator("#publish-folder-open").click();
+  await expect
+    .poll(
+      async () =>
+        (
+          await Promise.all(
+            (await readdir(publishFolder))
+              .filter((name) => name.endsWith(".md"))
+              .map((name) => readFile(join(publishFolder, name), "utf8")),
+          )
+        ).some((text) => text.startsWith("# My own short title")),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  const revealed = await electron.evaluate(
+    () => (globalThis as unknown as { __revealed: string[] }).__revealed,
+  );
+  assert.ok(
+    revealed.some((path) => path === publishFolder),
+    "Show in folder reveals the Publish folder",
+  );
+  await page.screenshot({ path: join(evidence, "publish-short.png") });
+  await page.locator("#publish-close").click();
+  await expect(dialog).toBeHidden();
+  result.publish = { shortTitle, publishFolder };
+
   result.step = "complete";
   await writeFile(
     join(evidence, "result.json"),
