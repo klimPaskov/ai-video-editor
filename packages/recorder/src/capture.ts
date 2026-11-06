@@ -29,7 +29,9 @@ export interface AudioInput {
     | "dshow"
     | "avfoundation"
     | "test_tone"
-    | "test_desktop_tone";
+    | "test_desktop_tone"
+    /** The computer's own sound, streamed by the loopback helper; `device` is its local port. */
+    | "loopback";
   device: string;
 }
 
@@ -189,7 +191,21 @@ export function segmentArguments(request: SegmentRequest): string[] {
         "-i",
         `sine=frequency=880:sample_rate=${captureSampleRate},arealtime`,
       );
-    else if (source.format === "dshow")
+    else if (source.format === "loopback") {
+      if (!/^\d{1,5}$/u.test(source.device))
+        throw new Error("The computer sound needs a local port.");
+      // Raw 32-bit float stereo from the loopback helper (docs/06).
+      audio.push(
+        "-f",
+        "f32le",
+        "-ar",
+        String(captureSampleRate),
+        "-ac",
+        "2",
+        "-i",
+        `tcp://127.0.0.1:${source.device}`,
+      );
+    } else if (source.format === "dshow")
       audio.push("-f", "dshow", "-i", `audio=${source.device}`);
     else if (source.format === "avfoundation")
       audio.push("-f", "avfoundation", "-i", `:${source.device}`);

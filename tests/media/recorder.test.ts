@@ -140,6 +140,128 @@ test("parsers read counters, devices and input start times", () => {
 });
 
 test(
+  "computer sound from the loopback helper is mixed with the microphone and the helper ends with the capture",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await realpath(
+      await mkdtemp(join(tmpdir(), "recorder-loopback-")),
+    );
+    try {
+      const session = new CaptureSession({
+        ffmpeg: "ffmpeg",
+        ffprobe: "ffprobe",
+        directory,
+        loopback: {
+          executable: process.execPath,
+          args: [fileURLToPath(new URL("fake-loopback.mjs", import.meta.url))],
+        },
+        request: {
+          platform: "test",
+          display: { ...display, x: 0, width: 160, height: 90 },
+          microphone: testToneInput,
+          desktopAudio: {
+            id: "desktop-audio",
+            label: "Computer sound",
+            format: "loopback",
+            device: "",
+          },
+          frameRate: 30,
+        },
+      });
+      await session.record();
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      const finished = await session.stop();
+      const level = async (frequency: number) =>
+        Number(
+          (
+            await runProcess({
+              executable: "ffmpeg",
+              args: [
+                "-v",
+                "info",
+                "-i",
+                finished.path,
+                "-map",
+                "0:a:0",
+                "-af",
+                `bandpass=f=${frequency}:width_type=h:w=40,volumedetect`,
+                "-f",
+                "null",
+                "-",
+              ],
+            })
+          ).stderr
+            .toString()
+            .match(/max_volume: (-?[\d.]+) dB/u)?.[1],
+        );
+      // 440 Hz is the microphone, 880 Hz the computer sound from the helper.
+      assert.ok((await level(440)) > -40, "microphone tone present");
+      assert.ok((await level(880)) > -40, "computer sound present");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "a take with only computer sound from the loopback helper keeps its audio",
+  { timeout: 120_000 },
+  async () => {
+    const directory = await realpath(
+      await mkdtemp(join(tmpdir(), "recorder-loopback-only-")),
+    );
+    try {
+      const session = new CaptureSession({
+        ffmpeg: "ffmpeg",
+        ffprobe: "ffprobe",
+        directory,
+        loopback: {
+          executable: process.execPath,
+          args: [fileURLToPath(new URL("fake-loopback.mjs", import.meta.url))],
+        },
+        request: {
+          platform: "test",
+          display: { ...display, x: 0, width: 160, height: 90 },
+          microphone: null,
+          desktopAudio: {
+            id: "desktop-audio",
+            label: "Computer sound",
+            format: "loopback",
+            device: "",
+          },
+          frameRate: 30,
+        },
+      });
+      await session.record();
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      const finished = await session.stop();
+      const result = await runProcess({
+        executable: "ffmpeg",
+        args: [
+          "-v",
+          "info",
+          "-i",
+          finished.path,
+          "-map",
+          "0:a:0",
+          "-af",
+          "bandpass=f=880:width_type=h:w=40,volumedetect",
+          "-f",
+          "null",
+          "-",
+        ],
+      });
+      const level = Number(
+        result.stderr.toString().match(/max_volume: (-?[\d.]+) dB/u)?.[1],
+      );
+      assert.ok(level > -40, `computer sound level ${level}`);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
   "a take with the microphone and computer sound keeps one aligned audio track holding both",
   { timeout: 120_000 },
   async () => {

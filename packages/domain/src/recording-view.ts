@@ -111,6 +111,8 @@ export const recordingIssues = Object.freeze({
     "Recording could not start. Check screen and microphone permissions and try again.",
   microphone:
     "The microphone could not be opened. Close other apps that use it, or choose another microphone, then try again.",
+  desktopAudio:
+    "The computer sound could not be recorded. Turn off Record computer sound, or try again.",
   interrupted:
     "Recording stopped unexpectedly. The part recorded so far was kept.",
   finish: "The recording could not be saved. Try recording again.",

@@ -83,6 +83,12 @@ export interface RecorderOptions {
     script: string;
     env?: NodeJS.ProcessEnv;
   };
+  /**
+   * Records the computer's own sound (WASAPI loopback, as OBS does): the
+   * bundled engine run as `urushi-engine loopback`. Windows only; without it
+   * the recorder falls back to a DirectShow "Stereo Mix" style device.
+   */
+  loopback?: { executable: string; args: string[] };
   /** Overridable for tests; lists capture microphones. */
   listOutput?(executable: string, args: string[]): Promise<string>;
   /**
@@ -230,7 +236,16 @@ export class DesktopRecorder {
       return {
         microphones: parseDshowAudio(text),
         cameras: parseDshowVideo(text),
-        desktopAudio: parseDshowDesktopAudio(text),
+        // The loopback helper records any Windows output device; the
+        // DirectShow mix device is only the fallback.
+        desktopAudio: this.options.loopback
+          ? {
+              id: "desktop-audio",
+              label: "Computer sound",
+              format: "loopback",
+              device: "",
+            }
+          : parseDshowDesktopAudio(text),
         reliable: text.trim() !== "",
       };
     }
@@ -441,6 +456,7 @@ export class DesktopRecorder {
       ...(this.options.supervisor
         ? { supervisor: this.options.supervisor }
         : {}),
+      ...(this.options.loopback ? { loopback: this.options.loopback } : {}),
       request: {
         platform,
         ...(platform === "linux" && this.options.env.DISPLAY
@@ -475,9 +491,11 @@ export class DesktopRecorder {
 
   /** The plain message for a capture that would not start. */
   private startMessage(error: unknown): string {
-    return error instanceof CaptureStartError && error.failure === "microphone"
-      ? recordingIssues.microphone
-      : recordingIssues.start;
+    if (error instanceof CaptureStartError) {
+      if (error.failure === "microphone") return recordingIssues.microphone;
+      if (error.failure === "desktopAudio") return recordingIssues.desktopAudio;
+    }
+    return recordingIssues.start;
   }
 
   async pause(): Promise<RecordingView> {

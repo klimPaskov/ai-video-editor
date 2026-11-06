@@ -1194,6 +1194,10 @@ async function start(): Promise<void> {
   });
   recorder = new DesktopRecorder({
     ...mediaExecutables,
+    // Computer sound on Windows comes from the bundled engine (WASAPI loopback).
+    ...(process.platform === "win32" && clipsEngine
+      ? { loopback: { executable: clipsEngine, args: ["loopback"] } }
+      : {}),
     root: path.join(userData, "recordings"),
     platform: process.platform,
     env: process.env,

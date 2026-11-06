@@ -15,5 +15,8 @@ engine-core = { path = "../engine-core" }
 engine-clips = { path = "../engine-clips" }
 serde_json.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.26.0"
+
 [lints]
 workspace = true

@@ -11,6 +11,8 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::process::ExitCode;
 use std::thread;
 
+mod loopback;
+
 const METHODS: [&str; 3] = ["engine.hello", "clips.render", "clips.frame"];
 
 fn dispatch(request: &Request, cancel: &Cancel, emitter: &Emitter) -> JobResult<Value> {
@@ -40,6 +42,10 @@ fn dispatch(request: &Request, cancel: &Cancel, emitter: &Emitter) -> JobResult<
 }
 
 fn main() -> ExitCode {
+    // `urushi-engine loopback` records the computer's own sound (docs/06).
+    if std::env::args().nth(1).as_deref() == Some("loopback") {
+      return loopback::run();
+    }
     let emitter = Emitter::stdout();
     let cancel = Cancel::new();
     let mut lines = BufReader::new(std::io::stdin()).lines();

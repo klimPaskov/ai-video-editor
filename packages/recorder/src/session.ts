@@ -63,7 +63,8 @@ export interface FinishedRecording {
 }
 
 /** Why a capture did not start; main maps it to a plain, actionable message. */
-export type CaptureStartFailure = "microphone" | "screen" | "timeout";
+export type CaptureStartFailure =
+  "microphone" | "desktopAudio" | "screen" | "timeout";
 
 export class CaptureStartError extends Error {
   readonly failure: CaptureStartFailure;
@@ -79,6 +80,12 @@ export interface SessionOptions {
   directory: string;
   request: Omit<SegmentRequest, "outputPath">;
   onUpdate?: () => void;
+  /**
+   * The program that records the computer's own sound (`urushi-engine
+   * loopback`): started before each segment, it prints `PORT <n>` and streams
+   * raw audio to FFmpeg over that local port.
+   */
+  loopback?: { executable: string; args: string[] };
   /**
    * Runs each capture through `capture-supervisor` so FFmpeg stops when the
    * app goes away. `executable` runs `script` as Node.
@@ -155,6 +162,8 @@ function startFailure(
   stderr: string,
   hasMicrophone: boolean,
 ): CaptureStartFailure {
+  // FFmpeg could not read the computer sound from the loopback helper.
+  if (/tcp:\/\/127\.0\.0\.1/u.test(stderr)) return "desktopAudio";
   return hasMicrophone &&
     /dshow|audio=|pulse|alsa|avfoundation|Could not run graph|Error opening input/iu.test(
       stderr,
@@ -320,7 +329,12 @@ export class CaptureSession {
     const found = starts
       .slice(1, 1 + audioSources(this.options.request).length)
       .filter((value): value is number => value !== undefined);
-    return found.length > 0 ? Math.min(...found) : null;
+    if (found.length > 0) return Math.min(...found);
+    // A raw stream from the loopback helper reports no start time; with no
+    // microphone to anchor it, it is taken to begin with the picture (without
+    // a start time the audio would be left out of the finished file).
+    const sources = audioSources(this.options.request).length;
+    return sources > 0 && starts[0] !== undefined ? starts[0] : null;
   }
 
   /** The camera is the last input: after the screen and the audio. */
@@ -408,6 +422,46 @@ export class CaptureSession {
     }
   }
 
+  /** Starts the loopback helper and reads the local port it listens on. */
+  private async startLoopback(): Promise<{
+    process: ChildProcess;
+    port: number;
+  }> {
+    const loopback = this.options.loopback;
+    if (!loopback) throw new CaptureStartError("desktopAudio");
+    const helper = spawn(loopback.executable, loopback.args, {
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    helper.stderr.resume();
+    const port = await new Promise<number>((resolve, reject) => {
+      let text = "";
+      const timer = setTimeout(() => reject(new Error("timeout")), 8000);
+      helper.stdout.setEncoding("utf8");
+      helper.stdout.on("data", (chunk: string) => {
+        text += chunk;
+        const match = /^PORT (\d{1,5})\r?\n/mu.exec(text);
+        if (match) {
+          clearTimeout(timer);
+          resolve(Number(match[1]));
+        }
+      });
+      helper.once("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      helper.once("close", () => {
+        clearTimeout(timer);
+        reject(new Error("closed"));
+      });
+    }).catch(() => {
+      helper.kill();
+      throw new CaptureStartError("desktopAudio");
+    });
+    return { process: helper, port };
+  }
+
   private async launch(): Promise<void> {
     const file = join(
       this.options.directory,
@@ -419,8 +473,20 @@ export class CaptureSession {
           `camera-${String(this.segments.length + 1).padStart(3, "0")}.mkv`,
         )
       : undefined;
+    // Computer sound: the helper listens first, FFmpeg then connects to it.
+    const wanted = this.options.request.desktopAudio;
+    let loopback: ChildProcess | null = null;
+    let request = this.options.request;
+    if (wanted?.format === "loopback") {
+      const started = await this.startLoopback();
+      loopback = started.process;
+      request = {
+        ...request,
+        desktopAudio: { ...wanted, device: String(started.port) },
+      };
+    }
     const args = segmentArguments({
-      ...this.options.request,
+      ...request,
       outputPath: file,
       ...(cameraFile ? { cameraOutputPath: cameraFile } : {}),
     });
@@ -460,6 +526,12 @@ export class CaptureSession {
       },
       done: Promise.resolve(),
     };
+    // The helper never outlives the capture it feeds.
+    if (loopback) {
+      const helper = loopback;
+      child.once("close", () => helper.kill());
+      child.once("error", () => helper.kill());
+    }
     child.stdin.on("error", () => undefined);
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {

@@ -4368,6 +4368,7 @@
             "A recording is already in progress.",
             "The selected screen or microphone is no longer available.",
             "Recording could not start. Check screen and microphone permissions and try again.",
+            "The computer sound could not be recorded. Turn off Record computer sound, or try again.",
             "Recording stopped unexpectedly. The part recorded so far was kept.",
             "The recording could not be saved. Try recording again.",
             "Nothing was recorded.",
