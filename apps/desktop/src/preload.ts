@@ -35,6 +35,11 @@ import {
 } from "../../../packages/domain/src/edit-summary.ts";
 import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import {
+  assertPublishRequest,
+  assertPublishSaveRequest,
+  assertPublishView,
+} from "../../../packages/domain/src/publish.ts";
+import {
   assertShortcutStatus,
   isShortcutId,
 } from "../../../packages/domain/src/shortcuts.ts";
@@ -684,6 +689,26 @@ const bridge: DesktopBridge = {
     ipcRenderer.on(channels.projectStageChanged, receive);
     return () =>
       ipcRenderer.removeListener(channels.projectStageChanged, receive);
+  },
+  getPublish: (request) => {
+    assertPublishRequest(request);
+    return invoke(channels.publishGet, request, assertPublishView);
+  },
+  draftPublish: (request) => {
+    assertPublishRequest(request);
+    return invoke(channels.publishDraft, request, assertPublishView);
+  },
+  savePublish: (request) => {
+    assertPublishSaveRequest(request);
+    return invoke(channels.publishSave, request, assertPublishView);
+  },
+  showPublishFolder: (request) => {
+    assertPublishRequest(request);
+    return invoke(channels.publishFolder, request, assertPublishView);
+  },
+  openYoutube: (request) => {
+    assertPublishRequest(request);
+    return invoke(channels.publishStudio, request, assertPublishView);
   },
   getShortcutStatus: () =>
     invoke(channels.shortcutStatus, undefined, assertShortcutStatus),

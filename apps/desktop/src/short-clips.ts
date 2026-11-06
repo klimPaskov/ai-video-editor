@@ -69,7 +69,8 @@ export interface ShortClipsOptions {
   draftWords(projectId: string): Promise<DraftWords>;
   captionSettings(projectId: string): Promise<CaptionSettings>;
   audioSettings(projectId: string): Promise<AudioSettings>;
-  defaultDirectory(): string;
+  /** Where a project's clips are proposed to be saved (its own tidy folder). */
+  defaultDirectory(projectName: string): string;
   chooseDestination(defaultPath: string): Promise<string | null>;
   /** A folder for exporting every clip; null when the user cancels. */
   chooseFolder(defaultPath: string): Promise<string | null>;
@@ -598,9 +599,12 @@ export class DesktopShortClips {
     );
     if (!candidate) throw new ShortClipError(shortIssues.unknown);
     await this.checkSpeed(projectId, candidate, request.speed);
+    const projectName = (
+      await this.options.drafts.snapshotWithProject(projectId)
+    ).project.project.name;
     const chosen = await this.options.chooseDestination(
       path.join(
-        this.options.defaultDirectory(),
+        this.options.defaultDirectory(projectName),
         `${safeName(candidate.title)}.mp4`,
       ),
     );
@@ -665,7 +669,10 @@ export class DesktopShortClips {
     for (const candidate of candidates)
       await this.checkSpeed(projectId, candidate, request.speed);
     const folder = await this.options.chooseFolder(
-      this.options.defaultDirectory(),
+      this.options.defaultDirectory(
+        (await this.options.drafts.snapshotWithProject(projectId)).project
+          .project.name,
+      ),
     );
     if (!folder) return this.view(projectId);
     // One file per clip, named for its title; a repeated name gets a number.

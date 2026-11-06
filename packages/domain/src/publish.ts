@@ -523,3 +523,18 @@ export function assertPublishView(
   if (!ok) throw new Error("Publish view could not be read.");
   if (view.kit !== null) assertPublishKit(view.kit);
 }
+
+/** Saves the person's edits to the text of one video or short. */
+export interface PublishSaveRequest extends PublishRequest {
+  kit: PublishKit;
+}
+
+export function assertPublishSaveRequest(
+  value: unknown,
+): asserts value is PublishSaveRequest {
+  if (!value || typeof value !== "object" || !("kit" in value))
+    throw new Error("Publish request could not be read.");
+  const { kit, ...request } = value as PublishSaveRequest;
+  assertPublishRequest(request);
+  assertPublishKit(kit);
+}

@@ -332,6 +332,30 @@ class DesktopIpcContractTests(unittest.TestCase):
             self.invalid({'channel': 'shortcuts:status', 'response': {'ok': True, 'value': {'unavailable': wrong}}})
         self.invalid({'channel': 'shortcuts:status', 'payload': {}, 'response': {'ok': True, 'value': {'unavailable': []}}})
 
+    def test_publish_channels(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1', 'kind': 'video', 'subject_id': 'project-1'}
+        kit = {
+            'schema_version': '1.0', 'tone': 'casual', 'writtenBy': 'draft', 'updatedAt': '2026-11-06T10:00:00.000Z',
+            'subject': {'kind': 'video', 'id': 'project-1', 'name': 'Trailer', 'durationUs': 400000000},
+            'youtube': {'title': 'Trailer', 'titleIdeas': [], 'intro': 'About it.',
+                        'chapters': [{'startUs': 0, 'title': 'A'}, {'startUs': 60000000, 'title': 'B'}, {'startUs': 120000000, 'title': 'C'}],
+                        'tags': ['hoi4']},
+            'posts': {'x': 'x', 'redditTitle': 'r', 'redditBody': 'b', 'linkedin': 'l', 'discord': 'd'},
+        }
+        view = {'kit': kit, 'folder': 'C:/Videos/Urushi/Trailer/Publish', 'message': None}
+        empty = {'kit': None, 'folder': None, 'message': None}
+        for channel in ['publish:get', 'publish:draft', 'publish:folder', 'publish:studio']:
+            for value in [view, empty]:
+                self.valid({'channel': channel, 'payload': request, 'response': {'ok': True, 'value': value}})
+            self.valid({'channel': channel, 'payload': dict(request, tone='funny'), 'response': {'ok': False, 'message': 'x'}})
+            for wrong in [dict(request, kind='film'), dict(request, project_id='../x'), dict(request, extra=1)]:
+                self.invalid({'channel': channel, 'payload': wrong, 'response': {'ok': True, 'value': empty}})
+        save = dict(request, kit=kit)
+        self.valid({'channel': 'publish:save', 'payload': save, 'response': {'ok': True, 'value': view}})
+        long_title = dict(kit, youtube=dict(kit['youtube'], title='t' * 101))
+        self.invalid({'channel': 'publish:save', 'payload': dict(request, kit=long_title), 'response': {'ok': True, 'value': view}})
+        self.invalid({'channel': 'publish:save', 'payload': request, 'response': {'ok': True, 'value': view}})
+
     def project_view(self):
         return {
             'id': '11111111-1111-4111-8111-111111111111', 'name': 'Synthetic project',

@@ -89,7 +89,8 @@ export interface DesktopExportOptions {
   /** Directory for delivery manifests (never shown to the renderer). */
   recordRoot: string;
   /** Default folder offered by the save dialog. */
-  defaultDirectory: () => string;
+  /** Where a project's video is proposed to be saved (its own tidy folder). */
+  defaultDirectory: (projectName: string) => string;
   /** Main-owned save dialog; null when the user cancels. */
   chooseDestination: (options: {
     defaultPath: string;
@@ -425,7 +426,7 @@ export class DesktopExports {
     const suffix = profile === "lossless_master" ? "master" : "share";
     const chosen = await this.options.chooseDestination({
       defaultPath: path.join(
-        this.options.defaultDirectory(),
+        this.options.defaultDirectory(project.project.name),
         `${safeName(project.project.name)} ${suffix}${extension}`,
       ),
       profile,

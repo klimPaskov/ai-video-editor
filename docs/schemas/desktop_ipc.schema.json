@@ -7,11 +7,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "audio:get"
@@ -27,10 +23,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -47,11 +40,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "audio:set"
@@ -59,11 +48,7 @@
         "payload": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "schema_version",
-            "project_id",
-            "settings"
-          ],
+          "required": ["schema_version", "project_id", "settings"],
           "properties": {
             "schema_version": {
               "const": "1.0"
@@ -85,10 +70,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -105,19 +87,10 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
-          "enum": [
-            "shorts:get",
-            "shorts:find",
-            "shorts:cancel",
-            "shorts:pick"
-          ]
+          "enum": ["shorts:get", "shorts:find", "shorts:cancel", "shorts:pick"]
         },
         "payload": {
           "$ref": "#/$defs/shortProjectRequest"
@@ -130,10 +103,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -150,11 +120,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "shorts:discard"
@@ -170,10 +136,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -190,11 +153,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "shorts:export"
@@ -210,10 +169,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -230,11 +186,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "shorts:export-all"
@@ -250,10 +202,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -270,11 +219,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "shorts:reveal"
@@ -290,10 +235,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -310,11 +252,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "shorts:forget"
@@ -330,10 +268,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -350,11 +285,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "captions:get"
@@ -370,10 +301,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -390,11 +318,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "captions:set"
@@ -402,11 +326,7 @@
         "payload": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "schema_version",
-            "project_id",
-            "settings"
-          ],
+          "required": ["schema_version", "project_id", "settings"],
           "properties": {
             "schema_version": {
               "const": "1.0"
@@ -428,10 +348,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -448,11 +365,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "playback:get"
@@ -468,10 +381,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -488,10 +398,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "recording:devices"
@@ -504,10 +411,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -524,10 +428,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "enum": [
@@ -546,10 +447,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -566,11 +464,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "recording:interrupted"
@@ -586,10 +480,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -606,11 +497,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "recording:recover"
@@ -626,10 +513,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -646,11 +530,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "recording:discard-interrupted"
@@ -666,10 +546,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -686,11 +563,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "recording:pick-region"
@@ -706,10 +579,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -717,9 +587,7 @@
                 "value": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": [
-                    "region"
-                  ],
+                  "required": ["region"],
                   "properties": {
                     "region": {
                       "anyOf": [
@@ -742,11 +610,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "recording:start"
@@ -762,10 +626,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -782,17 +643,10 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
-          "enum": [
-            "magic:get",
-            "magic:stop"
-          ]
+          "enum": ["magic:get", "magic:stop"]
         },
         "payload": {
           "$ref": "#/$defs/magicWandProjectRequest"
@@ -805,10 +659,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -825,11 +676,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "magic:start"
@@ -845,10 +692,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -865,11 +709,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "edit-summary:get"
@@ -885,10 +725,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -905,11 +742,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "edit-summary:undo"
@@ -925,10 +758,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -945,11 +775,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "edit-summary:put-back"
@@ -965,10 +791,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -985,18 +808,10 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
-          "enum": [
-            "export:get",
-            "export:cancel",
-            "export:reset"
-          ]
+          "enum": ["export:get", "export:cancel", "export:reset"]
         },
         "payload": {
           "$ref": "#/$defs/exportProjectRequest"
@@ -1009,10 +824,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1029,11 +841,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "export:start"
@@ -1049,10 +857,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1069,17 +874,10 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
-          "enum": [
-            "export:reveal",
-            "export:open"
-          ]
+          "enum": ["export:reveal", "export:open"]
         },
         "payload": {
           "$ref": "#/$defs/exportProjectRequest"
@@ -1092,10 +890,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1112,10 +907,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "library:list"
@@ -1128,10 +920,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1154,11 +943,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:transcript-cut"
@@ -1174,10 +959,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1194,10 +976,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "library:import"
@@ -1210,10 +989,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1237,11 +1013,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "library:frame"
@@ -1254,10 +1026,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1277,11 +1046,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "library:thumbnail"
@@ -1297,10 +1062,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1317,10 +1079,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "library:cancel"
@@ -1333,10 +1092,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1353,10 +1109,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "preferences:get"
@@ -1369,10 +1122,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1389,10 +1139,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "shortcuts:status"
@@ -1405,10 +1152,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1425,11 +1169,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "preferences:set"
@@ -1442,10 +1182,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1465,10 +1202,172 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response", "payload"],
+      "properties": {
+        "channel": {
+          "const": "publish:get"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ok", "value"],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/publishView"
+                }
+              }
+            }
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/publishRequest"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "response", "payload"],
+      "properties": {
+        "channel": {
+          "const": "publish:draft"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ok", "value"],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/publishView"
+                }
+              }
+            }
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/publishRequest"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "response", "payload"],
+      "properties": {
+        "channel": {
+          "const": "publish:save"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ok", "value"],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/publishView"
+                }
+              }
+            }
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/publishSaveRequest"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "response", "payload"],
+      "properties": {
+        "channel": {
+          "const": "publish:folder"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ok", "value"],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/publishView"
+                }
+              }
+            }
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/publishRequest"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "response", "payload"],
+      "properties": {
+        "channel": {
+          "const": "publish:studio"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ok", "value"],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/publishView"
+                }
+              }
+            }
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/publishRequest"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "projects:list"
@@ -1481,10 +1380,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1507,11 +1403,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "projects:create"
@@ -1524,10 +1416,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1547,11 +1436,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "projects:create-two"
@@ -1564,10 +1449,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1587,11 +1469,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "projects:open"
@@ -1604,10 +1482,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1627,11 +1502,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "projects:navigate"
@@ -1644,10 +1515,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1667,11 +1535,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "transcription:get"
@@ -1687,10 +1551,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1707,11 +1568,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "transcription:start"
@@ -1727,10 +1584,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1747,11 +1601,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "transcription:stop"
@@ -1767,10 +1617,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1787,11 +1634,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "projects:verify-draft-integrity"
@@ -1807,10 +1650,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1827,10 +1667,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "enum": [
@@ -1848,10 +1685,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1868,10 +1702,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "codex:get"
@@ -1884,10 +1715,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1904,10 +1732,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "codex:reconnect"
@@ -1920,10 +1745,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1940,10 +1762,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "codex:login"
@@ -1956,10 +1775,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -1976,10 +1792,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "codex:device-login"
@@ -1992,10 +1805,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2012,10 +1822,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "codex:device-verification"
@@ -2028,10 +1835,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2048,10 +1852,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "codex:cancel-login"
@@ -2064,10 +1865,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2084,10 +1882,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "codex:logout"
@@ -2100,10 +1895,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2120,11 +1912,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "codex:select"
@@ -2137,10 +1925,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2160,11 +1945,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "projects:close"
@@ -2177,10 +1958,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2200,11 +1978,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "projects:rename"
@@ -2220,10 +1994,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2241,11 +2012,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "projects:delete"
@@ -2261,10 +2028,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2282,18 +2046,10 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
-          "enum": [
-            "api-thread:get",
-            "api-thread:open",
-            "api-thread:interrupt"
-          ]
+          "enum": ["api-thread:get", "api-thread:open", "api-thread:interrupt"]
         },
         "payload": {
           "$ref": "#/$defs/apiThreadProjectRequest"
@@ -2306,10 +2062,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2326,11 +2079,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "api-thread:send"
@@ -2346,10 +2095,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2366,11 +2112,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "codex-thread:get"
@@ -2383,10 +2125,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2406,11 +2145,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "codex-thread:open"
@@ -2423,10 +2158,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2446,11 +2178,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "codex-thread:interrupt"
@@ -2463,10 +2191,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2486,11 +2211,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "codex-thread:send"
@@ -2503,10 +2224,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2526,11 +2244,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:frame"
@@ -2546,10 +2260,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2566,11 +2277,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:strip"
@@ -2586,10 +2293,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2606,11 +2310,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-trim"
@@ -2626,10 +2326,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2646,11 +2343,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-split"
@@ -2666,10 +2359,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2686,11 +2376,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-graphic"
@@ -2706,10 +2392,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2726,11 +2409,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-graphic-remove"
@@ -2746,10 +2425,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2766,11 +2442,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-transition"
@@ -2786,10 +2458,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2806,11 +2475,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-transition-remove"
@@ -2826,10 +2491,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2846,11 +2508,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-speed"
@@ -2866,10 +2524,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2886,11 +2541,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-zoom"
@@ -2906,10 +2557,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2926,11 +2574,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-zoom-remove"
@@ -2946,10 +2590,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -2966,11 +2607,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-range-cut"
@@ -2986,10 +2623,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3006,11 +2640,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-restore-range"
@@ -3026,10 +2656,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3046,11 +2673,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:transcript-correction"
@@ -3066,10 +2689,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3086,11 +2706,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-undo"
@@ -3106,10 +2722,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3126,11 +2739,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-redo"
@@ -3146,10 +2755,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3166,10 +2772,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "event"
-      ],
+      "required": ["channel", "event"],
       "properties": {
         "channel": {
           "const": "projects:draft-changed"
@@ -3182,10 +2785,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3202,10 +2802,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "enum": [
@@ -3224,10 +2821,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3244,17 +2838,10 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
-          "enum": [
-            "claude:select",
-            "claude:select-rough-cut"
-          ]
+          "enum": ["claude:select", "claude:select-rough-cut"]
         },
         "payload": {
           "$ref": "#/$defs/claudeSelection"
@@ -3267,10 +2854,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3287,10 +2871,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response"
-      ],
+      "required": ["channel", "response"],
       "properties": {
         "channel": {
           "const": "claude:install-guide"
@@ -3303,10 +2884,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3323,11 +2901,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "enum": [
@@ -3347,10 +2921,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3367,11 +2938,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "claude-thread:send"
@@ -3387,10 +2954,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3407,11 +2971,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "claude-thread:full-edit"
@@ -3427,10 +2987,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3447,11 +3004,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "response",
-        "payload"
-      ],
+      "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
           "const": "claude-thread:undo-full-edit"
@@ -3467,10 +3020,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3487,19 +3037,10 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
-          "enum": [
-            "sounds:get",
-            "sounds:add",
-            "sounds:update",
-            "sounds:remove"
-          ]
+          "enum": ["sounds:get", "sounds:add", "sounds:update", "sounds:remove"]
         },
         "payload": {
           "oneOf": [
@@ -3525,10 +3066,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3545,11 +3083,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-layout"
@@ -3565,10 +3099,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3585,11 +3116,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "projects:manual-layout-remove"
@@ -3605,10 +3132,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3625,11 +3149,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "camera:get"
@@ -3645,10 +3165,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3665,11 +3182,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "camera:choose"
@@ -3685,10 +3198,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3705,11 +3215,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "camera:remove"
@@ -3725,10 +3231,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3745,11 +3248,7 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "channel",
-        "payload",
-        "response"
-      ],
+      "required": ["channel", "payload", "response"],
       "properties": {
         "channel": {
           "const": "camera:offset"
@@ -3765,10 +3264,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ok",
-                "value"
-              ],
+              "required": ["ok", "value"],
               "properties": {
                 "ok": {
                   "const": true
@@ -3830,10 +3326,7 @@
           "maximum": 4
         },
         "motion": {
-          "enum": [
-            "hold",
-            "push"
-          ]
+          "enum": ["hold", "push"]
         },
         "end_center_x": {
           "type": "number",
@@ -3861,10 +3354,7 @@
       "description": "Per-project audio cleanup applied when exporting; sources are never changed.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "normalize",
-        "denoise"
-      ],
+      "required": ["normalize", "denoise"],
       "properties": {
         "normalize": {
           "type": "boolean"
@@ -3877,10 +3367,7 @@
     "shortProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -3898,11 +3385,7 @@
     "shortClipRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "clip_id"
-      ],
+      "required": ["schema_version", "project_id", "clip_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -3942,17 +3425,10 @@
           "$ref": "#/$defs/shortClipId"
         },
         "format": {
-          "enum": [
-            "vertical",
-            "square",
-            "landscape"
-          ]
+          "enum": ["vertical", "square", "landscape"]
         },
         "framing": {
-          "enum": [
-            "fit",
-            "fill"
-          ]
+          "enum": ["fit", "fill"]
         },
         "position": {
           "type": "number",
@@ -3966,10 +3442,7 @@
           "type": "boolean"
         },
         "speed": {
-          "enum": [
-            1,
-            2
-          ]
+          "enum": [1, 2]
         }
       }
     },
@@ -4003,21 +3476,10 @@
       "description": "Short clips found in the draft transcript by rules or chosen by Claude, the export job and the list of exported clips. Output paths stay in main; only exported file names are shown.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status",
-        "candidates",
-        "job",
-        "message",
-        "library",
-        "pick"
-      ],
+      "required": ["status", "candidates", "job", "message", "library", "pick"],
       "properties": {
         "status": {
-          "enum": [
-            "none",
-            "ready",
-            "stale"
-          ]
+          "enum": ["none", "ready", "stale"]
         },
         "candidates": {
           "type": "array",
@@ -4069,10 +3531,7 @@
                 "maxLength": 400
               },
               "origin": {
-                "enum": [
-                  "rules",
-                  "ai"
-                ]
+                "enum": ["rules", "ai"]
               }
             }
           }
@@ -4090,12 +3549,7 @@
           ],
           "properties": {
             "status": {
-              "enum": [
-                "idle",
-                "running",
-                "completed",
-                "failed"
-              ]
+              "enum": ["idle", "running", "completed", "failed"]
             },
             "clipId": {
               "anyOf": [
@@ -4142,10 +3596,7 @@
                 {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": [
-                    "index",
-                    "total"
-                  ],
+                  "required": ["index", "total"],
                   "properties": {
                     "index": {
                       "type": "integer",
@@ -4197,17 +3648,10 @@
                 "pattern": "^[^\\\\/:\\u0000-\\u001f\\u007f]+\\.mp4$"
               },
               "format": {
-                "enum": [
-                  "vertical",
-                  "square",
-                  "landscape"
-                ]
+                "enum": ["vertical", "square", "landscape"]
               },
               "speed": {
-                "enum": [
-                  1,
-                  2
-                ]
+                "enum": [1, 2]
               },
               "durationUs": {
                 "type": "integer",
@@ -4226,10 +3670,7 @@
         "pick": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "running",
-            "message"
-          ],
+          "required": ["running", "message"],
           "properties": {
             "running": {
               "type": "boolean"
@@ -4244,10 +3685,7 @@
     "captionSettingsRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -4262,13 +3700,7 @@
       "description": "Per-project caption choices. Caption text and timing are derived from the transcript and the draft, never stored here.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "enabled",
-        "style",
-        "size",
-        "position",
-        "burnIn"
-      ],
+      "required": ["enabled", "style", "size", "position", "burnIn"],
       "properties": {
         "enabled": {
           "type": "boolean"
@@ -4277,34 +3709,20 @@
           "type": "boolean"
         },
         "style": {
-          "enum": [
-            "plain",
-            "highlight",
-            "minimal"
-          ]
+          "enum": ["plain", "highlight", "minimal"]
         },
         "size": {
-          "enum": [
-            "small",
-            "medium",
-            "large"
-          ]
+          "enum": ["small", "medium", "large"]
         },
         "position": {
-          "enum": [
-            "bottom",
-            "top"
-          ]
+          "enum": ["bottom", "top"]
         }
       }
     },
     "playbackProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -4321,11 +3739,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "status",
-            "progress",
-            "message"
-          ],
+          "required": ["status", "progress", "message"],
           "properties": {
             "status": {
               "const": "ready"
@@ -4341,11 +3755,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "status",
-            "progress",
-            "message"
-          ],
+          "required": ["status", "progress", "message"],
           "properties": {
             "status": {
               "const": "preparing"
@@ -4363,11 +3773,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "status",
-            "progress",
-            "message"
-          ],
+          "required": ["status", "progress", "message"],
           "properties": {
             "status": {
               "const": "failed"
@@ -4437,13 +3843,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "id",
-              "label",
-              "width",
-              "height",
-              "primary"
-            ],
+            "required": ["id", "label", "width", "height", "primary"],
             "properties": {
               "id": {
                 "$ref": "#/$defs/recordingDeviceId"
@@ -4471,10 +3871,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "id",
-              "label"
-            ],
+            "required": ["id", "label"],
             "properties": {
               "id": {
                 "$ref": "#/$defs/recordingDeviceId"
@@ -4491,10 +3888,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "id",
-              "label"
-            ],
+            "required": ["id", "label"],
             "properties": {
               "id": {
                 "$ref": "#/$defs/recordingDeviceId"
@@ -4513,11 +3907,7 @@
     "recordingStartRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "display_id",
-        "microphone_id"
-      ],
+      "required": ["schema_version", "display_id", "microphone_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -4558,12 +3948,7 @@
       "description": "Part of the chosen display to record, in its physical pixels. Omitted to record the whole display; main refuses a region outside the display.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "x",
-        "y",
-        "width",
-        "height"
-      ],
+      "required": ["x", "y", "width", "height"],
       "properties": {
         "x": {
           "type": "integer",
@@ -4589,9 +3974,7 @@
       "description": "Takes a crash or forced quit left without a finished recording, newest first. Ids are the take folders' random UUIDs; no paths.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "takes"
-      ],
+      "required": ["takes"],
       "properties": {
         "takes": {
           "type": "array",
@@ -4599,10 +3982,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "id",
-              "createdAt"
-            ],
+            "required": ["id", "createdAt"],
             "properties": {
               "id": {
                 "type": "string",
@@ -4620,10 +4000,7 @@
     "interruptedTakeRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "take_id"
-      ],
+      "required": ["schema_version", "take_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -4638,10 +4015,7 @@
       "description": "Opens main's area picker over the display; the renderer never sees coordinates of other windows.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "display_id"
-      ],
+      "required": ["schema_version", "display_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -4655,13 +4029,7 @@
       "description": "Recording state. media is the imported take and is present only when finished.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status",
-        "elapsedUs",
-        "missedFrames",
-        "media",
-        "message"
-      ],
+      "required": ["status", "elapsedUs", "missedFrames", "media", "message"],
       "properties": {
         "status": {
           "enum": [
@@ -4723,9 +4091,7 @@
     "thumbnailRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id"
-      ],
+      "required": ["id"],
       "properties": {
         "id": {
           "type": "string",
@@ -4737,11 +4103,7 @@
       "description": "Small cosmetic RGBA picture for library and project cards; never a review frame. Runtime also checks the exact base64 length and padding.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "width",
-        "height",
-        "rgbaBase64"
-      ],
+      "required": ["width", "height", "rgbaBase64"],
       "properties": {
         "width": {
           "type": "integer",
@@ -4764,10 +4126,7 @@
     "magicWandProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -4781,12 +4140,7 @@
     "magicWandStartRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "preset",
-        "provider"
-      ],
+      "required": ["schema_version", "project_id", "preset", "provider"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -4796,21 +4150,11 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
         },
         "preset": {
-          "enum": [
-            "gentle",
-            "balanced",
-            "tight"
-          ]
+          "enum": ["gentle", "balanced", "tight"]
         },
         "provider": {
           "description": "The AI connection the user chose in the assistant drawer; it makes the story edit after the app tightens pauses and fillers.",
-          "enum": [
-            "claude",
-            "codex",
-            "deepseek",
-            "openai",
-            "gemini"
-          ]
+          "enum": ["claude", "codex", "deepseek", "openai", "gemini"]
         }
       }
     },
@@ -4849,12 +4193,7 @@
           ]
         },
         "preset": {
-          "enum": [
-            "gentle",
-            "balanced",
-            "tight",
-            null
-          ]
+          "enum": ["gentle", "balanced", "tight", null]
         },
         "progress": {
           "anyOf": [
@@ -4944,10 +4283,7 @@
     "editSummaryProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -4961,11 +4297,7 @@
     "editSummaryUndoRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "kind"
-      ],
+      "required": ["schema_version", "project_id", "kind"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -4993,12 +4325,7 @@
     "editSummaryView": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "projectId",
-        "draftSequence",
-        "rows",
-        "putBack"
-      ],
+      "required": ["projectId", "draftSequence", "rows", "putBack"],
       "properties": {
         "projectId": {
           "type": "string",
@@ -5014,11 +4341,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "kind",
-              "label",
-              "count"
-            ],
+            "required": ["kind", "label", "count"],
             "properties": {
               "kind": {
                 "enum": [
@@ -5054,10 +4377,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "kind",
-                "label"
-              ],
+              "required": ["kind", "label"],
               "properties": {
                 "kind": {
                   "enum": [
@@ -5087,10 +4407,7 @@
     "exportProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -5104,11 +4421,7 @@
     "exportStartRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "profile"
-      ],
+      "required": ["schema_version", "project_id", "profile"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -5118,10 +4431,7 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
         },
         "profile": {
-          "enum": [
-            "lossless_master",
-            "smaller_mp4"
-          ]
+          "enum": ["lossless_master", "smaller_mp4"]
         }
       }
     },
@@ -5140,13 +4450,7 @@
       ],
       "properties": {
         "status": {
-          "enum": [
-            "idle",
-            "running",
-            "cancelling",
-            "completed",
-            "failed"
-          ]
+          "enum": ["idle", "running", "cancelling", "completed", "failed"]
         },
         "projectId": {
           "anyOf": [
@@ -5160,18 +4464,10 @@
           ]
         },
         "profile": {
-          "enum": [
-            "lossless_master",
-            "smaller_mp4",
-            null
-          ]
+          "enum": ["lossless_master", "smaller_mp4", null]
         },
         "phase": {
-          "enum": [
-            "rendering",
-            "verifying",
-            null
-          ]
+          "enum": ["rendering", "verifying", null]
         },
         "fraction": {
           "anyOf": [
@@ -5221,10 +4517,7 @@
                   "pattern": "^[^\\\\/\\u0000-\\u001f\\u007f]+$"
                 },
                 "profile": {
-                  "enum": [
-                    "lossless_master",
-                    "smaller_mp4"
-                  ]
+                  "enum": ["lossless_master", "smaller_mp4"]
                 },
                 "durationUs": {
                   "type": "integer",
@@ -5356,11 +4649,7 @@
     "frame": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "width",
-        "height",
-        "rgbaBase64"
-      ],
+      "required": ["width", "height", "rgbaBase64"],
       "properties": {
         "width": {
           "type": "integer",
@@ -5384,10 +4673,7 @@
     "frameRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "timeUs"
-      ],
+      "required": ["id", "timeUs"],
       "properties": {
         "id": {
           "type": "string",
@@ -5403,10 +4689,7 @@
     "error": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "ok",
-        "message"
-      ],
+      "required": ["ok", "message"],
       "properties": {
         "ok": {
           "const": false
@@ -5421,24 +4704,14 @@
     "preferences": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "interfaceScale"
-      ],
+      "required": ["interfaceScale"],
       "properties": {
         "interfaceScale": {
           "type": "number",
-          "enum": [
-            1,
-            1.25,
-            1.5,
-            2
-          ]
+          "enum": [1, 1.25, 1.5, 2]
         },
         "assetPolicy": {
-          "enum": [
-            "any",
-            "copyright_free"
-          ],
+          "enum": ["any", "copyright_free"],
           "description": "Which media Claude may use: any material including copyrighted (the default when absent) or copyright-free material only."
         },
         "theme": {
@@ -5447,27 +4720,17 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
-                  "enum": [
-                    "light_canvas",
-                    "studio_dark",
-                    "paper",
-                    "cinematic"
-                  ]
+                  "enum": ["light_canvas", "studio_dark", "paper", "cinematic"]
                 }
               }
             },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "id",
-                "custom"
-              ],
+              "required": ["id", "custom"],
               "properties": {
                 "id": {
                   "const": "custom"
@@ -5500,10 +4763,7 @@
                       "pattern": "^#[0-9a-f]{6}$"
                     },
                     "layout": {
-                      "enum": [
-                        "classic",
-                        "cinematic"
-                      ]
+                      "enum": ["classic", "cinematic"]
                     }
                   }
                 }
@@ -5666,9 +4926,7 @@
     "projectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id"
-      ],
+      "required": ["id"],
       "properties": {
         "id": {
           "type": "string",
@@ -5680,10 +4938,7 @@
     "projectRename": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "name"
-      ],
+      "required": ["id", "name"],
       "properties": {
         "id": {
           "type": "string",
@@ -5700,10 +4955,7 @@
     "twoSourceProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "firstId",
-        "secondId"
-      ],
+      "required": ["firstId", "secondId"],
       "properties": {
         "firstId": {
           "type": "string",
@@ -5719,10 +4971,7 @@
     "projectNavigation": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "stage"
-      ],
+      "required": ["id", "stage"],
       "properties": {
         "id": {
           "type": "string",
@@ -5743,10 +4992,7 @@
     "transcriptionProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -5761,11 +5007,7 @@
     "transcriptionJobRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "job_id"
-      ],
+      "required": ["schema_version", "project_id", "job_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -6073,9 +5315,7 @@
     "apiProvidersView": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "providers"
-      ],
+      "required": ["providers"],
       "properties": {
         "providers": {
           "type": "array",
@@ -6096,11 +5336,7 @@
             ],
             "properties": {
               "id": {
-                "enum": [
-                  "deepseek",
-                  "gemini",
-                  "openai"
-                ]
+                "enum": ["deepseek", "gemini", "openai"]
               },
               "connected": {
                 "type": "boolean"
@@ -6122,10 +5358,7 @@
                 }
               },
               "selectedModel": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "busy": {
                 "type": "boolean"
@@ -6150,11 +5383,7 @@
     "apiThreadProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "provider"
-      ],
+      "required": ["schema_version", "project_id", "provider"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -6163,23 +5392,14 @@
           "$ref": "#/$defs/codexThreadId"
         },
         "provider": {
-          "enum": [
-            "deepseek",
-            "gemini",
-            "openai"
-          ]
+          "enum": ["deepseek", "gemini", "openai"]
         }
       }
     },
     "apiThreadSendRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "provider",
-        "text"
-      ],
+      "required": ["schema_version", "project_id", "provider", "text"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -6188,11 +5408,7 @@
           "$ref": "#/$defs/codexThreadId"
         },
         "provider": {
-          "enum": [
-            "deepseek",
-            "gemini",
-            "openai"
-          ]
+          "enum": ["deepseek", "gemini", "openai"]
         },
         "text": {
           "type": "string",
@@ -6204,22 +5420,10 @@
     "apiThreadView": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "status",
-        "projectId",
-        "provider",
-        "messages",
-        "message"
-      ],
+      "required": ["status", "projectId", "provider", "messages", "message"],
       "properties": {
         "status": {
-          "enum": [
-            "closed",
-            "ready",
-            "running",
-            "interrupting",
-            "failed"
-          ]
+          "enum": ["closed", "ready", "running", "interrupting", "failed"]
         },
         "projectId": {
           "anyOf": [
@@ -6232,12 +5436,7 @@
           ]
         },
         "provider": {
-          "enum": [
-            "deepseek",
-            "gemini",
-            "openai",
-            null
-          ]
+          "enum": ["deepseek", "gemini", "openai", null]
         },
         "messages": {
           "type": "array",
@@ -6245,20 +5444,13 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "id",
-              "role",
-              "text"
-            ],
+            "required": ["id", "role", "text"],
             "properties": {
               "id": {
                 "$ref": "#/$defs/codexThreadId"
               },
               "role": {
-                "enum": [
-                  "user",
-                  "assistant"
-                ]
+                "enum": ["user", "assistant"]
               },
               "text": {
                 "type": "string",
@@ -6313,11 +5505,7 @@
                 "$ref": "#/$defs/codexThreadId"
               },
               "provider": {
-                "enum": [
-                  "deepseek",
-                  "gemini",
-                  "openai"
-                ]
+                "enum": ["deepseek", "gemini", "openai"]
               }
             }
           }
@@ -6327,10 +5515,7 @@
     "codexDeviceLogin": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "verificationUrl",
-        "userCode"
-      ],
+      "required": ["verificationUrl", "userCode"],
       "properties": {
         "verificationUrl": {
           "const": "https://auth.openai.com/codex/device"
@@ -6359,19 +5544,10 @@
       ],
       "properties": {
         "connection": {
-          "enum": [
-            "disconnected",
-            "connected",
-            "unavailable"
-          ]
+          "enum": ["disconnected", "connected", "unavailable"]
         },
         "account": {
-          "enum": [
-            "unknown",
-            "signed_out",
-            "signing_in",
-            "signed_in"
-          ]
+          "enum": ["unknown", "signed_out", "signing_in", "signed_in"]
         },
         "plan": {
           "anyOf": [
@@ -6408,12 +5584,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "id",
-              "name",
-              "reasoning",
-              "defaultReasoning"
-            ],
+            "required": ["id", "name", "reasoning", "defaultReasoning"],
             "properties": {
               "id": {
                 "type": "string",
@@ -6453,11 +5624,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "name",
-              "description",
-              "enabled"
-            ],
+            "required": ["name", "description", "enabled"],
             "properties": {
               "name": {
                 "type": "string",
@@ -6481,11 +5648,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "name",
-              "remainingPercent",
-              "resetsAt"
-            ],
+            "required": ["name", "remainingPercent", "resetsAt"],
             "properties": {
               "name": {
                 "type": "string",
@@ -6499,10 +5662,7 @@
                 "maximum": 100
               },
               "resetsAt": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
+                "type": ["integer", "null"],
                 "minimum": 0,
                 "maximum": 9007199254740991
               }
@@ -6514,10 +5674,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "modelId",
-                "reasoning"
-              ],
+              "required": ["modelId", "reasoning"],
               "properties": {
                 "modelId": {
                   "type": "string",
@@ -6575,10 +5732,7 @@
     "codexSelection": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "modelId",
-        "reasoning"
-      ],
+      "required": ["modelId", "reasoning"],
       "properties": {
         "modelId": {
           "type": "string",
@@ -6601,10 +5755,7 @@
     "codexThreadProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -6617,11 +5768,7 @@
     "codexThreadSendRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "text"
-      ],
+      "required": ["schema_version", "project_id", "text"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -6640,21 +5787,13 @@
     "codexThreadMessage": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "role",
-        "text",
-        "complete"
-      ],
+      "required": ["id", "role", "text", "complete"],
       "properties": {
         "id": {
           "$ref": "#/$defs/codexThreadId"
         },
         "role": {
-          "enum": [
-            "user",
-            "codex"
-          ]
+          "enum": ["user", "codex"]
         },
         "text": {
           "type": "string",
@@ -6669,22 +5808,13 @@
     "codexThreadActivity": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "kind",
-        "label",
-        "complete"
-      ],
+      "required": ["id", "kind", "label", "complete"],
       "properties": {
         "id": {
           "$ref": "#/$defs/codexThreadId"
         },
         "kind": {
-          "enum": [
-            "activity",
-            "subagent",
-            "edit"
-          ]
+          "enum": ["activity", "subagent", "edit"]
         },
         "label": {
           "type": "string",
@@ -6806,9 +5936,7 @@
                 "const": true
               }
             },
-            "required": [
-              "retryable"
-            ]
+            "required": ["retryable"]
           },
           "then": {
             "properties": {
@@ -6822,9 +5950,7 @@
                       "const": "user"
                     }
                   },
-                  "required": [
-                    "role"
-                  ]
+                  "required": ["role"]
                 }
               }
             }
@@ -6926,12 +6052,7 @@
           "maximum": 9007199254740991
         },
         "speed": {
-          "enum": [
-            2,
-            3,
-            4,
-            8
-          ]
+          "enum": [2, 3, 4, 8]
         }
       },
       "description": "Half-open committed clip map; runtime additionally validates ordered source identity, contiguity, a timeline span of ceil(source span / speed) (speed omitted at normal speed), and total duration."
@@ -6939,11 +6060,7 @@
     "projectTimelineView": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "durationUs",
-        "frameRate"
-      ],
+      "required": ["id", "durationUs", "frameRate"],
       "properties": {
         "id": {
           "type": "string",
@@ -6957,10 +6074,7 @@
         "frameRate": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "numerator",
-            "denominator"
-          ],
+          "required": ["numerator", "denominator"],
           "properties": {
             "numerator": {
               "type": "integer",
@@ -6979,10 +6093,7 @@
     "projectDraftIntegrityView": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "draft",
-        "structuralCheckpointRecorded"
-      ],
+      "required": ["draft", "structuralCheckpointRecorded"],
       "properties": {
         "draft": {
           "$ref": "#/$defs/projectDraftView"
@@ -6995,11 +6106,7 @@
     "projectDraftView": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "projectId",
-        "draft",
-        "timeline"
-      ],
+      "required": ["projectId", "draft", "timeline"],
       "properties": {
         "projectId": {
           "type": "string",
@@ -7101,10 +6208,7 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
         },
         "edge": {
-          "enum": [
-            "start",
-            "end"
-          ]
+          "enum": ["start", "end"]
         },
         "timelinePositionUs": {
           "type": "integer",
@@ -7424,13 +6528,7 @@
           "maximum": 9007199254740991
         },
         "speed": {
-          "enum": [
-            1,
-            2,
-            3,
-            4,
-            8
-          ]
+          "enum": [1, 2, 3, 4, 8]
         }
       },
       "description": "Plays an output-timeline half-open range at a whole-number speed (1 restores normal speed) as one undoable edit. Main injects manual authority."
@@ -7728,10 +6826,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "status",
-            "draft"
-          ],
+          "required": ["status", "draft"],
           "properties": {
             "status": {
               "const": "stale"
@@ -7746,10 +6841,7 @@
     "claudeSelection": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "model",
-        "effort"
-      ],
+      "required": ["model", "effort"],
       "properties": {
         "model": {
           "type": "string",
@@ -7758,13 +6850,7 @@
         "effort": {
           "anyOf": [
             {
-              "enum": [
-                "low",
-                "medium",
-                "high",
-                "xhigh",
-                "max"
-              ]
+              "enum": ["low", "medium", "high", "xhigh", "max"]
             },
             {
               "type": "null"
@@ -7813,17 +6899,10 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "billing",
-                "plan"
-              ],
+              "required": ["billing", "plan"],
               "properties": {
                 "billing": {
-                  "enum": [
-                    "subscription",
-                    "api",
-                    "other"
-                  ]
+                  "enum": ["subscription", "api", "other"]
                 },
                 "plan": {
                   "anyOf": [
@@ -7849,12 +6928,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "value",
-              "label",
-              "detail",
-              "efforts"
-            ],
+            "required": ["value", "label", "detail", "efforts"],
             "properties": {
               "value": {
                 "type": "string",
@@ -7877,13 +6951,7 @@
                 "maxItems": 5,
                 "uniqueItems": true,
                 "items": {
-                  "enum": [
-                    "low",
-                    "medium",
-                    "high",
-                    "xhigh",
-                    "max"
-                  ]
+                  "enum": ["low", "medium", "high", "xhigh", "max"]
                 }
               }
             }
@@ -7962,10 +7030,7 @@
     "claudeThreadProjectRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -7978,11 +7043,7 @@
     "claudeThreadSendRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "text"
-      ],
+      "required": ["schema_version", "project_id", "text"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -8012,13 +7073,7 @@
       ],
       "properties": {
         "status": {
-          "enum": [
-            "closed",
-            "ready",
-            "running",
-            "interrupting",
-            "failed"
-          ]
+          "enum": ["closed", "ready", "running", "interrupting", "failed"]
         },
         "projectId": {
           "anyOf": [
@@ -8036,20 +7091,13 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "id",
-              "role",
-              "text"
-            ],
+            "required": ["id", "role", "text"],
             "properties": {
               "id": {
                 "$ref": "#/$defs/codexThreadId"
               },
               "role": {
-                "enum": [
-                  "user",
-                  "assistant"
-                ]
+                "enum": ["user", "assistant"]
               },
               "text": {
                 "type": "string",
@@ -8065,11 +7113,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "id",
-              "label",
-              "complete"
-            ],
+            "required": ["id", "label", "complete"],
             "properties": {
               "id": {
                 "$ref": "#/$defs/codexThreadId"
@@ -8099,11 +7143,7 @@
         "billing": {
           "anyOf": [
             {
-              "enum": [
-                "subscription",
-                "api",
-                "other"
-              ]
+              "enum": ["subscription", "api", "other"]
             },
             {
               "type": "null"
@@ -8133,19 +7173,10 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "status",
-                "changes",
-                "undoable"
-              ],
+              "required": ["status", "changes", "undoable"],
               "properties": {
                 "status": {
-                  "enum": [
-                    "running",
-                    "finished",
-                    "stopped",
-                    "failed"
-                  ]
+                  "enum": ["running", "finished", "stopped", "failed"]
                 },
                 "changes": {
                   "type": "integer",
@@ -8207,11 +7238,7 @@
           "if": {
             "properties": {
               "status": {
-                "enum": [
-                  "closed",
-                  "ready",
-                  "failed"
-                ]
+                "enum": ["closed", "ready", "failed"]
               }
             }
           },
@@ -8228,11 +7255,7 @@
     "claudeFullEditRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "brief"
-      ],
+      "required": ["schema_version", "project_id", "brief"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -8243,12 +7266,7 @@
         "brief": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "goal",
-            "audience",
-            "style",
-            "level"
-          ],
+          "required": ["goal", "audience", "style", "level"],
           "properties": {
             "goal": {
               "type": "string",
@@ -8263,11 +7281,7 @@
               "maxLength": 300
             },
             "level": {
-              "enum": [
-                "tidy",
-                "polished",
-                "bold"
-              ]
+              "enum": ["tidy", "polished", "bold"]
             }
           }
         }
@@ -8277,10 +7291,7 @@
     "soundsRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -8294,12 +7305,7 @@
     "soundAddRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "kind",
-        "start_us"
-      ],
+      "required": ["schema_version", "project_id", "kind", "start_us"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -8309,10 +7315,7 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
         },
         "kind": {
-          "enum": [
-            "music",
-            "effect"
-          ]
+          "enum": ["music", "effect"]
         },
         "start_us": {
           "type": "integer",
@@ -8358,11 +7361,7 @@
     "soundRemoveRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "sound_id"
-      ],
+      "required": ["schema_version", "project_id", "sound_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -8381,11 +7380,7 @@
       "description": "Music and sound effects in the draft, with where each plays. No file path is included; audio files are chosen in a dialog owned by the main process.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "layers"
-      ],
+      "required": ["schema_version", "project_id", "layers"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -8424,10 +7419,7 @@
                 "maxLength": 400
               },
               "kind": {
-                "enum": [
-                  "music",
-                  "effect"
-                ]
+                "enum": ["music", "effect"]
               },
               "file_name": {
                 "type": "string",
@@ -8473,10 +7465,7 @@
                   {
                     "type": "object",
                     "additionalProperties": false,
-                    "required": [
-                      "start_us",
-                      "end_us"
-                    ],
+                    "required": ["start_us", "end_us"],
                     "properties": {
                       "start_us": {
                         "type": "integer",
@@ -8555,12 +7544,7 @@
           "maximum": 9007199254740991
         },
         "kind": {
-          "enum": [
-            "dip",
-            "wipe_right",
-            "wipe_left",
-            "iris"
-          ]
+          "enum": ["dip", "wipe_right", "wipe_left", "iris"]
         },
         "durationUs": {
           "type": "integer",
@@ -8680,19 +7664,10 @@
           "maximum": 9007199254740991
         },
         "kind": {
-          "enum": [
-            "screen",
-            "camera",
-            "pip"
-          ]
+          "enum": ["screen", "camera", "pip"]
         },
         "corner": {
-          "enum": [
-            "top_left",
-            "top_right",
-            "bottom_left",
-            "bottom_right"
-          ]
+          "enum": ["top_left", "top_right", "bottom_left", "bottom_right"]
         },
         "size": {
           "type": "number",
@@ -8700,11 +7675,7 @@
           "maximum": 0.5
         },
         "shape": {
-          "enum": [
-            "circle",
-            "rounded",
-            "rect"
-          ]
+          "enum": ["circle", "rounded", "rect"]
         },
         "faceZoom": {
           "type": "number",
@@ -8775,10 +7746,7 @@
     "cameraRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id"
-      ],
+      "required": ["schema_version", "project_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -8793,11 +7761,7 @@
     "cameraOffsetRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "offset_us"
-      ],
+      "required": ["schema_version", "project_id", "offset_us"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -8881,12 +7845,7 @@
     "layoutChange": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "layout_id",
-        "source_id",
-        "source_us",
-        "kind"
-      ],
+      "required": ["layout_id", "source_id", "source_us", "kind"],
       "properties": {
         "layout_id": {
           "type": "string",
@@ -8901,19 +7860,10 @@
           "minimum": 0
         },
         "kind": {
-          "enum": [
-            "screen",
-            "camera",
-            "pip"
-          ]
+          "enum": ["screen", "camera", "pip"]
         },
         "corner": {
-          "enum": [
-            "top_left",
-            "top_right",
-            "bottom_left",
-            "bottom_right"
-          ]
+          "enum": ["top_left", "top_right", "bottom_left", "bottom_right"]
         },
         "size": {
           "type": "number",
@@ -8921,11 +7871,7 @@
           "maximum": 0.5
         },
         "shape": {
-          "enum": [
-            "circle",
-            "rounded",
-            "rect"
-          ]
+          "enum": ["circle", "rounded", "rect"]
         },
         "face_zoom": {
           "type": "number",
@@ -8975,12 +7921,7 @@
           "minimum": 0
         },
         "kind": {
-          "enum": [
-            "dip",
-            "wipe_right",
-            "wipe_left",
-            "iris"
-          ]
+          "enum": ["dip", "wipe_right", "wipe_left", "iris"]
         },
         "duration_us": {
           "type": "integer",
@@ -9017,17 +7958,10 @@
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$"
         },
         "format": {
-          "enum": [
-            "vertical",
-            "square",
-            "landscape"
-          ]
+          "enum": ["vertical", "square", "landscape"]
         },
         "framing": {
-          "enum": [
-            "fit",
-            "fill"
-          ]
+          "enum": ["fit", "fill"]
         },
         "position": {
           "type": "number",
@@ -9041,10 +7975,7 @@
           "type": "boolean"
         },
         "speed": {
-          "enum": [
-            1,
-            2
-          ]
+          "enum": [1, 2]
         },
         "clip_ids": {
           "type": "array",
@@ -9062,11 +7993,7 @@
       "description": "Acts on one entry of the project's list of exported clips.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version",
-        "project_id",
-        "export_id"
-      ],
+      "required": ["schema_version", "project_id", "export_id"],
       "properties": {
         "schema_version": {
           "const": "1.0"
@@ -9171,10 +8098,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "timelineTimeUs",
-              "frame"
-            ],
+            "required": ["timelineTimeUs", "frame"],
             "properties": {
               "timelineTimeUs": {
                 "type": "integer",
@@ -9204,10 +8128,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "status",
-            "draft"
-          ],
+          "required": ["status", "draft"],
           "properties": {
             "status": {
               "const": "stale"
@@ -9223,21 +8144,233 @@
       "description": "Which global shortcuts the system refused (another program already owns the keys); empty when all are registered.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "unavailable"
-      ],
+      "required": ["unavailable"],
       "properties": {
         "unavailable": {
           "type": "array",
           "uniqueItems": true,
           "maxItems": 3,
           "items": {
-            "enum": [
-              "record.start",
-              "record.pause",
-              "record.stop"
-            ]
+            "enum": ["record.start", "record.pause", "record.stop"]
           }
+        }
+      }
+    },
+    "publishRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "project_id", "kind", "subject_id"],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,80}$"
+        },
+        "kind": {
+          "enum": ["video", "short"]
+        },
+        "subject_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,80}$"
+        },
+        "tone": {
+          "enum": ["casual", "professional", "funny"]
+        }
+      }
+    },
+    "publishKit": {
+      "description": "Publishing text for a finished video or a short clip. Chapter timestamps come from the transcript, never from a model; chapters are empty or at least three, the first at 0, at least ten seconds apart.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "subject",
+        "tone",
+        "writtenBy",
+        "youtube",
+        "posts",
+        "updatedAt"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "name", "durationUs"],
+          "properties": {
+            "kind": {
+              "enum": ["video", "short"]
+            },
+            "id": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "durationUs": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "tone": {
+          "enum": ["casual", "professional", "funny"]
+        },
+        "writtenBy": {
+          "enum": ["provider", "draft"]
+        },
+        "youtube": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["title", "titleIdeas", "intro", "chapters", "tags"],
+          "properties": {
+            "title": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "titleIdeas": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "string",
+                "maxLength": 100
+              }
+            },
+            "intro": {
+              "type": "string",
+              "maxLength": 4800
+            },
+            "chapters": {
+              "type": "array",
+              "maxItems": 30,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["startUs", "title"],
+                "properties": {
+                  "startUs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 80
+                  }
+                }
+              }
+            },
+            "tags": {
+              "type": "array",
+              "maxItems": 15,
+              "items": {
+                "type": "string",
+                "maxLength": 30
+              }
+            }
+          }
+        },
+        "posts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "redditTitle", "redditBody", "linkedin", "discord"],
+          "properties": {
+            "x": {
+              "type": "string",
+              "maxLength": 280
+            },
+            "redditTitle": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "redditBody": {
+              "type": "string",
+              "maxLength": 8000
+            },
+            "linkedin": {
+              "type": "string",
+              "maxLength": 3000
+            },
+            "discord": {
+              "type": "string",
+              "maxLength": 3000
+            }
+          }
+        },
+        "updatedAt": {
+          "type": "string",
+          "maxLength": 40
+        }
+      }
+    },
+    "publishSaveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "project_id", "kind", "subject_id", "kit"],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,80}$"
+        },
+        "kind": {
+          "enum": ["video", "short"]
+        },
+        "subject_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,80}$"
+        },
+        "tone": {
+          "enum": ["casual", "professional", "funny"]
+        },
+        "kit": {
+          "$ref": "#/$defs/publishKit"
+        }
+      }
+    },
+    "publishView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kit", "folder", "message"],
+      "properties": {
+        "kit": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/publishKit"
+            }
+          ]
+        },
+        "folder": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "maxLength": 1000
+            }
+          ]
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "maxLength": 300
+            }
+          ]
         }
       }
     }

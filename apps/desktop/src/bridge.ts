@@ -11,6 +11,11 @@ import type {
 } from "../../../packages/domain/src/api-providers.ts";
 import type { Preferences } from "../../../packages/domain/src/preferences.ts";
 import type {
+  PublishRequest,
+  PublishSaveRequest,
+  PublishView,
+} from "../../../packages/domain/src/publish.ts";
+import type {
   ShortcutId,
   ShortcutStatus,
 } from "../../../packages/domain/src/shortcuts.ts";
@@ -351,6 +356,12 @@ export interface DesktopBridge {
   getShortcutStatus(): Promise<Reply<ShortcutStatus>>;
   /** A global shortcut was pressed while the app may be out of the way. */
   onShortcut(listener: (id: ShortcutId) => void): () => void;
+  /** Publishing text (title, description, chapters, tags, posts) for a video or short. */
+  getPublish(request: PublishRequest): Promise<Reply<PublishView>>;
+  draftPublish(request: PublishRequest): Promise<Reply<PublishView>>;
+  savePublish(request: PublishSaveRequest): Promise<Reply<PublishView>>;
+  showPublishFolder(request: PublishRequest): Promise<Reply<PublishView>>;
+  openYoutube(request: PublishRequest): Promise<Reply<PublishView>>;
   getPreferences(): Promise<Reply<Preferences>>;
   setPreferences(value: Preferences): Promise<Reply<Preferences>>;
   listMedia(): Promise<Reply<MediaSummary[]>>;
@@ -472,6 +483,11 @@ export const channels = Object.freeze({
   projectManualRedo: "projects:manual-redo",
   projectDraftChanged: "projects:draft-changed",
   projectStageChanged: "projects:stage-changed",
+  publishGet: "publish:get",
+  publishDraft: "publish:draft",
+  publishSave: "publish:save",
+  publishFolder: "publish:folder",
+  publishStudio: "publish:studio",
   shortcutStatus: "shortcuts:status",
   shortcutFired: "shortcuts:fired",
   preferencesGet: "preferences:get",

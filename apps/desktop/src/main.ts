@@ -1,5 +1,13 @@
 import { DesktopCodex } from "./codex.ts";
 import { ShortcutService } from "./shortcuts.ts";
+import { organizedFolder, Publisher, type ProjectFolder } from "./publish.ts";
+import {
+  assertPublishRequest,
+  assertPublishSaveRequest,
+  assertPublishView,
+  type PublishRequest,
+  type PublishView,
+} from "../../../packages/domain/src/publish.ts";
 import {
   MediaToolsError,
   pathWithMediaTools,
@@ -98,6 +106,7 @@ import {
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   globalShortcut,
   ipcMain,
@@ -1071,6 +1080,31 @@ async function start(): Promise<void> {
     process.resourcesPath,
     app.isPackaged ? undefined : process.env.URUSHI_ENGINE,
   ).catch(() => null);
+  // Everything made for a project lives in VideosUrushi<project> (docs/59).
+  const ensureFolder = (projectName: string, kind: ProjectFolder): string => {
+    const folder = organizedFolder(app.getPath("videos"), projectName, kind);
+    mkdirSync(folder, { recursive: true });
+    return folder;
+  };
+  const draftWordsOf = async (projectId: string) => {
+    const project = await projectRuntime.view(projectId);
+    const view = await transcription!.get({
+      schema_version: "1.0",
+      project_id: projectId,
+      job_id: null,
+    });
+    return {
+      words:
+        view.results.length === 0
+          ? null
+          : captionWordsForDraft(
+              captionSourceWords(view.results, project.transcriptEdits ?? []),
+              project.clips ?? [],
+            ),
+      sequence: project.draft.sequence,
+      timelineSha256: project.draft.timelineSha256,
+    };
+  };
   shortClips = new DesktopShortClips({
     ...mediaExecutables,
     root: path.join(userData, "short-clips"),
@@ -1080,28 +1114,10 @@ async function start(): Promise<void> {
     renderGraphics: (request) =>
       renderGraphicsTrack(request, `${origin}/stage.html`),
     drafts,
-    draftWords: async (projectId) => {
-      const project = await projectRuntime.view(projectId);
-      const view = await transcription!.get({
-        schema_version: "1.0",
-        project_id: projectId,
-        job_id: null,
-      });
-      return {
-        words:
-          view.results.length === 0
-            ? null
-            : captionWordsForDraft(
-                captionSourceWords(view.results, project.transcriptEdits ?? []),
-                project.clips ?? [],
-              ),
-        sequence: project.draft.sequence,
-        timelineSha256: project.draft.timelineSha256,
-      };
-    },
+    draftWords: draftWordsOf,
     captionSettings: effectiveCaptions,
     audioSettings: effectiveAudio,
-    defaultDirectory: () => app.getPath("videos"),
+    defaultDirectory: (projectName) => ensureFolder(projectName, "Shorts"),
     chooseFolder: async (defaultPath) => {
       if (!window) return null;
       const chosen = await dialog.showOpenDialog(window, {
@@ -1412,7 +1428,7 @@ async function start(): Promise<void> {
       (await soundAssets.resolve(projectId, assetId, sha256)).path,
     drafts,
     recordRoot: path.join(userData, "exports"),
-    defaultDirectory: () => app.getPath("videos"),
+    defaultDirectory: (projectName) => ensureFolder(projectName, "Video"),
     chooseDestination: async ({ defaultPath, profile }) => {
       if (!window) return null;
       const lossless = profile === "lossless_master";
@@ -2855,6 +2871,85 @@ async function start(): Promise<void> {
     assertClaudeThreadView(value);
     return value;
   });
+  // Publishing text for a finished video or a short clip (docs/59).
+  const publisher = new Publisher({
+    root: path.join(userData, "publish"),
+    videos: () => app.getPath("videos"),
+    context: async (request) => {
+      const project = await projectRuntime.view(request.project_id);
+      const words = (await draftWordsOf(request.project_id)).words ?? [];
+      if (request.kind === "video")
+        return {
+          projectName: project.name,
+          name: project.name,
+          durationUs: project.timeline.durationUs,
+          words,
+        };
+      const clips = await shortClips!.view(request.project_id);
+      const clip = clips.candidates.find((c) => c.id === request.subject_id);
+      if (!clip) throw new UserFacingError("That clip is no longer there.");
+      return {
+        projectName: project.name,
+        name: clip.title,
+        durationUs: clip.endUs - clip.startUs,
+        words: words
+          .filter((w) => w.endUs > clip.startUs && w.startUs < clip.endUs)
+          .map((w) => ({
+            text: w.text,
+            startUs: Math.max(0, w.startUs - clip.startUs),
+            endUs: Math.max(0, w.endUs - clip.startUs),
+          })),
+      };
+    },
+    // The first API provider with a key and a model words the text.
+    write: async (prompt) => {
+      for (const provider of apiProviderIds) {
+        const chosen = await apiProviders.selected(provider);
+        if (!chosen) continue;
+        const completion = await apiClient.complete(provider, chosen.key, {
+          model: chosen.model,
+          messages: [{ role: "user", content: prompt }],
+          maxTokens: 3000,
+        });
+        return completion.content ?? null;
+      }
+      return null;
+    },
+    now: () => new Date().toISOString(),
+    copy: (text) => clipboard.writeText(text),
+    openPage: async (url) => {
+      await shell.openExternal(url);
+    },
+    reveal: (target) => shell.showItemInFolder(target),
+  });
+  const publishing = async (
+    request: unknown,
+    work: (value: PublishRequest) => Promise<PublishView>,
+  ) => {
+    assertPublishRequest(request);
+    if (activeProjectId !== request.project_id)
+      throw new UserFacingError("Open this project first.");
+    const view = await work(request);
+    assertPublishView(view);
+    return view;
+  };
+  register(channels.publishGet, (request) =>
+    publishing(request, (value) => publisher.view(value)),
+  );
+  register(channels.publishDraft, (request) =>
+    publishing(request, (value) => publisher.draft(value)),
+  );
+  register(channels.publishSave, async (request) => {
+    assertPublishSaveRequest(request);
+    const { kit, ...rest } = request;
+    return publishing(rest, (value) => publisher.save(value, kit));
+  });
+  register(channels.publishFolder, (request) =>
+    publishing(request, (value) => publisher.showFolder(value)),
+  );
+  register(channels.publishStudio, (request) =>
+    publishing(request, (value) => publisher.openStudio(value)),
+  );
   register(channels.apiThreadGet, async (request) => {
     assertApiThreadProjectRequest(request);
     await activeCodexProject(request.project_id);
