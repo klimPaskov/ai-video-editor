@@ -273,3 +273,31 @@ test("the writer prompt carries the sections and the tone", () => {
     new RegExp(`exactly ${sections.length} short titles`, "u"),
   );
 });
+
+test("an edited short keeps its title and tags and rewrites its file", async () => {
+  const { publisher, videos } = await fixture();
+  const view = await publisher.draft(short);
+  const edited = {
+    ...view.kit!,
+    youtube: {
+      ...view.kit!.youtube,
+      title: "My own short title",
+      tags: ["hoi4", "mod", "shorts"],
+    },
+  };
+  const saved = await publisher.save(short, edited);
+  assert.equal(saved.message, "Saved.");
+  const text = await readFile(
+    join(
+      videos,
+      "Urushi",
+      "Chaos Redux trailer",
+      "Publish",
+      "Shorts",
+      "The focus tree that broke my mod.md",
+    ),
+    "utf8",
+  );
+  assert.match(text, /^# My own short title/u);
+  assert.match(text, /hoi4, mod, shorts/u);
+});

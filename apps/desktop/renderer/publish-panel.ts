@@ -132,8 +132,9 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
           chip.textContent = idea;
           chip.setAttribute("aria-label", `Use the title: ${idea}`);
           chip.addEventListener("click", () => {
-            if (!kit) return;
-            kit = { ...kit, youtube: { ...kit.youtube, title: idea } };
+            const current = readFields();
+            if (!current) return;
+            kit = { ...current, youtube: { ...current.youtube, title: idea } };
             draw();
             queueSave();
           });
@@ -285,10 +286,8 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
   }
 
   for (const tab of tabs)
-    tab.addEventListener("click", () => {
-      showTab(tab.dataset.tab ?? "youtube");
-      draw();
-    });
+    // Only the pane changes: redrawing would replace unsaved typing.
+    tab.addEventListener("click", () => showTab(tab.dataset.tab ?? "youtube"));
 
   for (const field of [titleInput, intro, tags, redditTitle, redditBody])
     field.addEventListener("input", queueSave);

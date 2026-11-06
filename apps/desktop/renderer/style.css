@@ -4663,3 +4663,7 @@ button.short-preview:hover:not(:disabled) {
   background: #b80000;
   border-color: #b80000;
 }
+.publish-post[data-brand] .field-label,
+.publish-brand-head strong {
+  font-size: var(--text-body, 15px);
+}

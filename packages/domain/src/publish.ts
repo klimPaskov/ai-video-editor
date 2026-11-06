@@ -259,10 +259,24 @@ function clip(text: string, limit: number): string {
     : `${clean.slice(0, limit - 1).trimEnd()}…`;
 }
 
+/** Like clip, but keeps paragraph breaks (posts are written in paragraphs). */
+function clipPost(text: string, limit: number): string {
+  const clean = text
+    .split("\n")
+    .map((line) => line.replaceAll(/[ \t]+/gu, " ").trim())
+    .join("\n")
+    .replaceAll(/\n{3,}/gu, "\n\n")
+    .trim();
+  return clean.length <= limit
+    ? clean
+    : `${clean.slice(0, limit - 1).trimEnd()}…`;
+}
+
 function postsFor(
   tone: PublishTone,
   title: string,
   minutes: number,
+  spoken: string,
 ): PublishPosts {
   const length = minutes >= 1 ? `${Math.round(minutes)} minute` : "short";
   const opening: Record<PublishTone, string> = {
@@ -270,19 +284,20 @@ function postsFor(
     professional: `New video: ${title}.`,
     funny: `I made a ${length} video so you don't have to watch the footage: ${title}.`,
   };
-  const x = clip(`${opening[tone]} Link below.`, publishLimits.x);
+  const quote = (limit: number): string =>
+    spoken ? `\n\n"${clip(spoken, limit)}"` : "";
   return {
-    x,
+    x: clipPost(`${opening[tone]} Link below.`, publishLimits.x),
     redditTitle: clip(title, publishLimits.redditTitle),
-    redditBody: clip(
-      `${opening[tone]}\n\nHow it was made and what is in it is in the video. Tell me what you think and what you would change.`,
+    redditBody: clipPost(
+      `${opening[tone]}${quote(220)}\n\nWhat do you think, and what would you change?`,
       publishLimits.redditBody,
     ),
-    linkedin: clip(
-      `${opening[tone]} I would like to hear how others approach this.`,
+    linkedin: clipPost(
+      `${opening[tone]}${quote(160)}\n\nHow do you approach this? I would like to hear.`,
       publishLimits.post,
     ),
-    discord: clip(
+    discord: clipPost(
       `${opening[tone]} Feedback welcome in this thread.`,
       publishLimits.post,
     ),
@@ -325,7 +340,7 @@ export function draftKit(input: KitInput): PublishKit {
       chapters,
       tags: cleanTags(keywordTags(input.words)),
     },
-    posts: postsFor(input.tone, title, input.durationUs / 60_000_000),
+    posts: postsFor(input.tone, title, input.durationUs / 60_000_000, spoken),
     updatedAt: input.now,
   };
 }
