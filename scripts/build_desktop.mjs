@@ -409,17 +409,12 @@ const packages = await packager({
   // and Chromium falls back to en-US, so only that pack is kept: a smaller,
   // faster install (docs/52).
   afterExtract: [
-    async (buildPath, _version, _platform, _arch, done) => {
-      try {
-        const folder = join(buildPath, "locales");
-        const names = await readdir(folder).catch(() => []);
-        for (const name of names)
-          if (name.endsWith(".pak") && name !== "en-US.pak")
-            await rm(join(folder, name), { force: true });
-        done();
-      } catch (error) {
-        done(error);
-      }
+    async (buildPath) => {
+      const folder = join(buildPath, "locales");
+      const names = await readdir(folder).catch(() => []);
+      for (const name of names)
+        if (name.endsWith(".pak") && name !== "en-US.pak")
+          await rm(join(folder, name), { force: true });
     },
   ],
   prune: false,
