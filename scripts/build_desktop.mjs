@@ -9,6 +9,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  rm,
   writeFile,
 } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -404,6 +405,23 @@ const packages = await packager({
         },
       }
     : {}),
+  // Chromium ships 55 language packs (49 MB, 54 files). The app is in English
+  // and Chromium falls back to en-US, so only that pack is kept: a smaller,
+  // faster install (docs/52).
+  afterExtract: [
+    async (buildPath, _version, _platform, _arch, done) => {
+      try {
+        const folder = join(buildPath, "locales");
+        const names = await readdir(folder).catch(() => []);
+        for (const name of names)
+          if (name.endsWith(".pak") && name !== "en-US.pak")
+            await rm(join(folder, name), { force: true });
+        done();
+      } catch (error) {
+        done(error);
+      }
+    },
+  ],
   prune: false,
   overwrite: false,
 });

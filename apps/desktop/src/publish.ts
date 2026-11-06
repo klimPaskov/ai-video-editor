@@ -44,7 +44,9 @@ export function organizedFolder(
   project: string,
   kind: ProjectFolder,
 ): string {
-  return path.join(videos, "Urushi", safeFolderName(project), kind);
+  // A project named after its file ("Trailer.mp4") gets the folder "Trailer".
+  const name = project.replace(/\.(mp4|mkv|mov|webm|avi|m4v)$/iu, "");
+  return path.join(videos, "Urushi", safeFolderName(name), kind);
 }
 
 export interface PublishContext {

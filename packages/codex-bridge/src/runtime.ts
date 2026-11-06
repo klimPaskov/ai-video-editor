@@ -8,7 +8,7 @@ const VERSION = "0.155.1";
 export class CodexRuntimeError extends Error {
   constructor() {
     super(
-      "The packaged Codex runtime is missing or damaged. Reinstall the application.",
+      "Codex is not installed with this copy, or it is damaged. Run the installer again and tick “Codex connection”, or use Claude.",
     );
     this.name = "CodexRuntimeError";
   }

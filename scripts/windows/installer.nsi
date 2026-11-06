@@ -52,6 +52,7 @@ RequestExecutionLevel user
 !include "LogicLib.nsh"
 !include "x64.nsh"
 !include "WinVer.nsh"
+!include "FileFunc.nsh"
 
 Name "${PRODUCT_NAME}"
 OutFile "${OUT_FILE}"
@@ -88,6 +89,7 @@ VIAddVersionKey "LegalCopyright" "MIT licence; see the licence page"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE_NAME}"
 !define MUI_FINISHPAGE_RUN_TEXT "Open ${PRODUCT_NAME}"
 !insertmacro MUI_PAGE_LICENSE "${LICENSE_FILE}"
+!insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -95,6 +97,15 @@ VIAddVersionKey "LegalCopyright" "MIT licence; see the licence page"
 !insertmacro MUI_LANGUAGE "English"
 
 Function .onInit
+  ; /CODEX on the command line (for silent installs) includes the optional
+  ; Codex connection, which is otherwise left out.
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/CODEX" $R1
+  ${IfNot} ${Errors}
+    SectionSetFlags ${SecCodex} ${SF_SELECTED}
+  ${EndIf}
+
   ${IfNot} ${RunningX64}
     MessageBox MB_OK|MB_ICONSTOP "${PRODUCT_NAME} needs 64-bit Windows 10 or newer."
     Abort
@@ -116,7 +127,8 @@ Function .onInit
   ${EndIf}
 FunctionEnd
 
-Section "Install"
+Section "Urushi" SecCore
+  SectionIn RO
   SetShellVarContext current
 
   ; Replace an earlier install cleanly by running its own uninstaller, which
@@ -129,8 +141,10 @@ Section "Install"
     RMDir "$0"
   ${EndIf}
 
+  ; Everything except the optional Codex connection (about 380 MB), which
+  ; is its own section below so the default install stays small and quick.
   SetOutPath "$INSTDIR"
-  File /r "${SOURCE_DIR}/*"
+  File /r /x codex "${SOURCE_DIR}/*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}.lnk" "$INSTDIR\${EXE_NAME}" "" "$INSTDIR\${EXE_NAME}" 0
@@ -144,9 +158,23 @@ Section "Install"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "QuietUninstallString" '"$INSTDIR\Uninstall.exe" /S'
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
-  SectionGetSize 0 $1
+  SectionGetSize ${SecCore} $1
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "EstimatedSize" $1
 SectionEnd
+
+; Claude is the default connection. Codex is an alternative that needs its
+; own runtime; it is left out unless chosen (silent installs: /o sections are
+; skipped). The app says plainly when it is missing.
+Section /o "Codex connection (optional, adds about 380 MB)" SecCodex
+  SetShellVarContext current
+  SetOutPath "$INSTDIR\resources\codex"
+  File /r "${SOURCE_DIR}/resources/codex/*"
+SectionEnd
+
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecCore} "The video editor with the Claude connection."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecCodex} "The Codex (ChatGPT) connection as an alternative to Claude. Large; skip it unless you use Codex."
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 Section "Uninstall"
   SetShellVarContext current

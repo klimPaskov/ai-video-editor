@@ -109,6 +109,15 @@ test("everything made for a project lives in one tidy folder", () => {
     organizedFolder("/v", "My project", "Shorts"),
     join("/v", "Urushi", "My project", "Shorts"),
   );
+  // A project named after its file gets the folder without the extension.
+  assert.equal(
+    organizedFolder("/v", "Trailer.mp4", "Video"),
+    join("/v", "Urushi", "Trailer", "Video"),
+  );
+  assert.equal(
+    organizedFolder("/v", "My.mp4 notes", "Video"),
+    join("/v", "Urushi", "My.mp4 notes", "Video"),
+  );
 });
 
 test("without a model the plain text is drafted and saved in the Publish folder", async () => {
