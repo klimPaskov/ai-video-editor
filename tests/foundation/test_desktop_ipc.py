@@ -356,6 +356,16 @@ class DesktopIpcContractTests(unittest.TestCase):
         self.invalid({'channel': 'publish:save', 'payload': dict(request, kit=long_title), 'response': {'ok': True, 'value': view}})
         self.invalid({'channel': 'publish:save', 'payload': request, 'response': {'ok': True, 'value': view}})
 
+    def test_publish_thumbnail_channel(self):
+        request = {'schema_version': '1.0', 'project_id': 'project-1', 'kind': 'video',
+                   'subject_id': 'project-1', 'jpeg_base64': '/9j/4AAQ'}
+        view = {'kit': None, 'folder': 'C:/Videos/Urushi/Trailer/Thumbnails', 'message': 'Thumbnail saved.'}
+        self.valid({'channel': 'publish:thumbnail', 'payload': request, 'response': {'ok': True, 'value': view}})
+        self.valid({'channel': 'publish:thumbnail', 'payload': request, 'response': {'ok': False, 'message': 'x'}})
+        for wrong in [dict(request, kind='short'), dict(request, jpeg_base64=''),
+                      dict(request, jpeg_base64='not base64!'), dict(request, extra=1)]:
+            self.invalid({'channel': 'publish:thumbnail', 'payload': wrong, 'response': {'ok': True, 'value': view}})
+
     def project_view(self):
         return {
             'id': '11111111-1111-4111-8111-111111111111', 'name': 'Synthetic project',

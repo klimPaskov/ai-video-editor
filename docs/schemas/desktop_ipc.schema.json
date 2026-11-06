@@ -1337,6 +1337,39 @@
       "required": ["channel", "response", "payload"],
       "properties": {
         "channel": {
+          "const": "publish:thumbnail"
+        },
+        "response": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/error"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ok", "value"],
+              "properties": {
+                "ok": {
+                  "const": true
+                },
+                "value": {
+                  "$ref": "#/$defs/publishView"
+                }
+              }
+            }
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/publishThumbnailRequest"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "response", "payload"],
+      "properties": {
+        "channel": {
           "const": "publish:studio"
         },
         "response": {
@@ -8371,6 +8404,40 @@
               "maxLength": 300
             }
           ]
+        }
+      }
+    },
+    "publishThumbnailRequest": {
+      "description": "A composed 1280 by 720 JPEG thumbnail of a finished video, base64, at most 2 MB decoded.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "project_id",
+        "kind",
+        "subject_id",
+        "jpeg_base64"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,80}$"
+        },
+        "kind": {
+          "const": "video"
+        },
+        "subject_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,80}$"
+        },
+        "jpeg_base64": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2796216,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$"
         }
       }
     }

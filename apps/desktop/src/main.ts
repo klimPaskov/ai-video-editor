@@ -4,6 +4,7 @@ import { organizedFolder, Publisher, type ProjectFolder } from "./publish.ts";
 import {
   assertPublishRequest,
   assertPublishSaveRequest,
+  assertPublishThumbnailRequest,
   assertPublishView,
   type PublishRequest,
   type PublishView,
@@ -2946,6 +2947,13 @@ async function start(): Promise<void> {
     assertPublishSaveRequest(request);
     const { kit, ...rest } = request;
     return publishing(rest, (value) => publisher.save(value, kit));
+  });
+  register(channels.publishThumbnail, async (request) => {
+    assertPublishThumbnailRequest(request);
+    const { jpeg_base64: data, ...rest } = request;
+    return publishing(rest, (value) =>
+      publisher.saveThumbnail(value, Buffer.from(data, "base64")),
+    );
   });
   register(channels.publishFolder, (request) =>
     publishing(request, (value) => publisher.showFolder(value)),

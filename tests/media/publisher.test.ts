@@ -310,3 +310,34 @@ test("an edited short keeps its title and tags and rewrites its file", async () 
   assert.match(text, /^# My own short title/u);
   assert.match(text, /hoi4, mod, shorts/u);
 });
+
+test("a thumbnail is saved as a JPEG in the Thumbnails folder and nothing else is accepted", async () => {
+  const { publisher, videos } = await fixture();
+  const jpeg = new Uint8Array([
+    0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 5, 0xff, 0xd9,
+  ]);
+  const view = await publisher.saveThumbnail(video, jpeg);
+  const folder = join(videos, "Urushi", "Chaos Redux trailer", "Thumbnails");
+  assert.equal(view.folder, folder);
+  assert.match(view.message!, /^Thumbnail saved: /u);
+  assert.deepEqual(
+    [...(await readFile(join(folder, "thumbnail.jpg")))],
+    [...jpeg],
+  );
+  assert.deepEqual(await readdir(folder), ["thumbnail.jpg"]);
+  await assert.rejects(
+    publisher.saveThumbnail(video, new Uint8Array([1, 2, 3, 4, 5, 6])),
+    /JPEG under 2 MB/u,
+  );
+  await assert.rejects(
+    publisher.saveThumbnail(
+      video,
+      new Uint8Array(2 * 1024 * 1024 + 1).fill(0xff),
+    ),
+    /JPEG under 2 MB/u,
+  );
+  await assert.rejects(
+    publisher.saveThumbnail(short, jpeg),
+    /Only a video has a thumbnail/u,
+  );
+});

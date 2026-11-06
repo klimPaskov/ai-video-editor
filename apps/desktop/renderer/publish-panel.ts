@@ -1,4 +1,5 @@
 import { fillPlatformLogos } from "./platform-logos.ts";
+import { composeThumbnail, jpegBase64 } from "./thumbnail.ts";
 import {
   cleanTags,
   formatTimestamp,
@@ -62,6 +63,7 @@ export function setupPublishDialog(options: {
   const thumbPicture = element("publish-thumb-picture");
   const thumbTitle = element("publish-thumb-title");
   const thumbTime = element("publish-thumb-time");
+  const thumbSave = element<HTMLButtonElement>("publish-thumb-save");
   const xRing = element("publish-x-ring");
   const postX = element<HTMLTextAreaElement>("publish-x");
   const postXCount = element("publish-x-count");
@@ -249,7 +251,9 @@ export function setupPublishDialog(options: {
     thumbPicture.replaceChildren(...(picture ? [picture] : []));
     thumbTime.textContent = kit ? formatTimestamp(kit.subject.durationUs) : "";
     thumbTitle.textContent = titleInput.value;
-    thumb.classList.toggle("vertical", kit?.subject.kind === "short");
+    // Only a video has a thumbnail to upload; a short shows the picture only.
+    thumbSave.hidden = kit?.subject.kind !== "video";
+    thumbSave.disabled = busy;
   }
 
   function readFields(): PublishKit | null {
@@ -410,6 +414,27 @@ export function setupPublishDialog(options: {
       void copy(text, "Copied.");
     });
 
+  thumbSave.addEventListener("click", () => {
+    void (async () => {
+      if (!picture || !(await save())) return;
+      const title = titleInput.value.trim() || kit?.youtube.title || "";
+      let data: string;
+      try {
+        data = await jpegBase64(composeThumbnail(picture, title));
+      } catch {
+        fail("The thumbnail could not be made. Try again.");
+        return;
+      }
+      await run(
+        () =>
+          window.desktop.savePublishThumbnail({
+            ...request(),
+            jpeg_base64: data,
+          }),
+        "The thumbnail could not be saved.",
+      );
+    })();
+  });
   again.addEventListener("click", () => void write());
   copyAll.addEventListener("click", () => {
     void (async () => {

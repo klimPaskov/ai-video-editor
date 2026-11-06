@@ -553,3 +553,32 @@ export function assertPublishSaveRequest(
   assertPublishRequest(request);
   assertPublishKit(kit);
 }
+
+/** YouTube accepts thumbnails up to 2 MB; 1280 by 720 JPEG stays well inside. */
+export const thumbnailLimits = Object.freeze({
+  bytes: 2 * 1024 * 1024,
+  width: 1280,
+  height: 720,
+});
+
+/** Saves the composed thumbnail of a finished video as a JPEG. */
+export interface PublishThumbnailRequest extends PublishRequest {
+  jpeg_base64: string;
+}
+
+export function assertPublishThumbnailRequest(
+  value: unknown,
+): asserts value is PublishThumbnailRequest {
+  if (!value || typeof value !== "object" || !("jpeg_base64" in value))
+    throw new Error("Thumbnail request could not be read.");
+  const { jpeg_base64: data, ...request } = value as PublishThumbnailRequest;
+  assertPublishRequest(request);
+  if (
+    request.kind !== "video" ||
+    typeof data !== "string" ||
+    data.length === 0 ||
+    data.length > Math.ceil((thumbnailLimits.bytes * 4) / 3) + 8 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/u.test(data)
+  )
+    throw new Error("Thumbnail request could not be read.");
+}

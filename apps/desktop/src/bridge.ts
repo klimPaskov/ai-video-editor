@@ -13,6 +13,7 @@ import type { Preferences } from "../../../packages/domain/src/preferences.ts";
 import type {
   PublishRequest,
   PublishSaveRequest,
+  PublishThumbnailRequest,
   PublishView,
 } from "../../../packages/domain/src/publish.ts";
 import type {
@@ -361,6 +362,9 @@ export interface DesktopBridge {
   draftPublish(request: PublishRequest): Promise<Reply<PublishView>>;
   savePublish(request: PublishSaveRequest): Promise<Reply<PublishView>>;
   showPublishFolder(request: PublishRequest): Promise<Reply<PublishView>>;
+  savePublishThumbnail(
+    request: PublishThumbnailRequest,
+  ): Promise<Reply<PublishView>>;
   openYoutube(request: PublishRequest): Promise<Reply<PublishView>>;
   getPreferences(): Promise<Reply<Preferences>>;
   setPreferences(value: Preferences): Promise<Reply<Preferences>>;
@@ -487,6 +491,7 @@ export const channels = Object.freeze({
   publishDraft: "publish:draft",
   publishSave: "publish:save",
   publishFolder: "publish:folder",
+  publishThumbnail: "publish:thumbnail",
   publishStudio: "publish:studio",
   shortcutStatus: "shortcuts:status",
   shortcutFired: "shortcuts:fired",

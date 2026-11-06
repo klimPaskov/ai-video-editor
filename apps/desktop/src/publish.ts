@@ -10,6 +10,7 @@ import {
   parseWrittenText,
   publishLimits,
   publishTones,
+  thumbnailLimits,
   transcriptSections,
   youtubeDescription,
   type PublishKit,
@@ -292,6 +293,42 @@ export class Publisher {
     await this.store(request, next);
     const folder = await this.saveFiles(request, next, context.projectName);
     return { kit: next, folder, message: "Saved." };
+  }
+
+  /**
+   * Saves a composed thumbnail (a JPEG, at most 2 MB) in the project's
+   * Thumbnails folder; the person uploads it with the video.
+   */
+  async saveThumbnail(
+    request: PublishRequest,
+    jpeg: Uint8Array,
+  ): Promise<PublishView> {
+    const isJpeg =
+      jpeg.length > 4 &&
+      jpeg[0] === 0xff &&
+      jpeg[1] === 0xd8 &&
+      jpeg[2] === 0xff;
+    if (!isJpeg || jpeg.length > thumbnailLimits.bytes)
+      throw new Error("The thumbnail must be a JPEG under 2 MB.");
+    if (request.kind !== "video")
+      throw new Error("Only a video has a thumbnail.");
+    const context = await this.options.context(request);
+    const folder = organizedFolder(
+      this.options.videos(),
+      context.projectName,
+      "Thumbnails",
+    );
+    await mkdir(folder, { recursive: true });
+    const target = path.join(folder, "thumbnail.jpg");
+    const staged = `${target}.tmp`;
+    await writeFile(staged, jpeg);
+    await rename(staged, target);
+    const view = await this.view(request);
+    return {
+      ...view,
+      folder,
+      message: `Thumbnail saved: ${path.join(folder, "thumbnail.jpg")}`,
+    };
   }
 
   /** Shows the folder the text and files are saved in. */

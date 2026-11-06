@@ -37,6 +37,7 @@ import { assertPreferences } from "../../../packages/domain/src/preferences.ts";
 import {
   assertPublishRequest,
   assertPublishSaveRequest,
+  assertPublishThumbnailRequest,
   assertPublishView,
 } from "../../../packages/domain/src/publish.ts";
 import {
@@ -705,6 +706,10 @@ const bridge: DesktopBridge = {
   showPublishFolder: (request) => {
     assertPublishRequest(request);
     return invoke(channels.publishFolder, request, assertPublishView);
+  },
+  savePublishThumbnail: (request) => {
+    assertPublishThumbnailRequest(request);
+    return invoke(channels.publishThumbnail, request, assertPublishView);
   },
   openYoutube: (request) => {
     assertPublishRequest(request);

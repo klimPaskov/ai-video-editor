@@ -4,6 +4,7 @@ import type { CaptionWord } from "../../packages/domain/src/captions.ts";
 import {
   applyWrittenText,
   assertPublishKit,
+  assertPublishThumbnailRequest,
   chapterLines,
   cleanTags,
   draftKit,
@@ -251,4 +252,24 @@ test("unusable model replies are refused and over-long text is caught", () => {
       }),
     /0:00/u,
   );
+});
+
+test("a thumbnail request is for a video and carries a bounded base64 JPEG", () => {
+  const base = {
+    schema_version: "1.0",
+    project_id: "project-1",
+    kind: "video",
+    subject_id: "project-1",
+    jpeg_base64: "/9j/4AAQ",
+  };
+  assertPublishThumbnailRequest(base);
+  for (const wrong of [
+    { ...base, kind: "short" },
+    { ...base, jpeg_base64: "" },
+    { ...base, jpeg_base64: "not base64!" },
+    { ...base, jpeg_base64: "A".repeat(3_000_000) },
+    { ...base, extra: 1 },
+    { ...base, jpeg_base64: undefined },
+  ])
+    assert.throws(() => assertPublishThumbnailRequest(wrong));
 });

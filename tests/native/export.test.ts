@@ -261,6 +261,45 @@ try {
     /Urushi[\\/].+[\\/]Publish/u,
   );
   await page.screenshot({ path: join(evidence, "publish-video.png") });
+  // The thumbnail is composed from the footage and the title, saved as a
+  // 1280 by 720 JPEG under 2 MB in the project's Thumbnails folder.
+  await expect(page.locator("#publish-thumb")).toBeVisible({ timeout: 30_000 });
+  await page.locator("#publish-thumb-save").click();
+  await expect(page.locator("#publish-folder")).toContainText("Thumbnails", {
+    timeout: 30_000,
+  });
+  const thumbFolder = (await page.locator("#publish-folder").textContent())!
+    .replace(/^Saved to /u, "")
+    .trim();
+  const thumbFile = join(thumbFolder, "thumbnail.jpg");
+  const thumbBytes = await readFile(thumbFile);
+  assert.ok(thumbBytes.length > 5_000 && thumbBytes.length < 2 * 1024 * 1024);
+  assert.deepEqual([...thumbBytes.subarray(0, 3)], [0xff, 0xd8, 0xff]);
+  await writeFile(join(evidence, "thumbnail.jpg"), thumbBytes);
+  const thumbProbe = JSON.parse(
+    (
+      await runProcess({
+        executable: "ffprobe",
+        args: [
+          "-v",
+          "error",
+          "-show_entries",
+          "stream=codec_name,width,height",
+          "-of",
+          "json",
+          thumbFile,
+        ],
+      })
+    ).stdout.toString(),
+  ) as {
+    streams: Array<{ codec_name: string; width: number; height: number }>;
+  };
+  assert.equal(thumbProbe.streams[0]!.codec_name, "mjpeg");
+  assert.equal(thumbProbe.streams[0]!.width, 1280);
+  assert.equal(thumbProbe.streams[0]!.height, 720);
+  await page.locator("#publish-thumb-save").screenshot({
+    path: join(evidence, "publish-thumb-button.png"),
+  });
   await page.locator("#publish-close").click();
   await expect(page.locator("#publish-dialog")).toBeHidden();
   // Keep editing returns to Export, where the verified result is listed.
