@@ -27,6 +27,8 @@ export function setupShortsPanel(options: {
   picture(timeUs: number): Promise<HTMLCanvasElement | null>;
   /** How many clips are saved, so the step can offer to go on. */
   saved(count: number): void;
+  /** Opens the publishing text of one clip. */
+  publish(clipId: string, title: string, opener: HTMLElement): void;
 }): { render(project: ProjectView | undefined, visible: boolean): void } {
   const find = element<HTMLButtonElement>("shorts-find");
   const pick = element<HTMLButtonElement>("shorts-pick");
@@ -244,7 +246,18 @@ export function setupShortsPanel(options: {
           "click",
           () => void act("export", candidate.id),
         );
-        actions.append(discard, exportButton);
+        const publishButton = document.createElement("button");
+        publishButton.type = "button";
+        publishButton.className = "ghost";
+        publishButton.textContent = "Publish text";
+        publishButton.setAttribute(
+          "aria-label",
+          `Write the title, tags and posts for ${candidate.title}`,
+        );
+        publishButton.addEventListener("click", () =>
+          options.publish(candidate.id, candidate.title, publishButton),
+        );
+        actions.append(discard, exportButton, publishButton);
         item.append(picture, foot, actions);
         if (job && job.status !== "idle") {
           const status = document.createElement("div");

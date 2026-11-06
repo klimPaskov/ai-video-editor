@@ -42,6 +42,7 @@ export function setupDonePanel(options: {
   goTo(stage: "clips" | "export"): void;
   home(): void;
   importAnother(): void;
+  publish(project: ProjectView, opener: HTMLElement): void;
 }): { render(project: ProjectView | undefined, visible: boolean): void } {
   const panel = element("done-actions");
   const picture = element("done-thumb");
@@ -117,6 +118,10 @@ export function setupDonePanel(options: {
     () => void act(() => window.desktop.openExport(request())),
   );
   clipsCard.addEventListener("click", () => options.goTo("clips"));
+  const publishCard = element<HTMLButtonElement>("done-publish");
+  publishCard.addEventListener("click", () => {
+    if (project) options.publish(project, publishCard);
+  });
   element("done-another").addEventListener("click", () =>
     options.importAnother(),
   );

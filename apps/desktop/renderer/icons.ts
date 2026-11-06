@@ -82,6 +82,7 @@ const paths: Record<string, string> = {
     "M5.5 4.5h13A1.5 1.5 0 0 1 20 6v12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18V6a1.5 1.5 0 0 1 1.5-1.5ZM4 16l4.5-4.5 3.5 3.5 3-3 5 5M9 9.5v.01",
   "arrow-right": "M5 12h14M13 6l6 6-6 6",
   check: "M5 12.5l4.5 4.5L19 7.5",
+  copy: "M9.5 9.5h8A1.5 1.5 0 0 1 19 11v8a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 8 19v-8a1.5 1.5 0 0 1 1.5-1.5ZM5 15.5v-10A1.5 1.5 0 0 1 6.5 4h9",
 };
 const filled = new Set(["play", "pause", "record", "stop"]);
 const svgNamespace = "http://www.w3.org/2000/svg";

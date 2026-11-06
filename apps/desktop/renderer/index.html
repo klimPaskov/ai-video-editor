@@ -961,6 +961,14 @@
                   </div>
                   <div class="done-cards">
                     <button
+                      id="done-publish"
+                      class="done-card"
+                      type="button"
+                      data-icon="send"
+                    >
+                      Publish text
+                    </button>
+                    <button
                       id="done-clips"
                       class="done-card"
                       type="button"
@@ -1515,6 +1523,171 @@
         </div>
         <p id="project-dialog-error" role="alert" hidden></p>
       </form>
+    </dialog>
+    <dialog id="publish-dialog" aria-labelledby="publish-title">
+      <div class="panel-header">
+        <h2 id="publish-title">Publish</h2>
+        <button
+          type="button"
+          id="publish-close"
+          class="icon-button"
+          data-icon="close"
+          aria-label="Close publish"
+        ></button>
+      </div>
+      <p id="publish-subject" class="muted"></p>
+      <div class="publish-tabs" role="group" aria-label="Where to post">
+        <button
+          type="button"
+          id="publish-tab-youtube"
+          aria-pressed="true"
+          data-tab="youtube"
+        >
+          YouTube
+        </button>
+        <button
+          type="button"
+          id="publish-tab-posts"
+          aria-pressed="false"
+          data-tab="posts"
+        >
+          Posts
+        </button>
+      </div>
+      <div id="publish-body" class="publish-body">
+        <div id="publish-youtube" class="publish-pane">
+          <label class="field-label" for="publish-title-input">Title</label>
+          <input
+            type="text"
+            id="publish-title-input"
+            maxlength="100"
+            autocomplete="off"
+          />
+          <div id="publish-ideas" class="publish-ideas"></div>
+          <label class="field-label" for="publish-intro">Description</label>
+          <textarea id="publish-intro" rows="5" maxlength="4000"></textarea>
+          <div id="publish-chapters-box" hidden>
+            <span class="field-label">Chapters</span>
+            <ol id="publish-chapters" class="publish-chapters"></ol>
+          </div>
+          <label class="field-label" for="publish-tags">Tags</label>
+          <input
+            type="text"
+            id="publish-tags"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+        <div id="publish-posts" class="publish-pane" hidden>
+          <div class="publish-post" data-post="x">
+            <div class="publish-post-head">
+              <label class="field-label" for="publish-x">X</label>
+              <span class="muted" id="publish-x-count"></span>
+              <button
+                type="button"
+                class="ghost"
+                data-copy="x"
+                data-icon="copy"
+              >
+                Copy
+              </button>
+            </div>
+            <textarea id="publish-x" rows="3" maxlength="280"></textarea>
+          </div>
+          <div class="publish-post" data-post="reddit">
+            <div class="publish-post-head">
+              <label class="field-label" for="publish-reddit-title"
+                >Reddit</label
+              >
+              <button
+                type="button"
+                class="ghost"
+                data-copy="reddit"
+                data-icon="copy"
+              >
+                Copy
+              </button>
+            </div>
+            <input
+              type="text"
+              id="publish-reddit-title"
+              maxlength="300"
+              autocomplete="off"
+            />
+            <textarea
+              id="publish-reddit-body"
+              rows="4"
+              maxlength="8000"
+              aria-label="Reddit post text"
+            ></textarea>
+          </div>
+          <div class="publish-post" data-post="linkedin">
+            <div class="publish-post-head">
+              <label class="field-label" for="publish-linkedin">LinkedIn</label>
+              <button
+                type="button"
+                class="ghost"
+                data-copy="linkedin"
+                data-icon="copy"
+              >
+                Copy
+              </button>
+            </div>
+            <textarea
+              id="publish-linkedin"
+              rows="4"
+              maxlength="3000"
+            ></textarea>
+          </div>
+          <div class="publish-post" data-post="discord">
+            <div class="publish-post-head">
+              <label class="field-label" for="publish-discord">Discord</label>
+              <button
+                type="button"
+                class="ghost"
+                data-copy="discord"
+                data-icon="copy"
+              >
+                Copy
+              </button>
+            </div>
+            <textarea id="publish-discord" rows="3" maxlength="3000"></textarea>
+          </div>
+        </div>
+        <p id="publish-empty" class="muted" hidden>
+          The text has not been written yet.
+        </p>
+      </div>
+      <p id="publish-message" role="status" class="muted" hidden></p>
+      <p id="publish-folder" class="muted" hidden></p>
+      <div class="publish-tone">
+        <label class="field-label" for="publish-tone">Wording</label>
+        <select id="publish-tone">
+          <option value="casual">Casual</option>
+          <option value="professional">Professional</option>
+          <option value="funny">Funny</option>
+        </select>
+        <button type="button" id="publish-again" data-icon="sparkle">
+          Write again
+        </button>
+      </div>
+      <div class="dialog-actions publish-actions">
+        <button type="button" id="publish-copy" data-icon="copy">
+          Copy title and description
+        </button>
+        <button type="button" id="publish-folder-open" data-icon="folder">
+          Show in folder
+        </button>
+        <button
+          type="button"
+          id="publish-upload"
+          class="primary"
+          data-icon="export"
+        >
+          Upload to YouTube
+        </button>
+      </div>
+      <p id="publish-error" role="alert" hidden></p>
     </dialog>
     <dialog id="record-dialog" aria-labelledby="record-title">
       <div class="panel-header">

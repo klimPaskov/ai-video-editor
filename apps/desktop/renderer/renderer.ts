@@ -23,6 +23,7 @@ import {
 } from "../../../packages/domain/src/zoom.ts";
 import { setupExportPanel } from "./export-panel.ts";
 import { setupDonePanel } from "./done-panel.ts";
+import { setupPublishDialog } from "./publish-panel.ts";
 import { setupPlayback } from "./playback.ts";
 import { setupMagicPanel } from "./magic-panel.ts";
 import { setupAutoPanel } from "./auto-panel.ts";
@@ -461,7 +462,16 @@ function populateRestoreSources(project: ProjectView): void {
 const exportPanel = setupExportPanel({
   completed: () => void navigate("done"),
 });
+const publishDialog = setupPublishDialog();
 const donePanel = setupDonePanel({
+  publish: (project, opener) =>
+    publishDialog.open({
+      projectId: project.id,
+      kind: "video",
+      subjectId: project.id,
+      name: project.name,
+      opener,
+    }),
   thumbnail: (mediaId, name) => thumbnail(mediaId, name),
   goTo: (stage) => void navigate(stage),
   home: () => back.click(),
@@ -475,6 +485,17 @@ let previewEndUs: number | undefined;
 /** How many short clips this project has saved; Clips then offers Continue. */
 let clipsSaved = 0;
 const shortsPanel = setupShortsPanel({
+  publish: (clipId, title, opener) => {
+    const project = activeProject;
+    if (!project) return;
+    publishDialog.open({
+      projectId: project.id,
+      kind: "short",
+      subjectId: clipId,
+      name: title,
+      opener,
+    });
+  },
   saved: (count) => {
     if (count === clipsSaved) return;
     clipsSaved = count;
