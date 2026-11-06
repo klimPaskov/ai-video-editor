@@ -373,6 +373,26 @@ test("H.264 preview rejects unknown color, higher precision, display transforms 
     });
     assert.equal(measured.previewAvailable, false, JSON.stringify(change));
   }
+  // An encoder that tags only the matrix leaves the rest unsaid; the standard
+  // HD defaults apply then, as in every player. Without the matrix they do not.
+  const bare = { ...original } as Record<string, unknown>;
+  bare.color_primaries = "unknown";
+  bare.color_transfer = "unknown";
+  delete bare.sample_aspect_ratio;
+  assert.equal(
+    mediaMeasurements({ streams: [bare], format: { duration: "1" } })
+      .previewAvailable,
+    true,
+    "matrix-only tagging previews",
+  );
+  assert.equal(
+    mediaMeasurements({
+      streams: [{ ...bare, color_space: "unknown" }],
+      format: { duration: "1" },
+    }).previewAvailable,
+    false,
+    "nothing tagged does not",
+  );
 });
 test("higher precision imports without enabling an unverified preview", async () => {
   const { dir, source } = await fixture("gbrp16le");

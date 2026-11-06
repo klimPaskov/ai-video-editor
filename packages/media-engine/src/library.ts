@@ -118,10 +118,22 @@ function previewProfile(
     height <= 0 ||
     width * height > maxFramePixels ||
     width > 8192 ||
-    height > 8192 ||
-    probe.color_primaries !== "bt709"
+    height > 8192
   )
     return undefined;
+  // Many encoders (x264 with only a matrix flag) tag the YUV matrix and leave
+  // primaries, transfer and pixel shape unsaid. When the matrix is explicitly
+  // bt709, an unsaid value takes the standard HD default every player uses;
+  // a value that says something else is still refused.
+  const unsaid = (value: unknown): boolean =>
+    value === undefined || value === "unknown" || value === "unspecified";
+  const matrixSaid = probe.color_space === "bt709";
+  const primariesOk =
+    probe.color_primaries === "bt709" ||
+    (matrixSaid &&
+      probe.pix_fmt === "yuv420p" &&
+      unsaid(probe.color_primaries));
+  if (!primariesOk) return undefined;
   // Full-range RGB is shown unchanged. Screen recordings are 8-bit RGB with
   // no alpha (bgr0) tagged sRGB; their samples are exactly what the display
   // produced, so the canvas shows them without conversion.
@@ -133,7 +145,11 @@ function previewProfile(
       probe.color_transfer === "iec61966-2-1")
   )
     return "native-bgra";
-  if (probe.color_transfer !== "bt709") return undefined;
+  if (
+    probe.color_transfer !== "bt709" &&
+    !(matrixSaid && unsaid(probe.color_transfer))
+  )
+    return undefined;
   // This conversion is only for the 8-bit display transport. Canonical
   // rendering and master export must read the preserved YUV source instead.
   if (
@@ -141,7 +157,11 @@ function previewProfile(
     probe.pix_fmt !== "yuv420p" ||
     probe.color_range !== "tv" ||
     probe.color_space !== "bt709" ||
-    probe.sample_aspect_ratio !== "1:1" ||
+    !(
+      probe.sample_aspect_ratio === "1:1" ||
+      probe.sample_aspect_ratio === undefined ||
+      probe.sample_aspect_ratio === "N/A"
+    ) ||
     (object(probe.tags) &&
       probe.tags.rotate !== undefined &&
       probe.tags.rotate !== "0") ||
