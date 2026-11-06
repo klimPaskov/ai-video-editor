@@ -118,6 +118,9 @@ const sourceHash = sha256(await readFile(sourcePath));
 const env = {
   ...process.env,
   XDG_CONFIG_HOME: configRoot,
+  // Claude Code 2.1.302 picks its opener from BROWSER and does not look for an
+  // xdg-open on PATH, so the recording stub is named there as well.
+  BROWSER: join(stubDirectory, "xdg-open"),
   PATH: `${stubDirectory}:${resolve(claudeBin)}:${process.env.PATH ?? "/usr/bin:/bin"}`,
 };
 const launch = () =>
