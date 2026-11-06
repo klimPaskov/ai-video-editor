@@ -6,6 +6,7 @@ import {
   balanceLines,
   buildCaptionCues,
   captionWordsForDraft,
+  collapseStutter,
   cueAt,
   joinCaptionWords,
   toSrt,
@@ -161,4 +162,29 @@ test("burned captions are sized from the frame's short side", () => {
   const tall = size(toAss([cue], defaultCaptionSettings, 1080, 1920));
   assert.equal(wide, tall);
   assert.equal(wide, Math.round(1080 * 0.054));
+});
+
+test("a word the speech model decoded twice is collapsed in written text only", () => {
+  const word = (text: string, startUs: number) => ({
+    text,
+    startUs,
+    endUs: startUs + 200_000,
+  });
+  const doubled = [
+    word("And", 0),
+    word("And", 50_000),
+    word("the", 300_000),
+    word("the", 340_000),
+    word("stranger", 600_000),
+    word("stranger.", 640_000),
+    word("had", 2_000_000),
+    word("had", 2_900_000),
+  ];
+  assert.deepEqual(
+    collapseStutter(doubled).map((entry) => entry.text),
+    ["And", "the", "stranger", "had", "had"],
+    "close repeats go; a repeat a second later stays",
+  );
+  assert.equal(collapseStutter(doubled)[0]!.endUs, 250_000);
+  assert.deepEqual(collapseStutter([]), []);
 });

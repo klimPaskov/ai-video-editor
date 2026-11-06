@@ -238,6 +238,7 @@ import {
   buildCaptionCues,
   captionSourceWords,
   captionWordsForDraft,
+  collapseStutter,
 } from "../../../packages/domain/src/captions.ts";
 import {
   assertPlaybackProjectRequest,
@@ -1097,9 +1098,11 @@ async function start(): Promise<void> {
       words:
         view.results.length === 0
           ? null
-          : captionWordsForDraft(
-              captionSourceWords(view.results, project.transcriptEdits ?? []),
-              project.clips ?? [],
+          : collapseStutter(
+              captionWordsForDraft(
+                captionSourceWords(view.results, project.transcriptEdits ?? []),
+                project.clips ?? [],
+              ),
             ),
       sequence: project.draft.sequence,
       timelineSha256: project.draft.timelineSha256,

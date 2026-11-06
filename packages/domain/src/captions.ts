@@ -32,6 +32,36 @@ export interface CaptionWord {
   endUs: number;
 }
 
+/**
+ * Drops a word that repeats the one before it a moment later. The speech model
+ * sometimes decodes the overlap of two windows twice and the words interleave
+ * ("And And the the stranger stranger"). This is for text written about the
+ * video (titles, descriptions); captions keep the transcript as it is.
+ */
+export function collapseStutter(
+  words: readonly CaptionWord[],
+  withinUs = 600_000,
+): CaptionWord[] {
+  const key = (text: string): string =>
+    text.toLowerCase().replaceAll(/[^\p{L}\p{N}]/gu, "");
+  const kept: CaptionWord[] = [];
+  for (const word of words) {
+    const previous = kept.at(-1);
+    if (
+      previous &&
+      key(previous.text) !== "" &&
+      key(previous.text) === key(word.text) &&
+      word.startUs - previous.startUs < withinUs
+    )
+      kept[kept.length - 1] = {
+        ...previous,
+        endUs: Math.max(previous.endUs, word.endUs),
+      };
+    else kept.push(word);
+  }
+  return kept;
+}
+
 export interface CaptionCue {
   startUs: number;
   endUs: number;
