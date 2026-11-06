@@ -96,36 +96,6 @@ VIAddVersionKey "LegalCopyright" "MIT licence; see the licence page"
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 
-Function .onInit
-  ; /CODEX on the command line (for silent installs) includes the optional
-  ; Codex connection, which is otherwise left out.
-  ${GetParameters} $R0
-  ClearErrors
-  ${GetOptions} $R0 "/CODEX" $R1
-  ${IfNot} ${Errors}
-    SectionSetFlags ${SecCodex} ${SF_SELECTED}
-  ${EndIf}
-
-  ${IfNot} ${RunningX64}
-    MessageBox MB_OK|MB_ICONSTOP "${PRODUCT_NAME} needs 64-bit Windows 10 or newer."
-    Abort
-  ${EndIf}
-  ${IfNot} ${AtLeastWin10}
-    MessageBox MB_OK|MB_ICONSTOP "${PRODUCT_NAME} needs Windows 10 or newer."
-    Abort
-  ${EndIf}
-
-  ; Say so when the app is already installed, and ask before replacing it.
-  ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "InstallLocation"
-  ${If} $0 != ""
-  ${AndIf} ${FileExists} "$0\${EXE_NAME}"
-    ReadRegStr $1 HKCU "${UNINSTALL_KEY}" "DisplayVersion"
-    ${IfNot} ${Silent}
-      MessageBox MB_YESNO|MB_ICONQUESTION "${PRODUCT_NAME} $1 is already installed.$\r$\n$\r$\nReplace it with ${PRODUCT_VERSION}? Your projects and settings are kept." IDYES +2
-      Abort
-    ${EndIf}
-  ${EndIf}
-FunctionEnd
 
 Section "Urushi" SecCore
   SectionIn RO
@@ -175,6 +145,38 @@ SectionEnd
   !insertmacro MUI_DESCRIPTION_TEXT ${SecCore} "The video editor with the Claude connection."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecCodex} "The Codex (ChatGPT) connection as an alternative to Claude. Large; skip it unless you use Codex."
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
+
+; After the sections so that ${SecCodex} is known.
+Function .onInit
+  ; /CODEX on the command line (for silent installs) includes the optional
+  ; Codex connection, which is otherwise left out.
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/CODEX" $R1
+  ${IfNot} ${Errors}
+    SectionSetFlags ${SecCodex} ${SF_SELECTED}
+  ${EndIf}
+
+  ${IfNot} ${RunningX64}
+    MessageBox MB_OK|MB_ICONSTOP "${PRODUCT_NAME} needs 64-bit Windows 10 or newer."
+    Abort
+  ${EndIf}
+  ${IfNot} ${AtLeastWin10}
+    MessageBox MB_OK|MB_ICONSTOP "${PRODUCT_NAME} needs Windows 10 or newer."
+    Abort
+  ${EndIf}
+
+  ; Say so when the app is already installed, and ask before replacing it.
+  ReadRegStr $0 HKCU "${UNINSTALL_KEY}" "InstallLocation"
+  ${If} $0 != ""
+  ${AndIf} ${FileExists} "$0\${EXE_NAME}"
+    ReadRegStr $1 HKCU "${UNINSTALL_KEY}" "DisplayVersion"
+    ${IfNot} ${Silent}
+      MessageBox MB_YESNO|MB_ICONQUESTION "${PRODUCT_NAME} $1 is already installed.$\r$\n$\r$\nReplace it with ${PRODUCT_VERSION}? Your projects and settings are kept." IDYES +2
+      Abort
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
 
 Section "Uninstall"
   SetShellVarContext current
