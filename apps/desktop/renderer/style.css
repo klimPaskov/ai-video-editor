@@ -4589,3 +4589,77 @@ button.short-preview:hover:not(:disabled) {
 #publish-folder {
   overflow-wrap: anywhere;
 }
+
+/* Each platform looks like itself: its mark and its colour */
+.brand-logo {
+  display: inline-flex;
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+[data-brand="youtube"] {
+  --brand: #d90000;
+}
+[data-brand="x"] {
+  --brand: var(--text);
+}
+[data-brand="reddit"] {
+  --brand: #ff4500;
+}
+[data-brand="linkedin"] {
+  --brand: #0a66c2;
+}
+[data-brand="discord"] {
+  --brand: #5865f2;
+}
+.publish-brand-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--brand) 9%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--border));
+  border-left: 4px solid var(--brand);
+  border-radius: var(--radius);
+}
+.publish-brand-head .muted {
+  margin-left: auto;
+  font-size: var(--text-small);
+}
+.publish-post[data-brand] {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  background: color-mix(in srgb, var(--brand) 7%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--brand) 28%, var(--border));
+  border-left: 4px solid var(--brand);
+  border-radius: var(--radius);
+}
+.publish-post[data-brand] .publish-post-head button {
+  color: var(--brand);
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--border));
+}
+.publish-post[data-brand] .publish-post-head button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+}
+.publish-post[data-brand] .field-label {
+  font-weight: 600;
+}
+.publish-post[data-brand="reddit"] input[type="text"] {
+  font-weight: 600;
+}
+#publish-x-count {
+  font-variant-numeric: tabular-nums;
+}
+#publish-x-count.near-limit {
+  color: var(--danger-text);
+  font-weight: 600;
+}
+#publish-upload {
+  color: #fff;
+  background: #d90000;
+  border-color: #d90000;
+}
+#publish-upload:hover:not(:disabled) {
+  background: #b80000;
+  border-color: #b80000;
+}

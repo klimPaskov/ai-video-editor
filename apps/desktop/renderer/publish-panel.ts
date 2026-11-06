@@ -1,3 +1,4 @@
+import { fillPlatformLogos } from "./platform-logos.ts";
 import {
   cleanTags,
   formatTimestamp,
@@ -64,6 +65,7 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
   const upload = element<HTMLButtonElement>("publish-upload");
   const errorText = element("publish-error");
 
+  fillPlatformLogos(dialog);
   let subject: PublishSubject | undefined;
   let kit: PublishKit | null = null;
   let busy = false;
@@ -115,7 +117,7 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
     intro.value = kit.youtube.intro;
     tags.value = kit.youtube.tags.join(", ");
     postX.value = kit.posts.x;
-    postXCount.textContent = `${kit.posts.x.length}/${publishLimits.x}`;
+    countX();
     redditTitle.value = kit.posts.redditTitle;
     redditBody.value = kit.posts.redditBody;
     linkedin.value = kit.posts.linkedin;
@@ -162,6 +164,13 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
         return item;
       }),
     );
+  }
+
+  /** The X counter turns to a warning near the limit. */
+  function countX(): void {
+    const used = postX.value.length;
+    postXCount.textContent = `${used}/${publishLimits.x}`;
+    postXCount.classList.toggle("near-limit", used >= publishLimits.x - 20);
   }
 
   function readFields(): PublishKit | null {
@@ -285,7 +294,7 @@ export function setupPublishDialog(): { open(subject: PublishSubject): void } {
     field.addEventListener("input", queueSave);
   for (const field of [postX, linkedin, discord])
     field.addEventListener("input", () => {
-      postXCount.textContent = `${postX.value.length}/${publishLimits.x}`;
+      countX();
       queueSave();
     });
 

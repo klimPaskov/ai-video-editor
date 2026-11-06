@@ -1555,7 +1555,16 @@
         </button>
       </div>
       <div id="publish-body" class="publish-body">
-        <div id="publish-youtube" class="publish-pane">
+        <div id="publish-youtube" class="publish-pane" data-brand="youtube">
+          <div class="publish-brand-head">
+            <span
+              class="brand-logo"
+              data-brand-logo="youtube"
+              aria-hidden="true"
+            ></span>
+            <strong>YouTube</strong>
+            <span class="muted">Title, description, chapters and tags</span>
+          </div>
           <label class="field-label" for="publish-title-input">Title</label>
           <input
             type="text"
@@ -1579,8 +1588,13 @@
           />
         </div>
         <div id="publish-posts" class="publish-pane" hidden>
-          <div class="publish-post" data-post="x">
+          <div class="publish-post" data-post="x" data-brand="x">
             <div class="publish-post-head">
+              <span
+                class="brand-logo"
+                data-brand-logo="x"
+                aria-hidden="true"
+              ></span>
               <label class="field-label" for="publish-x">X</label>
               <span class="muted" id="publish-x-count"></span>
               <button
@@ -1594,8 +1608,13 @@
             </div>
             <textarea id="publish-x" rows="3" maxlength="280"></textarea>
           </div>
-          <div class="publish-post" data-post="reddit">
+          <div class="publish-post" data-post="reddit" data-brand="reddit">
             <div class="publish-post-head">
+              <span
+                class="brand-logo"
+                data-brand-logo="reddit"
+                aria-hidden="true"
+              ></span>
               <label class="field-label" for="publish-reddit-title"
                 >Reddit</label
               >
@@ -1621,8 +1640,13 @@
               aria-label="Reddit post text"
             ></textarea>
           </div>
-          <div class="publish-post" data-post="linkedin">
+          <div class="publish-post" data-post="linkedin" data-brand="linkedin">
             <div class="publish-post-head">
+              <span
+                class="brand-logo"
+                data-brand-logo="linkedin"
+                aria-hidden="true"
+              ></span>
               <label class="field-label" for="publish-linkedin">LinkedIn</label>
               <button
                 type="button"
@@ -1639,8 +1663,13 @@
               maxlength="3000"
             ></textarea>
           </div>
-          <div class="publish-post" data-post="discord">
+          <div class="publish-post" data-post="discord" data-brand="discord">
             <div class="publish-post-head">
+              <span
+                class="brand-logo"
+                data-brand-logo="discord"
+                aria-hidden="true"
+              ></span>
               <label class="field-label" for="publish-discord">Discord</label>
               <button
                 type="button"
