@@ -116,7 +116,7 @@ export const claudeThreadIssues = Object.freeze({
   limit:
     "Your Claude usage limit was reached. Wait for it to reset, then send again.",
   account:
-    "Claude account access is unavailable. Check your Claude account, then send again.",
+    "Claude account access is unavailable. Your organization may have turned off Claude Code for subscriptions: ask your admin or sign in with another account in Settings, then send again.",
   modelUnavailable:
     "The selected Claude model is unavailable. Choose another model in Settings.",
   failed: "Claude could not complete this turn. Send again to retry.",

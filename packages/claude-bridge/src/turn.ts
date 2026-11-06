@@ -378,12 +378,14 @@ export class ClaudeTurnProjection {
         return (this.fail("turns"), true);
       switch (this.lastError) {
         case "authentication_failed":
-        case "oauth_org_not_allowed":
           this.fail("signIn");
           break;
         case "rate_limit":
           this.fail("limit");
           break;
+        // The organization turned off subscription use: signing in again
+        // cannot help, so it is an account problem, not a sign-in one.
+        case "oauth_org_not_allowed":
         case "billing_error":
         case "account_on_hold":
           this.fail("account");

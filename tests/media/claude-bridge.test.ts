@@ -437,6 +437,7 @@ test("projection maps documented failures to fixed issues", () => {
     ["authentication_failed", {}, "signIn"],
     ["rate_limit", {}, "limit"],
     ["billing_error", {}, "account"],
+    ["oauth_org_not_allowed", {}, "account"],
     ["model_not_found", {}, "modelUnavailable"],
     [undefined, { subtype: "error_max_turns" }, "turns"],
     ["server_error", {}, "failed"],
