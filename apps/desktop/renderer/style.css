@@ -5033,7 +5033,8 @@ button.short-preview:hover:not(:disabled) {
 #viewer[data-editor="full"] #refine-tools .rtool-slot {
   flex: 0 0 auto;
 }
-#viewer[data-editor="full"] #refine-tools .rtool-slot:has(#rt-trim) {
+#viewer[data-editor="full"] #refine-tools .rtool-slot:has(#rt-trim),
+#viewer[data-editor="full"] #refine-tools .rtool-slot:has(#rt-split) {
   display: none;
 }
 #viewer[data-editor="full"] button.rtool {
