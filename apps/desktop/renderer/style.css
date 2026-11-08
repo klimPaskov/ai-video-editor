@@ -2750,7 +2750,7 @@ main:has(#viewer:not([hidden])) {
 .project-page > #project-navigation,
 .project-page > .stage-card {
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--column);
   margin-inline: auto;
   flex: none;
 }
@@ -3292,10 +3292,7 @@ button.rtool.unavailable:hover {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-6) var(--space-4);
-  padding-inline: max(
-    var(--space-6),
-    calc((100% - 1180px) / 2 + var(--space-6))
-  );
+  padding-inline: max(var(--space-6), calc((100% - var(--column)) / 2));
   background: var(--bg);
   border-top: 1px solid var(--border);
 }
@@ -4322,7 +4319,7 @@ button.short-preview:hover:not(:disabled) {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  max-width: 900px;
+  max-width: var(--column);
 }
 #viewer[data-stage="export"] #timeline-strip {
   display: none;
@@ -5275,4 +5272,16 @@ button.short-preview:hover:not(:disabled) {
   #viewer[data-editor="full"] .edit-actions {
     gap: 0;
   }
+}
+
+/* One content column per step; the page and the action bar share it, so the
+   buttons line up with the cards above them at any window size. */
+#viewer {
+  --column: clamp(1180px, 66vw, 1440px);
+}
+#viewer[data-stage="export"] {
+  --column: 900px;
+}
+#viewer[data-editor="full"] {
+  --column: 100%;
 }
