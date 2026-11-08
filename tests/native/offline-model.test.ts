@@ -101,7 +101,6 @@ try {
   await expect(page.locator("#frame")).toBeVisible({ timeout: 120_000 });
   step = "transcribe-offline";
   await openStep(page, "Magic Edit");
-  await page.locator("#auto-edit-more > summary").click();
   await page.getByRole("button", { name: "Transcribe locally" }).click();
   await expect(page.locator("#transcription-error")).toBeVisible({
     timeout: 180_000,

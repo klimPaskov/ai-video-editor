@@ -259,6 +259,17 @@ try {
         await shot(
           join(evidence, `${themeId}-${size.replace("@", "x")}-${id}.png`),
         );
+        if (id === "edit") {
+          // The complete editor: every tool in view, the transcript open.
+          await page.locator("#action-secondary").click();
+          await expect(page.locator("#full-editor-done")).toBeVisible();
+          await audit(`${tag} / Full editor`);
+          await shot(
+            join(evidence, `${themeId}-${size.replace("@", "x")}-full.png`),
+          );
+          await page.locator("#full-editor-done").click();
+          await expect(page.locator("#full-editor-done")).toBeHidden();
+        }
         if (id === "auto_edit" || id === "edit" || id === "export") {
           await openDisclosures(page);
           await audit(`${tag} / ${name} with more open`);

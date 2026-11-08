@@ -233,7 +233,6 @@ try {
   watch(page);
   await openProject(page, project.id);
   await openStep(page, "Magic Edit");
-  await page.locator("#auto-edit-more > summary").click();
   await page.getByRole("button", { name: "Transcribe locally" }).click();
   // Since e9a4b51 a clip with no speech is a finished transcript with no
   // words, not an error.

@@ -4916,3 +4916,363 @@ button.short-preview:hover:not(:disabled) {
 .publish-thumb-box button {
   align-self: stretch;
 }
+
+/* Magic Edit: the other ways to edit are always in view, as two cards. */
+.auto-edit-actions {
+  max-width: 980px;
+}
+.auto-more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  margin-top: var(--space-2);
+}
+.auto-more-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-body);
+  font-weight: 600;
+  text-align: center;
+}
+.auto-more-title::before,
+.auto-more-title::after {
+  content: "";
+  flex: 1 1 0;
+  height: 1px;
+  background: var(--border-strong);
+}
+.auto-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: stretch;
+}
+.auto-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card, 16px);
+  box-shadow: var(--shadow);
+}
+.auto-card.magic-edit {
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+.auto-card .card-title {
+  font-size: var(--text-title, 17px);
+}
+.auto-card .card-title .icon {
+  width: 22px;
+  height: 22px;
+}
+.auto-card p {
+  margin: 0;
+}
+.auto-card .magic-edit-controls,
+.auto-card .auto-edit-controls {
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+.auto-card #magic-preset {
+  flex: 1 1 140px;
+}
+.auto-card button.primary,
+.auto-card #transcribe-local {
+  flex: 1 1 160px;
+}
+@container page (max-width: 760px) {
+  .auto-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- The complete editor: tool rail, large preview, inspector, lane timeline.
+   Designed from docs/design/ui-previews/full-editor-dense.png. ---- */
+#viewer[data-editor="full"] .project-page {
+  padding: 0 var(--space-5) var(--space-4);
+  overflow: hidden;
+}
+#viewer[data-editor="full"] .stage-card {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr) clamp(300px, 24vw, 380px);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "rail tools inspector"
+    "rail preview inspector"
+    "rail player inspector"
+    "timeline timeline timeline";
+  gap: var(--space-3) var(--space-4);
+  min-height: 0;
+}
+#viewer[data-editor="full"] .stage-media,
+#viewer[data-editor="full"] #frame-controls,
+#viewer[data-editor="full"] .stage-panel {
+  display: contents;
+}
+#viewer[data-editor="full"] .workspace {
+  grid-area: preview;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+}
+#viewer[data-editor="full"] .player-bar {
+  grid-area: player;
+}
+#viewer[data-editor="full"] #refine-tools {
+  grid-area: tools;
+  justify-content: flex-start;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+#viewer[data-editor="full"] #refine-tools .rtool-slot {
+  flex: 0 0 auto;
+}
+#viewer[data-editor="full"] #refine-tools .rtool-slot:has(#rt-trim) {
+  display: none;
+}
+#viewer[data-editor="full"] button.rtool {
+  flex-direction: row;
+  gap: var(--space-2);
+  width: auto;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+}
+#viewer[data-editor="full"] .timeline-strip {
+  grid-area: timeline;
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+#viewer[data-editor="full"] .source-row {
+  display: none;
+}
+
+/* Rail: every tool, always in view, grouped. */
+#viewer[data-editor="full"] .edit-actions {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: flex-start;
+  align-self: stretch;
+  gap: 2px;
+  width: auto;
+  min-height: 0;
+  padding: var(--space-3);
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+}
+#viewer[data-editor="full"] .edit-actions > .tool,
+#viewer[data-editor="full"] .edit-actions .range-actions .tool {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  margin: 0;
+  padding: 0 var(--space-3);
+  color: var(--text);
+  font-size: var(--text-body);
+  text-align: left;
+  border: 0;
+  border-radius: var(--radius-control, 10px);
+}
+#viewer[data-editor="full"] .edit-actions .tool .icon {
+  width: 20px;
+  height: 20px;
+}
+#viewer[data-editor="full"] .edit-actions .tool:disabled {
+  opacity: 0.45;
+}
+#viewer[data-editor="full"] #edit-clip {
+  align-self: flex-start;
+  margin: 0 0 var(--space-2);
+}
+#viewer[data-editor="full"] #undo-edit,
+#viewer[data-editor="full"] #mark-in {
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: 0;
+  border-radius: var(--radius-control, 10px);
+}
+#viewer[data-editor="full"] #edit-more {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#viewer[data-editor="full"] #edit-more > summary {
+  display: none;
+}
+#viewer[data-editor="full"] .edit-actions details.more[open] > .range-actions,
+#viewer[data-editor="full"] .edit-actions .range-actions {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 2px;
+  padding-top: var(--space-2);
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+#viewer[data-editor="full"] .range-actions select,
+#viewer[data-editor="full"] .speed-control {
+  width: 100%;
+}
+#viewer[data-editor="full"] .zoom-controls,
+#viewer[data-editor="full"] .transition-tools,
+#viewer[data-editor="full"] .camera-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+#viewer[data-editor="full"] .zoom-controls[hidden] {
+  display: none;
+}
+#viewer[data-editor="full"] #cut-selection {
+  align-self: flex-start;
+}
+
+/* Inspector: the transcript beside the picture, fully open. */
+#viewer[data-editor="full"] .transcript-edit-panel {
+  grid-area: inspector;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 0;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
+#viewer[data-editor="full"] #transcript-edit-details > summary {
+  color: var(--text);
+  font-size: var(--text-title, 17px);
+  font-weight: 600;
+}
+
+/* Timeline: a tall strip with its own lanes for zooms, graphics and layouts. */
+#viewer[data-editor="full"] .timeline-track {
+  height: 164px;
+}
+#viewer[data-editor="full"] .timeline-clips,
+#viewer[data-editor="full"] .timeline-thumbs {
+  inset: 6px 6px auto;
+  height: 68px;
+}
+#viewer[data-editor="full"] .timeline-zooms {
+  inset: 82px 6px auto;
+  height: 28px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border-radius: 6px;
+}
+#viewer[data-editor="full"] .timeline-graphics {
+  inset: 114px 6px 6px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border-radius: 6px;
+}
+#viewer[data-editor="full"] .timeline-zooms::before,
+#viewer[data-editor="full"] .timeline-graphics::before {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transform: translateY(-50%);
+  opacity: 0.55;
+}
+#viewer[data-editor="full"] .timeline-zooms::before {
+  content: "Zooms";
+}
+#viewer[data-editor="full"] .timeline-graphics::before {
+  content: "Graphics";
+}
+#viewer[data-editor="full"] .timeline-zoom {
+  top: 4px;
+  height: 20px;
+  font-size: 11px;
+  line-height: 20px;
+  border-radius: 5px;
+}
+#viewer[data-editor="full"] .timeline-graphic {
+  bottom: 4px;
+  height: 20px;
+  font-size: 11px;
+  line-height: 20px;
+  border-radius: 5px;
+}
+#viewer[data-editor="full"] .timeline-graphic.timeline-layout {
+  top: 4px;
+  bottom: auto;
+}
+#viewer[data-editor="full"] .timeline-ruler {
+  height: 18px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@media (max-width: 1100px) {
+  #viewer[data-editor="full"] .stage-card {
+    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-areas:
+      "rail tools"
+      "rail preview"
+      "rail player"
+      "timeline timeline";
+  }
+  #viewer[data-editor="full"] .transcript-edit-panel {
+    display: none;
+  }
+}
+/* Magic Edit: the picture leaves room for the cards under it. */
+#viewer[data-stage="auto_edit"] .workspace {
+  min-height: 180px;
+  max-height: min(42vh, 440px);
+}
+.auto-card .card-title,
+.auto-card .card-title label {
+  font-size: var(--text-title, 17px);
+  font-weight: 600;
+}
+@media (max-height: 940px) {
+  #viewer[data-editor="full"] .timeline-track {
+    height: 128px;
+  }
+  #viewer[data-editor="full"] .timeline-clips,
+  #viewer[data-editor="full"] .timeline-thumbs {
+    height: 48px;
+  }
+  #viewer[data-editor="full"] .timeline-zooms {
+    inset: 62px 6px auto;
+    height: 24px;
+  }
+  #viewer[data-editor="full"] .timeline-graphics {
+    inset: 90px 6px 6px;
+  }
+  #viewer[data-editor="full"] .edit-actions > .tool,
+  #viewer[data-editor="full"] .edit-actions .range-actions .tool {
+    min-height: 34px;
+  }
+  #viewer[data-editor="full"] .edit-actions {
+    gap: 0;
+  }
+}

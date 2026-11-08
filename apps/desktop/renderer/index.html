@@ -449,57 +449,67 @@
                     hidden
                   ></progress>
                   <p id="transcription-error" role="alert" hidden></p>
-                  <details id="auto-edit-more" class="more">
-                    <summary>More options</summary>
+                  <section
+                    id="auto-edit-more"
+                    class="auto-more"
+                    aria-labelledby="auto-more-title"
+                  >
+                    <h3 id="auto-more-title" class="auto-more-title">
+                      <span>Or do one thing</span>
+                    </h3>
                     <p id="transcription-status" role="status" hidden></p>
-                    <div id="magic-edit" class="magic-edit">
-                      <div class="magic-edit-controls">
+                    <div class="auto-cards">
+                      <div id="magic-edit" class="magic-edit auto-card">
                         <span class="card-title" data-icon="wand"
                           ><label for="magic-preset">Rough cut</label></span
                         >
-                        <select id="magic-preset">
-                          <option value="gentle">Natural</option>
-                          <option value="balanced" selected>Balanced</option>
-                          <option value="tight">Tight</option>
-                        </select>
-                        <button
-                          id="magic-start"
-                          class="primary"
-                          type="button"
-                          data-icon="wand"
-                        >
-                          Rough cut only
-                        </button>
-                        <button id="magic-stop" type="button" hidden>
-                          Stop
-                        </button>
+                        <p id="magic-note"></p>
+                        <div class="magic-edit-controls">
+                          <select id="magic-preset">
+                            <option value="gentle">Natural</option>
+                            <option value="balanced" selected>Balanced</option>
+                            <option value="tight">Tight</option>
+                          </select>
+                          <button
+                            id="magic-start"
+                            class="primary"
+                            type="button"
+                            data-icon="wand"
+                          >
+                            Rough cut only
+                          </button>
+                          <button id="magic-stop" type="button" hidden>
+                            Stop
+                          </button>
+                        </div>
+                        <progress
+                          id="magic-progress"
+                          max="1000"
+                          value="0"
+                          aria-label="Rough cut progress"
+                          hidden
+                        ></progress>
+                        <p id="magic-status" role="status" hidden></p>
+                        <p id="magic-error" role="alert" hidden></p>
                       </div>
-                      <p id="magic-note"></p>
-                      <progress
-                        id="magic-progress"
-                        max="1000"
-                        value="0"
-                        aria-label="Rough cut progress"
-                        hidden
-                      ></progress>
-                      <p id="magic-status" role="status" hidden></p>
-                      <p id="magic-error" role="alert" hidden></p>
+                      <div class="auto-card auto-transcript-card">
+                        <span class="card-title" data-icon="transcript"
+                          >Transcript</span
+                        >
+                        <p id="transcription-disclosure">
+                          The first time, a speech model (about 76 MB) is
+                          downloaded. Your audio stays on this device.
+                        </p>
+                        <div class="auto-edit-controls">
+                          <button id="transcribe-local" type="button">
+                            Transcribe locally
+                          </button>
+                          <button id="stop-transcription" type="button" hidden>
+                            Stop
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div class="auto-edit-controls">
-                      <span class="card-title" data-icon="transcript"
-                        >Transcript</span
-                      >
-                      <button id="transcribe-local" type="button">
-                        Transcribe locally
-                      </button>
-                      <button id="stop-transcription" type="button" hidden>
-                        Stop
-                      </button>
-                    </div>
-                    <p id="transcription-disclosure">
-                      The first time, a speech model (about 76 MB) is
-                      downloaded. Your audio stays on this device.
-                    </p>
                     <details id="transcript-results" hidden>
                       <summary id="transcript-summary">Transcript</summary>
                       <p id="transcript-timing-note">
@@ -523,7 +533,7 @@
                         <div id="speech-candidate-content"></div>
                       </details>
                     </details>
-                  </details>
+                  </section>
                 </section>
                 <section
                   id="transcript-edit-panel"

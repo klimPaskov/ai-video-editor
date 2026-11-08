@@ -417,6 +417,9 @@ function openFullEditor(): void {
   if (activeProject?.stage !== "edit" || navigating) return;
   popovers.closeAll();
   fullEditor = true;
+  // Every tool is in view: nothing is folded away in the complete editor.
+  element<HTMLDetailsElement>("edit-more").open = true;
+  element<HTMLDetailsElement>("transcript-edit-details").open = true;
   renderStage();
   fullEditorDone.focus();
 }
@@ -1531,7 +1534,7 @@ function renderEditTools(): void {
   }
   populateRestoreSources(project);
   editActions.hidden = !fullEditor;
-  refineTools.hidden = fullEditor;
+  refineTools.hidden = false;
   editActions.setAttribute("aria-busy", String(manualEditPending));
   const clip = currentClip(),
     position = Number(seek.value),
