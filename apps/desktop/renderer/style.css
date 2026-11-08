@@ -5340,3 +5340,63 @@ button.short-preview:hover:not(:disabled) {
     min-height: 180px;
   }
 }
+
+/* Narrow or short windows: one scrolling column, in reading order. */
+@media (max-width: 1000px), (max-height: 680px) {
+  #viewer[data-editor="full"] .project-page {
+    overflow-y: auto;
+  }
+  #viewer[data-editor="full"] .stage-card {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    min-height: auto;
+  }
+  #viewer[data-editor="full"] #refine-tools {
+    order: 1;
+  }
+  #viewer[data-editor="full"] .workspace {
+    order: 2;
+    flex: none;
+    height: clamp(200px, 46vh, 420px);
+    min-height: 0;
+  }
+  #viewer[data-editor="full"] .player-bar {
+    order: 3;
+  }
+  #viewer[data-editor="full"] .edit-actions {
+    order: 4;
+    flex: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-height: none;
+    overflow: visible;
+  }
+  #viewer[data-editor="full"] .timeline-strip {
+    order: 5;
+    flex: none;
+  }
+  #viewer[data-editor="full"] .transcript-edit-panel {
+    order: 6;
+    display: flex;
+    flex: none;
+    max-height: none;
+  }
+  #viewer[data-editor="full"] .edit-actions > .tool,
+  #viewer[data-editor="full"] .edit-actions .range-actions .tool {
+    width: auto;
+  }
+  #viewer[data-editor="full"] .edit-actions .range-actions,
+  #viewer[data-editor="full"] .zoom-controls,
+  #viewer[data-editor="full"] .transition-tools,
+  #viewer[data-editor="full"] .camera-tools,
+  #viewer[data-editor="full"] #edit-more {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  #viewer[data-editor="full"] .range-actions select,
+  #viewer[data-editor="full"] .speed-control {
+    width: auto;
+  }
+}
