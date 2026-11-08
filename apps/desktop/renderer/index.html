@@ -1031,20 +1031,32 @@
                           Pick with Claude
                         </button>
                       </div>
-                      <details class="more shorts-more">
-                        <summary>Clip options</summary>
+                      <section
+                        class="shorts-options-card"
+                        aria-labelledby="shorts-options-title"
+                      >
+                        <h3 id="shorts-options-title">Clip options</h3>
                         <div class="shorts-options">
-                          <select id="shorts-format" aria-label="Clip format">
-                            <option value="vertical">Vertical 9:16</option>
-                            <option value="square">Square 1:1</option>
-                            <option value="landscape">Landscape 16:9</option>
-                          </select>
-                          <select id="shorts-framing" aria-label="Clip framing">
-                            <option value="fit">
-                              Fit with blurred background
-                            </option>
-                            <option value="fill">Fill the frame</option>
-                          </select>
+                          <label class="opt"
+                            ><span>Format</span>
+                            <select id="shorts-format" aria-label="Clip format">
+                              <option value="vertical">Vertical 9:16</option>
+                              <option value="square">Square 1:1</option>
+                              <option value="landscape">Landscape 16:9</option>
+                            </select></label
+                          >
+                          <label class="opt"
+                            ><span>Framing</span>
+                            <select
+                              id="shorts-framing"
+                              aria-label="Clip framing"
+                            >
+                              <option value="fit">
+                                Fit with blurred background
+                              </option>
+                              <option value="fill">Fill the frame</option>
+                            </select></label
+                          >
                           <input
                             id="shorts-position"
                             type="range"
@@ -1065,12 +1077,15 @@
                             ><input id="shorts-title" type="checkbox" />Show
                             title</label
                           >
-                          <select id="shorts-speed" aria-label="Clip speed">
-                            <option value="1">Normal speed</option>
-                            <option value="2">2× speed</option>
-                          </select>
+                          <label class="opt"
+                            ><span>Speed</span>
+                            <select id="shorts-speed" aria-label="Clip speed">
+                              <option value="1">Normal speed</option>
+                              <option value="2">2× speed</option>
+                            </select></label
+                          >
                         </div>
-                      </details>
+                      </section>
                       <p id="shorts-note" class="muted"></p>
                       <div
                         id="shorts-batch"

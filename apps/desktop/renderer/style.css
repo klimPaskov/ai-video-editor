@@ -5401,3 +5401,43 @@ button.short-preview:hover:not(:disabled) {
     width: auto;
   }
 }
+
+/* Clips: the options are always in view, in one tidy card. */
+.shorts-options-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card, 16px);
+  box-shadow: var(--shadow);
+}
+.shorts-options-card h3 {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+.shorts-options-card .shorts-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4) var(--space-5);
+}
+.shorts-options-card .opt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--text-small);
+}
+.shorts-options-card .opt select {
+  min-width: 180px;
+  color: var(--text);
+}
+.shorts-options-card .switch {
+  align-self: flex-end;
+  min-height: 38px;
+}
