@@ -5285,3 +5285,58 @@ button.short-preview:hover:not(:disabled) {
 #viewer[data-editor="full"] {
   --column: 100%;
 }
+
+/* The complete editor in a narrow window (or at a large interface size): the
+   tools wrap, and below 760 px the rail becomes a strip under the picture. */
+#viewer[data-editor="full"] #refine-tools {
+  flex-wrap: wrap;
+}
+@media (max-width: 1100px) {
+  #viewer[data-editor="full"] .stage-card {
+    grid-template-columns: 196px minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  #viewer[data-editor="full"] .project-page {
+    overflow-y: auto;
+  }
+  #viewer[data-editor="full"] .stage-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(180px, 1fr) auto auto auto;
+    grid-template-areas:
+      "tools"
+      "preview"
+      "player"
+      "rail"
+      "timeline";
+  }
+  #viewer[data-editor="full"] .edit-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-height: none;
+    overflow: visible;
+  }
+  #viewer[data-editor="full"] .edit-actions > .tool,
+  #viewer[data-editor="full"] .edit-actions .range-actions .tool {
+    width: auto;
+  }
+  #viewer[data-editor="full"] .edit-actions .range-actions,
+  #viewer[data-editor="full"] .zoom-controls,
+  #viewer[data-editor="full"] .transition-tools,
+  #viewer[data-editor="full"] .camera-tools {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  #viewer[data-editor="full"] #edit-more {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  #viewer[data-editor="full"] .range-actions select,
+  #viewer[data-editor="full"] .speed-control {
+    width: auto;
+  }
+  #viewer[data-editor="full"] .workspace {
+    min-height: 180px;
+  }
+}
